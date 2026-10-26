@@ -269,24 +269,24 @@ data "mtncloud_projects" "all" {}
 }
 
 func TestResolveAuth_MatchesLegacyPrecedence(t *testing.T) {
-	t.Setenv("MTNCLOUD_API_TOKEN", "stale-token")
+	t.Setenv("MTNCLOUD_API_TOKEN", "stale-token") // ggignore: fake test credential
 	t.Setenv("MTNCLOUD_API_USERNAME", "")
 	t.Setenv("MTNCLOUD_API_PASSWORD", "")
 	t.Setenv("MTNCLOUD_API_TENANT", "")
 
 	// Username and password in the block win over a token from the environment.
-	got := resolveAuth(providerModel{Username: types.StringValue("jdoe"), Password: types.StringValue("pw"), TenantSubdomain: types.StringValue("acme")})
-	if got != (credentials{username: "jdoe", password: "pw", tenant: "acme"}) {
+	got := resolveAuth(providerModel{Username: types.StringValue("jdoe"), Password: types.StringValue("pw"), TenantSubdomain: types.StringValue("acme")}) // ggignore: fake test credential
+	if got != (credentials{username: "jdoe", password: "pw", tenant: "acme"}) {                                                                           // ggignore: fake test credential
 		t.Errorf("block credentials: got %+v", got)
 	}
 	// No username anywhere: the token is used.
-	if got := resolveAuth(providerModel{}); got != (credentials{token: "stale-token"}) {
+	if got := resolveAuth(providerModel{}); got != (credentials{token: "stale-token"}) { // ggignore: fake test credential
 		t.Errorf("token: got %+v", got)
 	}
 	// A username from the environment also means password login, as in legacy.
 	t.Setenv("MTNCLOUD_API_USERNAME", "envuser")
-	t.Setenv("MTNCLOUD_API_PASSWORD", "envpw")
-	if got := resolveAuth(providerModel{}); got != (credentials{username: "envuser", password: "envpw"}) {
+	t.Setenv("MTNCLOUD_API_PASSWORD", "envpw")                                                             // ggignore: fake test credential
+	if got := resolveAuth(providerModel{}); got != (credentials{username: "envuser", password: "envpw"}) { // ggignore: fake test credential
 		t.Errorf("env username: got %+v", got)
 	}
 }

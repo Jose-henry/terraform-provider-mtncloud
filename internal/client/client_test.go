@@ -117,7 +117,7 @@ func TestLogin_PasswordGrantWithTenant(t *testing.T) {
 	f := newFakeAPI(t)
 	f.route("POST", "/oauth/token", func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
-		if r.PostForm.Get("username") != `acme\jdoe` || r.PostForm.Get("grant_type") != "password" || r.PostForm.Get("password") != "pw" {
+		if r.PostForm.Get("username") != `acme\jdoe` || r.PostForm.Get("grant_type") != "password" || r.PostForm.Get("password") != "pw" { // ggignore: fake test credential
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
 			return
@@ -132,7 +132,7 @@ func TestLogin_PasswordGrantWithTenant(t *testing.T) {
 		body, _ := os.ReadFile(filepath.Join("testdata", "lookups", "whoami_subtenant.json"))
 		_, _ = w.Write(body)
 	})
-	c := f.client(t, func(c *Config) { c.Token, c.Username, c.Password, c.Tenant = "", "jdoe", "pw", "acme" })
+	c := f.client(t, func(c *Config) { c.Token, c.Username, c.Password, c.Tenant = "", "jdoe", "pw", "acme" }) // ggignore: fake test credential
 	who, err := c.WhoAmI(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +184,7 @@ func TestRelogin_OnExpiredToken(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"user":{"account":{"id":1,"name":"Acme"}}}`))
 	})
-	c := f.client(t, func(c *Config) { c.Token, c.Username, c.Password = "", "jdoe", "pw" })
+	c := f.client(t, func(c *Config) { c.Token, c.Username, c.Password = "", "jdoe", "pw" }) // ggignore: fake test credential
 	if _, err := c.WhoAmI(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -474,13 +474,13 @@ func TestCache_FailureIsNotCached(t *testing.T) {
 func TestLogger_NeverSeesCredentials(t *testing.T) {
 	f := newFakeAPI(t)
 	f.route("POST", "/oauth/token", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"access_token":"secret-token-value"}`))
+		_, _ = w.Write([]byte(`{"access_token":"secret-token-value"}`)) // ggignore: fake test credential
 	})
 	f.fixture("GET", "/api/whoami", "whoami_subtenant.json")
 	var mu sync.Mutex
 	var logged strings.Builder
 	c := f.client(t, func(c *Config) {
-		c.Token, c.Username, c.Password = "", "jdoe", "secret-password"
+		c.Token, c.Username, c.Password = "", "jdoe", "secret-password" // ggignore: fake test credential
 		c.Logger = func(_ context.Context, msg string, fields map[string]any) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -493,7 +493,7 @@ func TestLogger_NeverSeesCredentials(t *testing.T) {
 	if _, err := c.WhoAmI(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{"secret-token-value", "secret-password", "jdoe"} {
+	for _, secret := range []string{"secret-token-value", "secret-password", "jdoe"} { // ggignore: fake test credential
 		if strings.Contains(logged.String(), secret) {
 			t.Errorf("log contains %q", secret)
 		}
