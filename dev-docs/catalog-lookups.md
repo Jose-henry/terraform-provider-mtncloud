@@ -4,7 +4,7 @@ Goal: a customer writes Terraform without opening the console to copy an ID. Eve
 (image, size, network, project, security group, catalog item) is chosen by a **readable name or
 code**, and can be discovered from Terraform itself.
 
-Status: design, awaiting approval. No code yet.
+Status: layer 3 (list data sources) **built** (2026-10-26). Layers 1 and 2 arrive with each resource.
 
 ## Three layers
 
@@ -20,29 +20,38 @@ Status: design, awaiting approval. No code yet.
 3. **Catalog (list) data sources**, all new. They answer "what can I choose from?" and work with
    `for_each`:
 
-| Data source | API | Filters | Returns per item |
+A customer role gets **403** on the admin endpoints (`/api/zones`, `/api/zones/{id}/resource-pools`,
+`/api/service-plans`, `/api/networks/floating-ips`). Every lookup therefore uses the endpoints the
+console's own create-instance wizard calls, captured by dry-running `instances add` as a sub-tenant.
+Cloud and group are discovered once (`/api/options/groups`, `/api/options/clouds?groupId=`); a tenant
+with more than one is an error, not a guess.
+
+| Data source | API (customer-safe) | Arguments | Returns per item |
 |---|---|---|---|
-| `mtncloud_images` | `GET /api/instance-types` | `name_regex`; always public + openstack + category `os` (D-011) | `code`, `name`, `id`, `layout_ids`, `category`, `versions` |
-| `mtncloud_plans` | `GET /api/service-plans` (filter by provision type openstack) | `name_regex`, `min_cores`, `min_memory_gb` | `id`, `name`, `code`, `cores`, `memory_gb`, `disk_gb` |
-| `mtncloud_catalog_items` | `GET /api/catalog-item-types` | `name_regex`, `label` | `id`, `code`, `name`, `labels` |
-| `mtncloud_projects` | `GET /api/zones/{cloud}/resource-pools` (caller's tenant only) | `name_regex` | `id`, short `name`, `full_name`, `external_id` (see [prerequisites.md](prerequisites.md)) |
-| `mtncloud_networks` (exists) | `GET /api/networks` | add `project` filter | |
-| `mtncloud_security_groups` | `GET /api/security-groups` | `project`, `name_regex` | `id`, `name`, `rule_count` |
-| `mtncloud_routers` | `GET /api/networks/routers` | `project` | `id`, `name`, `external_network`, `external_ip` |
-| `mtncloud_floating_ip_pools` | `GET /api/networks/floating-ip-pools` | | `id`, `name` |
+| `mtncloud_projects` | `GET /api/options/zonePools?zoneId=` (skip `isGroup` headers) | `name_regex` | `id`, `name` (short), `full_name`, `external_id` |
+| `mtncloud_images` | `GET /api/instance-types` (paged), category `os` only (D-011) | `name_regex` (code or name) | `id`, `code`, `name`, `layout_id` |
+| `mtncloud_plans` | `GET /api/instances/service-plans?zoneId&siteId&layoutId&resourcePoolId` (500 without the project) | `project`, `image`, `name_regex`, `min_cores`, `min_memory_gb` | `id`, `name`, `code`, `cores`, `memory_gb`, `root_disk_gb` |
+| `mtncloud_datastores` | `GET /api/options/datastores?zoneId&siteId&resourcePoolId` | `project`, `name_regex` | `id`, `name` |
+| `mtncloud_security_groups` | `GET /api/options/zoneSecurityGroup?zoneId&poolId` | `project`, `name_regex` | `id`, `name`, `external_id` |
+| `mtncloud_external_networks` | `GET /api/options/openstackExternalNetworks?zoneId=` | `name_regex` | `id`, `name` |
+| `mtncloud_catalog_items` | `GET /api/catalog/types` (paged; no `code` field) | `name_regex`, `type` | `id`, `name`, `description`, `type`, `featured` |
+| `mtncloud_routers` | planned | | |
+
+`project` accepts the short name (`web-prod`) or the full name (`web-prod-<TENANT>`), matched
+case-sensitively. TENANT is the account name from `/api/whoami`, not the login subdomain: user
+`acme\jdoe` belongs to tenant `AcmeCorp`, whose pools end in `-AcmeCorp`
+(`internal/normalize/project.go`).
 
 Example (target UX):
 
 ```hcl
-data "mtncloud_images" "linux" {
-  category = "os"
-}
+data "mtncloud_images" "linux" {}
 
 resource "mtncloud_instance" "web" {
   name     = "web-1"
   project  = "web-prod"
   image    = "MTN-U24.04LTS"
-  plan     = "MTN-2C4G"
+  plan     = "G2S4"
   networks = [mtncloud_network.app.name]
 }
 

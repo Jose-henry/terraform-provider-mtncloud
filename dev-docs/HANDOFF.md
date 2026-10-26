@@ -23,11 +23,13 @@ provider and renamed throughout.
 4. `dev-docs/status.md`: what's done and what's next. Then `backlog.md` (open questions Q1–Q6),
    `prerequisites.md` (project name → pool ID resolution, synced default security group),
    `catalog-lookups.md` (names, not IDs), `api-research.md` (payloads P1–P10 still needed),
-   `mtn-cloud-domain.md` (catalog items, images, MOS), and `decisions.md` (D-001…D-009).
+   `mtn-cloud-domain.md` (catalog items, images, MOS), and `decisions.md` (D-001…D-017).
 
-**Where things stand:** the scaffold is on `main`. The provider builds, 6 schema tests pass, lint is
-clean, docs are generated, and CI is defined. No MTN-specific resource code exists yet. All new
-resources will use the Plugin Framework, muxed with `internal/legacy` (SDKv2).
+**Where things stand:** `main` has the scaffold, the features guide (PR #2) and, from PR #3, the
+Plugin Framework provider muxed with legacy, `internal/client`, and seven name-lookup data sources
+(projects, images, plans, datastores, security groups, external networks, catalog items). Read
+`dev-docs/status.md` for details. No MTN-specific **resource** exists yet. The next one is
+`mtncloud_security_group`.
 
 **Domain facts you must not get wrong:**
 - Customers type a **project name**. Its resource pool is named `<project>-<tenant account name>`.
@@ -42,10 +44,17 @@ resources will use the Plugin Framework, muxed with `internal/legacy` (SDKv2).
 - Users pick images, plans, projects and catalog items by **name or code**; IDs are resolved at plan
   time. No numeric IDs in Go.
 
-**Your first task:** read the files above, then ask the owner which open questions (Q1–Q6) and
-payloads (P1–P10) they can answer now. Propose the plan for the next step in `status.md`
-("Plugin Framework provider + mux") and wait for approval. Use the `ship-check` skill before
-calling anything done, and the `mtncloud-code-reviewer` agent on every diff.
+- Customer roles get **403** on admin endpoints (`/api/zones`, `/api/service-plans`, floating IPs).
+  Use the endpoints the console's wizard calls (D-016), and confirm every new endpoint with a
+  sub-tenant login.
+- The platform CLI runs only through `scripts/cli/capture.ps1`: reads, and `-d` dry runs for
+  anything that writes.
+
+**Your first task:** read the files above. Then capture, as a sub-tenant, the `-d` dry runs listed
+under "Next" in `status.md` for `mtncloud_security_group`, and propose its plan (schema with every
+attribute's Required/Optional/Computed and why, client methods, tests, docs). Wait for approval
+before writing Go. Use the `ship-check` skill before calling anything done, and the
+`mtncloud-code-reviewer` agent on every diff.
 
 **Local tooling notes (Windows):** `-race` needs cgo, so it runs in CI. `make` may be missing, so run
 the commands in the Makefile directly. `scripts/validate-examples.sh` needs `PYTHON=python` and

@@ -27,7 +27,7 @@ Appliance configuration resources work only for the master tenant. The provider 
 which tenant you are logged in as. The API is never left to fail halfway through an apply. The
 authoritative list of master-only types is pending from MTN (Q1).
 
-## D-005 New resources use the Plugin Framework, muxed with legacy (2026-10-26, recommended, pending confirmation)
+## D-005 New resources use the Plugin Framework, muxed with legacy (2026-10-26, confirmed)
 New and rewritten resources are written with terraform-plugin-framework and served alongside
 `internal/legacy` (SDKv2) through terraform-plugin-mux. A resource moves out of legacy only when it
 is rewritten with tests. No big-bang migration.
@@ -73,3 +73,30 @@ FastCreateLinuxInstance.sh does. Order has no meaning, so it is a set (no diff c
 ## D-013 Load balancer is on hold (2026-10-26)
 The owner has paused load balancer work. Captures show Octavia (type `octavia`) in use, but no LB
 resource is designed or documented until the owner reopens it.
+
+## D-014 Certificate verification is on by default (2026-10-26)
+Owner's decision. `secure` now defaults to `true` in both mux halves; `secure = false` or
+`MTNCLOUD_API_SECURE=false` opts out, with a warning on every run. Before this, the inherited
+default skipped verification. Users of a console with a self-signed certificate must now set
+`secure = false`: call it out in the first release notes.
+
+## D-015 Provider `url` is Optional in the schema, checked in Configure (2026-10-26)
+SDKv2 turns `Required` + `DefaultFunc` into Optional only when `MTNCLOUD_API_URL` is set, so the
+schema changed with the environment and the Framework half could never match it reliably (the mux
+needs identical provider schemas). Both halves declare `url` Optional and fail in Configure with a
+clear message when neither the argument nor the env var is set. `TestMux_ProviderSchemasMatch`
+guards the match.
+
+## D-016 Lookups use the customer-safe endpoints (2026-10-26)
+See [catalog-lookups.md](catalog-lookups.md). Admin endpoints return 403 for customer roles, so
+every lookup uses the provisioning wizard's endpoints, verified with a sub-tenant login.
+
+## D-017 MTN Network DNS defaults to MTN's resolvers (2026-10-26)
+Owner's request. Customers almost always type MTN's resolvers into the console's create-network form
+(it prints them as hints under the fields). `mtncloud_network` will declare `dns_primary` and
+`dns_secondary` as **Optional with a schema default**: `102.88.134.41` and `102.90.109.125`. Users can
+override either one, and neither is required. A default (not Optional+Computed) makes the plan show
+the value that will be sent, and keeps the empty plan after apply. Validate both as IPv4 at plan time.
+Defaults live in one constant pair in the network service package, with a comment pointing here, so a
+resolver change is a one-line edit plus a CHANGELOG note (changing a default produces a diff for
+existing networks that didn't set the attribute).

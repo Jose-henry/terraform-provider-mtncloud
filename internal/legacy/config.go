@@ -3,7 +3,6 @@ package legacy
 import (
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"os"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
@@ -88,7 +87,8 @@ provider "mtncloud" {
 		// logging with access token or username and password?
 		if c.Username != "" {
 			if c.TenantSubdomain != "" {
-				username := fmt.Sprintf(`%s\\%s`, c.TenantSubdomain, c.Username)
+				// Sub-tenant users log in as subdomain\username, one backslash (B-006).
+				username := c.TenantSubdomain + `\` + c.Username
 				client.SetUsernameAndPassword(username, c.Password)
 			} else {
 				client.SetUsernameAndPassword(c.Username, c.Password)
