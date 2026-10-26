@@ -2,12 +2,12 @@
 page_title: "mtncloud_resource_pool_group Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud resource pool group resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a resource pool group.
 ---
 
 # mtncloud_resource_pool_group
 
-Provides a MTN Cloud resource pool group resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a resource pool group.
 
 ## Example Usage
 

@@ -2,12 +2,12 @@
 page_title: "mtncloud_motd_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud message of the day policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a message of the day policy.
 ---
 
 # mtncloud_motd_policy
 
-Provides a MTN Cloud message of the day policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a message of the day policy.
 
 ## Example Usage
 

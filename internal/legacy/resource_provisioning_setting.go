@@ -15,7 +15,7 @@ import (
 
 func resourceProvisioningSetting() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud provisioning setting resource.",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance provisioning settings.",
 		CreateContext: resourceProvisioningSettingCreate,
 		ReadContext:   resourceProvisioningSettingRead,
 		UpdateContext: resourceProvisioningSettingUpdate,

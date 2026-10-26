@@ -2,12 +2,12 @@
 page_title: "mtncloud_hostname_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud cluster resource name policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a hostname policy.
 ---
 
 # mtncloud_hostname_policy
 
-Provides a MTN Cloud cluster resource name policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a hostname policy.
 
 ## Example Usage
 

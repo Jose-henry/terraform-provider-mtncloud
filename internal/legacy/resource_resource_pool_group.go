@@ -13,7 +13,7 @@ import (
 
 func resourceResourcePoolGroup() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud resource pool group resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a resource pool group.",
 		CreateContext: resourceResourcePoolGroupCreate,
 		ReadContext:   resourceResourcePoolGroupRead,
 		UpdateContext: resourceResourcePoolGroupUpdate,

@@ -13,7 +13,7 @@ import (
 
 func resourceCypherAccessPolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud cypher access policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a cypher access policy.",
 		CreateContext: resourceCypherAccessPolicyCreate,
 		ReadContext:   resourceCypherAccessPolicyRead,
 		UpdateContext: resourceCypherAccessPolicyUpdate,

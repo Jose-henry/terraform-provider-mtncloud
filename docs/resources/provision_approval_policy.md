@@ -2,12 +2,12 @@
 page_title: "mtncloud_provision_approval_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud provision approval policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a provision approval policy.
 ---
 
 # mtncloud_provision_approval_policy
 
-Provides a MTN Cloud provision approval policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a provision approval policy.
 
 ## Example Usage
 

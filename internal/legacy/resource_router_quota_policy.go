@@ -13,7 +13,7 @@ import (
 
 func resourceRouterQuotaPolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud router quota policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a router quota policy.",
 		CreateContext: resourceRouterQuotaPolicyCreate,
 		ReadContext:   resourceRouterQuotaPolicyRead,
 		UpdateContext: resourceRouterQuotaPolicyUpdate,

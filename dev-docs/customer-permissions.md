@@ -21,6 +21,11 @@ feature is master-only and says so (D-004).
 | `/api/policies` | Policies are master-only: the master tenant applies them to a sub-tenant. |
 | `/api/networks/floating-ips` | Floating IPs: the customer endpoint is still unknown. |
 | `/api/health` | Appliance health: master-only. |
+| `/api/accounts/available-roles` | Tenant roles: master-only. |
+| `/api/resource-pools/groups` | Resource pool groups: master-only. |
+| `/api/library/cluster-packages` | Cluster packages: master-only. |
+| `/api/license` | Appliance license: master-only. |
+| `/api/appliance-settings`, `backup-settings`, `guidance-settings`, `monitoring-settings`, `provisioning-settings` | Appliance configuration: master-only (D-004). |
 
 ## Readable by a customer (200)
 
@@ -40,8 +45,16 @@ feature is master-only and says so (D-004).
 | VDI | `vdi-pools`, `vdi-apps`, `vdi-gateways` (all 0) |
 | Integrations | `integrations` (0) |
 
-Not probed correctly (wrong path, 404): `library/security-packages`, `network-groups`,
-`networks/subnets`. Find the right paths before relying on them.
+Second probe, with the SDK's exact paths: `networks/groups` (0), `subnets` (13),
+`security-packages` (0), `user-sources` (2), `boot-scripts` (0), `preseed-scripts` (0) and
+`wiki/pages` (0) are readable.
+
+Not checked: the integration-specific lookups (Ansible Tower inventories and job templates, Chef
+servers, ServiceNow and vRO workflows) need an integration first, and this tenant has none.
+`mtncloud_permission_set` calls no API: it only renders JSON.
+
+The features guide (`scripts/gen-features.py`, `ACCESS`) shows this per type, and every
+master-only type says so in the first sentence of its description.
 
 A 200 shows the role can **read**. Whether it can **create** is a separate question, answered per
 resource with a `-d` dry run and, later, an acceptance test.

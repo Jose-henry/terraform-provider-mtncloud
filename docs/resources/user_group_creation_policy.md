@@ -2,12 +2,12 @@
 page_title: "mtncloud_user_group_creation_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud user group creation policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a user group creation policy.
 ---
 
 # mtncloud_user_group_creation_policy
 
-Provides a MTN Cloud user group creation policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a user group creation policy.
 
 ## Example Usage
 

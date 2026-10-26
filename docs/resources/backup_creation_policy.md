@@ -2,12 +2,12 @@
 page_title: "mtncloud_backup_creation_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud backup creation policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a backup creation policy.
 ---
 
 # mtncloud_backup_creation_policy
 
-Provides a MTN Cloud backup creation policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a backup creation policy.
 
 ## Example Usage
 

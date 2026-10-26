@@ -2,12 +2,12 @@
 page_title: "mtncloud_instance_name_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud instance name policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a instance name policy.
 ---
 
 # mtncloud_instance_name_policy
 
-Provides a MTN Cloud instance name policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a instance name policy.
 
 ## Example Usage
 

@@ -17,7 +17,7 @@ import (
 
 func resourceServicePlan() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a service plan resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a service plan.",
 		CreateContext: resourceServicePlanCreate,
 		ReadContext:   resourceServicePlanRead,
 		UpdateContext: resourceServicePlanUpdate,

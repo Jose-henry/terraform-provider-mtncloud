@@ -2,12 +2,12 @@
 page_title: "mtncloud_budget_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud budget policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a budget policy.
 ---
 
 # mtncloud_budget_policy
 
-Provides a MTN Cloud budget policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a budget policy.
 
 ## Example Usage
 

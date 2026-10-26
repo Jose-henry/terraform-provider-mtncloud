@@ -2,12 +2,12 @@
 page_title: "mtncloud_cluster_package Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud cluster package resource.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a cluster package.
 ---
 
 # mtncloud_cluster_package
 
-Provides a MTN Cloud cluster package resource.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a cluster package.
 
 ## Example Usage
 

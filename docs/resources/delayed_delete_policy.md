@@ -2,12 +2,12 @@
 page_title: "mtncloud_delayed_delete_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud delayed delete policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a delayed delete policy.
 ---
 
 # mtncloud_delayed_delete_policy
 
-Provides a MTN Cloud delayed delete policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a delayed delete policy.
 
 ## Example Usage
 

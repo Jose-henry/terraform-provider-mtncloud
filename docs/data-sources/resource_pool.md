@@ -2,12 +2,12 @@
 page_title: "mtncloud_resource_pool Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud resource pool data source.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a resource pool by name. Customers: use mtncloud_projects.
 ---
 
 # mtncloud_resource_pool (Data Source)
 
-Provides a MTN Cloud resource pool data source.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a resource pool by name. Customers: use `mtncloud_projects`.
 
 ## Example Usage
 

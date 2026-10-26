@@ -14,7 +14,7 @@ import (
 
 func resourceTenantRole() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud tenant role resource (This resource requires MTN Cloud 6.0.4 or later).",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a tenant role.",
 		CreateContext: resourceTenantRoleCreate,
 		ReadContext:   resourceTenantRoleRead,
 		UpdateContext: resourceTenantRoleUpdate,

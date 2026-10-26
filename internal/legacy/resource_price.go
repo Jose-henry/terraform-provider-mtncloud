@@ -14,7 +14,7 @@ import (
 
 func resourcePrice() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a price resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a price.",
 		CreateContext: resourcePriceCreate,
 		ReadContext:   resourcePriceRead,
 		UpdateContext: resourcePriceUpdate,

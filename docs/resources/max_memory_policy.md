@@ -2,12 +2,12 @@
 page_title: "mtncloud_max_memory_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud max memory policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum memory policy.
 ---
 
 # mtncloud_max_memory_policy
 
-Provides a MTN Cloud max memory policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum memory policy.
 
 ## Example Usage
 

@@ -2,12 +2,12 @@
 page_title: "mtncloud_max_storage_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud max storage policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum storage policy.
 ---
 
 # mtncloud_max_storage_policy
 
-Provides a MTN Cloud max storage policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum storage policy.
 
 ## Example Usage
 

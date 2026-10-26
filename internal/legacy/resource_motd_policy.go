@@ -14,7 +14,7 @@ import (
 
 func resourceMotdPolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud message of the day policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a message of the day policy.",
 		CreateContext: resourceMotdPolicyCreate,
 		ReadContext:   resourceMotdPolicyRead,
 		UpdateContext: resourceMotdPolicyUpdate,

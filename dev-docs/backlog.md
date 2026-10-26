@@ -52,14 +52,13 @@ Now on by default in both halves; `secure = false` opts out with a warning.
 `tenant\\user`. The API reference and the owner's CLI login (`acme\jdoe`) use one backslash.
 Fixed in legacy and the new client. Confirm with a real sub-tenant run once acceptance tests exist.
 
-## B-007 Legacy data sources that fail for customer logins
-They call endpoints a customer role gets 403 on ([customer-permissions.md](customer-permissions.md)):
-`mtncloud_cloud`, `mtncloud_clouds` (`/api/zones`), `mtncloud_plan` (`/api/service-plans`),
-`mtncloud_price`, `mtncloud_price_set`, `mtncloud_policy`, `mtncloud_policies`, `mtncloud_tenant`,
-`mtncloud_tenants`, `mtncloud_resource_pool`, and probably `mtncloud_cloud_datastore`. Options:
-mark them master-only in their descriptions and the features guide (D-004), and point customers to
-`mtncloud_projects`, `mtncloud_plans` and `mtncloud_datastores`. Decide with the owner; then add a
-"Who can use it" column to the features guide.
+## B-007 Legacy types that fail for customer logins (resolved: marked master-only)
+36 resources and 12 data sources call endpoints a customer role gets 403 on
+([customer-permissions.md](customer-permissions.md)). Each description now starts with "Master tenant
+only", pointing customers to `mtncloud_projects`, `mtncloud_plans` and `mtncloud_datastores` where
+one exists. The features guide shows a "Customer login" column; `scripts/gen-features.py` fails if
+its `MASTER_ONLY` list and the descriptions disagree. Still to do: the plan-time refusal D-004
+describes (`internal/tenancy`), so a customer gets a clear error before the API's 403.
 
 ## B-008 Apps (multi-instance) and customer inputs
 - Blueprint catalog items provision **apps** (several instances or containers). Planned

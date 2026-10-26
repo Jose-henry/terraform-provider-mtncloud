@@ -11,7 +11,7 @@ import (
 
 func dataSourcePrice() *schema.Resource {
 	return &schema.Resource{
-		Description: "The Price data source allows details of a Price to be retrieved by its name.",
+		Description: "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a price by name.",
 		ReadContext: dataSourcePriceRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

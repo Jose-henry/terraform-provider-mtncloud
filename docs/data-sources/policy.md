@@ -2,12 +2,12 @@
 page_title: "mtncloud_policy Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud policy data source.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a policy by name.
 ---
 
 # mtncloud_policy (Data Source)
 
-Provides a MTN Cloud policy data source.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a policy by name.
 
 ## Example Usage
 

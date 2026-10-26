@@ -12,7 +12,7 @@ import (
 
 func resourceLicense() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud license resource.",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance license.",
 		CreateContext: resourceLicenseCreate,
 		ReadContext:   resourceLicenseRead,
 		UpdateContext: resourceLicenseUpdate,

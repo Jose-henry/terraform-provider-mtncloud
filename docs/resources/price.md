@@ -2,12 +2,12 @@
 page_title: "mtncloud_price Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a price resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a price.
 ---
 
 # mtncloud_price
 
-Provides a price resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a price.
 
 ## Example Usage
 

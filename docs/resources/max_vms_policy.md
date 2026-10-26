@@ -2,12 +2,12 @@
 page_title: "mtncloud_max_vms_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud max vms policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum vms policy.
 ---
 
 # mtncloud_max_vms_policy
 
-Provides a MTN Cloud max vms policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum vms policy.
 
 ## Example Usage
 

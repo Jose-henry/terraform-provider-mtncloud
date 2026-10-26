@@ -2,12 +2,12 @@
 page_title: "mtncloud_service_plan Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a service plan resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a service plan.
 ---
 
 # mtncloud_service_plan
 
-Provides a service plan resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a service plan.
 
 ## Example Usage
 

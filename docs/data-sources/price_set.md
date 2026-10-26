@@ -2,12 +2,12 @@
 page_title: "mtncloud_price_set Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  The Price Set data source allows details of a Price Set to be retrieved by its name.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a price set by name.
 ---
 
 # mtncloud_price_set (Data Source)
 
-The Price Set data source allows details of a Price Set to be retrieved by its name.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a price set by name.
 
 ## Example Usage
 

@@ -2,12 +2,12 @@
 page_title: "mtncloud_license Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud license resource.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance license.
 ---
 
 # mtncloud_license
 
-Provides a MTN Cloud license resource.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance license.
 
 ## Example Usage
 

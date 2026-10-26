@@ -2,12 +2,12 @@
 page_title: "mtncloud_tenant_role Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud tenant role resource (This resource requires MTN Cloud 6.0.4 or later).
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a tenant role.
 ---
 
 # mtncloud_tenant_role
 
-Provides a MTN Cloud tenant role resource (This resource requires MTN Cloud 6.0.4 or later).
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a tenant role.
 
 ## Example Usage
 

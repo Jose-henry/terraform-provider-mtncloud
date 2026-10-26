@@ -13,7 +13,7 @@ import (
 
 func resourceMaxStoragePolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud max storage policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum storage policy.",
 		CreateContext: resourceMaxStoragePolicyCreate,
 		ReadContext:   resourceMaxStoragePolicyRead,
 		UpdateContext: resourceMaxStoragePolicyUpdate,

@@ -13,7 +13,7 @@ import (
 
 func resourceWorkflowPolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud workflow policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a workflow policy.",
 		CreateContext: resourceWorkflowPolicyCreate,
 		ReadContext:   resourceWorkflowPolicyRead,
 		UpdateContext: resourceWorkflowPolicyUpdate,

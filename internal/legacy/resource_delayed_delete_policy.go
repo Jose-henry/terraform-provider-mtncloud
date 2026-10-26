@@ -13,7 +13,7 @@ import (
 
 func resourceDelayedDeletePolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud delayed delete policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a delayed delete policy.",
 		CreateContext: resourceDelayedDeletePolicyCreate,
 		ReadContext:   resourceDelayedDeletePolicyRead,
 		UpdateContext: resourceDelayedDeletePolicyUpdate,

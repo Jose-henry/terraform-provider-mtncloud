@@ -12,7 +12,7 @@ import (
 
 func resourceClusterPackage() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud cluster package resource.",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a cluster package.",
 		CreateContext: resourceClusterPackageCreate,
 		ReadContext:   resourceClusterPackageRead,
 		UpdateContext: resourceClusterPackageUpdate,

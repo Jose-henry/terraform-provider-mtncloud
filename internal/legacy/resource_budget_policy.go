@@ -13,7 +13,7 @@ import (
 
 func resourceBudgetPolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud budget policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a budget policy.",
 		CreateContext: resourceBudgetPolicyCreate,
 		ReadContext:   resourceBudgetPolicyRead,
 		UpdateContext: resourceBudgetPolicyUpdate,

@@ -2,12 +2,12 @@
 page_title: "mtncloud_max_cores_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud max cores policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum cores policy.
 ---
 
 # mtncloud_max_cores_policy
 
-Provides a MTN Cloud max cores policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum cores policy.
 
 ## Example Usage
 

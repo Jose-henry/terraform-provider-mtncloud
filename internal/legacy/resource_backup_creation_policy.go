@@ -13,7 +13,7 @@ import (
 
 func resourceBackupCreationPolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud backup creation policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a backup creation policy.",
 		CreateContext: resourceBackupCreationPolicyCreate,
 		ReadContext:   resourceBackupCreationPolicyRead,
 		UpdateContext: resourceBackupCreationPolicyUpdate,

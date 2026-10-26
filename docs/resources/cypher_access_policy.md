@@ -2,12 +2,12 @@
 page_title: "mtncloud_cypher_access_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud cypher access policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a cypher access policy.
 ---
 
 # mtncloud_cypher_access_policy
 
-Provides a MTN Cloud cypher access policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a cypher access policy.
 
 ## Example Usage
 

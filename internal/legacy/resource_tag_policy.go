@@ -13,7 +13,7 @@ import (
 
 func resourceTagPolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud tag policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a tag policy.",
 		CreateContext: resourceTagPolicyCreate,
 		ReadContext:   resourceTagPolicyRead,
 		UpdateContext: resourceTagPolicyUpdate,

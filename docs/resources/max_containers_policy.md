@@ -2,12 +2,12 @@
 page_title: "mtncloud_max_containers_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud max containers policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum containers policy.
 ---
 
 # mtncloud_max_containers_policy
 
-Provides a MTN Cloud max containers policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a maximum containers policy.
 
 ## Example Usage
 

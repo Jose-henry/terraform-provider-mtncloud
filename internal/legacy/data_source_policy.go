@@ -12,7 +12,7 @@ import (
 
 func dataSourcePolicy() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud policy data source.",
+		Description: "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a policy by name.",
 		ReadContext: dataSourcePolicyRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

@@ -2,12 +2,12 @@
 page_title: "mtncloud_clouds Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud clouds data source.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Lists clouds. Customers don't need it: the provider finds the MTN Cloud cloud (MTNNG_CLOUD_AZ_1) by itself.
 ---
 
 # mtncloud_clouds (Data Source)
 
-Provides a MTN Cloud clouds data source.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Lists clouds. Customers don't need it: the provider finds the MTN Cloud cloud (`MTNNG_CLOUD_AZ_1`) by itself.
 
 ## Example Usage
 

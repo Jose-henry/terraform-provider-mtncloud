@@ -11,7 +11,7 @@ import (
 
 func dataSourceResourcePool() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud resource pool data source.",
+		Description: "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a resource pool by name. Customers: use `mtncloud_projects`.",
 		ReadContext: dataSourceResourcePoolRead,
 		Schema: map[string]*schema.Schema{
 			"cloud_id": {

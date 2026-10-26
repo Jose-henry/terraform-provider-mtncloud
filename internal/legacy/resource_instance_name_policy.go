@@ -13,7 +13,7 @@ import (
 
 func resourceInstanceNamePolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud instance name policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a instance name policy.",
 		CreateContext: resourceInstanceNamePolicyCreate,
 		ReadContext:   resourceInstanceNamePolicyRead,
 		UpdateContext: resourceInstanceNamePolicyUpdate,

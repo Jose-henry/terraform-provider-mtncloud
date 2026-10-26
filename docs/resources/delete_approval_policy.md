@@ -2,12 +2,12 @@
 page_title: "mtncloud_delete_approval_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud delete approval policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a delete approval policy.
 ---
 
 # mtncloud_delete_approval_policy
 
-Provides a MTN Cloud delete approval policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a delete approval policy.
 
 ## Example Usage
 

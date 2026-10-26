@@ -76,6 +76,12 @@ Last updated 2026-10-26 (PR #3, client and lookup data sources). Update this fil
   precedence). Every review fix was mutation-checked.
 - Types now: 112 resources, 70 data sources.
 
+### Customer permissions (branch `chore/customer-permission-matrix`, not pushed yet)
+- Read-only probe of ~100 endpoints as a sub-tenant Customer Admin User:
+  [customer-permissions.md](customer-permissions.md). The cloud is discovered, never hard-coded (D-018).
+- 36 resources and 12 data sources marked master-only in their descriptions (B-007); the features
+  guide has a "Customer login" column, a master-only list and a status for every planned type.
+
 ## Next (in order, each one a PR with tests, after the owner approves its plan)
 
 1. **`mtncloud_security_group` (+ `mtncloud_security_group_rule`).** Before the plan, as a

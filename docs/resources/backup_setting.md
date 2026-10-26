@@ -2,12 +2,12 @@
 page_title: "mtncloud_backup_setting Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud backup setting resource.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance backup settings.
 ---
 
 # mtncloud_backup_setting
 
-Provides a MTN Cloud backup setting resource.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance backup settings.
 
 ## Example Usage
 

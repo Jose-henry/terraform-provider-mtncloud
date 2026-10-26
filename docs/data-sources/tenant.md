@@ -2,12 +2,12 @@
 page_title: "mtncloud_tenant Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud tenant data source.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a tenant by name.
 ---
 
 # mtncloud_tenant (Data Source)
 
-Provides a MTN Cloud tenant data source.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a tenant by name.
 
 ## Example Usage
 

@@ -2,12 +2,12 @@
 page_title: "mtncloud_tenant_role Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud tenant role data source.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a tenant role by name.
 ---
 
 # mtncloud_tenant_role (Data Source)
 
-Provides a MTN Cloud tenant role data source.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a tenant role by name.
 
 ## Example Usage
 

@@ -2,12 +2,12 @@
 page_title: "mtncloud_tag_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud tag policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a tag policy.
 ---
 
 # mtncloud_tag_policy
 
-Provides a MTN Cloud tag policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a tag policy.
 
 ## Example Usage
 

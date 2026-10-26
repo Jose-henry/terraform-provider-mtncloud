@@ -11,7 +11,7 @@ import (
 
 func dataSourceTenant() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud tenant data source.",
+		Description: "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a tenant by name.",
 		ReadContext: dataSourceTenantRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

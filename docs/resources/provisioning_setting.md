@@ -3,12 +3,12 @@
 page_title: "mtncloud_provisioning_setting Resource - mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud provisioning setting resource.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance provisioning settings.
 ---
 
 # mtncloud_provisioning_setting (Resource)
 
-Provides a MTN Cloud provisioning setting resource.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance provisioning settings.
 
 ## Example Usage
 

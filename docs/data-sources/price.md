@@ -2,12 +2,12 @@
 page_title: "mtncloud_price Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  The Price data source allows details of a Price to be retrieved by its name.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a price by name.
 ---
 
 # mtncloud_price (Data Source)
 
-The Price data source allows details of a Price to be retrieved by its name.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a price by name.
 
 ## Example Usage
 

@@ -11,7 +11,7 @@ import (
 
 func dataSourceCloud() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud cloud data source.",
+		Description: "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Looks up a cloud by name. Customers don't need it: the provider finds the MTN Cloud cloud (`MTNNG_CLOUD_AZ_1`) by itself.",
 		ReadContext: dataSourceCloudRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

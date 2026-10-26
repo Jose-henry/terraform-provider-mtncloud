@@ -2,12 +2,12 @@
 page_title: "mtncloud_guidance_setting Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud guidance setting resource.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance guidance settings.
 ---
 
 # mtncloud_guidance_setting
 
-Provides a MTN Cloud guidance setting resource.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance guidance settings.
 
 ## Example Usage
 

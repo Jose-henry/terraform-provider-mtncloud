@@ -14,7 +14,7 @@ import (
 
 func resourceMonitoringSetting() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud monitoring setting resource.",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance monitoring settings.",
 		CreateContext: resourceMonitoringSettingCreate,
 		ReadContext:   resourceMonitoringSettingRead,
 		UpdateContext: resourceMonitoringSettingUpdate,

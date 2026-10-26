@@ -13,7 +13,7 @@ import (
 
 func resourceClusterResourceNamePolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud cluster resource name policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a cluster resource name policy.",
 		CreateContext: resourceClusterResourceNamePolicyCreate,
 		ReadContext:   resourceClusterResourceNamePolicyRead,
 		UpdateContext: resourceClusterResourceNamePolicyUpdate,

@@ -13,7 +13,7 @@ import (
 
 func resourcePowerSchedulePolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud power schedule policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a power schedule policy.",
 		CreateContext: resourcePowerSchedulePolicyCreate,
 		ReadContext:   resourcePowerSchedulePolicyRead,
 		UpdateContext: resourcePowerSchedulePolicyUpdate,

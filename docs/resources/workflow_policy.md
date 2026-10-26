@@ -2,12 +2,12 @@
 page_title: "mtncloud_workflow_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud workflow policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a workflow policy.
 ---
 
 # mtncloud_workflow_policy
 
-Provides a MTN Cloud workflow policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a workflow policy.
 
 ## Example Usage
 

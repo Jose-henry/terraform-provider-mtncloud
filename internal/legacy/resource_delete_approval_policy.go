@@ -14,7 +14,7 @@ import (
 
 func resourceDeleteApprovalPolicy() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud delete approval policy resource",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a delete approval policy.",
 		CreateContext: resourceDeleteApprovalPolicyCreate,
 		ReadContext:   resourceDeleteApprovalPolicyRead,
 		UpdateContext: resourceDeleteApprovalPolicyUpdate,

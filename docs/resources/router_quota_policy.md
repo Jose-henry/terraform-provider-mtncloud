@@ -2,12 +2,12 @@
 page_title: "mtncloud_router_quota_policy Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud router quota policy resource
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a router quota policy.
 ---
 
 # mtncloud_router_quota_policy
 
-Provides a MTN Cloud router quota policy resource
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a router quota policy.
 
 ## Example Usage
 

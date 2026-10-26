@@ -2,12 +2,12 @@
 page_title: "mtncloud_tenant Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud tenant resource.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a tenant.
 ---
 
 # mtncloud_tenant
 
-Provides a MTN Cloud tenant resource.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages a tenant.
 
 ## Example Usage
 

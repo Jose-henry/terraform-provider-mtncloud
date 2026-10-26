@@ -12,7 +12,7 @@ import (
 
 func resourceGuidanceSetting() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud guidance setting resource.",
+		Description:   "Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance guidance settings.",
 		CreateContext: resourceGuidanceSettingCreate,
 		ReadContext:   resourceGuidanceSettingRead,
 		UpdateContext: resourceGuidanceSettingUpdate,

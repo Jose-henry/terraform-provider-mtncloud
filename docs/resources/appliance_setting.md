@@ -2,12 +2,12 @@
 page_title: "mtncloud_appliance_setting Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud appliance setting resource.
+  Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance settings.
 ---
 
 # mtncloud_appliance_setting
 
-Provides a MTN Cloud appliance setting resource.
+Master tenant only: customer (sub-tenant) logins get 403 from the API it uses. Manages the appliance settings.
 
 ## Example Usage
 
