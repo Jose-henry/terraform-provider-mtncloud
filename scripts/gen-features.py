@@ -80,6 +80,9 @@ RESOURCES = [
 ]
 
 DATA_SOURCES = [
+    ("Pick by name: what can I deploy?",
+     ["projects", "images", "plans", "datastores", "security_groups", "external_networks",
+      "catalog_items"]),
     ("Tenancy, users and access",
      ["tenant", "tenants", "tenant_role", "user_role", "user_group", "user_groups",
       "permission_set", "contact", "credential", "group", "groups", "environment", "environments"]),
@@ -109,7 +112,7 @@ DATA_SOURCES = [
 PLANNED = [
     ("Resources", [
         ("mtncloud_project", "Order a project (resource pool) by name and wait until it and its default security group have synced."),
-        ("mtncloud_instance", "OpenStack VM from an MTN image: plan by size name (for example `G2S4`), project, networks, several security groups, volumes on any Cinder datastore, optional floating IP."),
+        ("mtncloud_instance", "OpenStack VM from an MTN OS image (applications come from the catalog): plan by size name (for example `G2S4`), project, networks, several security groups, volumes on any Cinder datastore, optional floating IP."),
         ("mtncloud_security_group", "Security group with rules, placed in a project."),
         ("mtncloud_security_group_rule", "A single rule, for rules managed from another module."),
         ("mtncloud_network", "MTN Network: private network and subnet in a project (CIDR, gateway, MTN DNS, DHCP)."),
@@ -120,15 +123,8 @@ PLANNED = [
         ("mtncloud_app", "Multi-instance apps."),
         ("mtncloud_ssl_certificate", "Certificates."),
     ]),
-    ("Data sources (pick by name, never copy IDs from the console)", [
-        ("mtncloud_project / mtncloud_projects", "Your projects by short name (the tenant suffix is handled for you)."),
-        ("mtncloud_images", "Images you can provision (MTN OS images)."),
-        ("mtncloud_plans", "Sizes (`G1S1` … `Ge96L384`) available in a project."),
-        ("mtncloud_catalog_items", "Catalog services you can order."),
-        ("mtncloud_security_groups", "Security groups in a project, including the synced `default`."),
+    ("Data sources", [
         ("mtncloud_routers", "MTN Routers in a project."),
-        ("mtncloud_external_networks", "Public networks a router can use for internet access."),
-        ("mtncloud_datastores", "Cinder datastores (volume types) available in a project, such as `__DEFAULT__`, `ENCR_AT_REST` and `_MULTIATTACH_`. New ones appear automatically."),
     ]),
 ]
 
@@ -189,7 +185,7 @@ def main():
         "## Coming next",
         "",
         "Designed and in progress. These are **not available yet**. Until `mtncloud_instance` ships, "
-        "virtual machines can't be created with this provider.",
+        "virtual machines can't be created with this provider. Load balancers are on hold.",
         "",
     ]
     for title, items in PLANNED:

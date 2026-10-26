@@ -1,0 +1,8 @@
+{"instanceTypes": [
+  {"id": 89, "code": "MTN-U24.04LTS", "name": "MTN Ubuntu Server 24.04.3LTS", "category": "os", "visibility": "public", "provisionTypeCode": "openstack", "versions": ["v24.04"],
+   "instanceTypeLayouts": [{"id": 309, "name": "MTN-U24.04LTS", "provisionTypeCode": "openstack"}]},
+  {"id": 164, "code": "MTN-WINSVR2025", "name": "MTN Windows Server 2025 (BYOL)", "category": "os", "visibility": "public",
+   "instanceTypeLayouts": [{"id": 399, "name": "MTN-WINSVR2025", "provisionTypeCode": "openstack"}]},
+  {"id": 152, "code": "MK8S-M", "name": "MTN KUBERNETES (MK8S) MASTER", "category": "apps", "visibility": "public",
+   "instanceTypeLayouts": [{"id": 386, "name": "MK8S-M", "provisionTypeCode": "openstack"}]}
+], "meta": {"offset": 0, "max": 200, "size": 3, "total": 3}}

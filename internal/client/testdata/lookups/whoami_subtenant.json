@@ -1,0 +1,11 @@
+{
+  "user": {
+    "id": 9002,
+    "username": "jdoe",
+    "account": {"id": 9001, "name": "Acme"},
+    "linuxPassword": "<scrubbed>",
+    "windowsPassword": "<scrubbed>"
+  },
+  "permissions": [{"name": "Provisioning", "code": "provisioning", "access": "full"}],
+  "appliance": {"buildVersion": "8.0.0"}
+}

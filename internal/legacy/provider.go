@@ -10,9 +10,11 @@ import (
 func Provider() *schema.Provider {
 	return &schema.Provider{
 		Schema: map[string]*schema.Schema{
+			// Optional (not Required) so the schema doesn't depend on MTNCLOUD_API_URL being set:
+			// the Framework half of the mux must declare the same schema. Configure checks it.
 			"url": {
 				Type:        schema.TypeString,
-				Required:    true,
+				Optional:    true,
 				Description: "The URL of the MTN Cloud console where requests will be directed.",
 				DefaultFunc: schema.EnvDefaultFunc("MTNCLOUD_API_URL", nil),
 			},
@@ -51,12 +53,12 @@ func Provider() *schema.Provider {
 				ConflictsWith: []string{"access_token"},
 			},
 
-			// defaults to false
+			// Verification is on unless the user turns it off (owner's decision, B-005).
 			"secure": {
 				Type:        schema.TypeBool,
 				Optional:    true,
-				Description: `Allow the provider to enable certificate verification. If omitted, default value is "false".`,
-				DefaultFunc: schema.EnvDefaultFunc("MTNCLOUD_API_SECURE", false),
+				Description: `Verify the MTN Cloud console's TLS certificate. Defaults to "true". Set to "false" only for a console with a self-signed certificate.`,
+				DefaultFunc: schema.EnvDefaultFunc("MTNCLOUD_API_SECURE", true),
 			},
 		},
 
@@ -244,6 +246,10 @@ func Provider() *schema.Provider {
 }
 
 func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
+	// An unknown url (from a resource not created yet) reads as "" during plan: that isn't "not set".
+	if d.Get("url").(string) == "" && urlKnown(d) {
+		return nil, diag.Errorf("the MTN Cloud console URL is not set: set url in the provider block, or MTNCLOUD_API_URL")
+	}
 	config := Config{
 		Url:             d.Get("url").(string),
 		AccessToken:     d.Get("access_token").(string),
@@ -254,4 +260,12 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	return config.Client()
+}
+
+func urlKnown(d *schema.ResourceData) bool {
+	raw := d.GetRawConfig()
+	if raw.IsNull() || !raw.IsKnown() || !raw.Type().IsObjectType() {
+		return raw.IsKnown()
+	}
+	return raw.GetAttr("url").IsKnown()
 }

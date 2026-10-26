@@ -40,17 +40,17 @@ Terraform's graph enforces "network before router" with no `depends_on`.
 ```json
 {
   "id": 768,
-  "name": "testproject-Akatsuki",
+  "name": "testproject-AcmeCorp",
   "externalId": "c6db9ce7b11a414293bbe93dc6ba1faa",
   "zone": { "id": 4, "name": "MTNNG_CLOUD_AZ_1" },
   "type": "default", "status": "available", "active": true, "visibility": "private",
-  "tenants": [ { "id": 72, "name": "Akatsuki" }, { "id": 1, "name": "MTNNG_MASTER_TENANT" } ],
+  "tenants": [ { "id": 72, "name": "AcmeCorp" }, { "id": 1, "name": "MTNNG_MASTER_TENANT" } ],
   "config": { "tenancy": "default", "managers": ["cloudadmin"] }
 }
 ```
 
 - **Name rule:** pool name = `<project>-<tenant account name>`, with the suffix in the tenant's exact
-  case: `testproject` + `Akatsuki` gives `testproject-Akatsuki`, and `qa` +
+  case: `testproject` + `AcmeCorp` gives `testproject-AcmeCorp`, and `qa` +
   `arcapaymentscompanylimitedcorp-lsq7` gives `qa-arcapaymentscompanylimitedcorp-lsq7`. The tenant
   name itself can contain `-`, so the project part is found by **stripping the known tenant suffix**,
   never by splitting on the last `-`.

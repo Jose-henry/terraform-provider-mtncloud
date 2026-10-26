@@ -1,0 +1,4 @@
+{"catalogItemTypes": [
+  {"id": 22, "name": "Create Instance", "description": "Quick Deployment of Instances", "type": "workflow", "context": "appliance", "featured": true, "allowQuantity": false},
+  {"id": 13, "name": "MTN Object Storage", "description": "S3-compatible object storage", "type": "workflow", "featured": false}
+], "meta": {"offset": 0, "max": 200, "size": 2, "total": 2}}

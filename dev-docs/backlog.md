@@ -5,7 +5,7 @@
 | # | Question | Blocks |
 |---|---|---|
 | Q1 | Authoritative list of master-tenant-only features | D-004 gating |
-| Q2 | Confirm Plugin Framework + mux (D-005) | all new resources |
+| ~~Q2~~ | ~~Confirm Plugin Framework + mux (D-005)~~ resolved: confirmed and built | |
 | Q3 | Load balancer API (instance type 70 "LoadBalancer", Octavia, no layouts: custom API?) | `mtncloud_load_balancer` (**on hold**, D-013) |
 | Q4 | Payloads P1–P7 in [api-research.md](api-research.md) and P8–P10 in [prerequisites.md](prerequisites.md) | network, router, SG, instance, MOS |
 | Q5 | Final GitHub org/repo name for registry publishing (`terraform-provider-mtncloud`) | first release |
@@ -13,8 +13,8 @@
 
 ## Build order (after approval)
 
-1. `internal/client`: retries, backoff, context, rate limit, a redacting logger, httptest contract tests.
-2. Catalog data sources (`mtncloud_images`, `mtncloud_plans`, `mtncloud_catalog_items`, `mtncloud_projects`).
+1. ~~`internal/client`~~ done.
+2. ~~Catalog data sources~~ done: projects, images, plans, datastores, security groups, external networks, catalog items.
 3. `mtncloud_security_group` (+ rule)
 4. `mtncloud_network` (MTN Network)
 5. `mtncloud_router` (MTN Router)
@@ -43,3 +43,11 @@ grows or if a listed file becomes clean.
 ## B-004 Quickstart `terraform.tfvars` (local only)
 The local, git-ignored file still has `username`/`password`/`tenant_subdomain` keys that the
 quickstart no longer declares (Terraform warns). Remove them locally.
+
+## B-005 TLS verification was off by default (resolved, D-014)
+Now on by default in both halves; `secure = false` opts out with a warning.
+
+## B-006 Legacy sub-tenant login sent two backslashes (fixed)
+`internal/legacy/config.go` built the username with the raw string `%s\\%s`, sending
+`tenant\\user`. The API reference and the owner's CLI login (`acme\jdoe`) use one backslash.
+Fixed in legacy and the new client. Confirm with a real sub-tenant run once acceptance tests exist.

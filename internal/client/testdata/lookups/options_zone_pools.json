@@ -1,0 +1,6 @@
+{"success": true, "data": [
+  {"name": "Resource Pools", "isGroup": true, "group": "pool"},
+  {"id": 5, "value": "pool-5", "name": "admin", "externalId": "00000000000000000000000000000005", "isDefault": false, "group": "pool"},
+  {"id": 9201, "value": "pool-9201", "name": "web-prod-Acme", "externalId": "00000000000000000000000000009201", "isDefault": false, "group": "pool"},
+  {"id": 9202, "value": "pool-9202", "name": "data-Acme", "externalId": "00000000000000000000000000009202", "isDefault": false, "group": "pool"}
+]}

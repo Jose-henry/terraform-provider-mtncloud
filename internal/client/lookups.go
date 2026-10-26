@@ -1,0 +1,350 @@
+package client
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"maps"
+	"net/url"
+	"strconv"
+	"strings"
+)
+
+// The lookups below use the endpoints the console's own provisioning wizard calls, because a
+// customer role (for example "Customer Admin User") gets 403 on the admin endpoints
+// (/api/zones, /api/zones/{id}/resource-pools, /api/service-plans). Captured with the CLI as a
+// sub-tenant user, 2026-10-26: see dev-docs/api-research.md.
+
+// WhoAmI is the calling user's tenant.
+type WhoAmI struct {
+	AccountID   int64
+	AccountName string // the tenant name; projects are named "<project>-<AccountName>"
+	IsMaster    bool
+}
+
+// WhoAmI returns the caller's tenant. It is fetched once per Client.
+func (c *Client) WhoAmI(ctx context.Context) (*WhoAmI, error) {
+	return cached(ctx, &c.cache, "whoami", func(ctx context.Context) (*WhoAmI, error) {
+		var resp struct {
+			User struct {
+				Account struct {
+					ID   int64  `json:"id"`
+					Name string `json:"name"`
+				} `json:"account"`
+			} `json:"user"`
+			IsMasterAccount bool `json:"isMasterAccount"` // absent (false) for sub-tenants
+		}
+		if err := c.get(ctx, "/api/whoami", nil, &resp); err != nil {
+			return nil, err
+		}
+		return &WhoAmI{AccountID: resp.User.Account.ID, AccountName: resp.User.Account.Name, IsMaster: resp.IsMasterAccount}, nil
+	})
+}
+
+// Placement is where the caller provisions: the cloud and the group the console offers them.
+type Placement struct {
+	CloudID   int64
+	CloudName string
+	GroupID   int64
+	GroupName string
+}
+
+// Placement discovers the caller's cloud and group. MTN Cloud offers each tenant one group and one
+// OpenStack cloud (MTNNG_CLOUD_AZ_1). More than one is reported as an error rather than guessed.
+func (c *Client) Placement(ctx context.Context) (*Placement, error) {
+	return cached(ctx, &c.cache, "placement", func(ctx context.Context) (*Placement, error) {
+		groups, err := c.options(ctx, "groups", nil)
+		if err != nil {
+			return nil, err
+		}
+		group, err := exactlyOne("group", groups)
+		if err != nil {
+			return nil, err
+		}
+		clouds, err := c.options(ctx, "clouds", url.Values{"groupId": {itoa(group.ID)}})
+		if err != nil {
+			return nil, err
+		}
+		cloud, err := exactlyOne("cloud", clouds)
+		if err != nil {
+			return nil, err
+		}
+		return &Placement{CloudID: cloud.ID, CloudName: cloud.Name, GroupID: group.ID, GroupName: group.Name}, nil
+	})
+}
+
+// Option is one entry of an /api/options/<source> list.
+type Option struct {
+	ID         int64
+	Name       string
+	ExternalID string // OpenStack UUID, when the source has one
+}
+
+// rawOption accepts the option shapes the platform uses: {"name","value"} with a numeric value,
+// or {"id","name","value":"<uuid or pool-N>","externalId"}.
+type rawOption struct {
+	ID         *int64 `json:"id"`
+	Name       string `json:"name"`
+	Value      any    `json:"value"`
+	ExternalID string `json:"externalId"`
+	IsGroup    bool   `json:"isGroup"` // a section header in grouped lists; never a real item
+}
+
+func (r rawOption) option() (Option, bool) {
+	if r.IsGroup {
+		return Option{}, false
+	}
+	o := Option{Name: r.Name, ExternalID: r.ExternalID}
+	switch {
+	case r.ID != nil:
+		o.ID = *r.ID
+		// Security groups carry the Neutron UUID in "value"; pools use "pool-<id>", which isn't one.
+		if s, ok := r.Value.(string); ok && o.ExternalID == "" && !strings.HasPrefix(s, "pool-") {
+			o.ExternalID = s
+		}
+	default:
+		switch v := r.Value.(type) {
+		case float64:
+			o.ID = int64(v)
+		case string: // some installs send numeric option values as strings
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				return Option{}, false
+			}
+			o.ID = n
+		default:
+			return Option{}, false
+		}
+	}
+	return o, true
+}
+
+func (c *Client) options(ctx context.Context, source string, q url.Values) ([]Option, error) {
+	key := "options/" + source + "?" + q.Encode()
+	return cached(ctx, &c.cache, key, func(ctx context.Context) ([]Option, error) {
+		var resp struct {
+			Data []rawOption `json:"data"`
+		}
+		if err := c.get(ctx, "/api/options/"+source, q, &resp); err != nil {
+			return nil, err
+		}
+		out := make([]Option, 0, len(resp.Data))
+		for _, r := range resp.Data {
+			if o, ok := r.option(); ok {
+				out = append(out, o)
+			}
+		}
+		return out, nil
+	})
+}
+
+func exactlyOne(kind string, opts []Option) (Option, error) {
+	switch len(opts) {
+	case 1:
+		return opts[0], nil
+	case 0:
+		return Option{}, fmt.Errorf("your MTN Cloud account has no %s to provision into. Ask your tenant administrator for access", kind)
+	}
+	names := make([]string, len(opts))
+	for i, o := range opts {
+		names[i] = o.Name
+	}
+	return Option{}, fmt.Errorf("your MTN Cloud account has %d %ss (%s); this provider supports exactly one", len(opts), kind, strings.Join(names, ", "))
+}
+
+// Projects lists the projects (OpenStack resource pools) the caller can provision into. Names are
+// the full platform names, for example "web-prod-AcmeCorp"; shared pools such as "admin" have no
+// tenant suffix.
+func (c *Client) Projects(ctx context.Context) ([]Option, error) {
+	p, err := c.Placement(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return c.options(ctx, "zonePools", url.Values{"zoneId": {itoa(p.CloudID)}})
+}
+
+// SecurityGroups lists the security groups placed in a project (its synced "default" included).
+func (c *Client) SecurityGroups(ctx context.Context, projectID int64) ([]Option, error) {
+	p, err := c.Placement(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return c.options(ctx, "zoneSecurityGroup", url.Values{"zoneId": {itoa(p.CloudID)}, "poolId": {itoa(projectID)}})
+}
+
+// ExternalNetworks lists the networks an MTN Router can use as its external (internet) side.
+func (c *Client) ExternalNetworks(ctx context.Context) ([]Option, error) {
+	p, err := c.Placement(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return c.options(ctx, "openstackExternalNetworks", url.Values{"zoneId": {itoa(p.CloudID)}})
+}
+
+// Datastores lists the storage datastores (OpenStack Cinder volume types) a project can use for
+// volumes, for example "__DEFAULT__". New datastores appear here without provider changes.
+func (c *Client) Datastores(ctx context.Context, projectID int64) ([]Option, error) {
+	p, err := c.Placement(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return c.options(ctx, "datastores", url.Values{
+		"zoneId": {itoa(p.CloudID)}, "siteId": {itoa(p.GroupID)}, "resourcePoolId": {itoa(projectID)},
+	})
+}
+
+// InstanceType is a provisionable type: an OS image (category "os") or an app type.
+type InstanceType struct {
+	ID       int64
+	Code     string
+	Name     string
+	Category string
+	// LayoutID is the OpenStack layout. Every MTN instance type has exactly one; 0 if none.
+	LayoutID int64
+}
+
+// InstanceTypes lists every instance type visible to the caller.
+func (c *Client) InstanceTypes(ctx context.Context) ([]InstanceType, error) {
+	return cached(ctx, &c.cache, "instance-types", func(ctx context.Context) ([]InstanceType, error) {
+		type layout struct {
+			ID                int64  `json:"id"`
+			ProvisionTypeCode string `json:"provisionTypeCode"`
+		}
+		type item struct {
+			ID       int64    `json:"id"`
+			Code     string   `json:"code"`
+			Name     string   `json:"name"`
+			Category string   `json:"category"`
+			Layouts  []layout `json:"instanceTypeLayouts"`
+		}
+		items, err := listAll[item](ctx, c, "/api/instance-types", "instanceTypes", nil)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]InstanceType, 0, len(items))
+		for _, it := range items {
+			t := InstanceType{ID: it.ID, Code: it.Code, Name: it.Name, Category: it.Category}
+			for _, l := range it.Layouts {
+				if l.ProvisionTypeCode == "openstack" {
+					t.LayoutID = l.ID
+					break
+				}
+			}
+			out = append(out, t)
+		}
+		return out, nil
+	})
+}
+
+// Plan is a size (OpenStack flavor) offered in one project for one layout.
+type Plan struct {
+	ID          int64
+	Name        string // for example "G2S4"
+	Code        string
+	Cores       int64
+	MemoryBytes int64
+	RootBytes   int64
+}
+
+// Plans lists the sizes a project offers for a layout. Each project has its own copy of every
+// flavor, so plan IDs differ between projects: always look plans up per project.
+func (c *Client) Plans(ctx context.Context, projectID, layoutID int64) ([]Plan, error) {
+	p, err := c.Placement(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := url.Values{"zoneId": {itoa(p.CloudID)}, "siteId": {itoa(p.GroupID)}, "layoutId": {itoa(layoutID)}, "resourcePoolId": {itoa(projectID)}}
+	return cached(ctx, &c.cache, "service-plans?"+q.Encode(), func(ctx context.Context) ([]Plan, error) {
+		var resp struct {
+			Plans []struct {
+				ID         int64  `json:"id"`
+				Name       string `json:"name"`
+				Code       string `json:"code"`
+				MaxCores   int64  `json:"maxCores"`
+				MaxMemory  int64  `json:"maxMemory"`
+				MaxStorage int64  `json:"maxStorage"`
+			} `json:"plans"`
+		}
+		if err := c.get(ctx, "/api/instances/service-plans", q, &resp); err != nil {
+			return nil, err
+		}
+		out := make([]Plan, 0, len(resp.Plans))
+		for _, x := range resp.Plans {
+			out = append(out, Plan{ID: x.ID, Name: x.Name, Code: x.Code, Cores: x.MaxCores, MemoryBytes: x.MaxMemory, RootBytes: x.MaxStorage})
+		}
+		return out, nil
+	})
+}
+
+// CatalogItem is a service a customer can order from the catalog.
+type CatalogItem struct {
+	ID          int64
+	Name        string
+	Description string
+	Type        string // "instance", "blueprint" or "workflow"
+	Featured    bool
+}
+
+// CatalogItems lists the catalog (the customer-facing view, not the admin library).
+func (c *Client) CatalogItems(ctx context.Context) ([]CatalogItem, error) {
+	return cached(ctx, &c.cache, "catalog-types", func(ctx context.Context) ([]CatalogItem, error) {
+		type item struct {
+			ID          int64  `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Type        string `json:"type"`
+			Featured    bool   `json:"featured"`
+		}
+		items, err := listAll[item](ctx, c, "/api/catalog/types", "catalogItemTypes", nil)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]CatalogItem, len(items))
+		for i, x := range items {
+			out[i] = CatalogItem(x)
+		}
+		return out, nil
+	})
+}
+
+const pageSize = 200
+
+// listAll reads every page of a paginated list endpoint ({"<key>": [...], "meta": {...}}).
+func listAll[T any](ctx context.Context, c *Client, path, key string, q url.Values) ([]T, error) {
+	var all []T
+	for offset := 0; ; offset += pageSize {
+		page := url.Values{}
+		maps.Copy(page, q)
+		page.Set("max", strconv.Itoa(pageSize))
+		page.Set("offset", strconv.Itoa(offset))
+		var resp map[string]json.RawMessage
+		if err := c.get(ctx, path, page, &resp); err != nil {
+			return nil, err
+		}
+		raw, ok := resp[key]
+		if !ok {
+			return nil, fmt.Errorf("MTN Cloud API GET %s: response has no %q list", path, key)
+		}
+		var items []T
+		if err := json.Unmarshal(raw, &items); err != nil {
+			return nil, fmt.Errorf("MTN Cloud API GET %s: unexpected %q list (%w)", path, key, err)
+		}
+		all = append(all, items...)
+		// Stop on meta.total when the API sends it (the server may cap "max" below pageSize),
+		// otherwise on a short or empty page.
+		var meta struct {
+			Total *int `json:"total"`
+		}
+		if m, ok := resp["meta"]; ok && json.Unmarshal(m, &meta) == nil && meta.Total != nil {
+			if len(all) >= *meta.Total || len(items) == 0 {
+				return all, nil
+			}
+			continue
+		}
+		if len(items) < pageSize {
+			return all, nil
+		}
+	}
+}
+
+func itoa(n int64) string { return strconv.FormatInt(n, 10) }

@@ -1,0 +1,6 @@
+{"plans": [
+  {"id": 9401, "name": "G1S1", "code": "openstack.flavor.4.00000000000000000000000000009201.10067", "value": 9401, "maxCores": 1, "maxMemory": 1073741824, "maxStorage": 10737418240, "rootDiskCustomizable": true,
+   "storageTypes": [{"id": 11, "code": "openstackVolume", "name": "Volume"}], "datastores": {"cluster": [], "store": [{"id": 2, "name": "__DEFAULT__"}]}},
+  {"id": 9402, "name": "G2S4", "code": "openstack.flavor.4.00000000000000000000000000009201.10071", "value": 9402, "maxCores": 2, "maxMemory": 4294967296, "maxStorage": 10737418240, "rootDiskCustomizable": true,
+   "storageTypes": [{"id": 11, "code": "openstackVolume", "name": "Volume"}], "datastores": {"cluster": [], "store": [{"id": 2, "name": "__DEFAULT__"}]}}
+]}
