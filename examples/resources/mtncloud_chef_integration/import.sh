@@ -1,0 +1,1 @@
+terraform import mtncloud_chef_integration.tf_example_chef_integration 1

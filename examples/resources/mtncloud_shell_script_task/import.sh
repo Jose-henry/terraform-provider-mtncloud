@@ -1,0 +1,1 @@
+terraform import mtncloud_shell_script_task.tf_example_shell_task_script 1

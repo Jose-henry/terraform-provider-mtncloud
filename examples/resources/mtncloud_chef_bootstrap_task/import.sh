@@ -1,0 +1,1 @@
+terraform import mtncloud_chef_bootstrap_task.tf_example_chef_bootstrap_task 1

@@ -1,0 +1,1 @@
+terraform import mtncloud_appliance_setting.tf_example_appliance_config 1

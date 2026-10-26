@@ -1,0 +1,1 @@
+terraform import mtncloud_power_schedule_policy.tf_example_power_schedule_policy 1

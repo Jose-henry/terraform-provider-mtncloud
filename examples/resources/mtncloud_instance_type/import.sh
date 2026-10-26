@@ -1,0 +1,1 @@
+terraform import mtncloud_instance_type.tf_example_instance_type 1

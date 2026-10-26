@@ -1,0 +1,1 @@
+terraform import mtncloud_typeahead_option_type.tf_example_typeahead_option_type 1

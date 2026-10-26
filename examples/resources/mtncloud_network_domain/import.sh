@@ -1,0 +1,1 @@
+terraform import mtncloud_network_domain.tf_example_network_domain 1

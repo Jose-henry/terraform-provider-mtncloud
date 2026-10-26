@@ -1,0 +1,1 @@
+terraform import mtncloud_backup_setting.tf_example_backup_config 1

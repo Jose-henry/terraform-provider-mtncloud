@@ -1,0 +1,1 @@
+terraform import mtncloud_active_directory_identity_source.tf_example_active_directory_identity_source 1

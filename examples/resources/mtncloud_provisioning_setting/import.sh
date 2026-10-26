@@ -1,0 +1,1 @@
+terraform import mtncloud_provisioning_setting.tf_example_provisioning_config 1

@@ -1,0 +1,1 @@
+terraform import mtncloud_kubernetes_app_blueprint.tf_example_kubernetes_app_blueprint 1

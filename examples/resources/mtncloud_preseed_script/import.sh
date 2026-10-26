@@ -1,0 +1,1 @@
+terraform import mtncloud_preseed_script.tf_example_preseed_script 1

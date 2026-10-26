@@ -1,0 +1,1 @@
+terraform import mtncloud_hostname_policy.tf_example_hostname_policy 1

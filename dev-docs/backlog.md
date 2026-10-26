@@ -1,0 +1,45 @@
+# Backlog
+
+## Open questions (blocking design)
+
+| # | Question | Blocks |
+|---|---|---|
+| Q1 | Authoritative list of master-tenant-only features | D-004 gating |
+| Q2 | Confirm Plugin Framework + mux (D-005) | all new resources |
+| Q3 | Load balancer API (instance type 70 "LoadBalancer", Octavia, no layouts: custom API?) | `mtncloud_load_balancer` |
+| Q4 | Payloads P1–P7 in [api-research.md](api-research.md) and P8–P10 in [prerequisites.md](prerequisites.md) | network, router, SG, instance, MOS |
+| Q5 | Final GitHub org/repo name for registry publishing (`terraform-provider-mtncloud`) | first release |
+| Q6 | Test tenant + credentials for acceptance tests (isolated, disposable) | acceptance CI |
+
+## Build order (after approval)
+
+1. `internal/client`: retries, backoff, context, rate limit, a redacting logger, httptest contract tests.
+2. Catalog data sources (`mtncloud_images`, `mtncloud_plans`, `mtncloud_catalog_items`, `mtncloud_projects`).
+3. `mtncloud_security_group` (+ rule)
+4. `mtncloud_network` (MTN Network)
+5. `mtncloud_router` (MTN Router)
+6. `mtncloud_instance` (OpenStack), with an optional floating IP
+7. `mtncloud_project`
+8. `mtncloud_catalog_order`
+9. `mtncloud_object_storage` (MOS)
+10. `mtncloud_app`, `mtncloud_load_balancer`, `mtncloud_ssl_certificate`
+
+## B-001 Real bugs inherited in legacy
+- 32 `json.Unmarshal` calls whose error is dropped: a bad API response becomes an empty struct, and
+  Terraform then plans a recreate. Fix when each resource is migrated.
+- 2 unchecked `UpdateInstanceTypeLogo` / `UpdateCatalogItemLogo` calls: the logo upload fails silently.
+
+## B-002 Legacy lint debt (baseline 2026-10-26, only shrinks)
+1439 unchecked `d.Set`, 60 QF1008, 1 SA6005, 2 unused funcs. These are excluded for
+`internal/legacy/` in `.golangci.yml`. New code gets no exclusions.
+
+## B-003 Upstream examples with schema errors
+22 example files use arguments the schema doesn't have (mostly `apply_each_user` on `*_policy`
+role examples, `message_type` on motd, `visibility` on the terraform blueprint, a typo
+`default_chedefault_checked` on form, and the plan data source missing `provision_type`). They are
+listed in `scripts/examples-known-defects.txt`. `scripts/validate-examples.sh` fails if the list
+grows or if a listed file becomes clean.
+
+## B-004 Quickstart `terraform.tfvars` (local only)
+The local, git-ignored file still has `username`/`password`/`tenant_subdomain` keys that the
+quickstart no longer declares (Terraform warns). Remove them locally.

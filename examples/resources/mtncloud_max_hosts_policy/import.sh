@@ -1,0 +1,1 @@
+terraform import mtncloud_max_hosts_policy.tf_example_max_hosts_policy 1

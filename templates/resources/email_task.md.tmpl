@@ -1,0 +1,32 @@
+---
+page_title: "mtncloud_email_task Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_email_task
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+Creating the email task with local email template content:
+
+{{tffile "examples/resources/mtncloud_email_task/resource.tf"}}
+
+Creating the email task with the email template fetched from a url:
+
+{{tffile "examples/resources/mtncloud_email_task/resource_url.tf"}}
+
+Creating the email task with the email template fetched via git:
+
+{{tffile "examples/resources/mtncloud_email_task/resource_git.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_email_task/import.sh" }}

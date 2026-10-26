@@ -1,8 +1,0 @@
-# MTN Cloud Configuration
-# Copy this file to terraform.tfvars and fill in your actual values
-
-morpheus_url              = "https://console.cloud.mtn.ng"
-morpheus_username         = "your_username"
-morpheus_password         = "your_password"
-morpheus_access_token     = ""   #if yu want to use this aside from username and password, leave it empty if not
-morpheus_tenant_subdomain = "1"  #this is the tenant id, you can find it in the url when you login to the console

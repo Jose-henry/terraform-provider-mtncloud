@@ -1,0 +1,1 @@
+terraform import mtncloud_vro_integration.tf_example_vro_integration 1

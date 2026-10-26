@@ -1,0 +1,16 @@
+# graphify indexes Go code only. Docs, examples and config are read directly, not graphed.
+docs/
+dev-docs/
+examples/
+templates/
+.claude/
+.github/
+graphify-out/
+dist/
+bin/
+**/testdata/
+**/*.json
+**/*.md
+**/*.tf
+**/*.tmpl
+go.sum

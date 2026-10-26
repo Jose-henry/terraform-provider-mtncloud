@@ -1,0 +1,1 @@
+terraform import mtncloud_kubernetes_spec_template.tf_example_kubernetes_spec_template 1

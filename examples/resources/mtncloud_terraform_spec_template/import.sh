@@ -1,0 +1,1 @@
+terraform import mtncloud_terraform_spec_template.tfexample_terraform_spec_template 1

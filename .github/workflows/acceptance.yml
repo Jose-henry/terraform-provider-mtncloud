@@ -1,0 +1,51 @@
+name: Acceptance
+
+# Real MTN Cloud. Manual only, in the dedicated test tenant (dev-docs/backlog.md Q6).
+# Never runs on pull requests: secrets must not reach untrusted code.
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: "Test name regex (go test -run)"
+        default: "^TestAcc"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: acceptance
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    environment: acceptance
+    timeout-minutes: 150
+    env:
+      TF_ACC: "1"
+      MTNCLOUD_API_URL: ${{ secrets.MTNCLOUD_API_URL }}
+      MTNCLOUD_API_TOKEN: ${{ secrets.MTNCLOUD_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+      - name: Check credentials are configured
+        run: test -n "$MTNCLOUD_API_URL" && test -n "$MTNCLOUD_API_TOKEN"
+      - name: Acceptance tests
+        env:
+          RUN: ${{ inputs.run }}
+        run: go test ./... -v -count=1 -timeout 140m -run "$RUN" 2>&1 | tee acc.log
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Acceptance"
+            echo '```'
+            grep -E '^(--- |ok |FAIL|PASS)' acc.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,1 @@
+terraform import mtncloud_email_task.tf_example_email_task 1

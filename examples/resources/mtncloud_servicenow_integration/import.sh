@@ -1,0 +1,1 @@
+terraform import mtncloud_servicenow_integration.tf_example_servicenow_integration 1

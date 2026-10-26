@@ -1,0 +1,1 @@
+terraform import mtncloud_guidance_setting.tf_example_guidance_config 1

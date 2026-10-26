@@ -1,0 +1,1 @@
+terraform import mtncloud_delete_approval_policy.tf_example_delete_approval_policy 1

@@ -1,0 +1,1 @@
+terraform import mtncloud_max_storage_policy.tf_example_max_storage_policy 1

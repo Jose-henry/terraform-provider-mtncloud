@@ -1,0 +1,1 @@
+terraform import mtncloud_password_option_type.tf_example_password_option_type 1

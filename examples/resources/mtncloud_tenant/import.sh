@@ -1,0 +1,1 @@
+terraform import mtncloud_tenant.tf_example_tenant 1

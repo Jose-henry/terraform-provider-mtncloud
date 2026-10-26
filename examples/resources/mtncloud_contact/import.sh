@@ -1,0 +1,1 @@
+terraform import mtncloud_contact.tf_example_contact 1

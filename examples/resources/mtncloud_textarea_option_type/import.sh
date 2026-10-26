@@ -1,0 +1,1 @@
+terraform import mtncloud_textarea_option_type.tf_example_textarea_option_type 1

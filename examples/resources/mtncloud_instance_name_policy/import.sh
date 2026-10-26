@@ -1,0 +1,1 @@
+terraform import mtncloud_instance_name_policy.tf_example_instance_name_policy 1

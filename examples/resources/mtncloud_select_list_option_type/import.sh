@@ -1,0 +1,1 @@
+terraform import mtncloud_select_list_option_type.tf_example_select_list_option_type 1

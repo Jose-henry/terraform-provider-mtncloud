@@ -1,0 +1,1 @@
+terraform import mtncloud_file_template.tf_example_file_template 1

@@ -1,0 +1,1 @@
+terraform import mtncloud_service_plan.tf_example_service_plan 1

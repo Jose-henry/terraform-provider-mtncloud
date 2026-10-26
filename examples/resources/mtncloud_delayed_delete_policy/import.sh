@@ -1,0 +1,1 @@
+terraform import mtncloud_delayed_delete_policy.tf_example_delayed_delete_policy 1

@@ -1,0 +1,1 @@
+terraform import mtncloud_price.tf_example_price 1

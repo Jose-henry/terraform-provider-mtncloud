@@ -1,23 +1,38 @@
-# Terraform generated files
-**/.terraform/
-*.tfstate
-*.tfstate.*
-crash.log
-crash.*.log
-
-# Terraform variable files with sensitive data (may contain secrets)
+# --- Secrets and Terraform state: never commit ---
 *.tfvars
 !*.tfvars.example
-
-# Provider directory
-terraform-provider-MTN_cloud/
-
-# Override files
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+.terraform/
+.terraform.lock.hcl
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
-
-# CLI config file
 .terraformrc
 terraform.rc
+.env
+.env.*
+*.pem
+*.key
+
+# --- Build output ---
+/bin/
+/dist/
+terraform-provider-mtncloud
+terraform-provider-mtncloud.exe
+*.test
+*.out
+coverage.*
+
+# --- Tooling ---
+graphify-out/
+.claude/settings.local.json
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

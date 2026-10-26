@@ -1,0 +1,39 @@
+# golangci-lint v2. New code is held to every linter below with no exclusions.
+# internal/legacy (the upstream SDKv2 code) has a documented debt baseline, see
+# dev-docs/backlog.md "Legacy lint debt". The baseline only shrinks: code migrated out of
+# internal/legacy, or rewritten inside it, must pass with no exclusion.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - errorlint
+    - misspell
+    - nilerr
+    - unconvert
+    - usestdlibvars
+  settings:
+    misspell:
+      locale: US
+  exclusions:
+    generated: strict
+    rules:
+      # Legacy debt baseline (counted 2026-10-26): 1439 unchecked d.Set, 32 unchecked
+      # json.Unmarshal, 2 unchecked logo uploads, 60 QF1008, 1 SA6005, 2 unused funcs.
+      - path: internal/legacy/
+        linters: [errcheck, staticcheck, unused, errorlint, misspell, unconvert, usestdlibvars, nilerr, bodyclose]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/mtn/terraform-provider-mtncloud

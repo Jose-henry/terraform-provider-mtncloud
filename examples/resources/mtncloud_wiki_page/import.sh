@@ -1,0 +1,1 @@
+terraform import mtncloud_wiki_page.tf_example_wiki_page 1
