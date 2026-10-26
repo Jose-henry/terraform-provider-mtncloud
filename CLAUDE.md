@@ -25,6 +25,7 @@ what MTN Cloud offers and rebuilt to MTN's standards.
 | MTN Cloud facts: catalog items, images, MOS, names | [dev-docs/mtn-cloud-domain.md](dev-docs/mtn-cloud-domain.md) |
 | API shapes per resource, payloads still needed | [dev-docs/api-research.md](dev-docs/api-research.md) |
 | Names-not-IDs design (catalog data sources) | [dev-docs/catalog-lookups.md](dev-docs/catalog-lookups.md) |
+| What a customer (sub-tenant) login can read | [dev-docs/customer-permissions.md](dev-docs/customer-permissions.md) |
 | Decisions (D-NNN) | [dev-docs/decisions.md](dev-docs/decisions.md) |
 | Open questions, build order, known debt | [dev-docs/backlog.md](dev-docs/backlog.md) |
 

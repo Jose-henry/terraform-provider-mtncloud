@@ -100,3 +100,11 @@ the value that will be sent, and keeps the empty plan after apply. Validate both
 Defaults live in one constant pair in the network service package, with a comment pointing here, so a
 resolver change is a one-line edit plus a CHANGELOG note (changing a default produces a diff for
 existing networks that didn't set the attribute).
+
+## D-018 The cloud is discovered, not hard-coded (2026-10-26)
+MTN Cloud has one OpenStack cloud, `MTNNG_CLOUD_AZ_1` (id 4 today). Customers get 403 on
+`/api/zones` but can read `/api/options/clouds`, which returns it. The provider discovers the
+group and the cloud once per run (`client.Placement`) and errors, listing the choices, if there is
+ever more than one. No cloud ID is written in Go (rule 4). Planned: an optional provider argument
+`cloud` (by name) for when MTN adds a second availability zone. The registry docs name
+`MTNNG_CLOUD_AZ_1` so users know what they're on. See [customer-permissions.md](customer-permissions.md).

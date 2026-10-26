@@ -51,3 +51,23 @@ Now on by default in both halves; `secure = false` opts out with a warning.
 `internal/legacy/config.go` built the username with the raw string `%s\\%s`, sending
 `tenant\\user`. The API reference and the owner's CLI login (`acme\jdoe`) use one backslash.
 Fixed in legacy and the new client. Confirm with a real sub-tenant run once acceptance tests exist.
+
+## B-007 Legacy data sources that fail for customer logins
+They call endpoints a customer role gets 403 on ([customer-permissions.md](customer-permissions.md)):
+`mtncloud_cloud`, `mtncloud_clouds` (`/api/zones`), `mtncloud_plan` (`/api/service-plans`),
+`mtncloud_price`, `mtncloud_price_set`, `mtncloud_policy`, `mtncloud_policies`, `mtncloud_tenant`,
+`mtncloud_tenants`, `mtncloud_resource_pool`, and probably `mtncloud_cloud_datastore`. Options:
+mark them master-only in their descriptions and the features guide (D-004), and point customers to
+`mtncloud_projects`, `mtncloud_plans` and `mtncloud_datastores`. Decide with the owner; then add a
+"Who can use it" column to the features guide.
+
+## B-008 Apps (multi-instance) and customer inputs
+- Blueprint catalog items provision **apps** (several instances or containers). Planned
+  `mtncloud_app` (build step 10) and `mtncloud_catalog_order` (step 8) must cover them. `/api/apps`
+  and `/api/blueprints` are readable by customers.
+- Inputs (option types), option lists and forms: legacy has a resource per input type (text,
+  select list, checkbox, number, password, radio list, textarea, typeahead, hidden) plus
+  `mtncloud_option_list` and `mtncloud_form`. A customer can read `/api/library/option-types`, but
+  the master's inputs aren't shared with the tenant. Catalog orders need each item's inputs: expose
+  them on `mtncloud_catalog_items` (name, type, required, default, choices) when the order resource
+  is designed.
