@@ -182,6 +182,7 @@ func Provider() *schema.Provider {
 			"mtncloud_catalog_item_type":          dataSourceCatalogItemType(),
 			"mtncloud_chef_server":                dataSourceChefServer(),
 			"mtncloud_cloud":                      dataSourceCloud(),
+			"mtncloud_cloud_datastore":            dataSourceCloudDatastore(),
 			"mtncloud_clouds":                     dataSourceClouds(),
 			"mtncloud_cloud_type":                 dataSourceCloudType(),
 			"mtncloud_cluster_type":               dataSourceClusterType(),

@@ -72,16 +72,25 @@ Where docs and a real payload disagree, the payload wins and the difference is n
 - **Needs payload P4** (the MTN "Create Instance" request the UI sends, to see the OpenStack
   `config` keys MTN actually uses, such as availability zone and key pair).
 
-## Payloads to capture (read-only; the user runs them)
+## Captured payloads (2026-10-26, master login, CLI 9.0.0)
 
-| # | Command | Why |
+Captured with `scripts/cli/capture.ps1` (reads, and `-d` dry runs only). Raw output stays in the
+git-ignored `.captures/`; only the scrubbed facts below are recorded.
+
+| # | Capture | Finding |
 |---|---|---|
-| P1 | `morpheus network-types list -j` and `morpheus networks get <an existing MTN Network> -j` | network type code, subnet shape |
-| P2 | `morpheus network-routers list -j`, `morpheus network-router-types list -j` | router type, option types, external network |
-| P3 | `morpheus security-groups get <id> -j` (a group with a few rules) | rule shape as echoed |
-| P4 | `morpheus instances get <id> -j --details` on a typical VM, plus the browser network tab's POST from "Create Instance" | real create payload |
-| P5 | `morpheus service-plans list -j` (or `morpheus plans list -j`) | plans for OpenStack |
-| P6 | `morpheus storage-buckets list -j` (one MOS bucket; **remove the secret key first**) | MOS bucket config keys |
-| P7 | `morpheus networks floating-ip-pools list -j` (or `morpheus floating-ips list -j`) | floating IP pools |
+| P1 | `networks list` | MTN Networks are type `openstackPrivate` (id 12). Fields: `cidr`, `gateway`, `dnsPrimary`/`dnsSecondary` (MTN DNS), `dhcpServer`, `allowStaticOverride`, `zonePool {id,name}` (the project), one `subnets[]` entry named `<network> subnet`, `config {dhcpRange, hostRoutes}`. `network-types list` crashes in CLI 9.0.0 (`find_zone_by_name_or_id`), so the type comes from the list. |
+| P2 | `network-routers list`, `network-routers types` | One router type: `neutronRouter` (id 1). Options: `poolId` (project, required), `interfaces.networkSubnet.id` (internal subnets, multi), `externalNetwork.id` (optional), `name`, `enabled`. Public networks (`public-network-01` .. `-05...`) are listed as `openstackPrivate` networks, so the router's external network list must come from the router option source `openstackExternalNetworks`, not a network type filter. |
+| P3 | `security-groups list` | Each group has `locations[]` with `zonePool` (the project) and `externalId` (Neutron UUID). Rules: `direction`, `protocol` (`any`/`tcp`/`udp`/`icmp`), `sourceType` (`all`/`cidr`/`group`), `source`, `portRange` (`"22"`, not `22-22`), `destinationType: instance`. The synced default group is named `default` (or `<Tenant>-Default-SG`), `syncSource: external`, and is found by `locations[].zonePool.name == "<project>-<TENANCY>"` (MTN script MainUpdateSGAfterProjectCreation.sh). |
+| P4 | FastCreateLinuxInstance.sh | `securityGroups: [{id}, ...]` (several, D-012); volumes `{rootVolume, name, size, storageType: 11, datastoreId: "auto"}`. |
+| P5 | `service-plans list -t openstack` | 10,861 plans = 31 sizes x every project: each OpenStack project has its own flavors (`openstack.flavor.4.<projectExternalId>.<n>`). Sizes `G1S1` .. `Ge96L384` plus `LoadBalancer`; every size has a 10 GB root. **Plan lookup must be by name within the project**, never globally. |
+| P6 | `storage-buckets list` | MOS buckets: `providerType: s3`, config `accessKey`, `secretKey` (masked), `endpoint`, `pathStyleAccess: on`, `region: ""`. |
+| P7 | `networks floating-ips list` | 570 floating IPs, `ipStatus` (`assigned`/free), `server {id,name}`, `cloud`. Network pools: none. |
+| P8 | `datastores list` | 258 datastores, all type `generic`: `__DEFAULT__` per project, plus `ENCR_AT_REST` and `_MULTIATTACH_`. See D-010. |
+| P9 | `storage-volume-types list` | OpenStack: `openstackVolume` (11, resizable) and `openstackLocal` (12, flavor disk, fixed). |
+| P10 | `clouds list` | One cloud: `MTNNG_CLOUD_AZ_1` (id 4, `openstack`). |
+
+Still needed: the same reads with a **sub-tenant** login (what a customer token sees), and `-d`
+dry runs of `networks add`, `network-routers add`, `security-groups add`/`add-rule`, `instances add`.
 
 Never paste tokens, secret keys or passwords. `-V` already masks the bearer token.

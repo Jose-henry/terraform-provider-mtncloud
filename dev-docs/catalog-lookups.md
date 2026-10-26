@@ -22,7 +22,7 @@ Status: design, awaiting approval. No code yet.
 
 | Data source | API | Filters | Returns per item |
 |---|---|---|---|
-| `mtncloud_images` | `GET /api/instance-types` | `category`, `name_regex`; default public + openstack | `code`, `name`, `id`, `layout_ids`, `category`, `versions` |
+| `mtncloud_images` | `GET /api/instance-types` | `name_regex`; always public + openstack + category `os` (D-011) | `code`, `name`, `id`, `layout_ids`, `category`, `versions` |
 | `mtncloud_plans` | `GET /api/service-plans` (filter by provision type openstack) | `name_regex`, `min_cores`, `min_memory_gb` | `id`, `name`, `code`, `cores`, `memory_gb`, `disk_gb` |
 | `mtncloud_catalog_items` | `GET /api/catalog-item-types` | `name_regex`, `label` | `id`, `code`, `name`, `labels` |
 | `mtncloud_projects` | `GET /api/zones/{cloud}/resource-pools` (caller's tenant only) | `name_regex` | `id`, short `name`, `full_name`, `external_id` (see [prerequisites.md](prerequisites.md)) |

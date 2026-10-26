@@ -31,6 +31,7 @@ fmt-check:
 	$(TF) fmt -check -recursive examples
 
 docs:
+	go run ./tools/listtypes | python3 scripts/gen-features.py
 	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate --provider-name mtncloud
 	go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs validate --provider-name mtncloud
 

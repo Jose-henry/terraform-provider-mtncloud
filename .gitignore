@@ -36,3 +36,6 @@ graphify-out/
 *.swp
 .DS_Store
 Thumbs.db
+
+# CLI payload captures (real tenant data)
+.captures/

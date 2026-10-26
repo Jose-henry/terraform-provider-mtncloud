@@ -64,7 +64,7 @@ everything that ships. Internal notes (`CLAUDE.md`, `dev-docs/`, `.claude/`) may
 | Catalog order | `/api/catalog/orders` | Project, VPN, firewall, NAT, MOS, managed DB/MQ/K8s, BYOL appliances... |
 | MOS | catalog item 13 (`s32311`) + `/api/storage-buckets` (type `s3`) + Cypher | Ordering keys **rotates the tenant-wide key**. Adopt existing keys, never re-order silently (D-007). |
 | Cypher | `/api/cypher` | Secrets store; MOS keys live here. |
-| Load balancer | Octavia, API unknown | Blocked on Q3. |
+| Load balancer | Octavia, API unknown | On hold (D-013). |
 
 ## Scope
 

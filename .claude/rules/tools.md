@@ -7,11 +7,20 @@
   and query it. Don't rely on memory for framework APIs.
 - OpenStack behaviour (Neutron routers, floating IPs, Octavia): Context7 first, then the OpenStack docs.
 
-## Real payloads: the owner runs the CLI
-The upstream CLI is installed on the owner's machine (`<cli> <noun> list|get ... -j`, plus `-V` to
-print the request). Claude never runs it with the owner's credentials. Ask for one specific read-only
-command and say why it's needed. The payloads still needed are listed in `dev-docs/api-research.md`.
-Save results as scrubbed fixtures.
+## Real payloads: the platform CLI (owner's machine)
+- **CLI docs:** `../HPE_sd00006978en_us_HPE Morpheus Enterprise Software CLI Documentation Reference (1).pdf`
+  (one folder above the repo). When unsure about a command, flag or payload, look it up there
+  before guessing.
+- Claude may run the CLI in the owner's PowerShell, **always through `scripts/cli/capture.ps1`**,
+  which adds `-j -V` (JSON response plus the request, bearer token masked).
+- **Reads only** (`list`, `get`, `types`, `whoami`). Anything that could write (`add`, `update`,
+  `remove`, `allocate`, `refresh`, ...) runs **only as a dry run (`-d`)**, which prints the request
+  without sending it. The script refuses otherwise. No exceptions without the owner's explicit
+  approval for that one command.
+- Output lands in `.captures/` (git-ignored): it holds real tenant data. Summarise it with
+  `scripts/cli/summarize.py` (redacts secrets), record only scrubbed facts in `dev-docs/`, and
+  scrub fixtures before committing them.
+- Check which login the CLI uses (`whoami`): master and sub-tenant tokens see different data.
 
 ## Code graph
 Use `graphify` (see graphify.md) before grep for "who calls this" and "what breaks".

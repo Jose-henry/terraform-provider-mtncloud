@@ -49,3 +49,27 @@ Resources are `mtncloud_network` and `mtncloud_router`. Docs call them **MTN Net
 The first scaffold commit went straight to `main` (no code). From then on: work on a branch, open a
 PR, and merge only when CI is green. Acceptance tests against MTN Cloud run only with explicit
 approval and dedicated test credentials.
+
+## D-010 Restore `mtncloud_cloud_datastore`; datastores are Cinder volume types (2026-10-26)
+D-002 removed `cloud_datastore` as vSphere-only. The CLI capture (`datastores list`) shows that on
+MTN Cloud every datastore is type `generic` on cloud `MTNNG_CLOUD_AZ_1`: one per project
+(`__DEFAULT__`), plus `ENCR_AT_REST` (encrypted) and `_MULTIATTACH_` (shared volumes). These are the
+OpenStack Cinder volume types. The owner wants all of them selectable, and more may be added later,
+so nothing is hard-coded: users pick a datastore by **name** and the ID is resolved per project.
+- The legacy data source is restored as-is (lookup by name or ID within a cloud).
+- Planned `mtncloud_datastores` lists them for a project; `mtncloud_instance` volumes take
+  `datastore = "<name>"` (default: the project's `__DEFAULT__`, sent as `datastoreId: "auto"`) with
+  storage type `openstackVolume` (id 11). `openstackLocal` (id 12, not resizable) is the flavor disk.
+
+## D-011 Images are OS instance types only; apps come from the catalog (2026-10-26)
+`mtncloud_images` returns public OpenStack instance types with category `os`. App types (MK8S
+master/worker, LAMP, Fortinet and similar) are ordered through catalog items; their instance types
+are resolved internally only to build catalog orders.
+
+## D-012 An instance takes several security groups (2026-10-26)
+`security_groups` is a set of names, sent as `securityGroups: [{"id": N}, ...]`, as MTN's
+FastCreateLinuxInstance.sh does. Order has no meaning, so it is a set (no diff churn).
+
+## D-013 Load balancer is on hold (2026-10-26)
+The owner has paused load balancer work. Captures show Octavia (type `octavia`) in use, but no LB
+resource is designed or documented until the owner reopens it.

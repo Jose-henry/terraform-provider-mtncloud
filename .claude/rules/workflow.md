@@ -6,6 +6,7 @@ Before designing or changing anything, read both:
    for example Project-Creation-Workflow, Network-and-Router-Creation-Workflow, Instance Access & Security)
    and the MTN-Cloud-Service-Automation repo. They define the customer flow and the prerequisites.
 2. **The platform API via Context7** (`/websites/apidocs_morpheusdata_reference`). Never use memory.
+3. **The CLI docs PDF** (see [tools.md](tools.md)) when unsure about a command or payload.
 Record what you read, and what it changed, in `dev-docs/`. If neither covers it, ask the owner for a
 read-only CLI payload.
 
@@ -32,7 +33,7 @@ read-only CLI payload.
   Fixtures are scrubbed before they are committed.
 - Never print a secret value, even when debugging. Check for presence or length only.
 - Never run acceptance tests, `terraform apply`, or any write call (POST/PUT/DELETE) against MTN Cloud
-  without explicit permission for that specific run. Read-only CLI calls are made by the owner.
+  without explicit permission for that specific run. CLI calls are reads or `-d` dry runs only (see [tools.md](tools.md)).
 
 ## Changing upstream code
 - Rename fully, delete dead branches (AWS, vSphere, other clouds), and add the tests upstream lacked.
