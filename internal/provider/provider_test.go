@@ -21,11 +21,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// fakeAPI serves the scrubbed fixtures the client contract tests use.
+// fakeAPI serves the scrubbed fixtures the client contract tests use. Requests under
+// /api/security-groups go to sg, a stateful fake (security_group_test.go), when it is set.
 type fakeAPI struct {
 	srv   *httptest.Server
 	mu    sync.Mutex
 	calls map[string]int
+	sg    http.Handler
 }
 
 func newFakeAPI(t *testing.T) *fakeAPI {
@@ -46,7 +48,12 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.calls[r.URL.Path]++
+		sg := f.sg
 		f.mu.Unlock()
+		if sg != nil && strings.HasPrefix(r.URL.Path, "/api/security-groups") && r.Header.Get("Authorization") == "Bearer test-token" {
+			sg.ServeHTTP(w, r)
+			return
+		}
 		file, ok := routes[r.URL.Path]
 		if !ok || r.Header.Get("Authorization") != "Bearer test-token" {
 			w.WriteHeader(http.StatusNotFound)

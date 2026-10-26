@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,6 +49,20 @@ func IsNotFound(err error) bool { return hasStatus(err, http.StatusNotFound) }
 
 // IsForbidden reports whether err is an API 403.
 func IsForbidden(err error) bool { return hasStatus(err, http.StatusForbidden) }
+
+// MayHaveSucceeded reports whether a failed write may still have been applied: the response
+// was lost (a transport error) or the server or a gateway failed (5xx). Writes are never
+// retried by the client, so callers check before writing again.
+func MayHaveSucceeded(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+	}
+	return apiErr.StatusCode >= 500
+}
+
+// IsBadRequest reports whether err is an API 400.
+func IsBadRequest(err error) bool { return hasStatus(err, http.StatusBadRequest) }
 
 // IsConflict reports whether err is an API 409.
 func IsConflict(err error) bool { return hasStatus(err, http.StatusConflict) }

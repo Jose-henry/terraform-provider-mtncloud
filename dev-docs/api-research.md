@@ -97,35 +97,49 @@ What `GET /api/security-groups/{id}` returns (a user-made group with 20 rules an
 | default egress | **every** group has two synced egress rules, `any` to `0.0.0.0/0` and to `::/0` | Neutron adds these to each new group: the design must decide what Terraform does with them (owner question). |
 | group | `externalId` (Neutron UUID, or null on synced defaults), `visibility`, `syncSource`, `locations[]` with `zonePool` (the project) and `status` | Project read from `locations[0].zonePool`. No tenant permissions are returned to a customer. |
 
-Still unproven (needs one real create, with the owner's permission, in a test project): that a
-customer may create a group and rules, and how a rule created through the API is echoed back (egress
-CIDR field, `ruleType`).
+Proven by one live create with the owner's permission (2026-10-26, test project, cleaned up): a
+customer can create a group, add and delete rules, and delete the group. The answers to the open
+questions:
 
-### Proposed design (awaiting the owner's approval)
+| Question | Answer |
+|---|---|
+| Is the group created in OpenStack straight away? | Yes: `externalId` set and the location `available` in the create response. |
+| Where is an API-created egress rule's CIDR? | In `source` (`sourceType` `cidr`), same as ingress. |
+| `ruleType` of an API-created rule | `customRule`; rules synced from OpenStack are `custom`. |
+| Single port | Echoed as `"22"`, never `"22-22"`. |
+| Default egress rules | Neutron adds allow-all egress for `0.0.0.0/0` and `::/0`, but MTN Cloud shows them only after its sync, which can take a long time. Synced form: `ruleType` `custom`, `sourceType` `all`, CIDR in `destination`. |
+| Delete | `DELETE` returns 200; a later `GET` returns 404 "Security Group not found". |
+
+### Built design (D-019)
 
 `mtncloud_security_group`
 | Attribute | Kind | Why |
 |---|---|---|
-| `name` | Required | User's choice; updated in place (`PUT`). |
-| `description` | Optional | Updated in place. |
-| `project` | Required, RequiresReplace | Short or full project name, resolved at plan time (D-006). A group lives in one project. |
-| `rule` | Optional, **set** of blocks | Order has no meaning; set = no ordering churn. A changed rule is deleted and recreated. |
-| `rule.direction` | Optional, default `ingress` | API default. |
-| `rule.protocol` | Required | `tcp`, `udp`, `icmp`, `any`. |
-| `rule.port_range` | Optional | `"22"` or `"8000-8080"`, validated 1-65535; null = all ports; not allowed for `icmp`/`any`. |
-| `rule.cidr` | Optional | Remote CIDR (source for ingress, destination for egress), canonicalised. |
-| `rule.source_security_group_id` | Optional | Conflicts with `cidr`. Neither = all addresses. |
-| `rule.description` | Optional | Sent as the rule `name`. |
 | `id` | Computed, UseStateForUnknown | Server ID; import by ID. |
+| `name` | Required | Updated in place (`PUT`). |
+| `description` | Optional | Updated in place. Null stays null. |
+| `project` | Required | Short or full name (D-006). ModifyPlan resolves both: replace only when the project ID changes. |
+| `rules` | Optional, set of objects | Null = rules not managed (use `mtncloud_security_group_rule`). Set = authoritative except the default egress rules. A changed rule is deleted and recreated (OpenStack rules are immutable). |
+| `rules.direction` / `protocol` | Required | `ingress`/`egress`; `tcp`/`udp`/`icmp`/`any`. |
+| `rules.port_range` | Optional | Validated 1-65535, low first, `"22"` not `"22-22"`; refused for `icmp`/`any`. |
+| `rules.cidr` | Optional | Must be a network address (`10.0.0.0/24`, not `10.0.0.5/24`). Conflicts with the group source. |
+| `rules.source_security_group_id` | Optional | Remote group. |
+| `rules.description` | Optional | Sent as the rule `name`. Unset = any name matches (no churn on synced rules). |
+| `remove_default_egress` | Optional+Computed, default false | Computed only because a schema default needs it. |
+| `all_rules` | Computed list | Every rule, sorted, with `default` = default egress. How users "view all the rules". |
 | `external_id` | Computed | Neutron UUID. |
 
-`mtncloud_security_group_rule`: one rule, for rules managed from another module. `security_group_id`
-plus the rule fields above, all RequiresReplace. ID `<group id>/<rule id>`, importable. Don't mix
-with `rule` blocks on the same group (documented, as in other providers).
+A configured rule shaped like a default (egress, any, no port, `0.0.0.0/0` or `::/0`) is refused at
+plan time: Neutron would reject the duplicate.
 
-Client: `CreateSecurityGroup`, `GetSecurityGroup`, `UpdateSecurityGroup`, `DeleteSecurityGroup`,
-`CreateSecurityGroupRule`, `DeleteSecurityGroupRule`. Read on 404 removes from state; a 404 just
-after create is retried.
+`mtncloud_security_group_rule`: `security_group_id` plus the rule fields, all RequiresReplace. ID
+`<group id>/<rule id>` (built and parsed in one helper), importable. Read finds the rule in the group;
+gone = removed from state.
+
+Client (`internal/client/security_groups.go`): `CreateSecurityGroup`, `GetSecurityGroup`,
+`FindSecurityGroup` (idempotent create after a dropped request), `UpdateSecurityGroup`,
+`DeleteSecurityGroup`, `CreateSecurityGroupRule`, `DeleteSecurityGroupRule`. Deletes treat 404 as
+done. Fixtures: `internal/client/testdata/security_groups/` (scrubbed copies of the live shapes).
 
 ## Instances on OpenStack (`POST /api/instances`)
 

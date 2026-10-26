@@ -100,6 +100,25 @@ func (f *fakeAPI) withPlacement() {
 	f.fixture("GET", "/api/options/clouds", "options_clouds.json")
 }
 
+func TestMayHaveSucceeded(t *testing.T) {
+	for err, want := range map[error]bool{
+		&APIError{StatusCode: 502}:                          true,
+		&APIError{StatusCode: 500}:                          true,
+		&APIError{StatusCode: 400}:                          false,
+		&APIError{StatusCode: 404}:                          false,
+		errors.New("connection reset"):                      true,
+		context.Canceled:                                    false,
+		fmt.Errorf("wrapped: %w", context.DeadlineExceeded): false,
+	} {
+		if got := MayHaveSucceeded(err); got != want {
+			t.Errorf("MayHaveSucceeded(%v) = %v, want %v", err, got, want)
+		}
+	}
+	if MayHaveSucceeded(nil) {
+		t.Error("nil error")
+	}
+}
+
 func TestNew_Validates(t *testing.T) {
 	for name, cfg := range map[string]Config{
 		"no url":      {Token: "x"},

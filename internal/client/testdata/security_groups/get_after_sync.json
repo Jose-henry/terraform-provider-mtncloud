@@ -1,0 +1,42 @@
+{
+  "securityGroup": {
+    "id": 9501, "accountId": 9001, "name": "web", "description": "web servers",
+    "externalId": "00000000-0000-0000-0000-000000009501", "active": true, "enabled": null,
+    "groupSource": null, "syncSource": "internal", "visibility": "private",
+    "zone": {"id": 4, "name": "MTNNG_CLOUD_AZ_1"},
+    "locations": [{
+      "id": 9601, "name": "web", "description": "web servers",
+      "externalId": "00000000-0000-0000-0000-000000009501", "iacId": null,
+      "zone": {"id": 4, "name": "MTNNG_CLOUD_AZ_1"},
+      "zonePool": {"id": 9201, "name": "web-prod-Acme"},
+      "status": "available", "priority": null, "groupLayer": null
+    }],
+    "rules": [
+      {"id": 9701, "name": "tf-acc-ssh", "ruleType": "customRule", "customRule": true, "instanceTypeId": null,
+       "direction": "ingress", "policy": "accept", "sourceType": "cidr", "source": "10.0.0.0/24",
+       "sourceGroup": null, "sourceTier": null, "portRange": "22", "protocol": "tcp",
+       "destinationType": "instance", "destination": null, "destinationGroup": null, "destinationTier": null,
+       "destinationPortRange": "*", "sourcePortRange": null, "externalId": null, "enabled": null},
+      {"id": 9702, "name": "https-out", "ruleType": "customRule", "customRule": true, "instanceTypeId": null,
+       "direction": "egress", "policy": "accept", "sourceType": "cidr", "source": "192.0.2.0/24",
+       "sourceGroup": null, "sourceTier": null, "portRange": "443", "protocol": "tcp",
+       "destinationType": "instance", "destination": null, "destinationGroup": null, "destinationTier": null,
+       "destinationPortRange": "*", "sourcePortRange": null, "externalId": null, "enabled": null},
+      {"id": 9703, "name": null, "ruleType": "custom", "customRule": true, "instanceTypeId": null,
+       "direction": "egress", "policy": "accept", "sourceType": "all", "source": null,
+       "sourceGroup": null, "sourceTier": null, "portRange": null, "protocol": "any",
+       "destinationType": "instance", "destination": "0.0.0.0/0", "destinationGroup": null, "destinationTier": null,
+       "destinationPortRange": null, "sourcePortRange": null, "externalId": "00000000-0000-0000-0000-000000009703", "enabled": null},
+      {"id": 9704, "name": null, "ruleType": "custom", "customRule": true, "instanceTypeId": null,
+       "direction": "egress", "policy": "accept", "sourceType": "all", "source": null,
+       "sourceGroup": null, "sourceTier": null, "portRange": null, "protocol": "any",
+       "destinationType": "instance", "destination": "::/0", "destinationGroup": null, "destinationTier": null,
+       "destinationPortRange": null, "sourcePortRange": null, "externalId": "00000000-0000-0000-0000-000000009704", "enabled": null},
+      {"id": 9705, "name": null, "ruleType": "custom", "customRule": true, "instanceTypeId": null,
+       "direction": "ingress", "policy": "accept", "sourceType": "group", "source": "198.51.100.0/24",
+       "sourceGroup": {"id": 9502, "name": "default"}, "sourceTier": null, "portRange": null, "protocol": "any",
+       "destinationType": "instance", "destination": null, "destinationGroup": null, "destinationTier": null,
+       "destinationPortRange": null, "sourcePortRange": null, "externalId": "00000000-0000-0000-0000-000000009705", "enabled": null}
+    ]
+  }
+}

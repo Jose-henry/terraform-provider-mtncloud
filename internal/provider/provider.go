@@ -16,6 +16,7 @@ import (
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/lookup"
+	"github.com/mtn/terraform-provider-mtncloud/internal/services/network"
 )
 
 var _ provider.Provider = (*mtncloudProvider)(nil)
@@ -160,7 +161,7 @@ func stringOrEnv(v types.String, env string) string {
 }
 
 func (p *mtncloudProvider) Resources(context.Context) []func() resource.Resource {
-	return nil
+	return network.Resources()
 }
 
 func (p *mtncloudProvider) DataSources(context.Context) []func() datasource.DataSource {

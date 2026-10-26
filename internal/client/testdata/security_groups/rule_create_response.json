@@ -1,0 +1,8 @@
+{
+  "rule": {"id": 9701, "name": "tf-acc-ssh", "ruleType": "customRule", "customRule": true, "instanceTypeId": null,
+    "direction": "ingress", "policy": "accept", "sourceType": "cidr", "source": "10.0.0.0/24",
+    "sourceGroup": null, "sourceTier": null, "portRange": "22", "protocol": "tcp",
+    "destinationType": "instance", "destination": null, "destinationGroup": null, "destinationTier": null,
+    "destinationPortRange": "*", "sourcePortRange": null, "externalId": null, "enabled": null},
+  "success": true
+}

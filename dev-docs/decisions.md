@@ -108,3 +108,22 @@ group and the cloud once per run (`client.Placement`) and errors, listing the ch
 ever more than one. No cloud ID is written in Go (rule 4). Planned: an optional provider argument
 `cloud` (by name) for when MTN adds a second availability zone. The registry docs name
 `MTNNG_CLOUD_AZ_1` so users know what they're on. See [customer-permissions.md](customer-permissions.md).
+
+## D-019 Security group default egress rules: kept, visible, removable, never waited for (2026-10-26)
+OpenStack adds two allow-all egress rules (`0.0.0.0/0`, `::/0`) to every new group. MTN Cloud only
+shows them after its sync with OpenStack, which can take a long time. Owner's direction: leave them in
+place by default, let users see every rule and remove the defaults if they want, and **never poll for
+the sync**. So:
+- Default egress rules are recognised by their synced shape (`ruleType` `custom`, egress, any
+  protocol, no port, `0.0.0.0/0` or `::/0`) and are never counted as drift of `rules`. A user's own
+  allow-all rule is made through the API as `customRule`, so it never matches.
+- `all_rules` (computed) lists every rule, with `default = true` on these two.
+- `remove_default_egress = true` removes them. Because they arrive later, ModifyPlan marks
+  `all_rules` unknown whenever the state shows a default, so the first apply after the sync deletes
+  them. Before the sync there is nothing to delete and the plan is empty.
+- Declaring a rule shaped like a default is a plan-time error (Neutron refuses duplicates).
+- Consequence, documented on the attribute and in the example: a group with
+  `remove_default_egress = true` still allows all outbound traffic from create until the first apply
+  after the sync. Closing that gap would need a wait for the sync, which the owner ruled out.
+- Create never adopts a group it didn't make: it refuses a name already used in the project (and
+  points at import), and only after a lost reply (transport error or 5xx) looks the group up again.

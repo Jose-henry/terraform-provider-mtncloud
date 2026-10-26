@@ -12,4 +12,5 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 - Sub-tenant login now sends `subdomain\username` with a single backslash.
 - New data sources that pick things by name, using endpoints customer roles can call: `mtncloud_projects`, `mtncloud_images`, `mtncloud_plans`, `mtncloud_datastores`, `mtncloud_security_groups`, `mtncloud_external_networks`, `mtncloud_catalog_items`.
 - The provider now serves the legacy and Plugin Framework implementations together (terraform-plugin-mux).
+- New resources `mtncloud_security_group` (rules as a set, every rule visible in `all_rules`, optional removal of the default allow-all egress rules) and `mtncloud_security_group_rule`. Both work with a customer (sub-tenant) login.
 - 36 resources and 12 data sources that MTN Cloud only allows for the master tenant now say so in the first line of their description, and the features guide shows which types a customer (sub-tenant) login can use.

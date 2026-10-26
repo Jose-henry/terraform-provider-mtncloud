@@ -1,0 +1,17 @@
+{
+  "securityGroup": {
+    "id": 9501, "accountId": 9001, "name": "web", "description": "web servers",
+    "externalId": "00000000-0000-0000-0000-000000009501", "active": true, "enabled": null,
+    "groupSource": null, "syncSource": "internal", "visibility": "private",
+    "zone": {"id": 4, "name": "MTNNG_CLOUD_AZ_1"},
+    "locations": [{
+      "id": 9601, "name": "web", "description": "web servers",
+      "externalId": "00000000-0000-0000-0000-000000009501", "iacId": null,
+      "zone": {"id": 4, "name": "MTNNG_CLOUD_AZ_1"},
+      "zonePool": {"id": 9201, "name": "web-prod-Acme"},
+      "status": "available", "priority": null, "groupLayer": null
+    }],
+    "rules": []
+  },
+  "success": true
+}

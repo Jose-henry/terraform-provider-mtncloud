@@ -82,18 +82,20 @@ Last updated 2026-10-26 (PR #3, client and lookup data sources). Update this fil
 - 36 resources and 12 data sources marked master-only in their descriptions (B-007); the features
   guide has a "Customer login" column, a master-only list and a status for every planned type.
 
+- `mtncloud_security_group` and `mtncloud_security_group_rule` (branch `feat/network-security-group`,
+  local): rules as a set, `all_rules` to see every rule, default egress kept unless
+  `remove_default_egress` (D-019). Proven with one live create/delete as a customer; unit, client
+  contract and provider lifecycle tests (plan, apply, empty plan, import, drift, disappear, replace).
+
 ## Next (in order, each one a PR with tests, after the owner approves its plan)
 
-1. **`mtncloud_security_group` (+ `mtncloud_security_group_rule`).** Before the plan, as a
-   sub-tenant: `-d` dry runs of `security-groups add`, `add-rule`, `add-location`, and a
-   `security-groups get` of a group with rules ([api-research.md](api-research.md)).
-2. **`mtncloud_network`** (MTN Network), DNS defaulting to MTN's resolvers (D-017). Needs a
+1. **`mtncloud_network`** (MTN Network), DNS defaulting to MTN's resolvers (D-017). Needs a
    sub-tenant `networks add -d`.
-3. **`mtncloud_router`** (MTN Router). Needs `network-routers add -d`.
-4. **`mtncloud_instance`** (OpenStack, OS images only, several security groups). The floating IP
+2. **`mtncloud_router`** (MTN Router). Needs `network-routers add -d`.
+3. **`mtncloud_instance`** (OpenStack, OS images only, several security groups). The floating IP
    endpoint for customers is unknown (403 on `/api/networks/floating-ips`).
-5. `mtncloud_project` → `mtncloud_catalog_order` → `mtncloud_object_storage` (MOS) → app, SSL
+4. `mtncloud_project` → `mtncloud_catalog_order` → `mtncloud_object_storage` (MOS) → app, SSL
    certificate. Load balancer on hold (D-013).
-6. `internal/tenancy` (master gating, D-004) once Q1 is answered.
-7. Migrate the legacy resources customers use most, fixing B-001 on the way.
-8. First release: registry repo name (Q5), GPG key, `v0.1.0`. Acceptance tests need a test tenant (Q6).
+5. `internal/tenancy` (master gating, D-004) once Q1 is answered.
+6. Migrate the legacy resources customers use most, fixing B-001 on the way.
+7. First release: registry repo name (Q5), GPG key, `v0.1.0`. Acceptance tests need a test tenant (Q6).

@@ -70,3 +70,17 @@ describes (`internal/tenancy`), so a customer gets a clear error before the API'
   the master's inputs aren't shared with the tenant. Catalog orders need each item's inputs: expose
   them on `mtncloud_catalog_items` (name, type, required, default, choices) when the order resource
   is designed.
+
+## B-009 Security group behaviour still to prove live (acceptance run, test tenant)
+The live test (2026-10-26) made two CIDR rules and saw no sync. These are assumed by the fake API
+and need an acceptance run, or a read of a real group that has such rules:
+- Rules with no `cidr` (`sourceType all`): is `destination` filled on egress? If it reads back as
+  `0.0.0.0/0`, a configured `{egress, tcp, 443}` would churn. Is `{egress, any}` with no remote
+  refused as a duplicate of the IPv4 default?
+- Group-source rules, `any` and `icmp` rules, and an unnamed rule: how they are echoed.
+- `PUT` with `description: ""`: does it clear the description?
+- Deleting a synced default egress rule: does the next sync bring it back? If so,
+  `remove_default_egress` never settles.
+- A group with several locations: `project` is read from the first one.
+- Tests still missing: a failure partway through Update, the rule resource's disappears and
+  drift steps, and the acceptance set (`_basic`, `_update`, `_import`, `_disappears`, `_drift`).
