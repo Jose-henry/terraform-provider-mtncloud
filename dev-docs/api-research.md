@@ -59,6 +59,74 @@ Where docs and a real payload disagree, the payload wins and the difference is n
 - **Needs payload P3** (a real group with rules, to confirm the `ruleType` values and how OpenStack
   echoes ports back).
 
+### Security group captures as a customer (2026-10-26, sub-tenant, reads and `-d` only)
+
+Request bodies (dry runs through `--payload`, so the CLI's own lookups were skipped; they show the
+documented shape, **not** that the server accepts it from a customer):
+
+```
+POST /api/security-groups                 {"securityGroup": {"name", "description", "zoneId": 4,
+                                            "customOptions": {"resourcePoolId": <project id>}}}
+POST /api/security-groups/{id}/locations  {"securityGroupLocation": {"name", "zoneId",
+                                            "customOptions": {"resourcePoolId"}}}
+POST /api/security-groups/{id}/rules      {"rule": {"name", "ruleType": "customRule", "direction",
+                                            "protocol", "portRange", "sourceType", "source",
+                                            "destinationType": "instance"}}
+PUT  /api/security-groups/{id}/rules/{ruleId}  (exists; not needed, see design)
+```
+
+CLI quirks for customers: `security-groups add -c <cloud>` reads `/api/zones/{id}` first (403), and
+`add-location` finds "0 available clouds". Both are CLI helpers; the provider sends the bodies itself.
+
+What `GET /api/security-groups/{id}` returns (a user-made group with 20 rules and a synced
+`default` group with 14), shapes only:
+
+| Field | Seen | Design consequence |
+|---|---|---|
+| `ruleType` | `custom` (synced from OpenStack) and `customRule` (made in the console); `customRule: true` on both | Treat both as a custom rule; never expose `ruleType`. |
+| `portRange` | `null` (all ports, also for some tcp rules), `"22"`, `"8000-8080"`. **Never `"22-22"`.** | `port_range` Optional; null means all ports. Normalise `"22-22"` to `"22"` anyway. |
+| `protocol` | `any`, `tcp`, `udp`, `icmp` | Validate one of these at plan time. |
+| `sourceType` | `all`, `cidr`, `group` | `all` = no `cidr` and no `source_security_group`. |
+| `source` | a CIDR, **even when `sourceType` is `group`** | Read `source` only when `sourceType` is `cidr`. |
+| `destination` | the remote CIDR on synced **egress** rules (`sourceType: all`) | Egress `cidr` comes from `destination`. To confirm on a rule created by the provider. |
+| `sourceGroup` | `{id, name}` for group rules | Reference by ID (from `mtncloud_security_group.x.id` or the data source). |
+| `destinationType` | always `instance` | Send `instance`, don't expose it. |
+| `policy` | always `accept` | Not exposed. |
+| `name` | null, free text, or the port (`"22"`) | Optional; null when unset. |
+| `externalId` | Neutron rule UUID | Computed. |
+| default egress | **every** group has two synced egress rules, `any` to `0.0.0.0/0` and to `::/0` | Neutron adds these to each new group: the design must decide what Terraform does with them (owner question). |
+| group | `externalId` (Neutron UUID, or null on synced defaults), `visibility`, `syncSource`, `locations[]` with `zonePool` (the project) and `status` | Project read from `locations[0].zonePool`. No tenant permissions are returned to a customer. |
+
+Still unproven (needs one real create, with the owner's permission, in a test project): that a
+customer may create a group and rules, and how a rule created through the API is echoed back (egress
+CIDR field, `ruleType`).
+
+### Proposed design (awaiting the owner's approval)
+
+`mtncloud_security_group`
+| Attribute | Kind | Why |
+|---|---|---|
+| `name` | Required | User's choice; updated in place (`PUT`). |
+| `description` | Optional | Updated in place. |
+| `project` | Required, RequiresReplace | Short or full project name, resolved at plan time (D-006). A group lives in one project. |
+| `rule` | Optional, **set** of blocks | Order has no meaning; set = no ordering churn. A changed rule is deleted and recreated. |
+| `rule.direction` | Optional, default `ingress` | API default. |
+| `rule.protocol` | Required | `tcp`, `udp`, `icmp`, `any`. |
+| `rule.port_range` | Optional | `"22"` or `"8000-8080"`, validated 1-65535; null = all ports; not allowed for `icmp`/`any`. |
+| `rule.cidr` | Optional | Remote CIDR (source for ingress, destination for egress), canonicalised. |
+| `rule.source_security_group_id` | Optional | Conflicts with `cidr`. Neither = all addresses. |
+| `rule.description` | Optional | Sent as the rule `name`. |
+| `id` | Computed, UseStateForUnknown | Server ID; import by ID. |
+| `external_id` | Computed | Neutron UUID. |
+
+`mtncloud_security_group_rule`: one rule, for rules managed from another module. `security_group_id`
+plus the rule fields above, all RequiresReplace. ID `<group id>/<rule id>`, importable. Don't mix
+with `rule` blocks on the same group (documented, as in other providers).
+
+Client: `CreateSecurityGroup`, `GetSecurityGroup`, `UpdateSecurityGroup`, `DeleteSecurityGroup`,
+`CreateSecurityGroupRule`, `DeleteSecurityGroupRule`. Read on 404 removes from state; a 404 just
+after create is retried.
+
 ## Instances on OpenStack (`POST /api/instances`)
 
 - `zoneId`, `instance.{name, type, layout.id, plan.id, site.id}`,
