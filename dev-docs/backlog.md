@@ -6,7 +6,7 @@
 |---|---|---|
 | Q1 | Authoritative list of master-tenant-only features | D-004 gating |
 | Q2 | Confirm Plugin Framework + mux (D-005) | all new resources |
-| Q3 | Load balancer API (instance type 70 "LoadBalancer", Octavia, no layouts: custom API?) | `mtncloud_load_balancer` |
+| Q3 | Load balancer API (instance type 70 "LoadBalancer", Octavia, no layouts: custom API?) | `mtncloud_load_balancer` (**on hold**, D-013) |
 | Q4 | Payloads P1–P7 in [api-research.md](api-research.md) and P8–P10 in [prerequisites.md](prerequisites.md) | network, router, SG, instance, MOS |
 | Q5 | Final GitHub org/repo name for registry publishing (`terraform-provider-mtncloud`) | first release |
 | Q6 | Test tenant + credentials for acceptance tests (isolated, disposable) | acceptance CI |

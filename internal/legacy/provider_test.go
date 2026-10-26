@@ -15,7 +15,8 @@ var (
 		"arm_app_blueprint", "arm_spec_template",
 		"cloud_formation_app_blueprint", "cloud_formation_spec_template",
 	}
-	removedDataSources = []string{"cloud_datastore", "cloud_folder"}
+	// cloud_datastore was restored (D-010): OpenStack Cinder volume types are cloud datastores.
+	removedDataSources = []string{"cloud_folder"}
 )
 
 func TestProvider_InternalValidate(t *testing.T) {
