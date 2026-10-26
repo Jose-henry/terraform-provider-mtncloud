@@ -80,7 +80,7 @@ everything that ships. Internal notes (`CLAUDE.md`, `dev-docs/`, `.claude/`) may
 ## Architecture
 
 ```
-main.go                     # serves the provider (muxed once Framework code lands)
+main.go                     # serves legacy + Framework halves through terraform-plugin-mux
 internal/
   legacy/                   # upstream SDKv2 code, renamed; shrinks as resources migrate
   provider/                 # Plugin Framework provider: config, auth, whoami, mux

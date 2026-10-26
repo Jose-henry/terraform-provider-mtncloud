@@ -17,6 +17,8 @@ Where docs and a real payload disagree, the payload wins and the difference is n
 - Fields that matter for OpenStack: `zonePool.id` (project), `cidr`, `gateway`, `dnsPrimary`,
   `dnsSecondary`, `dhcpServer`, `allowStaticOverride`, `pool` (IP pool), `visibility`,
   `resourcePermission`, `config` (type-specific).
+- `dnsPrimary` / `dnsSecondary` default to MTN's resolvers `102.88.134.41` / `102.90.109.125`
+  (D-017): Optional with a schema default, overridable, never required.
 - Omitting `site` means the network is shared across groups. We will always send it explicitly
   (isolation rule).
 - **Unknown:** the OpenStack network type ID/code on MTN, and whether subnet creation is implicit or
@@ -90,7 +92,23 @@ git-ignored `.captures/`; only the scrubbed facts below are recorded.
 | P9 | `storage-volume-types list` | OpenStack: `openstackVolume` (11, resizable) and `openstackLocal` (12, flavor disk, fixed). |
 | P10 | `clouds list` | One cloud: `MTNNG_CLOUD_AZ_1` (id 4, `openstack`). |
 
-Still needed: the same reads with a **sub-tenant** login (what a customer token sees), and `-d`
-dry runs of `networks add`, `network-routers add`, `security-groups add`/`add-rule`, `instances add`.
+## Sub-tenant captures (2026-10-26, Customer Admin User login)
+
+What a customer token sees. This is the role the provider must work with.
+
+| Capture | Finding |
+|---|---|
+| `whoami` | No `isMasterAccount` field for a sub-tenant. The tenant **account name** (used in pool names) differs from the **login subdomain** (used in `subdomain\username`). |
+| `clouds list`, `resource-pools list`, `service-plans list`, `networks floating-ips list` | **403** for this role. The provider can't use these endpoints. |
+| `instances add -d` (dry run) | The wizard's endpoints all work for this role, so the lookups use them (D-016): `/api/options/groups`, `clouds?groupId`, `zonePools?zoneId` (the first item is an `isGroup` header), `zoneSecurityGroup?zoneId&poolId`, `datastores?zoneId&siteId&resourcePoolId` (the sub-tenant only sees `__DEFAULT__`), `openstackExternalNetworks?zoneId`, `/api/instances/service-plans?zoneId&layoutId&siteId&resourcePoolId` (500 without the pool). |
+| `instance-types list` | 22 OS images, each with one OpenStack layout. |
+| `catalog types` (`/api/catalog/types`) | No `code` field, so catalog items are picked by name. |
+
+Still needed, as a sub-tenant, with `-d` dry runs only: `networks add`, `network-routers add`,
+`security-groups add` / `add-rule` / `add-location`, and a real `security-groups get` of a group
+with rules. These are the next resources.
+
+**Floating IPs are 403 for customers** on `/api/networks/floating-ips`. Before designing
+`mtncloud_floating_ip`, find the endpoint the console uses when a customer attaches a public IP.
 
 Never paste tokens, secret keys or passwords. `-V` already masks the bearer token.
