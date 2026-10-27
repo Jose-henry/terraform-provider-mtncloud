@@ -129,5 +129,18 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
   Both need the console's own request from the browser Network tab.
 - Does an instance created without `domain` get its network's domain? (`domain` is Optional+Computed
   in case it does.) Are user `evars` read back unmasked, or masked so `env_vars` would diff?
+- Is `expireDays` echoed by GET after create? (The provider doesn't rely on it: it keeps the
+  configured days and shows `expireDate`.) Does `PUT /threshold` accept every field as the docs say
+  for a customer login, and does an "off" threshold read back with `id` null again?
 - Status words besides `provisioning`, `running`, `failed`, `error`, and where the reason lives
   (`statusMessage` or `errorMessage`).
+
+## B-014 Instance workflows and deployments (deferred, owner 2026-10-27)
+- **Workflows:** every MTN workflow customers see (6, captured 2026-10-27) is an *operational* one,
+  run on an existing instance with inputs, some secret: Create Linux/Windows User, Update Linux User
+  Passwd, Install/Uninstall LetsEncrypt SSL, MK8S Cypher Regeneration. None is a provisioning
+  workflow the create body's `taskSetId` could take. The owner chose to skip them for now. If they
+  come back: a separate resource that runs the workflow on create and again when inputs or
+  `triggers` change, with secret inputs write-only.
+- **Deployments:** the tenant has none (`/api/deployments` is empty), so `POST /api/instances/{id}/deploys`
+  can't be checked against MTN. Deferred until one exists.

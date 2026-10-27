@@ -45,6 +45,10 @@ type Instance struct {
 	Interfaces []Interface // primary first
 	PrivateIP  string
 	PublicIP   string
+
+	// Lifecycle: the days set at create (0 for none) and the dates they lead to ("" for none).
+	ExpireDays, ShutdownDays int64
+	ExpireDate, ShutdownDate string
 }
 
 // Volume is a disk of an instance. DatastoreID is "auto" (the project default) or a datastore ID.
@@ -79,6 +83,7 @@ type InstanceInput struct {
 	NetworkIDs                  []int64      // primary first
 	NoAgent, CreateUser         bool
 	LayoutSize                  int64
+	ExpireDays, ShutdownDays    int64 // 0: none (or the policy's)
 }
 
 // VolumeSpec is a disk to create (ID 0) or to keep (its ID) in a create or resize.
@@ -106,6 +111,10 @@ type InstanceUpdate struct {
 }
 
 type wireInstance struct {
+	ExpireDays        *int64   `json:"expireDays"`
+	ShutdownDays      *int64   `json:"shutdownDays"`
+	ExpireDate        *string  `json:"expireDate"`
+	ShutdownDate      *string  `json:"shutdownDate"`
 	ID                int64    `json:"id"`
 	Name              string   `json:"name"`
 	Description       *string  `json:"description"`
@@ -160,6 +169,13 @@ func (w wireInstance) instance() *Instance {
 		ID: w.ID, Name: w.Name, Description: deref(w.Description), HostName: deref(w.HostName),
 		Status: w.Status, Environment: deref(w.InstanceContext), Labels: w.Labels, EnvPrefix: w.EnvironmentPrefix,
 		Tags: map[string]string{}, EnvVars: map[string]string{},
+	}
+	in.ExpireDate, in.ShutdownDate = deref(w.ExpireDate), deref(w.ShutdownDate)
+	if w.ExpireDays != nil {
+		in.ExpireDays = *w.ExpireDays
+	}
+	if w.ShutdownDays != nil {
+		in.ShutdownDays = *w.ShutdownDays
 	}
 	if in.StatusMessage = deref(w.StatusMessage); in.StatusMessage == "" {
 		in.StatusMessage = deref(w.ErrorMessage)
@@ -331,6 +347,13 @@ func (c *Client) CreateInstance(ctx context.Context, in InstanceInput) (int64, e
 	if in.NetworkDomainID != 0 {
 		inst["networkDomain"] = map[string]any{"id": in.NetworkDomainID}
 	}
+	// Only at create: afterwards the platform offers only "extend" and "cancel".
+	if in.ExpireDays > 0 {
+		inst["expireDays"] = in.ExpireDays
+	}
+	if in.ShutdownDays > 0 {
+		inst["shutdownDays"] = in.ShutdownDays
+	}
 	nics := make([]map[string]any, len(in.NetworkIDs))
 	for i, id := range in.NetworkIDs {
 		// No ipMode: the network's own DHCP setting applies (FastCreateLinuxInstance.sh).
@@ -497,4 +520,99 @@ func (c *Client) WaitForInstanceGone(ctx context.Context, id int64) error {
 			return strings.EqualFold(in.Status, "pendingRemoval"), nil
 		})
 	return err
+}
+
+// Threshold is an instance's scaling: how many VMs (min to max, by increment) and the usage, in
+// percent, that adds (above max) or removes (below min) one. A nil range is not watched.
+type Threshold struct {
+	AutoUp, AutoDown              bool
+	MinCount, MaxCount, Increment int64
+	CPU, Memory, Disk             *Range
+}
+
+// Range is a low and high usage mark, in percent.
+type Range struct{ Min, Max float64 }
+
+// Set reports whether any scaling is configured; a new instance reads as all off (captured 2026-10-27).
+func (t *Threshold) Set() bool {
+	return t.AutoUp || t.AutoDown || t.CPU != nil || t.Memory != nil || t.Disk != nil
+}
+
+type wireThreshold struct {
+	AutoUp         bool     `json:"autoUp"`
+	AutoDown       bool     `json:"autoDown"`
+	MinCount       *int64   `json:"minCount"`
+	MaxCount       *int64   `json:"maxCount"`
+	ScaleIncrement *int64   `json:"scaleIncrement"`
+	CPUEnabled     bool     `json:"cpuEnabled"`
+	MinCPU         *float64 `json:"minCpu"`
+	MaxCPU         *float64 `json:"maxCpu"`
+	MemoryEnabled  bool     `json:"memoryEnabled"`
+	MinMemory      *float64 `json:"minMemory"`
+	MaxMemory      *float64 `json:"maxMemory"`
+	DiskEnabled    bool     `json:"diskEnabled"`
+	MinDisk        *float64 `json:"minDisk"`
+	MaxDisk        *float64 `json:"maxDisk"`
+}
+
+func rangeOf(enabled bool, lo, hi *float64) *Range {
+	if !enabled {
+		return nil
+	}
+	r := &Range{}
+	if lo != nil {
+		r.Min = *lo
+	}
+	if hi != nil {
+		r.Max = *hi
+	}
+	return r
+}
+
+func orZero(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+// InstanceThreshold reads an instance's scaling. The answer's key is "instanceThreshold" (captured
+// 2026-10-27), not the "instance.threshold" of the API reference.
+func (c *Client) InstanceThreshold(ctx context.Context, id int64) (*Threshold, error) {
+	var resp struct {
+		InstanceThreshold *wireThreshold `json:"instanceThreshold"`
+	}
+	if err := c.get(ctx, "/api/instances/"+itoa(id)+"/threshold", nil, &resp); err != nil {
+		return nil, err
+	}
+	w := resp.InstanceThreshold
+	if w == nil {
+		return &Threshold{MinCount: 1, Increment: 1}, nil
+	}
+	return &Threshold{
+		AutoUp: w.AutoUp, AutoDown: w.AutoDown,
+		MinCount: orZero(w.MinCount), MaxCount: orZero(w.MaxCount), Increment: orZero(w.ScaleIncrement),
+		CPU:    rangeOf(w.CPUEnabled, w.MinCPU, w.MaxCPU),
+		Memory: rangeOf(w.MemoryEnabled, w.MinMemory, w.MaxMemory),
+		Disk:   rangeOf(w.DiskEnabled, w.MinDisk, w.MaxDisk),
+	}, nil
+}
+
+// SetInstanceThreshold replaces an instance's scaling. A zero Threshold turns scaling off.
+func (c *Client) SetInstanceThreshold(ctx context.Context, id int64, t Threshold) error {
+	body := map[string]any{
+		"autoUp": t.AutoUp, "autoDown": t.AutoDown,
+		"minCount": max(t.MinCount, 1), "scaleIncrement": max(t.Increment, 1),
+	}
+	if t.MaxCount > 0 {
+		body["maxCount"] = t.MaxCount
+	}
+	for name, r := range map[string]*Range{"Cpu": t.CPU, "Memory": t.Memory, "Disk": t.Disk} {
+		key := strings.ToLower(name[:1]) + name[1:]
+		body[key+"Enabled"] = r != nil
+		if r != nil {
+			body["min"+name], body["max"+name] = r.Min, r.Max
+		}
+	}
+	return c.do(ctx, http.MethodPut, "/api/instances/"+itoa(id)+"/threshold", nil, map[string]any{"instanceThreshold": body}, nil)
 }

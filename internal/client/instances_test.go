@@ -356,3 +356,64 @@ func TestInstance_NumericIDs(t *testing.T) {
 		t.Errorf("null interface ID read as %q, want empty", got)
 	}
 }
+
+func TestInstanceThreshold_Read(t *testing.T) {
+	f := newFakeAPI(t)
+	for name, file := range map[string]string{"unset": "threshold_unset.json", "set": "threshold_set.json"} {
+		body := instanceFixture(t, file)
+		f.route("GET", "/api/instances/9701/threshold", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(body) })
+		th, err := f.client(t).InstanceThreshold(t.Context(), 9701)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch name {
+		case "unset":
+			if th.Set() || th.MinCount != 1 || th.MaxCount != 0 {
+				t.Errorf("unset: %+v", th)
+			}
+		case "set":
+			// A disabled metric keeps its old marks in the API; it reads as not watched.
+			if !th.Set() || th.MaxCount != 3 || th.CPU == nil || th.CPU.Max != 50.5 || th.Memory != nil || th.Disk != nil {
+				t.Errorf("set: %+v", th)
+			}
+		}
+	}
+}
+
+func TestSetInstanceThreshold_Body(t *testing.T) {
+	f := newFakeAPI(t)
+	var body map[string]any
+	f.route("PUT", "/api/instances/9701/threshold", captureBody(t, &body, http.StatusOK, []byte(`{"success":true}`)))
+	c := f.client(t)
+	err := c.SetInstanceThreshold(t.Context(), 9701, Threshold{AutoUp: true, MinCount: 1, MaxCount: 3, Increment: 1, Memory: &Range{Min: 20, Max: 80}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	th := body["instanceThreshold"].(map[string]any)
+	if th["autoUp"] != true || th["maxCount"] != 3.0 || th["memoryEnabled"] != true || th["maxMemory"] != 80.0 ||
+		th["cpuEnabled"] != false || th["diskEnabled"] != false {
+		t.Errorf("body %v", th)
+	}
+	// Off: everything disabled, counts back to the platform's defaults.
+	if err := c.SetInstanceThreshold(t.Context(), 9701, Threshold{}); err != nil {
+		t.Fatal(err)
+	}
+	th = body["instanceThreshold"].(map[string]any)
+	if th["autoUp"] != false || th["minCount"] != 1.0 || th["scaleIncrement"] != 1.0 || th["maxCount"] != nil || th["cpuEnabled"] != false {
+		t.Errorf("off body %v", th)
+	}
+}
+
+func TestCreateInstance_Lifecycle(t *testing.T) {
+	f := newFakeAPI(t)
+	var body map[string]any
+	f.route("POST", "/api/instances", captureBody(t, &body, http.StatusOK, []byte(`{"instance":{"id":9701}}`)))
+	in := InstanceInput{ProjectID: 9201, ImageCode: "MTN-U24.04LTS", LayoutID: 1, PlanID: 9402, NetworkIDs: []int64{9301}, ExpireDays: 30}
+	if _, err := f.client(t).CreateInstance(t.Context(), in); err != nil {
+		t.Fatal(err)
+	}
+	inst := body["instance"].(map[string]any)
+	if _, ok := inst["shutdownDays"]; ok || inst["expireDays"] != 30.0 {
+		t.Errorf("instance %v", inst)
+	}
+}

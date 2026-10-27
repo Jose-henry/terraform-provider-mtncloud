@@ -21,21 +21,23 @@ import (
 // new instance reads "provisioning" once before "running"; the naming template names an instance
 // sent without a name; the platform adds its own <PREFIX>_* variables; groups are kept per instance.
 type instStore struct {
-	mu          sync.Mutex
-	nextID, seq int64
-	insts       map[int64]map[string]any
-	sgs         map[int64][]int64
-	pending     map[int64]bool
-	fail        string // the next create ends in this status
-	stuck       bool   // instances never leave "provisioning"
-	lostReplies int    // the next creates are applied but answer 502
-	creates     int
-	lastCreate  map[string]any
-	resizes     []map[string]any
+	mu           sync.Mutex
+	nextID, seq  int64
+	insts        map[int64]map[string]any
+	sgs          map[int64][]int64
+	thresholds   map[int64]map[string]any
+	thresholdErr bool // PUT /threshold answers 400
+	pending      map[int64]bool
+	fail         string // the next create ends in this status
+	stuck        bool   // instances never leave "provisioning"
+	lostReplies  int    // the next creates are applied but answer 502
+	creates      int
+	lastCreate   map[string]any
+	resizes      []map[string]any
 }
 
 func newInstStore() *instStore {
-	return &instStore{nextID: 9700, insts: map[int64]map[string]any{}, sgs: map[int64][]int64{}, pending: map[int64]bool{}}
+	return &instStore{nextID: 9700, insts: map[int64]map[string]any{}, sgs: map[int64][]int64{}, thresholds: map[int64]map[string]any{}, pending: map[int64]bool{}}
 }
 
 var (
@@ -96,6 +98,18 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case len(parts) == 2 && parts[1] == "threshold" && r.Method == http.MethodGet:
+		th := s.thresholds[id]
+		if th == nil { // as captured for an instance never scaled
+			th = map[string]any{"id": nil, "autoUp": false, "autoDown": false, "minCount": 1, "maxCount": nil, "scaleIncrement": 1,
+				"cpuEnabled": false, "memoryEnabled": false, "diskEnabled": false}
+		}
+		reply(http.StatusOK, map[string]any{"instance": map[string]any{"id": id}, "instanceThreshold": th, "instanceSchedules": []any{}})
+	case len(parts) == 2 && parts[1] == "threshold" && s.thresholdErr:
+		reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "Invalid threshold"})
+	case len(parts) == 2 && parts[1] == "threshold":
+		s.thresholds[id] = body["instanceThreshold"].(map[string]any)
+		reply(http.StatusOK, map[string]any{"success": true, "instanceThreshold": s.thresholds[id]})
 	case len(parts) == 2 && parts[1] == "security-groups" && r.Method == http.MethodGet:
 		list := []any{}
 		for _, g := range s.sgs[id] {
@@ -193,6 +207,9 @@ func (s *instStore) create(body map[string]any, reply func(int, any)) {
 		"plan":         map[string]any{"id": plan, "name": fakePlans[plan]},
 		"config":       map[string]any{"resourcePoolId": cfg["resourcePoolId"], "noAgent": cfg["noAgent"], "createUser": cfg["createUser"], "layoutSize": body["layoutSize"]},
 		"evars":        evars, "connectionInfo": []any{map[string]any{"ip": ip, "port": 22, "name": "SSH"}},
+	}
+	if days, ok := req["expireDays"].(float64); ok {
+		in["expireDays"], in["expireDate"] = days, "2026-11-26T09:00:00Z"
 	}
 	if d, ok := req["networkDomain"].(map[string]any); ok {
 		in["networkDomain"] = map[string]any{"id": d["id"], "name": "example.com"}
@@ -532,4 +549,152 @@ resource "terraform_data" "p" {
 			{Config: f.providerConfig()},
 		},
 	})
+}
+
+func TestInstance_ScaleAndLifecycle(t *testing.T) {
+	f, s := newInstFakes(t)
+	cfg := func(extra string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+  expire_days = 30
+`+extra)
+	}
+	scaled := cfg(`  scale = {
+    min_count = 1
+    max_count = 3
+    cpu       = { min = 30, max = 75.5 }
+  }`)
+	attr := func(p string) tfjsonpath.Path { return tfjsonpath.New(p) }
+	threshold := func() map[string]any {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, th := range s.thresholds {
+			return th
+		}
+		return nil
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: scaled,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("expire_date"), knownvalue.StringExact("2026-11-26T09:00:00Z")),
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("scale").AtMapKey("increment"), knownvalue.Int64Exact(1)),
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("scale").AtMapKey("memory"), knownvalue.Null()),
+				},
+			},
+			{
+				PreConfig: func() {
+					if th := threshold(); th == nil || th["cpuEnabled"] != true || th["maxCpu"] != 75.5 || th["autoUp"] != true {
+						t.Errorf("threshold sent %v", th)
+					}
+				},
+				Config:           scaled,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{ResourceName: "mtncloud_instance.app", ImportState: true, ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{"timeouts", "expire_days"}, Config: scaled},
+			{
+				// Changed in place: memory instead of cpu.
+				Config: cfg(`  scale = {
+    min_count = 2
+    max_count = 4
+    memory    = { min = 20, max = 80 }
+  }`),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
+			},
+			{
+				// Removed: scaling turned off.
+				Config:           cfg(""),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("scale"), knownvalue.Null()),
+				},
+			},
+			{
+				PreConfig: func() {
+					if th := threshold(); th["cpuEnabled"] != false || th["memoryEnabled"] != false || th["autoUp"] != false {
+						t.Errorf("threshold after removing scale %v", th)
+					}
+				},
+				Config:      strings.Replace(cfg(""), "expire_days = 30", "expire_days = 60", 1),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?s)Set at create only.*set\s+expire_days\s+back\s+to\s+30`),
+			},
+			{
+				// A replacing change takes the new days with it: no refusal.
+				Config: strings.Replace(strings.Replace(cfg(""), "expire_days = 30", "expire_days = 60", 1),
+					`networks = ["9301"]`, `networks = ["9303"]`, 1),
+				PlanOnly: true, ExpectNonEmptyPlan: true, // no "Set at create only" error
+			},
+			{
+				// Scaling changed in the console: the plan puts it back.
+				PreConfig: func() {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					for id := range s.insts {
+						s.thresholds[id] = map[string]any{"autoUp": true, "minCount": 1, "maxCount": 5, "scaleIncrement": 1, "cpuEnabled": true, "minCpu": 10.0, "maxCpu": 90.0}
+					}
+				},
+				Config:           cfg(""),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
+			},
+			{Config: cfg(`  scale = {
+    min_count = 3
+    max_count = 2
+  }`), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)(max_count\s+must\s+be\s+at\s+least\s+min_count.*Watch\s+at\s+least\s+one|Watch\s+at\s+least\s+one.*max_count\s+must\s+be\s+at\s+least\s+min_count)`)},
+			{Config: f.providerConfig()},
+		},
+	})
+}
+
+func TestInstance_LifecycleEdges(t *testing.T) {
+	f, s := newInstFakes(t)
+	cfg := func(extra string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+`+extra)
+	}
+	scale := `  scale = {
+    min_count = 1
+    max_count = 2
+    cpu       = { min = 20, max = 80 }
+  }`
+	setErr := func(on bool) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); s.thresholdErr = on } }
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				// The scaling PUT fails: a warning, so the VM is kept (not tainted)...
+				PreConfig:          setErr(true),
+				Config:             cfg(scale),
+				ExpectNonEmptyPlan: true, // scaling still to set
+			},
+			{
+				// ...and the next plan sets the scaling in place.
+				PreConfig:        setErr(false),
+				Config:           cfg(scale),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
+			},
+			{
+				// No days in state (as after an import): setting them only warns, and changes nothing.
+				Config:           cfg(scale + "\n  expire_days = 60"),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
+			},
+			{
+				Config:      cfg(scale + "\n  expire_days = 90"),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?s)Set at create only.*set\s+expire_days\s+back\s+to\s+60`),
+			},
+			{Config: f.providerConfig()},
+		},
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.creates != 1 {
+		t.Errorf("%d creates, want 1: a failed scaling PUT must not replace the VM", s.creates)
+	}
 }

@@ -31,6 +31,13 @@ resource "mtncloud_instance" "web" {
     datastore = "ENCR_AT_REST"
   }
 
+  # Add a VM above 75% CPU, remove one below 30%, between 1 and 3 VMs.
+  scale = {
+    min_count = 1
+    max_count = 3
+    cpu       = { min = 30, max = 75 }
+  }
+
   environment = "Production"
   labels      = ["web"]
   tags = {

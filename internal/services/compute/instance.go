@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
+	"github.com/hashicorp/terraform-plugin-framework-validators/float64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -28,6 +29,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 	"github.com/mtn/terraform-provider-mtncloud/internal/normalize"
@@ -76,6 +78,11 @@ type instanceModel struct {
 	InstallAgent   types.Bool     `tfsdk:"install_agent"`
 	CreateUser     types.Bool     `tfsdk:"create_user"`
 	ScaleFactor    types.Int64    `tfsdk:"scale_factor"`
+	Scale          types.Object   `tfsdk:"scale"`
+	ExpireDays     types.Int64    `tfsdk:"expire_days"`
+	ShutdownDays   types.Int64    `tfsdk:"shutdown_days"`
+	ExpireDate     types.String   `tfsdk:"expire_date"`
+	ShutdownDate   types.String   `tfsdk:"shutdown_date"`
 	Status         types.String   `tfsdk:"status"`
 	PrivateIP      types.String   `tfsdk:"private_ip"`
 	PublicIP       types.String   `tfsdk:"public_ip"`
@@ -87,6 +94,30 @@ type dataVolumeModel struct {
 	Size      types.Int64  `tfsdk:"size"`
 	Datastore types.String `tfsdk:"datastore"`
 }
+
+type scaleModel struct {
+	MinCount  types.Int64  `tfsdk:"min_count"`
+	MaxCount  types.Int64  `tfsdk:"max_count"`
+	Increment types.Int64  `tfsdk:"increment"`
+	AutoUp    types.Bool   `tfsdk:"auto_up"`
+	AutoDown  types.Bool   `tfsdk:"auto_down"`
+	CPU       types.Object `tfsdk:"cpu"`
+	Memory    types.Object `tfsdk:"memory"`
+	Disk      types.Object `tfsdk:"disk"`
+}
+
+type rangeModel struct {
+	Min types.Float64 `tfsdk:"min"`
+	Max types.Float64 `tfsdk:"max"`
+}
+
+var (
+	rangeType = types.ObjectType{AttrTypes: map[string]attr.Type{"min": types.Float64Type, "max": types.Float64Type}}
+	scaleType = types.ObjectType{AttrTypes: map[string]attr.Type{
+		"min_count": types.Int64Type, "max_count": types.Int64Type, "increment": types.Int64Type,
+		"auto_up": types.BoolType, "auto_down": types.BoolType, "cpu": rangeType, "memory": rangeType, "disk": rangeType,
+	}}
+)
 
 var dataVolumeType = types.ObjectType{AttrTypes: map[string]attr.Type{
 	"name": types.StringType, "size": types.Int64Type, "datastore": types.StringType,
@@ -216,6 +247,42 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Validators:    []validator.Int64{int64validator.Between(1, 20)},
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()},
 			},
+			"scale": schema.SingleNestedAttribute{
+				Optional: true,
+				Description: "Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and removes one " +
+					"below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. " +
+					"Changed in place; removing it turns scaling off.",
+				Attributes: map[string]schema.Attribute{
+					"min_count": schema.Int64Attribute{Required: true, Description: "Fewest VMs.",
+						Validators: []validator.Int64{int64validator.AtLeast(1)}},
+					"max_count": schema.Int64Attribute{Required: true, Description: "Most VMs.",
+						Validators: []validator.Int64{int64validator.AtLeast(1)}},
+					"increment": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1),
+						Description: "VMs added or removed at a time. Defaults to 1.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
+					"auto_up": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
+						Description: "Add VMs automatically. Defaults to `true`."},
+					"auto_down": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
+						Description: "Remove VMs automatically. Defaults to `true`."},
+					"cpu":    usageRange("CPU"),
+					"memory": usageRange("Memory"),
+					"disk":   usageRange("Disk"),
+				},
+			},
+			"expire_days": schema.Int64Attribute{
+				Optional: true,
+				Description: "Delete the instance this many days after it is created. Set at create only: afterwards extend " +
+					"or cancel the expiry in the console (a change here is refused at plan time).",
+				Validators: []validator.Int64{int64validator.AtLeast(1)},
+			},
+			"shutdown_days": schema.Int64Attribute{
+				Optional:    true,
+				Description: "Stop the VM this many days after it is created. Set at create only, like `expire_days`.",
+				Validators:  []validator.Int64{int64validator.AtLeast(1)},
+			},
+			"expire_date": schema.StringAttribute{Computed: true, PlanModifiers: keep,
+				Description: "When the instance will be deleted, if it expires (from `expire_days` or a policy)."},
+			"shutdown_date": schema.StringAttribute{Computed: true, PlanModifiers: keep,
+				Description: "When the VM will be stopped, if a shutdown is set."},
 			"status":     schema.StringAttribute{Computed: true, Description: "Status, for example `running`.", PlanModifiers: keep},
 			"private_ip": schema.StringAttribute{Computed: true, Description: "Private IP address on the primary network.", PlanModifiers: keep},
 			"public_ip":  schema.StringAttribute{Computed: true, Description: "Floating (public) IP address, when the instance has one.", PlanModifiers: keep},
@@ -238,6 +305,18 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 	}
 }
 
+func usageRange(what string) schema.SingleNestedAttribute {
+	pct := []validator.Float64{float64validator.Between(0, 100)}
+	return schema.SingleNestedAttribute{
+		Optional:    true,
+		Description: what + " usage to watch, in percent. Left out, " + strings.ToLower(what) + " isn't watched.",
+		Attributes: map[string]schema.Attribute{
+			"min": schema.Float64Attribute{Required: true, Description: "Remove a VM below this.", Validators: pct},
+			"max": schema.Float64Attribute{Required: true, Description: "Add a VM above this.", Validators: pct},
+		},
+	}
+}
+
 // ModifyPlan checks names at plan time (rule 17) and decides what a change replaces. The API can't
 // change the primary network, an existing disk or the root size; changing a reference that names
 // the same thing ("web-prod" vs "web-prod-Acme", an image's name vs its code) is no change at all.
@@ -250,6 +329,7 @@ func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	checkScale(ctx, plan.Scale, &resp.Diagnostics)
 	var state instanceModel
 	hasState := !req.State.Raw.IsNull()
 	if hasState {
@@ -376,11 +456,42 @@ func (r *instanceResource) planChanges(ctx context.Context, plan, state instance
 // planComputed marks the values an update can change as unknown: a reconfigure restarts the VM
 // (its status may change, for example from "stopped" to "running") and a floating IP may move.
 func (r *instanceResource) planComputed(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse, state instanceModel) {
+	if len(resp.RequiresReplace) == 0 {
+		var plan instanceModel
+		resp.Diagnostics.Append(resp.Plan.Get(ctx, &plan)...)
+		checkLifecycle(plan, state, &resp.Diagnostics)
+	}
 	if resp.Diagnostics.HasError() || resp.Plan.Raw.Equal(req.State.Raw) {
 		return
 	}
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("status"), types.StringUnknown())...)
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("public_ip"), types.StringUnknown())...)
+}
+
+// checkLifecycle refuses a change to the create-only days of an instance that is kept (a replaced
+// one gets the new days). Days are null in state after an import: setting them then can't be checked
+// against the platform, so it only warns that nothing changes.
+func checkLifecycle(plan, state instanceModel, diags *diag.Diagnostics) {
+	for _, f := range []struct {
+		at         string
+		plan, from types.Int64
+	}{{"expire_days", plan.ExpireDays, state.ExpireDays}, {"shutdown_days", plan.ShutdownDays, state.ShutdownDays}} {
+		switch {
+		case f.plan.IsUnknown() || f.plan.Equal(f.from):
+		case f.from.IsNull():
+			diags.AddAttributeWarning(path.Root(f.at), "Set at create only",
+				fmt.Sprintf("%s only applies when an instance is created; this one keeps the expiry or shutdown it has "+
+					"(see expire_date and shutdown_date).", f.at))
+		default:
+			undo := fmt.Sprintf("set %s back to %d", f.at, f.from.ValueInt64())
+			if f.plan.IsNull() {
+				undo = fmt.Sprintf("put %s = %d back", f.at, f.from.ValueInt64())
+			}
+			diags.AddAttributeError(path.Root(f.at), "Set at create only",
+				fmt.Sprintf("MTN Cloud sets %s when the instance is created; it can't be changed afterwards. Extend or cancel "+
+					"the expiry or shutdown in the console, and %s.", f.at, undo))
+		}
+	}
 }
 
 // checkNames resolves every name the plan uses, so a typo fails at plan time with the valid names.
@@ -496,6 +607,7 @@ func (r *instanceResource) input(ctx context.Context, m instanceModel, diags *di
 		Placement: *p, ProjectID: project.ID, ImageCode: image.Code, LayoutID: image.LayoutID, PlanID: plan.ID,
 		Labels: stringsOf(ctx, m.Labels, diags), Tags: mapOf(ctx, m.Tags, diags), EnvVars: mapOf(ctx, m.EnvVars, diags),
 		NoAgent: !m.InstallAgent.ValueBool(), CreateUser: m.CreateUser.ValueBool(), LayoutSize: m.ScaleFactor.ValueInt64(),
+		ExpireDays: m.ExpireDays.ValueInt64(), ShutdownDays: m.ShutdownDays.ValueInt64(),
 	}
 	if !known(m.Name) {
 		in.Name = ""
@@ -640,7 +752,20 @@ func (r *instanceResource) Create(ctx context.Context, req resource.CreateReques
 	// is replaced by the next apply instead of being orphaned.
 	plan.ID = types.StringValue(strconv.FormatInt(id, 10))
 	inst, err := r.client.WaitForInstance(ctx, id)
+	planned, scaleFailed := plan.Scale, false
+	if err == nil && !client.InstanceFailed(inst.Status) && !plan.Scale.IsNull() {
+		if serr := r.client.SetInstanceThreshold(ctx, id, thresholdOf(ctx, plan.Scale, &resp.Diagnostics)); serr != nil {
+			// A warning, not an error: an error would taint (and so replace) a healthy VM. Read finds
+			// no scaling, so the next plan sets it in place.
+			resp.Diagnostics.AddAttributeWarning(path.Root("scale"), "Scaling not set yet",
+				fmt.Sprintf("Instance %d was created, but its scaling wasn't set: %s. The next apply sets it.", id, serr))
+			scaleFailed = true
+		}
+	}
 	r.settle(ctx, &plan, inst, err, "create", &resp.Diagnostics)
+	if scaleFailed {
+		plan.Scale = planned // as planned, so the apply is consistent; the next refresh shows it unset
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -675,7 +800,7 @@ func (r *instanceResource) settle(ctx context.Context, m *instanceModel, inst *c
 
 // unknownToNull clears computed values that were never read, so state can be saved.
 func unknownToNull(ctx context.Context, m *instanceModel) {
-	for _, s := range []*types.String{&m.Name, &m.Hostname, &m.Domain, &m.Status, &m.PrivateIP, &m.PublicIP} {
+	for _, s := range []*types.String{&m.Name, &m.Hostname, &m.Domain, &m.Status, &m.PrivateIP, &m.PublicIP, &m.ExpireDate, &m.ShutdownDate} {
 		if s.IsUnknown() {
 			*s = types.StringNull()
 		}
@@ -757,6 +882,12 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 		}
 		if err := r.client.UpdateInstance(ctx, id, u); err != nil {
 			resp.Diagnostics.AddError("Unable to update instance", err.Error())
+			return
+		}
+	}
+	if !plan.Scale.Equal(state.Scale) {
+		if err := r.client.SetInstanceThreshold(ctx, id, thresholdOf(ctx, plan.Scale, &resp.Diagnostics)); err != nil {
+			resp.Diagnostics.AddError("Unable to set the instance's scaling", err.Error())
 			return
 		}
 	}
@@ -843,6 +974,9 @@ func (r *instanceResource) refresh(ctx context.Context, m *instanceModel, in *cl
 	m.PublicIP = optional(in.PublicIP)
 	m.InstallAgent = types.BoolValue(!in.NoAgent)
 	m.ScaleFactor = types.Int64Value(in.LayoutSize)
+	// expire_days and shutdown_days stay as configured: a policy may set days the configuration
+	// doesn't, and those show in the dates.
+	m.ExpireDate, m.ShutdownDate = optional(in.ExpireDate), optional(in.ShutdownDate)
 	if m.CreateUser.IsNull() || m.CreateUser.IsUnknown() {
 		m.CreateUser = types.BoolValue(true)
 	}
@@ -911,6 +1045,13 @@ func (r *instanceResource) refresh(ctx context.Context, m *instanceModel, in *cl
 		return
 	}
 	m.SecurityGroups = securityGroupNames(ctx, groups, m.SecurityGroups)
+
+	th, err := r.client.InstanceThreshold(ctx, in.ID)
+	if err != nil {
+		diags.AddError("Unable to read the instance's scaling", err.Error())
+		return
+	}
+	m.Scale = scaleOf(ctx, th)
 }
 
 // refreshProject keeps the configured project when it is the same one (short or full name), and
@@ -1107,4 +1248,74 @@ func volumesOf(ctx context.Context, v types.List, diags *diag.Diagnostics) []dat
 		diags.Append(d...)
 	}
 	return out
+}
+
+// checkScale refuses a scale block that can't work: no metric to watch, or marks the wrong way round.
+func checkScale(ctx context.Context, v types.Object, diags *diag.Diagnostics) {
+	if v.IsNull() || v.IsUnknown() {
+		return
+	}
+	var sc scaleModel
+	diags.Append(v.As(ctx, &sc, basetypes.ObjectAsOptions{})...)
+	at := path.Root("scale")
+	if known64(sc.MinCount) && known64(sc.MaxCount) && sc.MaxCount.ValueInt64() < sc.MinCount.ValueInt64() {
+		diags.AddAttributeError(at.AtName("max_count"), "Invalid scaling", "max_count must be at least min_count.")
+	}
+	if sc.CPU.IsNull() && sc.Memory.IsNull() && sc.Disk.IsNull() {
+		diags.AddAttributeError(at, "Invalid scaling", "Watch at least one of cpu, memory or disk, or remove the scale block.")
+	}
+	for name, o := range map[string]types.Object{"cpu": sc.CPU, "memory": sc.Memory, "disk": sc.Disk} {
+		if o.IsNull() || o.IsUnknown() {
+			continue
+		}
+		var r rangeModel
+		diags.Append(o.As(ctx, &r, basetypes.ObjectAsOptions{})...)
+		if !r.Min.IsUnknown() && !r.Max.IsUnknown() && r.Min.ValueFloat64() >= r.Max.ValueFloat64() {
+			diags.AddAttributeError(at.AtName(name), "Invalid scaling", fmt.Sprintf("%s: min must be below max.", name))
+		}
+	}
+}
+
+func known64(v types.Int64) bool { return !v.IsNull() && !v.IsUnknown() }
+
+// thresholdOf is the planned scale block in API terms; null turns scaling off.
+func thresholdOf(ctx context.Context, v types.Object, diags *diag.Diagnostics) client.Threshold {
+	if v.IsNull() || v.IsUnknown() {
+		return client.Threshold{}
+	}
+	var sc scaleModel
+	diags.Append(v.As(ctx, &sc, basetypes.ObjectAsOptions{})...)
+	rng := func(o types.Object) *client.Range {
+		if o.IsNull() || o.IsUnknown() {
+			return nil
+		}
+		var r rangeModel
+		diags.Append(o.As(ctx, &r, basetypes.ObjectAsOptions{})...)
+		return &client.Range{Min: r.Min.ValueFloat64(), Max: r.Max.ValueFloat64()}
+	}
+	return client.Threshold{
+		AutoUp: sc.AutoUp.ValueBool(), AutoDown: sc.AutoDown.ValueBool(),
+		MinCount: sc.MinCount.ValueInt64(), MaxCount: sc.MaxCount.ValueInt64(), Increment: sc.Increment.ValueInt64(),
+		CPU: rng(sc.CPU), Memory: rng(sc.Memory), Disk: rng(sc.Disk),
+	}
+}
+
+// scaleOf is the instance's scaling as the scale block; null when scaling is off.
+func scaleOf(ctx context.Context, th *client.Threshold) types.Object {
+	if !th.Set() {
+		return types.ObjectNull(scaleType.AttrTypes)
+	}
+	rng := func(r *client.Range) types.Object {
+		if r == nil {
+			return types.ObjectNull(rangeType.AttrTypes)
+		}
+		o, _ := types.ObjectValueFrom(ctx, rangeType.AttrTypes, rangeModel{Min: types.Float64Value(r.Min), Max: types.Float64Value(r.Max)})
+		return o
+	}
+	o, _ := types.ObjectValueFrom(ctx, scaleType.AttrTypes, scaleModel{
+		MinCount: types.Int64Value(th.MinCount), MaxCount: types.Int64Value(th.MaxCount), Increment: types.Int64Value(th.Increment),
+		AutoUp: types.BoolValue(th.AutoUp), AutoDown: types.BoolValue(th.AutoDown),
+		CPU: rng(th.CPU), Memory: rng(th.Memory), Disk: rng(th.Disk),
+	})
+	return o
 }

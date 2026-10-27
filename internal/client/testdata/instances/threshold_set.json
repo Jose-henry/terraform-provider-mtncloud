@@ -1,0 +1,1 @@
+{"instance":{"id":9701,"name":"app-1"},"instanceThreshold":{"id":9901,"autoUp":true,"autoDown":true,"minCount":1,"maxCount":3,"scaleIncrement":1,"cpuEnabled":true,"minCpu":30.0,"maxCpu":50.5,"memoryEnabled":false,"minMemory":10.0,"maxMemory":60.0,"diskEnabled":false,"minDisk":null,"maxDisk":null,"networkEnabled":false,"iopsEnabled":false},"instanceSchedules":[]}

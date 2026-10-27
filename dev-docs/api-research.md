@@ -344,3 +344,17 @@ with rules. These are the next resources.
 `mtncloud_floating_ip`, find the endpoint the console uses when a customer attaches a public IP.
 
 Never paste tokens, secret keys or passwords. `-V` already masks the bearer token.
+
+### Instance scaling, lifecycle, workflows (captured 2026-10-27, customer login)
+- `GET /api/instances/{id}/threshold` works for customers. The answer is `{"instance":{id,name},
+  "instanceThreshold":{...},"instanceSchedules":[]}`, not the reference's `instance.threshold`. A
+  never-scaled instance reads `id: null`, `autoUp/autoDown: false`, `minCount: 1`, `maxCount: null`,
+  `scaleIncrement: 1`, every metric disabled with null marks. Marks are floats (`30.0`).
+- `PUT /api/instances/{id}/threshold` `{instanceThreshold:{autoUp, autoDown, minCount, maxCount,
+  scaleIncrement, cpuEnabled, minCpu, maxCpu, memoryEnabled, ..., diskEnabled, ...}}` (Context7);
+  not yet sent live.
+- `GET /api/instances/{id}` carries `expireDays`, `expireDate`, `shutdownDays`, `shutdownDate` (null
+  when unset), plus warning dates and counts. After create the API only offers
+  `PUT .../extend-expiration`, `.../extend-shutdown` (by the policy's renewal days) and cancel.
+- `GET /api/instances/{id}/deploys` works (empty); `/api/deployments` is empty for the tenant.
+- `/api/task-sets`: 6 workflows, all `type: operation` (see B-014).

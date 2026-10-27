@@ -103,8 +103,8 @@ Last updated 2026-10-26 (PR #3, client and lookup data sources). Update this fil
 
 ## Next (in order, each one a PR with tests, after the owner approves its plan)
 
-1. Instance slice 2: workflow (`taskSetId`), lifecycle days, scale thresholds, deployments. Slice 3,
-   after a console capture: floating IP (pool list and attach call), availability zone.
+1. Instance slice 3, after a console capture: floating IP (pool list and attach call), availability
+   zone. (Slice 2, scaling and lifecycle days, is done; workflows and deployments deferred, B-014.)
 2. `mtncloud_project` → `mtncloud_catalog_order` → `mtncloud_object_storage` (MOS) → app, SSL
    certificate. Load balancer on hold (D-013).
 3. `internal/tenancy` (master gating, D-004) once Q1 is answered.

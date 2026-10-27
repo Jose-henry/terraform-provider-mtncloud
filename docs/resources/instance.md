@@ -45,6 +45,13 @@ resource "mtncloud_instance" "web" {
     datastore = "ENCR_AT_REST"
   }
 
+  # Add a VM above 75% CPU, remove one below 30%, between 1 and 3 VMs.
+  scale = {
+    min_count = 1
+    max_count = 3
+    cpu       = { min = 30, max = 75 }
+  }
+
   environment = "Production"
   labels      = ["web"]
   tags = {
@@ -89,21 +96,26 @@ resource "mtncloud_instance" "worker" {
 - `domain` (String) Network domain the instance joins, by name, for example `example.com`. Left out, MTN Cloud may apply the network's domain, shown here. Changing it replaces the instance.
 - `env_vars` (Map of String, Sensitive) Environment variables for the instance's automation, name to value. Sensitive: values are hidden in plans, but stored in state. The variables MTN Cloud adds itself (address, host, ports) are not shown. Changing them replaces the instance.
 - `environment` (String) Environment, by name or code, for example `Production`. Changed in place.
+- `expire_days` (Number) Delete the instance this many days after it is created. Set at create only: afterwards extend or cancel the expiry in the console (a change here is refused at plan time).
 - `hostname` (String) Hostname set inside the VM. Left out, MTN Cloud derives it from the name or your hostname template. Changing it replaces the instance.
 - `install_agent` (Boolean) Install the MTN Cloud agent, for monitoring, logs and automation. Defaults to `true`. The agent needs the network to be on an MTN Router. Changing it replaces the instance.
 - `labels` (Set of String) Labels (keywords). Changed in place.
 - `name` (String) Name of the instance. Leave it out to use your tenant's naming template (for example `<initials>-<account>-MTN-CLOUD-<type>-<n>`); the generated name is then shown here. Renaming is done in place.
 - `root_volume_size` (Number) Root volume size in GB. Left out, the plan's size applies (10 GB). MTN Cloud can't resize a root volume: add a `data_volume` instead. Windows images need at least 40 GB.
+- `scale` (Attributes) Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and removes one below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. Changed in place; removing it turns scaling off. (see [below for nested schema](#nestedatt--scale))
 - `scale_factor` (Number) Number of VMs in the instance. Defaults to 1. For several separate instances use `count` or `for_each`. Changing it replaces the instance.
 - `security_groups` (Set of String) Security groups to apply, by name, in addition to the project's default group, which is always applied. Changed in place. Each group needs the project as a location.
+- `shutdown_days` (Number) Stop the VM this many days after it is created. Set at create only, like `expire_days`.
 - `tags` (Map of String) Metadata tags, name to value. Changed in place.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
+- `expire_date` (String) When the instance will be deleted, if it expires (from `expire_days` or a policy).
 - `id` (String) Instance ID.
 - `private_ip` (String) Private IP address on the primary network.
 - `public_ip` (String) Floating (public) IP address, when the instance has one.
+- `shutdown_date` (String) When the VM will be stopped, if a shutdown is set.
 - `status` (String) Status, for example `running`.
 
 <a id="nestedblock--data_volume"></a>
@@ -117,6 +129,51 @@ Optional:
 
 - `datastore` (String) Datastore, by name. Left out, the project's default.
 - `name` (String) Volume name.
+
+
+<a id="nestedatt--scale"></a>
+### Nested Schema for `scale`
+
+Required:
+
+- `max_count` (Number) Most VMs.
+- `min_count` (Number) Fewest VMs.
+
+Optional:
+
+- `auto_down` (Boolean) Remove VMs automatically. Defaults to `true`.
+- `auto_up` (Boolean) Add VMs automatically. Defaults to `true`.
+- `cpu` (Attributes) CPU usage to watch, in percent. Left out, cpu isn't watched. (see [below for nested schema](#nestedatt--scale--cpu))
+- `disk` (Attributes) Disk usage to watch, in percent. Left out, disk isn't watched. (see [below for nested schema](#nestedatt--scale--disk))
+- `increment` (Number) VMs added or removed at a time. Defaults to 1.
+- `memory` (Attributes) Memory usage to watch, in percent. Left out, memory isn't watched. (see [below for nested schema](#nestedatt--scale--memory))
+
+<a id="nestedatt--scale--cpu"></a>
+### Nested Schema for `scale.cpu`
+
+Required:
+
+- `max` (Number) Add a VM above this.
+- `min` (Number) Remove a VM below this.
+
+
+<a id="nestedatt--scale--disk"></a>
+### Nested Schema for `scale.disk`
+
+Required:
+
+- `max` (Number) Add a VM above this.
+- `min` (Number) Remove a VM below this.
+
+
+<a id="nestedatt--scale--memory"></a>
+### Nested Schema for `scale.memory`
+
+Required:
+
+- `max` (Number) Add a VM above this.
+- `min` (Number) Remove a VM below this.
+
 
 
 <a id="nestedblock--timeouts"></a>
@@ -146,11 +203,14 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
   that ends "failed" or "error" (then or later) is reported with MTN Cloud's reason, kept in state,
   and replaced by the next apply.
 - **Restarts the VM:** changing `plan`. `status` and `public_ip` are read again after any update.
-- **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`,
+- **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`, `scale`,
   `plan`, networks added at the end of `networks`, and volumes added at the end of `data_volume`.
 - **Replaces the instance:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`,
   `env_vars`, `install_agent`, `create_user`, `scale_factor`, the primary (first) network, and
   removing, reordering or changing existing networks or data volumes.
+- **Set at create only:** `expire_days` and `shutdown_days`. Changing them later is refused at plan
+  time; extend or cancel an expiry in the console. `expire_date` and `shutdown_date` show the dates,
+  including ones a policy sets.
 - **Refused at plan time:** a new `root_volume_size` (MTN Cloud can't resize a root volume), a
   Windows image with a root volume under 40 GB, and any name (plan, security group, datastore,
   environment, domain) the project doesn't have; the error lists the valid ones.
@@ -161,5 +221,7 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
 - **Values known only at apply.** If `group`, `project` or `image` comes from a resource created in
   the same apply, Terraform can't tell whether it changed, so the plan replaces the instance.
 - **`env_vars` are sensitive:** hidden in plan output, but stored in state like every attribute.
+- **Workflows and deployments** aren't managed by this resource yet. MTN's workflows are operations
+  you run on an existing instance from the console.
 - **Floating IPs** are not managed by this resource yet. A floating IP attached in the console shows
   in `public_ip`.
