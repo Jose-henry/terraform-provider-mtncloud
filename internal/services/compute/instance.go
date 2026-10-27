@@ -556,7 +556,7 @@ func (r *instanceResource) checkNames(ctx context.Context, m instanceModel, p *c
 			names[i] = n.Name
 		}
 		diags.AddAttributeError(path.Root("floating_ip_pool"), "Unknown floating IP pool",
-			fmt.Sprintf("no floating IP pool named %q. Available pools: %s", m.FloatingIPPool.ValueString(), strings.Join(names, ", ")))
+			fmt.Sprintf("no floating IP pool named %q. Available pools: %s. %s", m.FloatingIPPool.ValueString(), strings.Join(names, ", "), client.SyncHint))
 	}
 }
 

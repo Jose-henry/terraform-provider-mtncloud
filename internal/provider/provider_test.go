@@ -31,6 +31,7 @@ type fakeAPI struct {
 	net    http.Handler // /api/networks, a stateful fake (network_test.go), when set
 	router http.Handler // /api/networks/routers, a stateful fake (router_test.go), when set
 	inst   http.Handler // /api/instances, a stateful fake (instance_test.go), when set
+	order  http.Handler // /api/catalog/orders and /items, a stateful fake (project_test.go), when set
 }
 
 func newFakeAPI(t *testing.T) *fakeAPI {
@@ -56,8 +57,13 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.calls[r.URL.Path]++
-		sg, net, router, inst := f.sg, f.net, f.router, f.inst
+		sg, net, router, inst, order := f.sg, f.net, f.router, f.inst, f.order
 		f.mu.Unlock()
+		if order != nil && (r.URL.Path == "/api/catalog/orders" || strings.HasPrefix(r.URL.Path, "/api/catalog/items/")) &&
+			r.Header.Get("Authorization") == "Bearer test-token" {
+			order.ServeHTTP(w, r)
+			return
+		}
 		fip := r.URL.Path == "/api/options/openStack/openstackFloatingIpOptions" || strings.HasPrefix(r.URL.Path, "/api/containers/")
 		if inst != nil && (fip || strings.HasPrefix(r.URL.Path, "/api/instances") && r.URL.Path != "/api/instances/service-plans") &&
 			r.Header.Get("Authorization") == "Bearer test-token" {

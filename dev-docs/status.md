@@ -100,12 +100,15 @@ Last updated 2026-10-26 (PR #3, client and lookup data sources). Update this fil
   names it otherwise); data volumes and networks appended in place; plan change in place (restarts);
   root resize and Windows under 40 GB refused at plan time; default SG always applied; waits for
   "running" and reports "failed"/"error" with the platform's reason. Not proven live yet (B-013).
+  `floating_ip_pool` (attached after running, no sync wait) on `main`.
+- `mtncloud_project` (`internal/services/catalog`, on `main`): orders "Create Project", waits for
+  the workflow's execution only (D-020, D-022). ID = catalog order item. Not proven live (B-015).
 
 ## Next (in order, each one a PR with tests, after the owner approves its plan)
 
-1. `mtncloud_project` (catalog order "Create Project"; destroy refuses, changes are plan-time errors).
-   Instance: floating IP done (`floating_ip_pool`); availability zone still open (B-013).
-2. `mtncloud_project` → `mtncloud_catalog_order` → `mtncloud_object_storage` (MOS) → app, SSL
+1. Prove `mtncloud_project` and `floating_ip_pool` live (B-015, B-013). Instance availability zone
+   still open (B-013).
+2. `mtncloud_catalog_order` → `mtncloud_object_storage` (MOS) → app, SSL
    certificate. Load balancer on hold (D-013).
 3. `internal/tenancy` (master gating, D-004) once Q1 is answered.
 4. Migrate the legacy resources customers use most, fixing B-001 on the way.

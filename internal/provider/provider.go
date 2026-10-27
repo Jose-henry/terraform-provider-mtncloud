@@ -5,6 +5,7 @@ package provider
 import (
 	"context"
 	"os"
+	"slices"
 	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -15,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
+	"github.com/mtn/terraform-provider-mtncloud/internal/services/catalog"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/compute"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/lookup"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/network"
@@ -162,7 +164,7 @@ func stringOrEnv(v types.String, env string) string {
 }
 
 func (p *mtncloudProvider) Resources(context.Context) []func() resource.Resource {
-	return append(network.Resources(), compute.Resources()...)
+	return slices.Concat(network.Resources(), compute.Resources(), catalog.Resources())
 }
 
 func (p *mtncloudProvider) DataSources(context.Context) []func() datasource.DataSource {

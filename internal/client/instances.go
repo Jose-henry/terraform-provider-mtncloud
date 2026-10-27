@@ -660,7 +660,7 @@ func (c *Client) FloatingIPPoolByName(ctx context.Context, containerID int64, na
 		}
 		names[i] = p.Name
 	}
-	return Option{}, fmt.Errorf("no floating IP pool named %q. Available pools: %s", name, strings.Join(names, ", "))
+	return Option{}, fmt.Errorf("no floating IP pool named %q. Available pools: %s. %s", name, strings.Join(names, ", "), SyncHint)
 }
 
 // AttachFloatingIP gives a VM an address from a floating IP pool. It works only when the VM's

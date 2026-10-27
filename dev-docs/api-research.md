@@ -374,3 +374,14 @@ Never paste tokens, secret keys or passwords. `-V` already masks the bearer toke
   sync never attaches a second address.
 - `/api/networks/floating-ips` (allocate, list) stays 403 for customers, so a standalone floating IP
   resource that outlives an instance isn't possible with a customer login.
+
+### Project order (captured 2026-10-27, dry run only)
+- Catalog type "Create Project" (id 10, `workflow`, context `appliance`). Form fields in `config`:
+  `groupName` (group, required), `cloud` (cloud, required), `projectName` (required, verifyPattern
+  `^[a-z][a-z0-9_-]*$`), `projectDescription` (optional).
+- The CLI's dry run printed `{"item":{"config":{...},"type":{"name":"Create Project"},"context":"appliance"}}`
+  (its own cart-less shape); the provider sends the API reference's `{"order":{"items":[...]}}`.
+- The workflow script (MTN-Cloud-Service-Automation, `Project Resource Pool Folder`) builds the pool
+  name `<projectName>-<tenant>` and POSTs `/api/zones/{cloud}/resource-pools`.
+- Inventory items for projects: `GET /api/catalog/items/{id}` gives `type.name`, `status`
+  ("ORDERED") and `execution` (null on the existing ones). See D-022 and B-015.

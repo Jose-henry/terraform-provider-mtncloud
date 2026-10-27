@@ -154,3 +154,19 @@ Users write `source = "jose-henry/mtncloud"`; `main.go` serves `registry.terrafo
 The Go module path (`github.com/mtn/terraform-provider-mtncloud`) is internal and unchanged. Moving the
 repo to an MTN GitHub org later changes the address, so users would update `source`; decide that
 before many people depend on it.
+
+## D-022 `mtncloud_project`: the order is the resource; no change, no destroy (2026-10-27)
+Owner's choices. MTN's catalog has "Create Project" (type 10, a workflow on the appliance) and no
+"Delete Project". Its workflow (`Project-ResourcePool.sh` in MTN-Cloud-Service-Automation) POSTs a
+resource pool named `<projectName>-<tenant>` to `/api/zones/{cloud}/resource-pools`.
+- **ID** is the catalog order item (`/api/catalog/items/{id}`), which exists the moment the order
+  is placed; the pool only appears after the workflow and the sync. The item doesn't show the order's
+  form, so `name`/`description` are kept as configured.
+- **Create** orders, then polls the item's execution to success or error (D-020). Nothing waits for
+  the sync: the docs tell users to allow up to an hour for the default security group, networks and
+  floating IP pools. A failed execution keeps nothing (nothing was made); a result not known by the
+  timeout keeps the order with a warning, so a retry never orders a second project.
+- **Changes** to name or description are plan-time errors (the owner chose this over replace).
+- **Destroy** is refused with an error that names the `removed` block and `terraform state rm`.
+- Existing project items read `execution: null`, `status: ORDERED`. If new orders behave the same,
+  Create ends at its timeout with the warning; B-015 checks this live.

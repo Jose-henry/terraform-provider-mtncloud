@@ -65,6 +65,13 @@ func MayHaveSucceeded(err error) bool {
 	return apiErr.StatusCode >= 500
 }
 
+// IsClientError reports an API 4xx: the platform answered and turned the request down, so a write
+// was not applied. Anything else (a 5xx, a timeout, a lost connection) may have been.
+func IsClientError(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode >= 400 && apiErr.StatusCode < 500
+}
+
 // IsRefused reports a request the platform turned down in a 2xx answer with "success": false.
 func IsRefused(err error) bool {
 	var apiErr *APIError

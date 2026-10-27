@@ -1,0 +1,60 @@
+---
+page_title: "mtncloud_project Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_project
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_project/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_project/import.sh" }}
+
+The order doesn't show the name and description it was placed with, so they come from your
+configuration: write them exactly as ordered. The first apply after an import records them and sends
+nothing.
+
+## Notes
+
+- **Waits for the order only.** Create places the order and waits for MTN's "Create Project"
+  workflow to finish (default timeout 15 minutes, see `timeouts`). It does not wait for the project
+  to sync in. Allow **up to an hour** before its default security group, networks and floating IP
+  pools are all there.
+- **Use it in a later apply.** Other resources look their `project` up by name when they plan, so
+  they can't name a project ordered in the same apply. Apply the project first, give it time to
+  sync, then add the resources that use it.
+- **A failed workflow** is reported with MTN Cloud's message and nothing is kept, so the next apply
+  orders again. If the workflow's result isn't known when the timeout ends, the order is kept with a
+  warning and is never placed twice; a later refresh that finds it failed drops it, so the next apply
+  orders again.
+- **Can't change.** `name` and `description` are fixed when the order is placed. A change is refused
+  at plan time, so a second project is never ordered by accident.
+- **Can't be deleted from Terraform.** MTN Cloud has no order that deletes a project, so
+  `terraform destroy` stops with an error. To stop managing a project and keep it, use a `removed`
+  block (Terraform 1.7 or later) or `terraform state rm`. To delete the project itself, ask MTN Cloud
+  support.
+
+```terraform
+removed {
+  from = mtncloud_project.web
+  lifecycle {
+    destroy = false
+  }
+}
+```
+
+- **Names.** A lowercase letter, then lowercase letters, digits, `_` or `-`, checked at plan time. The
+  name of a project that has synced is refused at plan time; an order still running isn't visible
+  yet, so if an apply fails with "the order may have been placed", check Catalog > Inventory and
+  import it before applying again.

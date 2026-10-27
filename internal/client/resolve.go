@@ -9,6 +9,12 @@ import (
 	"github.com/mtn/terraform-provider-mtncloud/internal/normalize"
 )
 
+// SyncHint ends every "not found" for what a new project brings with it. A project is usable once its
+// order's workflow succeeds, but MTN Cloud takes up to an hour to sync it, its default security
+// group, external networks and floating IP pools; nothing in the provider waits for that (D-020).
+const SyncHint = "If the project was created in the last hour, it may not have synced in yet (the project, " +
+	"its default security group, external networks and floating IP pools): wait up to an hour, then plan again"
+
 // ProjectByName finds a project by the name the customer gave it ("web-prod") or its full platform
 // name ("web-prod-Acme"). The error lists the valid names, so nobody has to open the console.
 func (c *Client) ProjectByName(ctx context.Context, name string) (Option, error) {
@@ -39,7 +45,7 @@ func matchProject(projects []Option, name, tenant string) (Option, error) {
 		for i, p := range projects {
 			names[i] = normalize.ProjectShortName(p.Name, tenant)
 		}
-		return Option{}, fmt.Errorf("no project named %q. Your projects: %s", name, list(names))
+		return Option{}, fmt.Errorf("no project named %q. Your projects: %s. %s", name, list(names), SyncHint)
 	}
 	full := make([]string, len(found))
 	for i, p := range found {
@@ -62,7 +68,7 @@ func (c *Client) ExternalNetworkByName(ctx context.Context, name string) (Option
 		}
 		names[i] = n.Name
 	}
-	return Option{}, fmt.Errorf("no external network named %q. Available: %s", name, list(names))
+	return Option{}, fmt.Errorf("no external network named %q. Available: %s. %s", name, list(names), SyncHint)
 }
 
 // ImageByCode finds an instance type by its code, for example "MTN-U24.04LTS".
@@ -151,7 +157,7 @@ func (c *Client) SecurityGroupByName(ctx context.Context, p *Placement, projectI
 		names[i] = g.Name
 	}
 	return Option{}, fmt.Errorf("no security group named %q in this project (a group needs the project as a location). "+
-		"Available: %s", name, list(names))
+		"Available: %s. %s", name, list(names), SyncHint)
 }
 
 // DefaultSecurityGroup is the project's synced OpenStack default group, named "default" or

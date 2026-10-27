@@ -145,3 +145,11 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
   `triggers` change, with secret inputs write-only.
 - **Deployments:** the tenant has none (`/api/deployments` is empty), so `POST /api/instances/{id}/deploys`
   can't be checked against MTN. Deferred until one exists.
+
+## B-015 Prove `mtncloud_project` live (needs permission for one real order)
+- Does a new "Create Project" item get an `execution`, and with which statuses? Existing items show
+  `execution: null` (D-022). If it stays null, Create always ends at its timeout with a warning:
+  then find another completion signal (the order's history, or the pool by name).
+- Does the order response carry `order.items[0].id`, as the API reference says?
+- `groupName` and `cloud` are sent as IDs (the form's `group` and `cloud` types); the workflow uses
+  only the cloud ID. Confirm with the execution's output.
