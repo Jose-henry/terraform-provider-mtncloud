@@ -1,0 +1,43 @@
+{
+ "datastores": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "type": "type-101",
+   "active": true,
+   "online": true,
+   "visibility": "visibility-101",
+   "storageSize": 1010,
+   "freeSpace": 1010,
+   "status": "status-101"
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "type": "type-102",
+   "active": true,
+   "online": true,
+   "visibility": "visibility-102",
+   "storageSize": 1020,
+   "freeSpace": 1020,
+   "status": "status-102"
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "type": "type-103",
+   "active": true,
+   "online": true,
+   "visibility": "visibility-103",
+   "storageSize": 1030,
+   "freeSpace": 1030,
+   "status": "status-103"
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

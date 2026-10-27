@@ -1,0 +1,82 @@
+{
+ "taskSets": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "description": "description-101",
+   "type": "type-101",
+   "labels": [
+    "labels-a",
+    "labels-b"
+   ],
+   "platform": "platform-101",
+   "visibility": "visibility-101",
+   "taskSetTasks": [
+    {
+     "task": {
+      "id": 102
+     }
+    },
+    {
+     "task": {
+      "id": 103
+     }
+    }
+   ]
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "description": "description-102",
+   "type": "type-102",
+   "labels": [
+    "labels-a",
+    "labels-b"
+   ],
+   "platform": "platform-102",
+   "visibility": "visibility-102",
+   "taskSetTasks": [
+    {
+     "task": {
+      "id": 103
+     }
+    },
+    {
+     "task": {
+      "id": 104
+     }
+    }
+   ]
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "description": "description-103",
+   "type": "type-103",
+   "labels": [
+    "labels-a",
+    "labels-b"
+   ],
+   "platform": "platform-103",
+   "visibility": "visibility-103",
+   "taskSetTasks": [
+    {
+     "task": {
+      "id": 104
+     }
+    },
+    {
+     "task": {
+      "id": 105
+     }
+    }
+   ]
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

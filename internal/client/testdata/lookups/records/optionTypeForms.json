@@ -1,0 +1,40 @@
+{
+ "optionTypeForms": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "code": "code-101",
+   "description": "description-101",
+   "labels": [
+    "labels-a",
+    "labels-b"
+   ]
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "code": "code-102",
+   "description": "description-102",
+   "labels": [
+    "labels-a",
+    "labels-b"
+   ]
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "code": "code-103",
+   "description": "description-103",
+   "labels": [
+    "labels-a",
+    "labels-b"
+   ]
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

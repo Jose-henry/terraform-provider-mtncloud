@@ -1,0 +1,67 @@
+{
+ "loadBalancers": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "description": "description-101",
+   "type": {
+    "name": "type-101"
+   },
+   "cloud": {
+    "name": "cloud-101"
+   },
+   "visibility": "visibility-101",
+   "enabled": true,
+   "host": "host-101",
+   "port": 1010,
+   "ip": "ip-101",
+   "internalIp": "internal_ip-101",
+   "externalIp": "external_ip-101",
+   "sslEnabled": true
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "description": "description-102",
+   "type": {
+    "name": "type-102"
+   },
+   "cloud": {
+    "name": "cloud-102"
+   },
+   "visibility": "visibility-102",
+   "enabled": true,
+   "host": "host-102",
+   "port": 1020,
+   "ip": "ip-102",
+   "internalIp": "internal_ip-102",
+   "externalIp": "external_ip-102",
+   "sslEnabled": true
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "description": "description-103",
+   "type": {
+    "name": "type-103"
+   },
+   "cloud": {
+    "name": "cloud-103"
+   },
+   "visibility": "visibility-103",
+   "enabled": true,
+   "host": "host-103",
+   "port": 1030,
+   "ip": "ip-103",
+   "internalIp": "internal_ip-103",
+   "externalIp": "external_ip-103",
+   "sslEnabled": true
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

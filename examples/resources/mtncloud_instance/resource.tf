@@ -31,7 +31,7 @@ resource "mtncloud_instance" "web" {
   root_volume_size = 40
   data_volume {
     size      = 100
-    datastore = "ENCR_AT_REST"
+    datastore = "__DEFAULT__"
   }
 
   # Add a VM above 75% CPU, remove one below 30%, between 1 and 3 VMs.

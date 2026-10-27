@@ -130,8 +130,8 @@ func pathOf(attr string) path.Path { return path.Root(attr) }
 func newDatastores() datasource.DataSource {
 	return &optionListDataSource{spec: optionListSpec{
 		typeName: "datastores", listAttr: "datastores", what: "datastores", byProject: true,
-		description: "Lists the storage datastores a project can put volumes on. For example " +
-			" `__DEFAULT__`, `ENCR_AT_REST` (encrypted at rest) or `_MULTIATTACH_` (shared volumes). " +
+		description: "Lists the storage datastores a project can put volumes on, for example `__DEFAULT__`, " +
+			"the default datastore. " +
 			"Which ones you see depends on your tenant; new datastores appear here automatically.",
 		idDesc:   "Datastore ID.",
 		nameDesc: "Datastore name. Use this to choose where a volume is stored.",

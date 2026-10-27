@@ -190,3 +190,92 @@ data "mtncloud_network" "one" {
 		},
 	})
 }
+
+func TestRouter_DataSource(t *testing.T) {
+	f, _, _ := newRouterFakes(t)
+	cfg := routerConfig(f, `  name = "edge"
+  networks = [mtncloud_network.app.id]
+  external_network = "public-network-02"`)
+	one := func(attrs string) string {
+		return cfg + "\ndata \"mtncloud_router\" \"one\" {\n" + attrs + "\n}\n"
+	}
+	found := []statecheck.StateCheck{
+		statecheck.ExpectKnownValue("data.mtncloud_router.one", tfjsonpath.New("name"), knownvalue.StringExact("edge")),
+		statecheck.ExpectKnownValue("data.mtncloud_router.one", tfjsonpath.New("external_network"), knownvalue.StringExact("public-network-02")),
+		statecheck.ExpectKnownValue("data.mtncloud_router.one", tfjsonpath.New("networks"), knownvalue.ListSizeExact(1)),
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg},
+			{Config: one(`  name = "edge"`), ConfigStateChecks: found},
+			{Config: one(`  id = mtncloud_router.edge.id`), ConfigStateChecks: found},
+			{Config: one(`  name = "nope"`), ExpectError: regexp.MustCompile(`No such router`)},
+			{Config: one(`  id = 999999`), ExpectError: regexp.MustCompile(`No such router`)},
+			{Config: cfg},
+		},
+	})
+}
+
+func TestProject_DataSource(t *testing.T) {
+	f := newFakeAPI(t)
+	one := func(attrs string) string {
+		return f.providerConfig() + "\ndata \"mtncloud_project\" \"one\" {\n" + attrs + "\n}\n"
+	}
+	check := func(attr string, v knownvalue.Check) statecheck.StateCheck {
+		return statecheck.ExpectKnownValue("data.mtncloud_project.one", tfjsonpath.New(attr), v)
+	}
+	found := []statecheck.StateCheck{
+		check("id", knownvalue.Int64Exact(9201)),
+		check("name", knownvalue.StringExact("web-prod")),
+		check("full_name", knownvalue.StringExact("web-prod-Acme")),
+		check("group", knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
+		check("cloud", knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: one(`  name = "web-prod"`), ConfigStateChecks: found},
+			{Config: one(`  name = "web-prod-Acme"`), ConfigStateChecks: found},
+			{Config: one(`  id = 9201`), ConfigStateChecks: found},
+			{Config: one(`  name = "nope"`), ExpectError: regexp.MustCompile(`(?s)No such project.*no project named "nope"`)},
+			{Config: one(`  id = 1`), ExpectError: regexp.MustCompile(`No such project`)},
+			{Config: one(`  name = "web-prod"`)},
+		},
+	})
+}
+
+func TestSecurityGroup_DataSource(t *testing.T) {
+	f := newFakeAPI(t)
+	f.sg = newSGStore()
+	cfg := sgConfig(f, webRules)
+	one := func(attrs string) string {
+		return cfg + "\ndata \"mtncloud_security_group\" \"one\" {\n" + attrs + "\n}\n"
+	}
+	check := func(attr string, v knownvalue.Check) statecheck.StateCheck {
+		return statecheck.ExpectKnownValue("data.mtncloud_security_group.one", tfjsonpath.New(attr), v)
+	}
+	found := []statecheck.StateCheck{
+		check("name", knownvalue.StringExact("web")),
+		check("project", knownvalue.StringExact("web-prod")),
+		check("description", knownvalue.StringExact("web servers")),
+		check("rules", knownvalue.ListSizeExact(2)),
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg},
+			{Config: one(`  name = "web"`), ConfigStateChecks: found},
+			{Config: one(`  id = mtncloud_security_group.web.id`), ConfigStateChecks: found},
+			{Config: one(`  name = "web"
+  project = "web-prod-Acme"`), ConfigStateChecks: found},
+			{Config: one(`  name = "web"
+  project = "data"`), ExpectError: regexp.MustCompile(`(?s)No such security group.*in\s+project\s+data`)},
+			{Config: one(`  id = mtncloud_security_group.web.id
+  project = "data"`), ExpectError: regexp.MustCompile(`Security group in another project`)},
+			{Config: one(`  id = "abc"`), ExpectError: regexp.MustCompile(`Invalid security group ID`)},
+			{Config: one(`  name = "nope"`), ExpectError: regexp.MustCompile(`No such security group`)},
+			{Config: cfg},
+		},
+	})
+}

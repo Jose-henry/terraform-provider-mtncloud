@@ -69,30 +69,34 @@ RESOURCES = [
 
 DATA_SOURCES = [
     ("Pick by name: what can I deploy?",
-     ["projects", "images", "plans", "datastores", "security_groups", "external_networks",
+     ["projects", "project", "images", "plans", "datastores", "datastore", "security_groups",
+      "security_group", "external_networks",
       "catalog_items"]),
     ("Tenancy, users and access",
-     ["user_role", "user_group", "user_groups",
+     ["user", "users", "user_role", "user_roles", "user_group", "user_groups", "identity_source",
+      "identity_sources",
       "permission_set", "contact", "credential", "group", "groups", "environment", "environments"]),
     ("Networking",
-     ["network", "networks", "network_group", "network_subnet", "domain", "routers"]),
+     ["network", "networks", "network_group", "network_subnet", "network_subnets", "domain", "domains",
+      "routers", "router", "load_balancer", "load_balancers", "ssl_certificate", "ssl_certificates"]),
     ("Compute",
-     ["instance", "instances"]),
+     ["instance", "instances", "app", "apps", "cluster", "clusters"]),
     ("Images",
      ["virtual_image",
       "virtual_images"]),
     ("Storage",
-     ["storage_bucket", "storage_volume", "storage_volume_type"]),
+     ["storage_bucket", "storage_buckets", "storage_volume", "storage_volumes", "storage_volume_type"]),
     ("Catalog, forms and inputs",
-     ["catalog_item_type", "option_list", "option_type", "vdi_pool"]),
+     ["catalog_item_type", "catalog_order", "catalog_orders", "form", "forms", "option_list",
+      "option_type", "vdi_pool"]),
     ("Automation and integrations",
-     ["task", "tasks", "workflow", "job", "execute_schedule", "power_schedule", "integration",
+     ["task", "tasks", "workflow", "workflows", "job", "jobs", "execute_schedule", "power_schedule", "integration", "integrations",
       "git_integration", "ansible_tower_inventory", "ansible_tower_job_template", "chef_server",
       "servicenow_workflow", "vro_workflow"]),
     ("Budgets",
      ["budget"]),
     ("Secrets and keys",
-     ["key_pair"]),
+     ["key_pair", "key_pairs", "credentials", "cypher", "cyphers"]),
 ]
 
 # Who can use each type with a customer (sub-tenant) login. Evidence: dev-docs/customer-permissions.md
@@ -100,7 +104,7 @@ DATA_SOURCES = [
 MASTER_ONLY = {"resource": set(), "data": set()}  # removed (D-024): customers can't use them
 # Built for customers on the endpoints the console's own wizard uses (D-016).
 FOR_CUSTOMERS = {"resource": {"project", "instance", "network", "router", "security_group", "security_group_rule"},
-                 "data": {"projects", "images", "plans", "datastores", "security_groups",
+                 "data": {"projects", "project", "images", "plans", "datastores", "security_groups", "security_group", "router",
                           "external_networks", "catalog_items", "routers", "instances", "instance"}}
 # Need an integration first; the probed tenant had none.
 NOT_CHECKED = {"data": {"ansible_tower_inventory", "ansible_tower_job_template", "chef_server",

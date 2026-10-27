@@ -168,5 +168,5 @@ func (p *mtncloudProvider) Resources(context.Context) []func() resource.Resource
 }
 
 func (p *mtncloudProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return lookup.DataSources()
+	return slices.Concat(lookup.DataSources(), network.DataSources())
 }

@@ -2,12 +2,12 @@
 page_title: "mtncloud_datastores Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Lists the storage datastores a project can put volumes on. For example  __DEFAULT__, ENCR_AT_REST (encrypted at rest) or _MULTIATTACH_ (shared volumes). Which ones you see depends on your tenant; new datastores appear here automatically.
+  Lists the storage datastores a project can put volumes on, for example __DEFAULT__, the default datastore. Which ones you see depends on your tenant; new datastores appear here automatically.
 ---
 
 # mtncloud_datastores (Data Source)
 
-Lists the storage datastores a project can put volumes on. For example  `__DEFAULT__`, `ENCR_AT_REST` (encrypted at rest) or `_MULTIATTACH_` (shared volumes). Which ones you see depends on your tenant; new datastores appear here automatically.
+Lists the storage datastores a project can put volumes on, for example `__DEFAULT__`, the default datastore. Which ones you see depends on your tenant; new datastores appear here automatically.
 
 ## Example Usage
 

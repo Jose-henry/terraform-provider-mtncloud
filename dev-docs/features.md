@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 60 | 49 |
-| Usable with a customer (sub-tenant) login | 60 | 44 |
+| Available today | 60 | 81 |
+| Usable with a customer (sub-tenant) login | 60 | 76 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 7 | 0 |
@@ -177,11 +177,14 @@ Autoscaling thresholds.
 | Type | Customer login |
 |---|---|
 | [`mtncloud_catalog_items`](../docs/data-sources/catalog_items.md) | Yes, built for customers |
+| [`mtncloud_datastore`](../docs/data-sources/datastore.md) | Yes (read verified) |
 | [`mtncloud_datastores`](../docs/data-sources/datastores.md) | Yes, built for customers |
 | [`mtncloud_external_networks`](../docs/data-sources/external_networks.md) | Yes, built for customers |
 | [`mtncloud_images`](../docs/data-sources/images.md) | Yes, built for customers |
 | [`mtncloud_plans`](../docs/data-sources/plans.md) | Yes, built for customers |
+| [`mtncloud_project`](../docs/data-sources/project.md) | Yes, built for customers |
 | [`mtncloud_projects`](../docs/data-sources/projects.md) | Yes, built for customers |
+| [`mtncloud_security_group`](../docs/data-sources/security_group.md) | Yes, built for customers |
 | [`mtncloud_security_groups`](../docs/data-sources/security_groups.md) | Yes, built for customers |
 
 ### Tenancy, users and access
@@ -194,26 +197,42 @@ Autoscaling thresholds.
 | [`mtncloud_environments`](../docs/data-sources/environments.md) | Yes (read verified) |
 | [`mtncloud_group`](../docs/data-sources/group.md) | Yes (read verified) |
 | [`mtncloud_groups`](../docs/data-sources/groups.md) | Yes (read verified) |
+| [`mtncloud_identity_source`](../docs/data-sources/identity_source.md) | Yes (read verified) |
+| [`mtncloud_identity_sources`](../docs/data-sources/identity_sources.md) | Yes (read verified) |
 | [`mtncloud_permission_set`](../docs/data-sources/permission_set.md) | Yes (no API call) |
+| [`mtncloud_user`](../docs/data-sources/user.md) | Yes (read verified) |
 | [`mtncloud_user_group`](../docs/data-sources/user_group.md) | Yes (read verified) |
 | [`mtncloud_user_groups`](../docs/data-sources/user_groups.md) | Yes (read verified) |
 | [`mtncloud_user_role`](../docs/data-sources/user_role.md) | Yes (read verified) |
+| [`mtncloud_user_roles`](../docs/data-sources/user_roles.md) | Yes (read verified) |
+| [`mtncloud_users`](../docs/data-sources/users.md) | Yes (read verified) |
 
 ### Networking
 
 | Type | Customer login |
 |---|---|
 | [`mtncloud_domain`](../docs/data-sources/domain.md) | Yes (read verified) |
+| [`mtncloud_domains`](../docs/data-sources/domains.md) | Yes (read verified) |
+| [`mtncloud_load_balancer`](../docs/data-sources/load_balancer.md) | Yes (read verified) |
+| [`mtncloud_load_balancers`](../docs/data-sources/load_balancers.md) | Yes (read verified) |
 | [`mtncloud_network`](../docs/data-sources/network.md) | Yes (read verified) |
 | [`mtncloud_network_group`](../docs/data-sources/network_group.md) | Yes (read verified) |
 | [`mtncloud_network_subnet`](../docs/data-sources/network_subnet.md) | Yes (read verified) |
+| [`mtncloud_network_subnets`](../docs/data-sources/network_subnets.md) | Yes (read verified) |
 | [`mtncloud_networks`](../docs/data-sources/networks.md) | Yes (read verified) |
+| [`mtncloud_router`](../docs/data-sources/router.md) | Yes, built for customers |
 | [`mtncloud_routers`](../docs/data-sources/routers.md) | Yes, built for customers |
+| [`mtncloud_ssl_certificate`](../docs/data-sources/ssl_certificate.md) | Yes (read verified) |
+| [`mtncloud_ssl_certificates`](../docs/data-sources/ssl_certificates.md) | Yes (read verified) |
 
 ### Compute
 
 | Type | Customer login |
 |---|---|
+| [`mtncloud_app`](../docs/data-sources/app.md) | Yes (read verified) |
+| [`mtncloud_apps`](../docs/data-sources/apps.md) | Yes (read verified) |
+| [`mtncloud_cluster`](../docs/data-sources/cluster.md) | Yes (read verified) |
+| [`mtncloud_clusters`](../docs/data-sources/clusters.md) | Yes (read verified) |
 | [`mtncloud_instance`](../docs/data-sources/instance.md) | Yes, built for customers |
 | [`mtncloud_instances`](../docs/data-sources/instances.md) | Yes, built for customers |
 
@@ -229,14 +248,20 @@ Autoscaling thresholds.
 | Type | Customer login |
 |---|---|
 | [`mtncloud_storage_bucket`](../docs/data-sources/storage_bucket.md) | Yes (read verified) |
+| [`mtncloud_storage_buckets`](../docs/data-sources/storage_buckets.md) | Yes (read verified) |
 | [`mtncloud_storage_volume`](../docs/data-sources/storage_volume.md) | Yes (read verified) |
 | [`mtncloud_storage_volume_type`](../docs/data-sources/storage_volume_type.md) | Yes (read verified) |
+| [`mtncloud_storage_volumes`](../docs/data-sources/storage_volumes.md) | Yes (read verified) |
 
 ### Catalog, forms and inputs
 
 | Type | Customer login |
 |---|---|
 | [`mtncloud_catalog_item_type`](../docs/data-sources/catalog_item_type.md) | Yes (read verified) |
+| [`mtncloud_catalog_order`](../docs/data-sources/catalog_order.md) | Yes (read verified) |
+| [`mtncloud_catalog_orders`](../docs/data-sources/catalog_orders.md) | Yes (read verified) |
+| [`mtncloud_form`](../docs/data-sources/form.md) | Yes (read verified) |
+| [`mtncloud_forms`](../docs/data-sources/forms.md) | Yes (read verified) |
 | [`mtncloud_option_list`](../docs/data-sources/option_list.md) | Yes (read verified) |
 | [`mtncloud_option_type`](../docs/data-sources/option_type.md) | Yes (read verified) |
 | [`mtncloud_vdi_pool`](../docs/data-sources/vdi_pool.md) | Yes (read verified) |
@@ -251,13 +276,16 @@ Autoscaling thresholds.
 | [`mtncloud_execute_schedule`](../docs/data-sources/execute_schedule.md) | Yes (read verified) |
 | [`mtncloud_git_integration`](../docs/data-sources/git_integration.md) | Yes (read verified) |
 | [`mtncloud_integration`](../docs/data-sources/integration.md) | Yes (read verified) |
+| [`mtncloud_integrations`](../docs/data-sources/integrations.md) | Yes (read verified) |
 | [`mtncloud_job`](../docs/data-sources/job.md) | Yes (read verified) |
+| [`mtncloud_jobs`](../docs/data-sources/jobs.md) | Yes (read verified) |
 | [`mtncloud_power_schedule`](../docs/data-sources/power_schedule.md) | Yes (read verified) |
 | [`mtncloud_servicenow_workflow`](../docs/data-sources/servicenow_workflow.md) | Not checked yet |
 | [`mtncloud_task`](../docs/data-sources/task.md) | Yes (read verified) |
 | [`mtncloud_tasks`](../docs/data-sources/tasks.md) | Yes (read verified) |
 | [`mtncloud_vro_workflow`](../docs/data-sources/vro_workflow.md) | Not checked yet |
 | [`mtncloud_workflow`](../docs/data-sources/workflow.md) | Yes (read verified) |
+| [`mtncloud_workflows`](../docs/data-sources/workflows.md) | Yes (read verified) |
 
 ### Budgets
 
@@ -269,7 +297,11 @@ Autoscaling thresholds.
 
 | Type | Customer login |
 |---|---|
+| [`mtncloud_credentials`](../docs/data-sources/credentials.md) | Yes (read verified) |
+| [`mtncloud_cypher`](../docs/data-sources/cypher.md) | Yes (read verified) |
+| [`mtncloud_cyphers`](../docs/data-sources/cyphers.md) | Yes (read verified) |
 | [`mtncloud_key_pair`](../docs/data-sources/key_pair.md) | Yes (read verified) |
+| [`mtncloud_key_pairs`](../docs/data-sources/key_pairs.md) | Yes (read verified) |
 
 ## Master tenant only
 

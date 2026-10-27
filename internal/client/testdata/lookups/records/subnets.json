@@ -1,0 +1,76 @@
+{
+ "subnets": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "description": "description-101",
+   "network": {
+    "name": "network-101",
+    "id": 1010
+   },
+   "zone": {
+    "name": "cloud-101"
+   },
+   "cidr": "cidr-101",
+   "gateway": "gateway-101",
+   "netmask": "netmask-101",
+   "dnsPrimary": "dns_primary-101",
+   "dnsSecondary": "dns_secondary-101",
+   "dhcpServer": true,
+   "active": true,
+   "status": {
+    "name": "status-101"
+   }
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "description": "description-102",
+   "network": {
+    "name": "network-102",
+    "id": 1020
+   },
+   "zone": {
+    "name": "cloud-102"
+   },
+   "cidr": "cidr-102",
+   "gateway": "gateway-102",
+   "netmask": "netmask-102",
+   "dnsPrimary": "dns_primary-102",
+   "dnsSecondary": "dns_secondary-102",
+   "dhcpServer": true,
+   "active": true,
+   "status": {
+    "name": "status-102"
+   }
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "description": "description-103",
+   "network": {
+    "name": "network-103",
+    "id": 1030
+   },
+   "zone": {
+    "name": "cloud-103"
+   },
+   "cidr": "cidr-103",
+   "gateway": "gateway-103",
+   "netmask": "netmask-103",
+   "dnsPrimary": "dns_primary-103",
+   "dnsSecondary": "dns_secondary-103",
+   "dhcpServer": true,
+   "active": true,
+   "status": {
+    "name": "status-103"
+   }
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

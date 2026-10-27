@@ -1,0 +1,103 @@
+{
+ "apps": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "description": "description-101",
+   "labels": [
+    "labels-a",
+    "labels-b"
+   ],
+   "status": "status-101",
+   "appStatus": "app_status-101",
+   "environment": "environment-101",
+   "type": "type-101",
+   "group": {
+    "name": "group-101"
+   },
+   "blueprint": {
+    "name": "blueprint-101"
+   },
+   "owner": {
+    "username": "owner-101"
+   },
+   "instanceCount": 1010,
+   "instances": [
+    {
+     "id": 102
+    },
+    {
+     "id": 103
+    }
+   ]
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "description": "description-102",
+   "labels": [
+    "labels-a",
+    "labels-b"
+   ],
+   "status": "status-102",
+   "appStatus": "app_status-102",
+   "environment": "environment-102",
+   "type": "type-102",
+   "group": {
+    "name": "group-102"
+   },
+   "blueprint": {
+    "name": "blueprint-102"
+   },
+   "owner": {
+    "username": "owner-102"
+   },
+   "instanceCount": 1020,
+   "instances": [
+    {
+     "id": 103
+    },
+    {
+     "id": 104
+    }
+   ]
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "description": "description-103",
+   "labels": [
+    "labels-a",
+    "labels-b"
+   ],
+   "status": "status-103",
+   "appStatus": "app_status-103",
+   "environment": "environment-103",
+   "type": "type-103",
+   "group": {
+    "name": "group-103"
+   },
+   "blueprint": {
+    "name": "blueprint-103"
+   },
+   "owner": {
+    "username": "owner-103"
+   },
+   "instanceCount": 1030,
+   "instances": [
+    {
+     "id": 104
+    },
+    {
+     "id": 105
+    }
+   ]
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

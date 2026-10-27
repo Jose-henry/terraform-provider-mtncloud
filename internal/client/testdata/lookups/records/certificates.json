@@ -1,0 +1,55 @@
+{
+ "certificates": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "description": "description-101",
+   "domainName": "domain_name-101",
+   "commonName": "common_name-101",
+   "certType": "cert_type-101",
+   "type": {
+    "code": "type-101"
+   },
+   "enabled": true,
+   "wildcard": true,
+   "selfSigned": true,
+   "generated": true
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "description": "description-102",
+   "domainName": "domain_name-102",
+   "commonName": "common_name-102",
+   "certType": "cert_type-102",
+   "type": {
+    "code": "type-102"
+   },
+   "enabled": true,
+   "wildcard": true,
+   "selfSigned": true,
+   "generated": true
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "description": "description-103",
+   "domainName": "domain_name-103",
+   "commonName": "common_name-103",
+   "certType": "cert_type-103",
+   "type": {
+    "code": "type-103"
+   },
+   "enabled": true,
+   "wildcard": true,
+   "selfSigned": true,
+   "generated": true
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

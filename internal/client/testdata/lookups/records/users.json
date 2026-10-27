@@ -1,0 +1,70 @@
+{
+ "users": [
+  {
+   "id": 101,
+   "username": "alpha",
+   "displayName": "display_name-101",
+   "email": "email-101",
+   "firstName": "first_name-101",
+   "lastName": "last_name-101",
+   "enabled": true,
+   "roles": [
+    {
+     "authority": "roles-a"
+    },
+    {
+     "authority": "roles-b"
+    }
+   ],
+   "accountLocked": true,
+   "passwordExpired": true,
+   "lastLoginDate": "last_login_date-101"
+  },
+  {
+   "id": 102,
+   "username": "beta",
+   "displayName": "display_name-102",
+   "email": "email-102",
+   "firstName": "first_name-102",
+   "lastName": "last_name-102",
+   "enabled": true,
+   "roles": [
+    {
+     "authority": "roles-a"
+    },
+    {
+     "authority": "roles-b"
+    }
+   ],
+   "accountLocked": true,
+   "passwordExpired": true,
+   "lastLoginDate": "last_login_date-102"
+  },
+  {
+   "id": 103,
+   "username": "beta",
+   "displayName": "display_name-103",
+   "email": "email-103",
+   "firstName": "first_name-103",
+   "lastName": "last_name-103",
+   "enabled": true,
+   "roles": [
+    {
+     "authority": "roles-a"
+    },
+    {
+     "authority": "roles-b"
+    }
+   ],
+   "accountLocked": true,
+   "passwordExpired": true,
+   "lastLoginDate": "last_login_date-103"
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

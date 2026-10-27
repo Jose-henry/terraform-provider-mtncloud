@@ -1,0 +1,52 @@
+{
+ "userSources": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "description": "description-101",
+   "type": "type-101",
+   "code": "code-101",
+   "active": true,
+   "defaultAccountRole": {
+    "authority": "default_role-101"
+   },
+   "externalLogin": true,
+   "loginURL": "login_url-101",
+   "subdomain": "subdomain-101"
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "description": "description-102",
+   "type": "type-102",
+   "code": "code-102",
+   "active": true,
+   "defaultAccountRole": {
+    "authority": "default_role-102"
+   },
+   "externalLogin": true,
+   "loginURL": "login_url-102",
+   "subdomain": "subdomain-102"
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "description": "description-103",
+   "type": "type-103",
+   "code": "code-103",
+   "active": true,
+   "defaultAccountRole": {
+    "authority": "default_role-103"
+   },
+   "externalLogin": true,
+   "loginURL": "login_url-103",
+   "subdomain": "subdomain-103"
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

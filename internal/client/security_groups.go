@@ -180,6 +180,21 @@ func (c *Client) FindSecurityGroup(ctx context.Context, name string, projectID i
 	return nil, nil
 }
 
+// FindSecurityGroupsNamed returns every group with exactly this name, in any project.
+func (c *Client) FindSecurityGroupsNamed(ctx context.Context, name string) ([]*SecurityGroup, error) {
+	items, err := listAll[wireSecurityGroup](ctx, c, "/api/security-groups", "securityGroups", url.Values{"name": {name}})
+	if err != nil {
+		return nil, err
+	}
+	var out []*SecurityGroup
+	for _, w := range items {
+		if w.Name == name { // the API's name filter also matches parts of names
+			out = append(out, w.group())
+		}
+	}
+	return out, nil
+}
+
 // UpdateSecurityGroup changes the name and description.
 func (c *Client) UpdateSecurityGroup(ctx context.Context, id int64, name, description string) error {
 	body := map[string]any{"securityGroup": map[string]any{"name": name, "description": description}}

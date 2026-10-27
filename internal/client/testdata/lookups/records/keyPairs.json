@@ -1,0 +1,31 @@
+{
+ "keyPairs": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "publicKey": "public_key-101",
+   "fingerprint": "fingerprint-101",
+   "hasPrivateKey": true
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "publicKey": "public_key-102",
+   "fingerprint": "fingerprint-102",
+   "hasPrivateKey": true
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "publicKey": "public_key-103",
+   "fingerprint": "fingerprint-103",
+   "hasPrivateKey": true
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

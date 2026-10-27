@@ -538,8 +538,16 @@ func refresh(ctx context.Context, m *securityGroupModel, g *client.SecurityGroup
 		m.Rules = types.SetNull(types.ObjectType{AttrTypes: ruleAttrTypes})
 	}
 
-	all := make([]allRuleModel, 0, len(g.Rules))
-	sorted := slices.Clone(g.Rules)
+	list, d := allRules(ctx, g.Rules)
+	diags.Append(d...)
+	m.AllRules = list
+	return diags
+}
+
+// allRules is every rule of a group as "all_rules" shows it, sorted by what it allows.
+func allRules(ctx context.Context, rules []client.SecurityGroupRule) (types.List, diag.Diagnostics) {
+	all := make([]allRuleModel, 0, len(rules))
+	sorted := slices.Clone(rules)
 	slices.SortFunc(sorted, func(a, b client.SecurityGroupRule) int {
 		return cmp.Or(cmp.Compare(fromAPI(a).key(), fromAPI(b).key()), cmp.Compare(a.ID, b.ID))
 	})
@@ -552,8 +560,5 @@ func refresh(ctx context.Context, m *securityGroupModel, g *client.SecurityGroup
 			Default: types.BoolValue(isDefaultEgress(rl)),
 		})
 	}
-	list, d := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: allRuleAttrTypes}, all)
-	diags.Append(d...)
-	m.AllRules = list
-	return diags
+	return types.ListValueFrom(ctx, types.ObjectType{AttrTypes: allRuleAttrTypes}, all)
 }

@@ -24,7 +24,7 @@ import (
 
 // DataSources lists every data source in this package, for the provider to register.
 func DataSources() []func() datasource.DataSource {
-	return []func() datasource.DataSource{
+	return append([]func() datasource.DataSource{
 		newProjects,
 		newImages,
 		newPlans,
@@ -36,7 +36,10 @@ func DataSources() []func() datasource.DataSource {
 		newInstances,
 		newInstance,
 		newNetwork,
-	}
+		newProject,
+		newRouter,
+		newCypher,
+	}, recordDataSources()...)
 }
 
 // base gives every lookup its client. Embed it and the data source gets Configure for free.

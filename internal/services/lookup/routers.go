@@ -8,6 +8,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 )
 
 func newRouters() datasource.DataSource { return &routersDataSource{} }
@@ -83,19 +85,23 @@ func (d *routersDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		if !match(r.Name) {
 			continue
 		}
-		nets := make([]types.Int64, len(r.NetworkIDs))
-		for i, id := range r.NetworkIDs {
-			nets[i] = types.Int64Value(id)
-		}
-		m.Routers = append(m.Routers, routerModel{
-			ID: types.Int64Value(r.ID), Name: types.StringValue(r.Name), Description: types.StringValue(r.Description),
-			Status: types.StringValue(r.Status), Enabled: types.BoolValue(r.Enabled),
-			ExternalNetwork: types.StringValue(r.ExternalNetworkName), ExternalIP: types.StringValue(r.ExternalIP),
-			Networks: nets,
-		})
+		m.Routers = append(m.Routers, routerFields(r))
 	}
 	slices.SortFunc(m.Routers, func(a, b routerModel) int {
 		return cmp.Or(cmp.Compare(a.Name.ValueString(), b.Name.ValueString()), cmp.Compare(a.ID.ValueInt64(), b.ID.ValueInt64()))
 	})
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+}
+
+func routerFields(r *client.Router) routerModel {
+	nets := make([]types.Int64, len(r.NetworkIDs))
+	for i, id := range r.NetworkIDs {
+		nets[i] = types.Int64Value(id)
+	}
+	return routerModel{
+		ID: types.Int64Value(r.ID), Name: types.StringValue(r.Name), Description: types.StringValue(r.Description),
+		Status: types.StringValue(r.Status), Enabled: types.BoolValue(r.Enabled),
+		ExternalNetwork: types.StringValue(r.ExternalNetworkName), ExternalIP: types.StringValue(r.ExternalIP),
+		Networks: nets,
+	}
 }

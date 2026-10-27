@@ -182,7 +182,7 @@ func IsDefaultSecurityGroup(name string) bool {
 	return n == "default" || strings.HasSuffix(n, "-default-sg")
 }
 
-// DatastoreByName finds a project's datastore, for example "__DEFAULT__" or "ENCR_AT_REST".
+// DatastoreByName finds a project's datastore, for example "__DEFAULT__".
 func (c *Client) DatastoreByName(ctx context.Context, p *Placement, projectID int64, name string) (Option, error) {
 	stores, err := c.DatastoresAt(ctx, p, projectID)
 	if err != nil {

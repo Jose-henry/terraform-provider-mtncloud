@@ -1,0 +1,40 @@
+{
+ "networkDomains": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "displayName": "display_name-101",
+   "description": "description-101",
+   "fqdn": "fqdn-101",
+   "active": true,
+   "visibility": "visibility-101",
+   "publicZone": true
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "displayName": "display_name-102",
+   "description": "description-102",
+   "fqdn": "fqdn-102",
+   "active": true,
+   "visibility": "visibility-102",
+   "publicZone": true
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "displayName": "display_name-103",
+   "description": "description-103",
+   "fqdn": "fqdn-103",
+   "active": true,
+   "visibility": "visibility-103",
+   "publicZone": true
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

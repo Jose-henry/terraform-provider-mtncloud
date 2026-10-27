@@ -1,0 +1,40 @@
+{
+ "integrations": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "integrationType": {
+    "name": "type-101"
+   },
+   "enabled": true,
+   "url": "url-101",
+   "status": "status-101"
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "integrationType": {
+    "name": "type-102"
+   },
+   "enabled": true,
+   "url": "url-102",
+   "status": "status-102"
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "integrationType": {
+    "name": "type-103"
+   },
+   "enabled": true,
+   "url": "url-103",
+   "status": "status-103"
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

@@ -1,0 +1,34 @@
+{
+ "cyphers": [
+  {
+   "id": 101,
+   "itemKey": "alpha",
+   "leaseTimeout": 1010,
+   "expireDate": "expire_date-101",
+   "createdBy": "created_by-101",
+   "lastAccessed": "last_accessed-101"
+  },
+  {
+   "id": 102,
+   "itemKey": "beta",
+   "leaseTimeout": 1020,
+   "expireDate": "expire_date-102",
+   "createdBy": "created_by-102",
+   "lastAccessed": "last_accessed-102"
+  },
+  {
+   "id": 103,
+   "itemKey": "beta",
+   "leaseTimeout": 1030,
+   "expireDate": "expire_date-103",
+   "createdBy": "created_by-103",
+   "lastAccessed": "last_accessed-103"
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

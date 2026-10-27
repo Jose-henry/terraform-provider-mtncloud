@@ -1,0 +1,67 @@
+{
+ "storageVolumes": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "description": "description-101",
+   "type": {
+    "name": "type-101"
+   },
+   "maxStorage": 1010,
+   "rootVolume": true,
+   "readOnly": true,
+   "status": "status-101",
+   "datastore": {
+    "name": "datastore-101"
+   },
+   "zone": {
+    "name": "cloud-101"
+   },
+   "deviceName": "device_name-101"
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "description": "description-102",
+   "type": {
+    "name": "type-102"
+   },
+   "maxStorage": 1020,
+   "rootVolume": true,
+   "readOnly": true,
+   "status": "status-102",
+   "datastore": {
+    "name": "datastore-102"
+   },
+   "zone": {
+    "name": "cloud-102"
+   },
+   "deviceName": "device_name-102"
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "description": "description-103",
+   "type": {
+    "name": "type-103"
+   },
+   "maxStorage": 1030,
+   "rootVolume": true,
+   "readOnly": true,
+   "status": "status-103",
+   "datastore": {
+    "name": "datastore-103"
+   },
+   "zone": {
+    "name": "cloud-103"
+   },
+   "deviceName": "device_name-103"
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

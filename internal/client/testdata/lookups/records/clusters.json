@@ -1,0 +1,64 @@
+{
+ "clusters": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "description": "description-101",
+   "type": {
+    "name": "type-101"
+   },
+   "layout": {
+    "name": "layout-101"
+   },
+   "site": {
+    "name": "group-101"
+   },
+   "zone": {
+    "name": "cloud-101"
+   },
+   "status": "status-101"
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "description": "description-102",
+   "type": {
+    "name": "type-102"
+   },
+   "layout": {
+    "name": "layout-102"
+   },
+   "site": {
+    "name": "group-102"
+   },
+   "zone": {
+    "name": "cloud-102"
+   },
+   "status": "status-102"
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "description": "description-103",
+   "type": {
+    "name": "type-103"
+   },
+   "layout": {
+    "name": "layout-103"
+   },
+   "site": {
+    "name": "group-103"
+   },
+   "zone": {
+    "name": "cloud-103"
+   },
+   "status": "status-103"
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

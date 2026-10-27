@@ -45,7 +45,7 @@ resource "mtncloud_instance" "web" {
   root_volume_size = 40
   data_volume {
     size      = 100
-    datastore = "ENCR_AT_REST"
+    datastore = "__DEFAULT__"
   }
 
   # Add a VM above 75% CPU, remove one below 30%, between 1 and 3 VMs.
@@ -94,7 +94,7 @@ resource "mtncloud_instance" "worker" {
 
 - `create_user` (Boolean) Create your user (from your Linux or Windows user settings) on the VM. Defaults to `true`. Changing it replaces the instance.
 - `data_volume` (Block List) Extra disks, in order. Volumes added at the end are attached in place; changing or removing one replaces the instance. (see [below for nested schema](#nestedblock--data_volume))
-- `datastore` (String) Datastore of the root volume, by name, for example `ENCR_AT_REST` (the `mtncloud_datastores` data source lists them). Left out, the project's default. Changing it replaces the instance.
+- `datastore` (String) Datastore of the root volume, by name, for example `__DEFAULT__` (the `mtncloud_datastores` data source lists them). Left out, the project's default. Changing it replaces the instance.
 - `description` (String) Description of the instance.
 - `domain` (String) Network domain the instance joins, by name, for example `example.com`. Left out, MTN Cloud may apply the network's domain, shown here. Changing it replaces the instance.
 - `env_vars` (Map of String, Sensitive) Environment variables for the instance's automation, name to value. Sensitive: values are hidden in plans, but stored in state. The variables MTN Cloud adds itself (address, host, ports) are not shown. Changing them replaces the instance.

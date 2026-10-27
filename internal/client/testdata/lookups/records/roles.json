@@ -1,0 +1,31 @@
+{
+ "roles": [
+  {
+   "id": 101,
+   "authority": "alpha",
+   "description": "description-101",
+   "roleType": "role_type-101",
+   "multitenant": true
+  },
+  {
+   "id": 102,
+   "authority": "beta",
+   "description": "description-102",
+   "roleType": "role_type-102",
+   "multitenant": true
+  },
+  {
+   "id": 103,
+   "authority": "beta",
+   "description": "description-103",
+   "roleType": "role_type-103",
+   "multitenant": true
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

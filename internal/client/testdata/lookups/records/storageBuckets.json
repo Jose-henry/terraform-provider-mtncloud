@@ -1,0 +1,34 @@
+{
+ "storageBuckets": [
+  {
+   "id": 101,
+   "name": "alpha",
+   "bucketName": "bucket_name-101",
+   "providerType": "provider_type-101",
+   "readOnly": true,
+   "active": true
+  },
+  {
+   "id": 102,
+   "name": "beta",
+   "bucketName": "bucket_name-102",
+   "providerType": "provider_type-102",
+   "readOnly": true,
+   "active": true
+  },
+  {
+   "id": 103,
+   "name": "beta",
+   "bucketName": "bucket_name-103",
+   "providerType": "provider_type-103",
+   "readOnly": true,
+   "active": true
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 200,
+  "size": 3,
+  "total": 3
+ }
+}

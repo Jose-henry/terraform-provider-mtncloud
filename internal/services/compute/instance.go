@@ -200,7 +200,7 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			},
 			"datastore": schema.StringAttribute{
 				Optional: true,
-				Description: "Datastore of the root volume, by name, for example `ENCR_AT_REST` (the `mtncloud_datastores` " +
+				Description: "Datastore of the root volume, by name, for example `__DEFAULT__` (the `mtncloud_datastores` " +
 					"data source lists them). Left out, the project's default. Changing it replaces the instance.",
 			},
 			"environment": schema.StringAttribute{
