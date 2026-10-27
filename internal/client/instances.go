@@ -43,8 +43,10 @@ type Instance struct {
 
 	Volumes    []Volume    // root first, then data volumes in the API's order
 	Interfaces []Interface // primary first
-	PrivateIP  string
-	PublicIP   string
+	// ContainerIDs are the instance's VMs (one per scale_factor); floating IPs attach to these.
+	ContainerIDs []int64
+	PrivateIP    string
+	PublicIP     string
 
 	// Lifecycle: the days set at create (0 for none) and the dates they lead to ("" for none).
 	ExpireDays, ShutdownDays int64
@@ -111,6 +113,7 @@ type InstanceUpdate struct {
 }
 
 type wireInstance struct {
+	Containers        []int64  `json:"containers"`
 	ExpireDays        *int64   `json:"expireDays"`
 	ShutdownDays      *int64   `json:"shutdownDays"`
 	ExpireDate        *string  `json:"expireDate"`
@@ -170,6 +173,7 @@ func (w wireInstance) instance() *Instance {
 		Status: w.Status, Environment: deref(w.InstanceContext), Labels: w.Labels, EnvPrefix: w.EnvironmentPrefix,
 		Tags: map[string]string{}, EnvVars: map[string]string{},
 	}
+	in.ContainerIDs = w.Containers
 	in.ExpireDate, in.ShutdownDate = deref(w.ExpireDate), deref(w.ShutdownDate)
 	if w.ExpireDays != nil {
 		in.ExpireDays = *w.ExpireDays
@@ -615,4 +619,58 @@ func (c *Client) SetInstanceThreshold(ctx context.Context, id int64, t Threshold
 		}
 	}
 	return c.do(ctx, http.MethodPut, "/api/instances/"+itoa(id)+"/threshold", nil, map[string]any{"instanceThreshold": body}, nil)
+}
+
+// FloatingIPPools lists the floating IP pools a VM can take an address from, for example
+// {pool-43, "public-network-02"}. The list needs the VM's container: without one the option source
+// answers 500 (captured 2026-10-27). Pools have their own IDs, not the external networks' IDs.
+func (c *Client) FloatingIPPools(ctx context.Context, containerID int64) ([]Option, error) {
+	var resp struct {
+		Data []struct {
+			Name  string `json:"name"`
+			Value any    `json:"value"`
+		} `json:"data"`
+	}
+	if err := c.get(ctx, "/api/options/openStack/openstackFloatingIpOptions", url.Values{"containerId": {itoa(containerID)}}, &resp); err != nil {
+		return nil, err
+	}
+	var out []Option
+	for _, d := range resp.Data {
+		// The list also holds headings ("Pools", "Available Ips", value "") and free addresses ("ip-<id>").
+		if v, ok := d.Value.(string); ok && strings.HasPrefix(v, "pool-") {
+			if id := idFrom(v, "pool-"); id != 0 {
+				out = append(out, Option{ID: id, Name: d.Name})
+			}
+		}
+	}
+	return out, nil
+}
+
+// FloatingIPPoolByName finds a VM's floating IP pool by name (case ignored), listing the valid ones
+// when there is none.
+func (c *Client) FloatingIPPoolByName(ctx context.Context, containerID int64, name string) (Option, error) {
+	pools, err := c.FloatingIPPools(ctx, containerID)
+	if err != nil {
+		return Option{}, err
+	}
+	names := make([]string, len(pools))
+	for i, p := range pools {
+		if strings.EqualFold(p.Name, name) {
+			return p, nil
+		}
+		names[i] = p.Name
+	}
+	return Option{}, fmt.Errorf("no floating IP pool named %q. Available pools: %s", name, strings.Join(names, ", "))
+}
+
+// AttachFloatingIP gives a VM an address from a floating IP pool. It works only when the VM's
+// network is on an MTN Router with an external network.
+func (c *Client) AttachFloatingIP(ctx context.Context, containerID, poolID int64) error {
+	body := map[string]any{"config": map[string]any{"osExternalNetworkId": "pool-" + itoa(poolID)}}
+	return c.do(ctx, http.MethodPut, "/api/containers/"+itoa(containerID)+"/attach-floating-ip", nil, body, nil)
+}
+
+// DetachFloatingIP takes a VM's floating IP away.
+func (c *Client) DetachFloatingIP(ctx context.Context, containerID int64) error {
+	return c.do(ctx, http.MethodPut, "/api/containers/"+itoa(containerID)+"/detach-floating-ip", nil, map[string]any{}, nil)
 }

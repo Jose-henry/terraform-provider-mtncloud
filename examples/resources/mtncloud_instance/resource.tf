@@ -25,6 +25,9 @@ resource "mtncloud_instance" "web" {
   # The project's default security group is always applied as well.
   security_groups = [mtncloud_security_group.web.name]
 
+  # A public IP, once the VM runs. The network must be on an MTN Router with an external network.
+  floating_ip_pool = "public-network-02"
+
   root_volume_size = 40
   data_volume {
     size      = 100

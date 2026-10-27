@@ -39,6 +39,9 @@ resource "mtncloud_instance" "web" {
   # The project's default security group is always applied as well.
   security_groups = [mtncloud_security_group.web.name]
 
+  # A public IP, once the VM runs. The network must be on an MTN Router with an external network.
+  floating_ip_pool = "public-network-02"
+
   root_volume_size = 40
   data_volume {
     size      = 100
@@ -97,6 +100,7 @@ resource "mtncloud_instance" "worker" {
 - `env_vars` (Map of String, Sensitive) Environment variables for the instance's automation, name to value. Sensitive: values are hidden in plans, but stored in state. The variables MTN Cloud adds itself (address, host, ports) are not shown. Changing them replaces the instance.
 - `environment` (String) Environment, by name or code, for example `Production`. Changed in place.
 - `expire_days` (Number) Delete the instance this many days after it is created. Set at create only: afterwards extend or cancel the expiry in the console (a change here is refused at plan time).
+- `floating_ip_pool` (String) Give the instance a floating (public) IP from this pool, for example `public-network-02` (the `mtncloud_external_networks` data source lists the names). It is attached once the VM is running, and works only when the instance's network is on an MTN Router with an external network. Changed in place: the old address is released and a new one attached. The address shows in `public_ip` once it syncs into MTN Cloud, which can take up to an hour.
 - `hostname` (String) Hostname set inside the VM. Left out, MTN Cloud derives it from the name or your hostname template. Changing it replaces the instance.
 - `install_agent` (Boolean) Install the MTN Cloud agent, for monitoring, logs and automation. Defaults to `true`. The agent needs the network to be on an MTN Router. Changing it replaces the instance.
 - `labels` (Set of String) Labels (keywords). Changed in place.
@@ -204,6 +208,7 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
   and replaced by the next apply.
 - **Restarts the VM:** changing `plan`. `status` and `public_ip` are read again after any update.
 - **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`, `scale`,
+  `floating_ip_pool`,
   `plan`, networks added at the end of `networks`, and volumes added at the end of `data_volume`.
 - **Replaces the instance:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`,
   `env_vars`, `install_agent`, `create_user`, `scale_factor`, the primary (first) network, and
@@ -223,5 +228,13 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
 - **`env_vars` are sensitive:** hidden in plan output, but stored in state like every attribute.
 - **Workflows and deployments** aren't managed by this resource yet. MTN's workflows are operations
   you run on an existing instance from the console.
-- **Floating IPs** are not managed by this resource yet. A floating IP attached in the console shows
-  in `public_ip`.
+- **Floating IP.** `floating_ip_pool` attaches a public address once the VM is running (never in the
+  create request). Nothing waits for the address to sync into MTN Cloud: it shows in `public_ip` once
+  it has, which can take up to an hour. It needs the instance's network to be on an `mtncloud_router`
+  with an `external_network`; reference the router (for example in `depends_on`) so it exists first.
+  If the attach fails at create, the instance is kept and the next apply tries again. Changing the
+  pool releases the old address and attaches a new one. A floating IP attached in the console, with
+  no `floating_ip_pool` set, shows in `public_ip` and is left alone; setting `floating_ip_pool` later
+  (or after an import) adopts that address without attaching another. If an attach call gets no clear
+  answer (a gateway error), the instance is kept and nothing is retried, so no second address is
+  attached; check `public_ip` within the hour. With `scale_factor` above 1, each VM gets an address.

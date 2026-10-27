@@ -27,6 +27,9 @@ type instStore struct {
 	sgs          map[int64][]int64
 	thresholds   map[int64]map[string]any
 	thresholdErr bool // PUT /threshold answers 400
+	fipErr       bool // attach answers 400, as for a network with no router
+	fip504       bool // attach answers 504 without attaching: the address may yet appear
+	attached     []int64
 	pending      map[int64]bool
 	fail         string // the next create ends in this status
 	stuck        bool   // instances never leave "provisioning"
@@ -74,6 +77,10 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if strings.HasPrefix(r.URL.Path, "/api/options/") || strings.HasPrefix(r.URL.Path, "/api/containers/") {
+		s.floating(w, r, reply)
+		return
+	}
 	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/instances"), "/")
 	if rest == "" {
 		switch r.Method {
@@ -207,6 +214,7 @@ func (s *instStore) create(body map[string]any, reply func(int, any)) {
 		"plan":         map[string]any{"id": plan, "name": fakePlans[plan]},
 		"config":       map[string]any{"resourcePoolId": cfg["resourcePoolId"], "noAgent": cfg["noAgent"], "createUser": cfg["createUser"], "layoutSize": body["layoutSize"]},
 		"evars":        evars, "connectionInfo": []any{map[string]any{"ip": ip, "port": 22, "name": "SSH"}},
+		"containers": []any{id*10 + 7},
 	}
 	if days, ok := req["expireDays"].(float64); ok {
 		in["expireDays"], in["expireDate"] = days, "2026-11-26T09:00:00Z"
@@ -697,4 +705,208 @@ func TestInstance_LifecycleEdges(t *testing.T) {
 	if s.creates != 1 {
 		t.Errorf("%d creates, want 1: a failed scaling PUT must not replace the VM", s.creates)
 	}
+}
+
+// floating fakes the floating IP calls on an instance's container (container ID = instance ID*10+7).
+func (s *instStore) floating(w http.ResponseWriter, r *http.Request, reply func(int, any)) {
+	if strings.HasPrefix(r.URL.Path, "/api/options/") {
+		if r.URL.Query().Get("containerId") == "" {
+			reply(http.StatusInternalServerError, map[string]any{"success": false, "msg": "Looks like the server threw a gasket"})
+			return
+		}
+		reply(http.StatusOK, map[string]any{"success": true, "data": []any{
+			map[string]any{"name": "Pools", "value": ""},
+			map[string]any{"name": "public-network-01", "value": "pool-9044"},
+			map[string]any{"name": "public-network-02", "value": "pool-9043"},
+			map[string]any{"name": "Available Ips", "value": ""},
+			map[string]any{"name": "203.0.113.4", "value": "ip-96420"},
+		}})
+		return
+	}
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/containers/"), "/"), "/")
+	cid, _ := strconv.ParseInt(parts[0], 10, 64)
+	in := s.insts[(cid-7)/10]
+	if in == nil || len(parts) != 2 {
+		reply(http.StatusNotFound, map[string]any{"success": false, "msg": "Container not found"})
+		return
+	}
+	private := in["connectionInfo"].([]any)[0].(map[string]any)["ip"]
+	for _, e := range in["evars"].([]any) {
+		if ev := e.(map[string]any); strings.HasSuffix(ev["name"].(string), "_IP") {
+			private = ev["value"]
+		}
+	}
+	switch parts[1] {
+	case "attach-floating-ip":
+		if s.fipErr {
+			reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "No router with an external gateway for this network"})
+			return
+		}
+		if s.fip504 {
+			reply(http.StatusGatewayTimeout, map[string]any{"success": false, "msg": "Gateway Timeout"})
+			return
+		}
+		in["connectionInfo"] = []any{map[string]any{"ip": fmt.Sprintf("203.0.113.%d", cid%200), "port": 22, "name": "SSH"}}
+		s.attached = append(s.attached, cid)
+	case "detach-floating-ip":
+		in["connectionInfo"] = []any{map[string]any{"ip": private, "port": 22, "name": "SSH"}}
+	}
+	reply(http.StatusOK, map[string]any{"success": true})
+}
+
+func TestInstance_FloatingIP(t *testing.T) {
+	f, s := newInstFakes(t)
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	cfg := func(extra string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+`+extra)
+	}
+	ip := func(re string) []statecheck.StateCheck {
+		var check knownvalue.Check = knownvalue.Null()
+		if re != "" {
+			check = knownvalue.StringRegexp(regexp.MustCompile(re))
+		}
+		return []statecheck.StateCheck{statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("public_ip"), check)}
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				// Attached after the VM runs, never in the create body.
+				Config:            cfg(`  floating_ip_pool = "public-network-02"`),
+				ConfigStateChecks: ip(`^203\.0\.113\.`),
+			},
+			{
+				PreConfig: lock(func() {
+					if _, ok := s.lastCreate["config"].(map[string]any)["osExternalNetworkId"]; ok {
+						t.Error("a floating IP was asked for in the create body")
+					}
+				}),
+				Config:           cfg(`  floating_ip_pool = "PUBLIC-network-02"`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{
+				// Another pool: in place.
+				Config:            cfg(`  floating_ip_pool = "public-network-01"`),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: ip(`^203\.0\.113\.`),
+			},
+			{
+				// Not synced yet (or released in the console): no address is no change, so a slow sync
+				// never attaches a second one.
+				PreConfig: lock(func() {
+					for _, in := range s.insts {
+						in["connectionInfo"] = []any{map[string]any{"ip": "10.20.1.99"}}
+						in["evars"] = append(in["evars"].([]any), map[string]any{"name": in["environmentPrefix"].(string) + "_IP", "value": "10.20.1.99"})
+					}
+				}),
+				Config:           cfg(`  floating_ip_pool = "public-network-01"`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{
+				// Removed: detached.
+				Config:            cfg(""),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: ip(""),
+			},
+			{Config: cfg(`  floating_ip_pool = "nope"`), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`(?s)Unknown floating IP pool.*public-network-01,\s+public-network-02`)},
+			{Config: f.providerConfig()},
+			{
+				// No router: the VM is kept (a warning), and the next plan tries again.
+				PreConfig:          lock(func() { s.fipErr = true }),
+				Config:             cfg(`  floating_ip_pool = "public-network-02"`),
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				// The router is fixed: the next apply attaches in place.
+				PreConfig:         lock(func() { s.fipErr = false }),
+				Config:            cfg(`  floating_ip_pool = "public-network-02"`),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: ip(`^203\.0\.113\.`),
+			},
+			{Config: f.providerConfig()},
+		},
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.creates != 2 {
+		t.Errorf("%d creates, want 2: a failed attach must not replace the VM", s.creates)
+	}
+}
+
+func TestInstance_FloatingIPFailures(t *testing.T) {
+	f, s := newInstFakes(t)
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	cfg := func(extra string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+`+extra)
+	}
+	pool := func(want knownvalue.Check) []statecheck.StateCheck {
+		return []statecheck.StateCheck{statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("floating_ip_pool"), want)}
+	}
+	attaches := 0
+	countAttaches := func(want int) func() {
+		return lock(func() {
+			if len(s.attached) != want {
+				t.Errorf("%d attaches, want %d", len(s.attached), want)
+			}
+		})
+	}
+	empty := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg(`  floating_ip_pool = "public-network-02"`)},
+			{
+				// The old address is released, the new one fails: state records none.
+				PreConfig:   lock(func() { s.fipErr = true }),
+				Config:      cfg(`  floating_ip_pool = "public-network-01"`),
+				ExpectError: regexp.MustCompile(`(?s)Unable to change the floating IP.*MTN Router`),
+			},
+			{
+				PreConfig:          lock(func() { s.fipErr = false }),
+				RefreshState:       true,
+				ExpectNonEmptyPlan: true, // the attach is retried
+				Check:              resource.TestCheckNoResourceAttr("mtncloud_instance.app", "floating_ip_pool"),
+			},
+			{
+				Config:           cfg(`  floating_ip_pool = "public-network-01"`),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
+			},
+			{Config: cfg("")},
+			{
+				// Attached in the console, then configured: adopted, never a second address.
+				PreConfig: lock(func() {
+					for _, in := range s.insts {
+						in["connectionInfo"] = []any{map[string]any{"ip": "203.0.113.250", "port": 22, "name": "SSH"}}
+					}
+					attaches = len(s.attached)
+				}),
+				Config:            cfg(`  floating_ip_pool = "public-network-02"`),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: pool(knownvalue.StringExact("public-network-02")),
+			},
+			{
+				PreConfig:        func() { countAttaches(attaches)() },
+				Config:           cfg(`  floating_ip_pool = "public-network-02"`),
+				ConfigPlanChecks: empty,
+			},
+			{Config: f.providerConfig()},
+			{
+				// No clear answer at create: a warning, and no retry that could attach a second address.
+				PreConfig: lock(func() { s.fip504 = true }),
+				Config:    cfg(`  floating_ip_pool = "public-network-02"`),
+			},
+			{
+				PreConfig:        lock(func() { s.fip504 = false }),
+				Config:           cfg(`  floating_ip_pool = "public-network-02"`),
+				ConfigPlanChecks: empty,
+			},
+		},
+	})
 }

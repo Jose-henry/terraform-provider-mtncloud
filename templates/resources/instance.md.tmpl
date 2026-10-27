@@ -48,6 +48,7 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
   and replaced by the next apply.
 - **Restarts the VM:** changing `plan`. `status` and `public_ip` are read again after any update.
 - **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`, `scale`,
+  `floating_ip_pool`,
   `plan`, networks added at the end of `networks`, and volumes added at the end of `data_volume`.
 - **Replaces the instance:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`,
   `env_vars`, `install_agent`, `create_user`, `scale_factor`, the primary (first) network, and
@@ -67,5 +68,13 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
 - **`env_vars` are sensitive:** hidden in plan output, but stored in state like every attribute.
 - **Workflows and deployments** aren't managed by this resource yet. MTN's workflows are operations
   you run on an existing instance from the console.
-- **Floating IPs** are not managed by this resource yet. A floating IP attached in the console shows
-  in `public_ip`.
+- **Floating IP.** `floating_ip_pool` attaches a public address once the VM is running (never in the
+  create request). Nothing waits for the address to sync into MTN Cloud: it shows in `public_ip` once
+  it has, which can take up to an hour. It needs the instance's network to be on an `mtncloud_router`
+  with an `external_network`; reference the router (for example in `depends_on`) so it exists first.
+  If the attach fails at create, the instance is kept and the next apply tries again. Changing the
+  pool releases the old address and attaches a new one. A floating IP attached in the console, with
+  no `floating_ip_pool` set, shows in `public_ip` and is left alone; setting `floating_ip_pool` later
+  (or after an import) adopts that address without attaching another. If an attach call gets no clear
+  answer (a gateway error), the instance is kept and nothing is retried, so no second address is
+  attached; check `public_ip` within the hour. With `scale_factor` above 1, each VM gets an address.

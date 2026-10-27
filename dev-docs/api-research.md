@@ -358,3 +358,19 @@ Never paste tokens, secret keys or passwords. `-V` already masks the bearer toke
   `PUT .../extend-expiration`, `.../extend-shutdown` (by the policy's renewal days) and cancel.
 - `GET /api/instances/{id}/deploys` works (empty); `/api/deployments` is empty for the tenant.
 - `/api/task-sets`: 6 workflows, all `type: operation` (see B-014).
+
+### Floating IPs for customers (captured 2026-10-27)
+- `GET /api/options/openStack/openstackFloatingIpOptions?containerId=<vm>` works for customers (the
+  earlier 500s had no `containerId`; `/api/options/openstackFloatingIpOptions` still answers 500).
+  It lists headings (value `""`), pools (`{"name":"public-network-02","value":"pool-43"}`) and free
+  addresses (`"ip-6420"`). Pool IDs differ from the external networks' option IDs (`public-network-02`
+  is 32 there), but the names match, so plan time checks names against `openstackExternalNetworks`.
+- `GET /api/containers/{id}` works: `ip` is the floating address, `internalIp` the private one. The
+  instance lists its containers in `containers`.
+- Attach: `PUT /api/containers/{id}/attach-floating-ip {config:{osExternalNetworkId:"pool-<id>"}}`;
+  detach: `PUT /api/containers/{id}/detach-floating-ip` (Context7). Not yet sent live.
+- Nothing waits for the address to sync in (owner, 2026-10-27, as D-020): a successful attach is
+  done. Only an attach that failed at create is reported as drift (private-state flag), so a slow
+  sync never attaches a second address.
+- `/api/networks/floating-ips` (allocate, list) stays 403 for customers, so a standalone floating IP
+  resource that outlives an instance isn't possible with a customer login.

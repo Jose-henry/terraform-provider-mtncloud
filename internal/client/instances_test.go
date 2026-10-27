@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -415,5 +416,45 @@ func TestCreateInstance_Lifecycle(t *testing.T) {
 	inst := body["instance"].(map[string]any)
 	if _, ok := inst["shutdownDays"]; ok || inst["expireDays"] != 30.0 {
 		t.Errorf("instance %v", inst)
+	}
+}
+
+func TestFloatingIP_PoolsAttachDetach(t *testing.T) {
+	f := newFakeAPI(t)
+	opts := instanceFixture(t, "floating_ip_options.json")
+	f.route("GET", "/api/options/openStack/openstackFloatingIpOptions", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("containerId") != "9741" {
+			w.WriteHeader(http.StatusInternalServerError) // as without a container (captured)
+			return
+		}
+		_, _ = w.Write(opts)
+	})
+	var attach, detach map[string]any
+	f.route("PUT", "/api/containers/9741/attach-floating-ip", captureBody(t, &attach, http.StatusOK, []byte(`{"success":true}`)))
+	f.route("PUT", "/api/containers/9741/detach-floating-ip", captureBody(t, &detach, http.StatusOK, []byte(`{"success":true}`)))
+	c := f.client(t)
+	pools, err := c.FloatingIPPools(t.Context(), 9741)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Headings and free addresses are not pools.
+	if len(pools) != 3 || pools[2] != (Option{ID: 9043, Name: "public-network-02"}) {
+		t.Errorf("pools %+v", pools)
+	}
+	p, err := c.FloatingIPPoolByName(t.Context(), 9741, "PUBLIC-network-02")
+	if err != nil || p.ID != 9043 {
+		t.Errorf("by name: %+v %v", p, err)
+	}
+	if _, err := c.FloatingIPPoolByName(t.Context(), 9741, "nope"); err == nil || !strings.Contains(err.Error(), "public-network-01, public-network-02") {
+		t.Errorf("unknown pool error: %v", err)
+	}
+	if err := c.AttachFloatingIP(t.Context(), 9741, 9043); err != nil {
+		t.Fatal(err)
+	}
+	if got := attach["config"].(map[string]any)["osExternalNetworkId"]; got != "pool-9043" {
+		t.Errorf("attach sent %v", attach)
+	}
+	if err := c.DetachFloatingIP(t.Context(), 9741); err != nil || detach == nil {
+		t.Errorf("detach: %v %v", err, detach)
 	}
 }

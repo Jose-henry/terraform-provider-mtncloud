@@ -16,7 +16,7 @@ The provider targets MTN Cloud on OpenStack. The cloud (`MTNNG_CLOUD_AZ_1`) is f
 | Usable with a customer (sub-tenant) login | 81 | 53 |
 | Master tenant only | 36 | 12 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 7 | 1 |
+| Coming next | 6 | 1 |
 
 ## Who can use what
 
@@ -393,7 +393,6 @@ Designed, **not available yet**, and all meant for customers. Until `mtncloud_in
 
 | Type | Status | What it does |
 |---|---|---|
-| `mtncloud_floating_ip` | Next | A public IP for an instance whose network is on an MTN Router with an external network, attached at create or later. |
 | `mtncloud_project` | Planned | Order a project (resource pool) by name and wait until it and its default security group have synced. |
 | `mtncloud_catalog_order` | Planned | Order any catalog service (Kubernetes, managed databases, VPN, firewall, NAT, BYOL appliances and more), with its inputs. |
 | `mtncloud_object_storage` | Planned | MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource. |

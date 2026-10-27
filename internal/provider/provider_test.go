@@ -58,7 +58,8 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		f.calls[r.URL.Path]++
 		sg, net, router, inst := f.sg, f.net, f.router, f.inst
 		f.mu.Unlock()
-		if inst != nil && strings.HasPrefix(r.URL.Path, "/api/instances") && r.URL.Path != "/api/instances/service-plans" &&
+		fip := r.URL.Path == "/api/options/openStack/openstackFloatingIpOptions" || strings.HasPrefix(r.URL.Path, "/api/containers/")
+		if inst != nil && (fip || strings.HasPrefix(r.URL.Path, "/api/instances") && r.URL.Path != "/api/instances/service-plans") &&
 			r.Header.Get("Authorization") == "Bearer test-token" {
 			inst.ServeHTTP(w, r)
 			return

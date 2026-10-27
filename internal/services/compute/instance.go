@@ -79,6 +79,7 @@ type instanceModel struct {
 	CreateUser     types.Bool     `tfsdk:"create_user"`
 	ScaleFactor    types.Int64    `tfsdk:"scale_factor"`
 	Scale          types.Object   `tfsdk:"scale"`
+	FloatingIPPool types.String   `tfsdk:"floating_ip_pool"`
 	ExpireDays     types.Int64    `tfsdk:"expire_days"`
 	ShutdownDays   types.Int64    `tfsdk:"shutdown_days"`
 	ExpireDate     types.String   `tfsdk:"expire_date"`
@@ -268,6 +269,15 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 					"disk":   usageRange("Disk"),
 				},
 			},
+			"floating_ip_pool": schema.StringAttribute{
+				// Kept as configured: a customer can't read which pool an attached address came from.
+				Optional: true,
+				Description: "Give the instance a floating (public) IP from this pool, for example `public-network-02` (the " +
+					"`mtncloud_external_networks` data source lists the names). It is attached once the VM is running, " +
+					"and works only when the instance's network is on an MTN Router with an external network. Changed in " +
+					"place: the old address is released and a new one attached. The address shows in `public_ip` once it " +
+					"syncs into MTN Cloud, which can take up to an hour.",
+			},
 			"expire_days": schema.Int64Attribute{
 				Optional: true,
 				Description: "Delete the instance this many days after it is created. Set at create only: afterwards extend " +
@@ -411,6 +421,9 @@ func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 		}
 		same("domain", equal, state.Domain, true)
 	}
+	if !plan.FloatingIPPool.IsUnknown() {
+		same("floating_ip_pool", sameName(plan.FloatingIPPool, state.FloatingIPPool), state.FloatingIPPool, false)
+	}
 	planVols, stateVols := volumesOf(ctx, plan.DataVolumes, &resp.Diagnostics), volumesOf(ctx, state.DataVolumes, &resp.Diagnostics)
 	for i := 0; i < len(planVols) && i < len(stateVols); i++ {
 		if !planVols[i].Datastore.Equal(stateVols[i].Datastore) && sameName(planVols[i].Datastore, stateVols[i].Datastore) {
@@ -526,6 +539,24 @@ func (r *instanceResource) checkNames(ctx context.Context, m instanceModel, p *c
 		if _, err := r.client.NetworkDomainByName(ctx, m.Domain.ValueString()); err != nil {
 			diags.AddAttributeError(path.Root("domain"), "Unknown network domain", err.Error())
 		}
+	}
+	if known(m.FloatingIPPool) {
+		// The pools carry the external networks' names (captured 2026-10-27); their own list needs a
+		// VM, so a new instance is checked by name here and resolved after it runs.
+		nets, err := r.client.ExternalNetworks(ctx)
+		if err != nil {
+			diags.AddError("Unable to list the floating IP pools", err.Error())
+			return
+		}
+		names := make([]string, len(nets))
+		for i, n := range nets {
+			if strings.EqualFold(n.Name, m.FloatingIPPool.ValueString()) {
+				return
+			}
+			names[i] = n.Name
+		}
+		diags.AddAttributeError(path.Root("floating_ip_pool"), "Unknown floating IP pool",
+			fmt.Sprintf("no floating IP pool named %q. Available pools: %s", m.FloatingIPPool.ValueString(), strings.Join(names, ", ")))
 	}
 }
 
@@ -762,9 +793,32 @@ func (r *instanceResource) Create(ctx context.Context, req resource.CreateReques
 			scaleFailed = true
 		}
 	}
+	plannedPool, fipFailed := plan.FloatingIPPool, false
+	if err == nil && !client.InstanceFailed(inst.Status) && known(plan.FloatingIPPool) {
+		if got, _, ferr := r.setFloatingIP(ctx, inst, types.StringNull(), plan.FloatingIPPool); ferr != nil {
+			// A warning, not an error: an error would taint (and so replace) a healthy VM.
+			if client.MayHaveSucceeded(ferr) {
+				// It may be attached and syncing: retrying could attach a second address.
+				resp.Diagnostics.AddAttributeWarning(path.Root("floating_ip_pool"), "Floating IP may not be attached",
+					fmt.Sprintf("Instance %d was created, but the floating IP call had no clear answer: %s. Check the "+
+						"instance in the console within the hour; if it has no public IP, remove floating_ip_pool, apply, "+
+						"then add it back.", id, ferr))
+			} else {
+				resp.Diagnostics.AddAttributeWarning(path.Root("floating_ip_pool"), "Floating IP not attached yet",
+					fmt.Sprintf("Instance %d was created, but its floating IP wasn't attached: %s. The next apply tries again.", id, ferr))
+				fipFailed = true
+			}
+		} else {
+			inst = got
+		}
+	}
 	r.settle(ctx, &plan, inst, err, "create", &resp.Diagnostics)
 	if scaleFailed {
 		plan.Scale = planned // as planned, so the apply is consistent; the next refresh shows it unset
+	}
+	if fipFailed {
+		plan.FloatingIPPool = plannedPool // as planned; Read reports it unattached, so the next apply tries again
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipPendingKey, []byte(`true`))...)
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -800,7 +854,7 @@ func (r *instanceResource) settle(ctx context.Context, m *instanceModel, inst *c
 
 // unknownToNull clears computed values that were never read, so state can be saved.
 func unknownToNull(ctx context.Context, m *instanceModel) {
-	for _, s := range []*types.String{&m.Name, &m.Hostname, &m.Domain, &m.Status, &m.PrivateIP, &m.PublicIP, &m.ExpireDate, &m.ShutdownDate} {
+	for _, s := range []*types.String{&m.Name, &m.Hostname, &m.Domain, &m.FloatingIPPool, &m.Status, &m.PrivateIP, &m.PublicIP, &m.ExpireDate, &m.ShutdownDate} {
 		if s.IsUnknown() {
 			*s = types.StringNull()
 		}
@@ -844,8 +898,16 @@ func (r *instanceResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 	r.refresh(ctx, &state, inst, &resp.Diagnostics)
+	// Only an attach that failed at create shows as drift; an address that is merely slow to sync
+	// must not, or a second one would be attached.
+	if pending, d := req.Private.GetKey(ctx, fipPendingKey); !d.HasError() && pending != nil && inst.PublicIP == "" {
+		state.FloatingIPPool = types.StringNull()
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
+
+// fipPendingKey marks, in private state, a floating IP whose attach failed at create.
+const fipPendingKey = "floating_ip_pending"
 
 func (r *instanceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	if !r.ready(&resp.Diagnostics) {
@@ -920,6 +982,24 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 		}
 	}
 	inst, err := r.client.WaitForInstance(ctx, id)
+	if !sameName(plan.FloatingIPPool, state.FloatingIPPool) {
+		if err != nil {
+			plan.FloatingIPPool = state.FloatingIPPool // not changed: the next apply tries again
+		} else {
+			got, detached, ferr := r.setFloatingIP(ctx, inst, state.FloatingIPPool, plan.FloatingIPPool)
+			if ferr != nil {
+				resp.Diagnostics.AddAttributeError(path.Root("floating_ip_pool"), "Unable to change the floating IP", ferr.Error())
+				if detached {
+					// The old address is gone: record none, so the next apply attaches one.
+					resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("floating_ip_pool"), types.StringNull())...)
+					resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("public_ip"), types.StringNull())...)
+				}
+				return
+			}
+			inst = got
+			resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipPendingKey, nil)...)
+		}
+	}
 	r.settle(ctx, &plan, inst, err, "update", &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -1318,4 +1398,44 @@ func scaleOf(ctx context.Context, th *client.Threshold) types.Object {
 		CPU: rng(th.CPU), Memory: rng(th.Memory), Disk: rng(th.Disk),
 	})
 	return o
+}
+
+// setFloatingIP moves the instance's VMs from one floating IP pool to another (either may be null):
+// it detaches the old address and attaches one from the new pool. Nothing waits for the address to
+// sync into MTN Cloud (owner, 2026-10-27): a successful call is done, and public_ip fills in later.
+// An address the instance already has with no pool recorded (import, or attached in the console) is
+// adopted as the configured pool: attaching would add a second one. detached reports whether an old
+// address was released, for the caller to record when the attach then fails.
+func (r *instanceResource) setFloatingIP(ctx context.Context, inst *client.Instance, from, to types.String) (_ *client.Instance, detached bool, _ error) {
+	if from.IsNull() && inst.PublicIP != "" {
+		return inst, false, nil
+	}
+	if len(inst.ContainerIDs) == 0 {
+		return inst, false, fmt.Errorf("instance %d has no VM to attach a floating IP to yet", inst.ID)
+	}
+	if !from.IsNull() {
+		for _, c := range inst.ContainerIDs {
+			if err := r.client.DetachFloatingIP(ctx, c); err != nil {
+				return inst, detached, fmt.Errorf("detaching the floating IP: %w", err)
+			}
+			detached = true
+		}
+	}
+	if known(to) {
+		for i, c := range inst.ContainerIDs {
+			pool, err := r.client.FloatingIPPoolByName(ctx, c, to.ValueString())
+			if err != nil {
+				return inst, detached, err
+			}
+			if err := r.client.AttachFloatingIP(ctx, c, pool.ID); err != nil {
+				return inst, detached, fmt.Errorf("attaching a floating IP from %s to VM %d of %d: %w. A floating IP needs "+
+					"the instance's network to be on an MTN Router with an external network", pool.Name, i+1, len(inst.ContainerIDs), err)
+			}
+		}
+	}
+	// One read for whatever has synced already; an error keeps the instance as it was.
+	if got, err := r.client.GetInstance(ctx, inst.ID); err == nil {
+		inst = got
+	}
+	return inst, detached, nil
 }
