@@ -279,3 +279,40 @@ func TestSecurityGroup_DataSource(t *testing.T) {
 		},
 	})
 }
+
+func TestCatalogItem_DataSource(t *testing.T) {
+	f := newFakeAPI(t)
+	one := func(attrs string) string {
+		return f.providerConfig() + "\ndata \"mtncloud_catalog_item\" \"one\" {\n" + attrs + "\n}\n"
+	}
+	in := func(i int, attr string) tfjsonpath.Path {
+		return tfjsonpath.New("inputs").AtSliceIndex(i).AtMapKey(attr)
+	}
+	check := func(p tfjsonpath.Path, v knownvalue.Check) statecheck.StateCheck {
+		return statecheck.ExpectKnownValue("data.mtncloud_catalog_item.one", p, v)
+	}
+	// The form's own inputs and its field groups', in display order.
+	form := []statecheck.StateCheck{
+		check(tfjsonpath.New("id"), knownvalue.Int64Exact(22)),
+		check(tfjsonpath.New("inputs"), knownvalue.ListSizeExact(4)),
+		check(in(0, "name"), knownvalue.StringExact("groupName")),
+		check(in(1, "name"), knownvalue.StringExact("cloud")),
+		check(in(1, "default"), knownvalue.StringExact("4")),
+		check(in(2, "name"), knownvalue.StringExact("instanceName")),
+		check(in(2, "help"), knownvalue.StringExact("Lower case and dashes.")),
+		check(in(3, "required"), knownvalue.Bool(false)),
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: one(`  name = "Create Instance"`), ConfigStateChecks: form},
+			{Config: one(`  id = 22`), ConfigStateChecks: form},
+			{Config: one(`  name = "MTN Object Storage"`), ConfigStateChecks: []statecheck.StateCheck{
+				check(tfjsonpath.New("inputs"), knownvalue.ListSizeExact(0)),
+			}},
+			{Config: one(`  name = "nope"`), ExpectError: regexp.MustCompile(`(?s)No such catalog item.*You can order:\s+Create\s+Instance`)},
+			{Config: one(`  id = 1`), ExpectError: regexp.MustCompile(`No such catalog item`)},
+			{Config: one(`  id = 22`)},
+		},
+	})
+}

@@ -87,7 +87,7 @@ DATA_SOURCES = [
     ("Storage",
      ["storage_bucket", "storage_buckets", "storage_volume", "storage_volumes", "storage_volume_type"]),
     ("Catalog, forms and inputs",
-     ["catalog_item_type", "catalog_order", "catalog_orders", "form", "forms", "option_list",
+     ["catalog_item_type", "catalog_item", "catalog_order", "catalog_orders", "form", "forms", "option_list",
       "option_type", "vdi_pool"]),
     ("Automation and integrations",
      ["task", "tasks", "workflow", "workflows", "job", "jobs", "execute_schedule", "power_schedule", "integration", "integrations",

@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 60 | 81 |
-| Usable with a customer (sub-tenant) login | 60 | 76 |
+| Available today | 60 | 82 |
+| Usable with a customer (sub-tenant) login | 60 | 77 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 7 | 0 |
@@ -257,6 +257,7 @@ Autoscaling thresholds.
 
 | Type | Customer login |
 |---|---|
+| [`mtncloud_catalog_item`](../docs/data-sources/catalog_item.md) | Yes (read verified) |
 | [`mtncloud_catalog_item_type`](../docs/data-sources/catalog_item_type.md) | Yes (read verified) |
 | [`mtncloud_catalog_order`](../docs/data-sources/catalog_order.md) | Yes (read verified) |
 | [`mtncloud_catalog_orders`](../docs/data-sources/catalog_orders.md) | Yes (read verified) |

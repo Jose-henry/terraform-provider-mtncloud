@@ -39,6 +39,7 @@ func DataSources() []func() datasource.DataSource {
 		newProject,
 		newRouter,
 		newCypher,
+		newCatalogItem,
 	}, recordDataSources()...)
 }
 

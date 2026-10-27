@@ -48,6 +48,8 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		"/api/options/networkServer":             "options_network_servers.json",
 		"/api/instances/service-plans":           "service_plans.json",
 		"/api/catalog/types":                     "catalog_types.json",
+		"/api/catalog/types/22":                  "catalog_type_22.json",
+		"/api/catalog/types/13":                  "catalog_type_13.json",
 		"/api/instance-types":                    "instance_types.json",
 		"/api/network-router-types":              "router_types.json",
 		"/api/options/environments":              "options_environments.json",
