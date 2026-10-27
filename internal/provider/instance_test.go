@@ -1,0 +1,535 @@
+package provider
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+)
+
+// instStore is a stateful fake of /api/instances that behaves like the captures (2026-10-27): a
+// new instance reads "provisioning" once before "running"; the naming template names an instance
+// sent without a name; the platform adds its own <PREFIX>_* variables; groups are kept per instance.
+type instStore struct {
+	mu          sync.Mutex
+	nextID, seq int64
+	insts       map[int64]map[string]any
+	sgs         map[int64][]int64
+	pending     map[int64]bool
+	fail        string // the next create ends in this status
+	stuck       bool   // instances never leave "provisioning"
+	lostReplies int    // the next creates are applied but answer 502
+	creates     int
+	lastCreate  map[string]any
+	resizes     []map[string]any
+}
+
+func newInstStore() *instStore {
+	return &instStore{nextID: 9700, insts: map[int64]map[string]any{}, sgs: map[int64][]int64{}, pending: map[int64]bool{}}
+}
+
+var (
+	fakeImages = map[string]string{"MTN-U24.04LTS": "MTN Ubuntu Server 24.04.3LTS", "MTN-WINSVR2025": "MTN Windows Server 2025 (BYOL)"}
+	fakePlans  = map[float64]string{9401: "G1S1", 9402: "G2S4"}
+	fakeSGs    = map[int64]string{9301: "default", 9302: "web"}
+	nonAlnum   = regexp.MustCompile(`[^A-Za-z0-9]+`)
+)
+
+func (s *instStore) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.insts)
+}
+
+func (s *instStore) view(id int64) map[string]any {
+	out := map[string]any{}
+	for k, v := range s.insts[id] {
+		out[k] = v
+	}
+	if s.pending[id] || s.stuck {
+		out["status"] = "provisioning"
+		delete(s.pending, id)
+	}
+	return out
+}
+
+func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var body map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	reply := func(status int, v any) {
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(v)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/instances"), "/")
+	if rest == "" {
+		switch r.Method {
+		case http.MethodGet:
+			list := []any{}
+			for id, in := range s.insts {
+				if name := r.URL.Query().Get("name"); name == "" || in["name"] == name {
+					list = append(list, s.view(id))
+				}
+			}
+			reply(http.StatusOK, map[string]any{"instances": list, "meta": map[string]any{"total": len(list)}})
+		case http.MethodPost:
+			s.create(body, reply)
+		}
+		return
+	}
+	parts := strings.SplitN(rest, "/", 2)
+	id, _ := strconv.ParseInt(parts[0], 10, 64)
+	in := s.insts[id]
+	if in == nil {
+		reply(http.StatusNotFound, map[string]any{"success": false, "msg": "Instance not found"})
+		return
+	}
+	switch {
+	case len(parts) == 2 && parts[1] == "security-groups" && r.Method == http.MethodGet:
+		list := []any{}
+		for _, g := range s.sgs[id] {
+			list = append(list, map[string]any{"id": g, "name": fakeSGs[g]})
+		}
+		reply(http.StatusOK, map[string]any{"success": true, "securityGroups": list})
+	case len(parts) == 2 && parts[1] == "security-groups":
+		var ids []int64
+		for _, v := range body["securityGroupIds"].([]any) {
+			ids = append(ids, int64(v.(float64)))
+		}
+		s.sgs[id] = ids
+		reply(http.StatusOK, map[string]any{"success": true})
+	case len(parts) == 2 && parts[1] == "resize":
+		s.resizes = append(s.resizes, body)
+		plan := body["instance"].(map[string]any)["plan"].(map[string]any)["id"].(float64)
+		in["plan"] = map[string]any{"id": plan, "name": fakePlans[plan]}
+		vols := in["volumes"].([]any)
+		for _, v := range body["volumes"].([]any) {
+			if v.(map[string]any)["id"] == -1.0 {
+				vols = append(vols, s.volume(id, len(vols), v.(map[string]any)))
+			}
+		}
+		in["volumes"] = vols
+		nics := in["interfaces"].([]any)
+		for _, n := range body["networkInterfaces"].([]any) {
+			if _, ok := n.(map[string]any)["id"]; !ok {
+				nics = append(nics, s.nic(id, len(nics), n.(map[string]any)))
+			}
+		}
+		in["interfaces"] = nics
+		in["status"] = "running" // a reconfigure restarts the VM
+		s.pending[id] = true
+		reply(http.StatusOK, map[string]any{"success": true})
+	case r.Method == http.MethodGet:
+		reply(http.StatusOK, map[string]any{"instance": s.view(id)})
+	case r.Method == http.MethodPut:
+		for k, v := range body["instance"].(map[string]any) {
+			in[k] = v
+		}
+		reply(http.StatusOK, map[string]any{"success": true, "instance": s.view(id)})
+	case r.Method == http.MethodDelete:
+		delete(s.insts, id)
+		reply(http.StatusOK, map[string]any{"success": true})
+	}
+}
+
+func (s *instStore) volume(id int64, i int, v map[string]any) map[string]any {
+	name, _ := v["name"].(string)
+	if name == "" {
+		name = fmt.Sprintf("data-%d", i)
+	}
+	return map[string]any{"id": id*10 + int64(i), "name": name, "size": v["size"], "rootVolume": v["rootVolume"],
+		"storageType": 11, "datastoreId": v["datastoreId"]}
+}
+
+func (s *instStore) nic(id int64, i int, n map[string]any) map[string]any {
+	net, _ := strconv.ParseInt(strings.TrimPrefix(n["network"].(map[string]any)["id"].(string), "network-"), 10, 64)
+	return map[string]any{"id": strconv.FormatInt(id*100+int64(i), 10), "network": map[string]any{"id": net},
+		"ipAddress": nil, "primaryInterface": i == 0}
+}
+
+func (s *instStore) create(body map[string]any, reply func(int, any)) {
+	s.creates++
+	s.lastCreate = body
+	req := body["instance"].(map[string]any)
+	s.nextID++
+	s.seq++
+	id := s.nextID
+	code := req["instanceType"].(map[string]any)["code"].(string)
+	name, _ := req["name"].(string)
+	if name == "" { // the tenant's naming template
+		name = fmt.Sprintf("jd-9001-MTN-CLOUD-%s-%d", code, s.seq)
+	}
+	host, _ := req["hostName"].(string)
+	if host == "" {
+		host = strings.ToLower(nonAlnum.ReplaceAllString(name, "-"))
+	}
+	prefix := strings.ToUpper(nonAlnum.ReplaceAllString(fakeImages[code], "_"))
+	ip := fmt.Sprintf("10.20.1.%d", 10+id%200)
+	evars := []any{
+		map[string]any{"name": prefix + "_IP", "value": ip}, map[string]any{"name": prefix + "_HOST", "value": "container" + strconv.FormatInt(id, 10)},
+		map[string]any{"name": prefix + "_PORT_SSH", "value": 22},
+	}
+	if ev, ok := body["evars"].([]any); ok {
+		evars = append(ev, evars...)
+	}
+	plan := req["plan"].(map[string]any)["id"].(float64)
+	cfg := body["config"].(map[string]any)
+	in := map[string]any{
+		"id": id, "name": name, "hostName": host, "status": "running", "environmentPrefix": prefix,
+		"description": req["description"], "instanceContext": req["instanceContext"], "labels": req["labels"], "tags": body["tags"],
+		"group":        map[string]any{"id": req["site"].(map[string]any)["id"], "name": "MTNNG_CLOUD_AZ_1"},
+		"instanceType": map[string]any{"code": code, "name": fakeImages[code]},
+		"plan":         map[string]any{"id": plan, "name": fakePlans[plan]},
+		"config":       map[string]any{"resourcePoolId": cfg["resourcePoolId"], "noAgent": cfg["noAgent"], "createUser": cfg["createUser"], "layoutSize": body["layoutSize"]},
+		"evars":        evars, "connectionInfo": []any{map[string]any{"ip": ip, "port": 22, "name": "SSH"}},
+	}
+	if d, ok := req["networkDomain"].(map[string]any); ok {
+		in["networkDomain"] = map[string]any{"id": d["id"], "name": "example.com"}
+	}
+	var vols, nics []any
+	for i, v := range body["volumes"].([]any) {
+		vols = append(vols, s.volume(id, i, v.(map[string]any)))
+	}
+	for i, n := range body["networkInterfaces"].([]any) {
+		nics = append(nics, s.nic(id, i, n.(map[string]any)))
+	}
+	in["volumes"], in["interfaces"] = vols, nics
+	var sgs []int64
+	for _, g := range body["securityGroups"].([]any) {
+		sgs = append(sgs, int64(g.(map[string]any)["id"].(float64)))
+	}
+	s.sgs[id] = sgs
+	if s.fail != "" {
+		in["status"], in["statusMessage"] = s.fail, "No valid host was found"
+		s.fail = ""
+	}
+	s.insts[id], s.pending[id] = in, true
+	if s.lostReplies > 0 {
+		s.lostReplies--
+		reply(http.StatusBadGateway, map[string]any{"success": false, "msg": "Bad Gateway"})
+		return
+	}
+	reply(http.StatusOK, map[string]any{"success": true, "instance": s.view(id)})
+}
+
+func instConfig(f *fakeAPI, attrs string) string {
+	return f.providerConfig() + `
+resource "mtncloud_instance" "app" {
+  group    = "MTNNG_CLOUD_AZ_1"
+  project  = "web-prod"
+  image    = "MTN Ubuntu Server 24.04.3LTS"
+` + attrs + `
+}
+`
+}
+
+func newInstFakes(t *testing.T) (*fakeAPI, *instStore) {
+	t.Helper()
+	f := newFakeAPI(t)
+	s := newInstStore()
+	f.inst = s
+	return f, s
+}
+
+func instPlan(action plancheck.ResourceActionType) resource.ConfigPlanChecks {
+	return resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("mtncloud_instance.app", action)}}
+}
+
+func TestInstance_Lifecycle(t *testing.T) {
+	f, s := newInstFakes(t)
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	base := `  plan     = "G1S1"
+  networks = ["9301"]
+  security_groups = ["web"]
+  environment = "Production"
+  labels   = ["web"]
+  tags     = { team = "payments" }
+  env_vars = { APP_ENV = "prod" }
+  domain   = "example.com"
+  data_volume {
+    size      = 50
+    datastore = "ENCR_AT_REST"
+  }`
+	attr := func(p string) tfjsonpath.Path { return tfjsonpath.New(p) }
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				// No name: the naming template names it, and the name is read back.
+				Config: instConfig(f, base),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("name"), knownvalue.StringRegexp(regexp.MustCompile(`^jd-9001-MTN-CLOUD-MTN-U24\.04LTS-\d+$`))),
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("status"), knownvalue.StringExact("running")),
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("private_ip"), knownvalue.StringRegexp(regexp.MustCompile(`^10\.20\.1\.`))),
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("root_volume_size"), knownvalue.Int64Exact(10)),
+					// Only the variable the user set: not the platform's <PREFIX>_IP, _HOST, _PORT_*.
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("env_vars"), knownvalue.MapExact(map[string]knownvalue.Check{"APP_ENV": knownvalue.StringExact("prod")})),
+					// The default group is applied, but not shown: only "web" was asked for.
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("security_groups"), knownvalue.SetExact([]knownvalue.Check{knownvalue.StringExact("web")})),
+				},
+			},
+			{
+				PreConfig: lock(func() {
+					b := s.lastCreate
+					sgs := fmt.Sprint(b["securityGroups"])
+					if !strings.Contains(sgs, "9301") || !strings.Contains(sgs, "9302") {
+						t.Errorf("security groups sent %s, want the default (9301) and web (9302)", sgs)
+					}
+					if _, ok := b["instance"].(map[string]any)["name"]; ok {
+						t.Error("a name was sent although none is configured")
+					}
+					cfg := b["config"].(map[string]any)
+					if cfg["resourcePoolId"] != "pool-9201" || cfg["noAgent"] != false || cfg["createUser"] != true {
+						t.Errorf("config %v", cfg)
+					}
+					if ds := b["volumes"].([]any)[1].(map[string]any)["datastoreId"]; ds != "414" {
+						t.Errorf("data volume datastore %v, want 414 (ENCR_AT_REST)", ds)
+					}
+				}),
+				Config:           instConfig(f, base),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{
+				ResourceName: "mtncloud_instance.app", ImportState: true, ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{"timeouts"}, Config: instConfig(f, base),
+			},
+			{
+				// In place: rename, new plan (restart), tags, groups, an added disk and network.
+				Config: instConfig(f, `  name     = "app-1"
+  plan     = "G2S4"
+  networks = ["9301", "9303"]
+  environment = "Dev"
+  labels   = ["web", "blue"]
+  tags     = { team = "payments", tier = "1" }
+  env_vars = { APP_ENV = "prod" }
+  domain   = "example.com"
+  data_volume {
+    size      = 50
+    datastore = "ENCR_AT_REST"
+  }
+  data_volume {
+    size = 20
+  }`),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("name"), knownvalue.StringExact("app-1")),
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("plan"), knownvalue.StringExact("G2S4")),
+					statecheck.ExpectKnownValue("mtncloud_instance.app", attr("security_groups"), knownvalue.Null()),
+				},
+			},
+			{
+				// The same things named another way: no change.
+				PreConfig: lock(func() {
+					if len(s.resizes) != 1 {
+						t.Errorf("%d resizes, want 1", len(s.resizes))
+					}
+					if got := fmt.Sprint(s.sgs[s.nextID]); got != "[9301]" {
+						t.Errorf("security groups %s after removing web, want the default only", got)
+					}
+				}),
+				Config: f.providerConfig() + `
+resource "mtncloud_instance" "app" {
+  group    = "mtnng_cloud_az_1"
+  project  = "web-prod-Acme"
+  image    = "MTN-U24.04LTS"
+  name     = "app-1"
+  plan     = "g2s4"
+  networks = ["9301", "9303"]
+  environment = "dev"
+  labels   = ["blue", "web"]
+  tags     = { team = "payments", tier = "1" }
+  env_vars = { APP_ENV = "prod" }
+  domain   = "Example.com"
+  data_volume {
+    size      = 50
+    datastore = "encr_at_rest"
+  }
+  data_volume {
+    size = 20
+  }
+}
+`,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{
+				// A new primary network can't be set in place.
+				Config: instConfig(f, `  name = "app-1"
+  plan = "G2S4"
+  networks = ["9303"]`),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionDestroyBeforeCreate),
+			},
+			{
+				// Deleted outside Terraform: planned again.
+				PreConfig: lock(func() { clear(s.insts) }),
+				Config: instConfig(f, `  name = "app-1"
+  plan = "G2S4"
+  networks = ["9303"]`),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+			},
+			{Config: f.providerConfig()},
+		},
+	})
+	if n := s.count(); n != 0 {
+		t.Errorf("%d instances left", n)
+	}
+}
+
+func TestInstance_Refusals(t *testing.T) {
+	f, s := newInstFakes(t)
+	cfg := func(attrs string) string { return instConfig(f, attrs) }
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg(`  plan = "G9S9"
+  networks = ["9301"]`), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)Unknown plan.*G1S1,\s+G2S4`)},
+			{Config: cfg(`  plan = "G1S1"
+  networks = ["9301"]
+  security_groups = ["nope"]`), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)Unknown security group.*default,\s+web`)},
+			{Config: cfg(`  plan = "G1S1"
+  networks = ["9301"]
+  environment = "Prod"`), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)Unknown environment.*Production`)},
+			{Config: strings.Replace(cfg(`  plan = "G1S1"
+  networks = ["9301"]`), "MTN Ubuntu Server 24.04.3LTS", "MTN-WINSVR2025", 1), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`(?s)Root volume too small for Windows.*at least 40 GB`)},
+			{Config: cfg(`  plan = "G1S1"
+  networks = ["9301"]
+  root_volume_size = 20`)},
+			{Config: cfg(`  plan = "G1S1"
+  networks = ["9301"]
+  root_volume_size = 40`), ExpectError: regexp.MustCompile(`Root volume can't be resized`)},
+			{
+				// The name is taken in the project: refused, never adopted.
+				Config: cfg(`  plan = "G1S1"
+  networks = ["9301"]
+  root_volume_size = 20`) + `
+resource "mtncloud_instance" "twin" {
+  group    = "MTNNG_CLOUD_AZ_1"
+  project  = "web-prod"
+  image    = "MTN-U24.04LTS"
+  name     = mtncloud_instance.app.name
+  plan     = "G1S1"
+  networks = ["9301"]
+}
+`,
+				ExpectError: regexp.MustCompile(`Instance already exists`),
+			},
+			{Config: f.providerConfig()},
+		},
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.creates != 1 {
+		t.Errorf("%d creates, want 1", s.creates)
+	}
+}
+
+func TestInstance_Failures(t *testing.T) {
+	f, s := newInstFakes(t)
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	named := instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]`)
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				// Failed: the platform's reason is shown, and the instance is kept to be replaced.
+				PreConfig:   lock(func() { s.fail = "failed" }),
+				Config:      named,
+				ExpectError: regexp.MustCompile(`(?s)Instance create failed.*"failed": No valid host was found`),
+			},
+			{
+				PreConfig: lock(func() {
+					for _, in := range s.insts {
+						in["status"] = "failed" // stays failed
+					}
+				}),
+				Config:           named,
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionDestroyBeforeCreate),
+			},
+			{Config: f.providerConfig()},
+			{
+				// A lost reply: the instance is found by name and kept, not created twice.
+				PreConfig: lock(func() { s.lostReplies = 1 }),
+				Config:    named,
+			},
+			{
+				PreConfig: lock(func() {
+					if len(s.insts) != 1 {
+						t.Errorf("%d instances after a lost reply, want 1", len(s.insts))
+					}
+					for _, in := range s.insts {
+						in["status"] = "error" // failed after create, out of band
+					}
+				}),
+				Config:           named,
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionDestroyBeforeCreate),
+			},
+			{Config: f.providerConfig()},
+			{
+				// Stuck: the create timeout ends the wait, and the instance is kept in state.
+				PreConfig: lock(func() { s.stuck = true }),
+				Config: strings.Replace(named, `networks = ["9301"]`, `networks = ["9301"]
+  timeouts {
+    create = "2s"
+  }`, 1),
+				ExpectError: regexp.MustCompile(`(?s)Timed out waiting for the instance.*still "provisioning"`),
+			},
+			{PreConfig: lock(func() { s.stuck = false }), Config: f.providerConfig()},
+		},
+	})
+}
+
+func TestInstance_UpdateEdges(t *testing.T) {
+	f, s := newInstFakes(t)
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	small := instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]`)
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: small},
+			{
+				// Stopped in the console: no diff, and a resize that brings it back running applies cleanly.
+				PreConfig: lock(func() {
+					for _, in := range s.insts {
+						in["status"] = "stopped"
+					}
+				}),
+				Config:           small,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{
+				Config:           strings.Replace(small, `"G1S1"`, `"G2S4"`, 1),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("status"), knownvalue.StringExact("running")),
+				},
+			},
+			{
+				// A project known only at apply is assumed to be another one: replace, never an update.
+				Config: strings.Replace(strings.Replace(small, `"G1S1"`, `"G2S4"`, 1), `project  = "web-prod"`,
+					`project  = terraform_data.p.output`, 1) + `
+resource "terraform_data" "p" {
+  input = "web-prod"
+}
+`,
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionDestroyBeforeCreate),
+			},
+			{Config: f.providerConfig()},
+		},
+	})
+}

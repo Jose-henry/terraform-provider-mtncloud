@@ -1,0 +1,500 @@
+package client
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/url"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+// Instances (OpenStack VMs): POST/GET/PUT/DELETE /api/instances[/{id}], plus /resize and
+// /security-groups. Shapes come from a customer's reads and CLI dry runs (2026-10-27), MTN's
+// FastCreateLinuxInstance.sh and the API reference: see dev-docs/api-research.md. An instance
+// starts "provisioning" and ends "running", or "failed" / "error".
+
+// Instance is an OpenStack instance as the API returns it.
+type Instance struct {
+	ID            int64
+	Name          string
+	Description   string
+	HostName      string
+	Status        string
+	StatusMessage string // the platform's own words for a failure, when it gives some
+
+	GroupName   string
+	ProjectID   int64 // the resource pool, from config.resourcePoolId ("pool-<id>")
+	ImageCode   string
+	ImageName   string
+	PlanID      int64
+	PlanName    string
+	Environment string // the environment code, for example "production"; "" for none
+	Labels      []string
+	Tags        map[string]string
+	// EnvVars holds every variable the API lists, the platform's own included: those start with
+	// EnvPrefix, for example "MTN_UBUNTU_SERVER_24_04_3LTS_IP".
+	EnvVars         map[string]string
+	EnvPrefix       string
+	NetworkDomainID int64
+	NoAgent         bool
+	LayoutSize      int64
+
+	Volumes    []Volume    // root first, then data volumes in the API's order
+	Interfaces []Interface // primary first
+	PrivateIP  string
+	PublicIP   string
+}
+
+// Volume is a disk of an instance. DatastoreID is "auto" (the project default) or a datastore ID.
+type Volume struct {
+	ID          int64
+	Name        string
+	Size        int64 // GB
+	Root        bool
+	DatastoreID string
+}
+
+// Interface is a network card of an instance.
+type Interface struct {
+	ID        string // the API sends a number or "network-<id>"; kept as sent for resize
+	NetworkID int64
+}
+
+// InstanceInput is an instance to create. Empty strings and zero IDs are left out of the body, so
+// the platform's own defaults (naming template, hostname policy) apply.
+type InstanceInput struct {
+	Name, Description, HostName string
+	Placement                   Placement
+	ProjectID                   int64
+	ImageCode                   string
+	LayoutID, PlanID            int64
+	Environment                 string // code
+	Labels                      []string
+	Tags, EnvVars               map[string]string
+	NetworkDomainID             int64
+	SecurityGroupIDs            []int64
+	Volumes                     []VolumeSpec // root first
+	NetworkIDs                  []int64      // primary first
+	NoAgent, CreateUser         bool
+	LayoutSize                  int64
+}
+
+// VolumeSpec is a disk to create (ID 0) or to keep (its ID) in a create or resize.
+type VolumeSpec struct {
+	ID          int64
+	Root        bool
+	Name        string
+	Size        int64
+	DatastoreID string // "auto" or a datastore ID
+}
+
+// ResizeInput is a reconfigure: the plan, and the full lists of volumes and network cards, kept ones
+// with their IDs and new ones without.
+type ResizeInput struct {
+	PlanID     int64
+	Volumes    []VolumeSpec
+	Interfaces []Interface // ID "" for a new card
+}
+
+// InstanceUpdate holds what PUT /api/instances/{id} changes in place.
+type InstanceUpdate struct {
+	Name, Description, Environment string
+	Labels                         []string
+	Tags                           map[string]string
+}
+
+type wireInstance struct {
+	ID                int64    `json:"id"`
+	Name              string   `json:"name"`
+	Description       *string  `json:"description"`
+	HostName          *string  `json:"hostName"`
+	Status            string   `json:"status"`
+	StatusMessage     *string  `json:"statusMessage"`
+	ErrorMessage      *string  `json:"errorMessage"`
+	InstanceContext   *string  `json:"instanceContext"`
+	EnvironmentPrefix string   `json:"environmentPrefix"`
+	Group             *wireRef `json:"group"`
+	InstanceType      *struct {
+		Code string `json:"code"`
+		Name string `json:"name"`
+	} `json:"instanceType"`
+	Plan          *wireRef  `json:"plan"`
+	NetworkDomain *wireRef  `json:"networkDomain"`
+	Labels        []string  `json:"labels"`
+	Tags          []wireTag `json:"tags"`
+	Evars         []struct {
+		Name  string `json:"name"`
+		Value any    `json:"value"`
+	} `json:"evars"`
+	Config struct {
+		ResourcePoolID any   `json:"resourcePoolId"`
+		NoAgent        *bool `json:"noAgent"`
+		LayoutSize     any   `json:"layoutSize"`
+	} `json:"config"`
+	Volumes []struct {
+		ID          int64  `json:"id"`
+		Name        string `json:"name"`
+		Size        int64  `json:"size"`
+		RootVolume  bool   `json:"rootVolume"`
+		DatastoreID any    `json:"datastoreId"`
+	} `json:"volumes"`
+	Interfaces []struct {
+		ID      any      `json:"id"`
+		Network *wireRef `json:"network"`
+		Primary *bool    `json:"primaryInterface"`
+	} `json:"interfaces"`
+	ConnectionInfo []struct {
+		IP string `json:"ip"`
+	} `json:"connectionInfo"`
+}
+
+type wireTag struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+func (w wireInstance) instance() *Instance {
+	in := &Instance{
+		ID: w.ID, Name: w.Name, Description: deref(w.Description), HostName: deref(w.HostName),
+		Status: w.Status, Environment: deref(w.InstanceContext), Labels: w.Labels, EnvPrefix: w.EnvironmentPrefix,
+		Tags: map[string]string{}, EnvVars: map[string]string{},
+	}
+	if in.StatusMessage = deref(w.StatusMessage); in.StatusMessage == "" {
+		in.StatusMessage = deref(w.ErrorMessage)
+	}
+	if w.Group != nil {
+		in.GroupName = w.Group.Name
+	}
+	if w.InstanceType != nil {
+		in.ImageCode, in.ImageName = w.InstanceType.Code, w.InstanceType.Name
+	}
+	if w.Plan != nil {
+		in.PlanID, in.PlanName = w.Plan.ID, w.Plan.Name
+	}
+	if w.NetworkDomain != nil {
+		in.NetworkDomainID = w.NetworkDomain.ID
+	}
+	for _, t := range w.Tags {
+		in.Tags[t.Name] = t.Value
+	}
+	for _, e := range w.Evars {
+		in.EnvVars[e.Name] = fmt.Sprint(e.Value)
+	}
+	in.ProjectID = idFrom(w.Config.ResourcePoolID, "pool-")
+	in.NoAgent = w.Config.NoAgent != nil && *w.Config.NoAgent
+	if in.LayoutSize = idFrom(w.Config.LayoutSize, ""); in.LayoutSize == 0 {
+		in.LayoutSize = 1
+	}
+	for _, v := range w.Volumes {
+		ds := "auto"
+		if v.DatastoreID != nil {
+			ds = idString(v.DatastoreID)
+		}
+		vol := Volume{ID: v.ID, Name: v.Name, Size: v.Size, Root: v.RootVolume, DatastoreID: ds}
+		if vol.Root {
+			in.Volumes = slices.Insert(in.Volumes, 0, vol)
+		} else {
+			in.Volumes = append(in.Volumes, vol)
+		}
+	}
+	for _, i := range w.Interfaces {
+		if i.Network == nil {
+			continue
+		}
+		nic := Interface{ID: idString(i.ID), NetworkID: i.Network.ID}
+		if i.Primary != nil && *i.Primary {
+			in.Interfaces = slices.Insert(in.Interfaces, 0, nic)
+		} else {
+			in.Interfaces = append(in.Interfaces, nic)
+		}
+	}
+	// The instance doesn't carry its addresses and customers can't read /api/servers (403), but
+	// the platform always sets <PREFIX>_IP to the private address (captured 2026-10-27).
+	if w.EnvironmentPrefix != "" {
+		in.PrivateIP = in.EnvVars[w.EnvironmentPrefix+"_IP"]
+	}
+	for _, ci := range w.ConnectionInfo {
+		if ci.IP != "" && ci.IP != in.PrivateIP {
+			in.PublicIP = ci.IP // a floating IP
+			break
+		}
+	}
+	return in
+}
+
+// idFrom reads an ID the API sends as a number, a numeric string or "<prefix><id>".
+// idString is an ID the API sends as a number or a string ("5742", "network-501"), as text.
+func idString(v any) string {
+	switch x := v.(type) {
+	case float64:
+		return strconv.FormatInt(int64(x), 10)
+	case string:
+		return x
+	}
+	return ""
+}
+
+func idFrom(v any, prefix string) int64 {
+	switch x := v.(type) {
+	case float64:
+		return int64(x)
+	case string:
+		n, _ := strconv.ParseInt(strings.TrimPrefix(x, prefix), 10, 64)
+		return n
+	}
+	return 0
+}
+
+// IsPlatformEnvVar reports a variable the platform sets on every instance (its address, host and
+// ports, all named "<EnvPrefix>_..."), as opposed to one a user added.
+func (in *Instance) IsPlatformEnvVar(name string) bool {
+	return in.EnvPrefix != "" && strings.HasPrefix(name, in.EnvPrefix+"_")
+}
+
+// InstanceFailed reports an instance the platform marks as broken.
+func InstanceFailed(status string) bool {
+	switch strings.ToLower(status) {
+	case "failed", "error":
+		return true
+	}
+	return false
+}
+
+// instanceSettled reports a status that a create or reconfigure ends in. Anything else
+// ("provisioning", "pending", "resizing", "restarting", ...) is still in progress.
+func instanceSettled(status string) bool {
+	switch strings.ToLower(status) {
+	case "running", "stopped", "suspended", "warning":
+		return true
+	}
+	return InstanceFailed(status)
+}
+
+func volumesBody(vs []VolumeSpec) []map[string]any {
+	out := make([]map[string]any, 0, len(vs))
+	for _, v := range vs {
+		id := v.ID
+		if id == 0 {
+			id = -1
+		}
+		ds := v.DatastoreID
+		if ds == "" {
+			ds = "auto"
+		}
+		m := map[string]any{"id": id, "rootVolume": v.Root, "size": v.Size, "storageType": 11, "datastoreId": ds}
+		if v.Name != "" {
+			m["name"] = v.Name
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+func kvList(m map[string]string) []map[string]string {
+	keys := slices.Sorted(func(yield func(string) bool) {
+		for k := range m {
+			if !yield(k) {
+				return
+			}
+		}
+	})
+	out := make([]map[string]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, map[string]string{"name": k, "value": m[k]})
+	}
+	return out
+}
+
+// CreateInstance provisions an instance and returns its ID. It is still provisioning:
+// WaitForInstance.
+func (c *Client) CreateInstance(ctx context.Context, in InstanceInput) (int64, error) {
+	if in.ProjectID == 0 || in.LayoutID == 0 || in.PlanID == 0 || len(in.NetworkIDs) == 0 {
+		return 0, fmt.Errorf("an instance needs a project, an image, a plan and a network")
+	}
+	inst := map[string]any{
+		"site":         map[string]any{"id": in.Placement.GroupID},
+		"type":         in.ImageCode,
+		"instanceType": map[string]any{"code": in.ImageCode},
+		"layout":       map[string]any{"id": in.LayoutID},
+		"plan":         map[string]any{"id": in.PlanID},
+	}
+	for k, v := range map[string]string{"name": in.Name, "description": in.Description, "hostName": in.HostName, "instanceContext": in.Environment} {
+		if v != "" {
+			inst[k] = v
+		}
+	}
+	if len(in.Labels) > 0 {
+		inst["labels"] = in.Labels
+	}
+	if in.NetworkDomainID != 0 {
+		inst["networkDomain"] = map[string]any{"id": in.NetworkDomainID}
+	}
+	nics := make([]map[string]any, len(in.NetworkIDs))
+	for i, id := range in.NetworkIDs {
+		// No ipMode: the network's own DHCP setting applies (FastCreateLinuxInstance.sh).
+		nics[i] = map[string]any{"primaryInterface": i == 0, "network": map[string]any{"id": "network-" + itoa(id)}}
+	}
+	sgs := make([]map[string]any, len(in.SecurityGroupIDs))
+	for i, id := range in.SecurityGroupIDs {
+		sgs[i] = map[string]any{"id": id}
+	}
+	layoutSize := in.LayoutSize
+	if layoutSize == 0 {
+		layoutSize = 1
+	}
+	body := map[string]any{
+		"zoneId":   in.Placement.CloudID,
+		"instance": inst,
+		"config": map[string]any{
+			"resourcePoolId": "pool-" + itoa(in.ProjectID),
+			"createUser":     in.CreateUser,
+			"noAgent":        in.NoAgent,
+		},
+		"volumes":           volumesBody(in.Volumes),
+		"networkInterfaces": nics,
+		"securityGroups":    sgs,
+		"layoutSize":        layoutSize,
+		"copies":            1,
+	}
+	if len(in.Tags) > 0 {
+		body["tags"] = kvList(in.Tags)
+	}
+	if len(in.EnvVars) > 0 {
+		body["evars"] = kvList(in.EnvVars)
+	}
+	var resp struct {
+		Instance struct {
+			ID int64 `json:"id"`
+		} `json:"instance"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/api/instances", nil, body, &resp); err != nil {
+		return 0, err
+	}
+	if resp.Instance.ID == 0 {
+		return 0, fmt.Errorf("MTN Cloud API POST /api/instances: the answer has no instance ID")
+	}
+	return resp.Instance.ID, nil
+}
+
+// GetInstance reads an instance. A missing instance is an APIError with IsNotFound.
+func (c *Client) GetInstance(ctx context.Context, id int64) (*Instance, error) {
+	var resp struct {
+		Instance wireInstance `json:"instance"`
+	}
+	if err := c.get(ctx, "/api/instances/"+itoa(id), nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Instance.instance(), nil
+}
+
+// FindInstances returns the instances with exactly this name in a project.
+func (c *Client) FindInstances(ctx context.Context, name string, projectID int64) ([]*Instance, error) {
+	items, err := listAll[wireInstance](ctx, c, "/api/instances", "instances", url.Values{"name": {name}})
+	if err != nil {
+		return nil, err
+	}
+	var out []*Instance
+	for _, w := range items {
+		if in := w.instance(); in.Name == name && in.ProjectID == projectID {
+			out = append(out, in)
+		}
+	}
+	return out, nil
+}
+
+// UpdateInstance changes the name, description, environment, labels and tags in place. Tags are
+// sent as the full list.
+func (c *Client) UpdateInstance(ctx context.Context, id int64, u InstanceUpdate) error {
+	inst := map[string]any{
+		"description":     u.Description,
+		"instanceContext": u.Environment,
+		"labels":          append([]string{}, u.Labels...),
+		"tags":            kvList(u.Tags),
+	}
+	if u.Name != "" {
+		inst["name"] = u.Name
+	}
+	return c.do(ctx, http.MethodPut, "/api/instances/"+itoa(id), nil, map[string]any{"instance": inst}, nil)
+}
+
+// ResizeInstance reconfigures an instance: a new plan restarts the VM; new volumes and network
+// cards are attached. Kept volumes and cards are sent with their IDs, so nothing is removed.
+func (c *Client) ResizeInstance(ctx context.Context, id int64, r ResizeInput) error {
+	nics := make([]map[string]any, len(r.Interfaces))
+	for i, n := range r.Interfaces {
+		nics[i] = map[string]any{"network": map[string]any{"id": "network-" + itoa(n.NetworkID)}}
+		if n.ID != "" {
+			nics[i]["id"] = n.ID
+		}
+	}
+	body := map[string]any{
+		"instance":              map[string]any{"id": id, "plan": map[string]any{"id": r.PlanID}},
+		"volumes":               volumesBody(r.Volumes),
+		"networkInterfaces":     nics,
+		"deleteOriginalVolumes": false,
+	}
+	return c.do(ctx, http.MethodPut, "/api/instances/"+itoa(id)+"/resize", nil, body, nil)
+}
+
+// InstanceSecurityGroups lists the security groups applied to an instance.
+func (c *Client) InstanceSecurityGroups(ctx context.Context, id int64) ([]Option, error) {
+	var resp struct {
+		SecurityGroups []*wireRef `json:"securityGroups"`
+	}
+	if err := c.get(ctx, "/api/instances/"+itoa(id)+"/security-groups", nil, &resp); err != nil {
+		return nil, err
+	}
+	out := make([]Option, 0, len(resp.SecurityGroups))
+	for _, g := range resp.SecurityGroups {
+		if g != nil {
+			out = append(out, Option{ID: g.ID, Name: g.Name})
+		}
+	}
+	return out, nil
+}
+
+// SetInstanceSecurityGroups replaces the security groups applied to an instance.
+func (c *Client) SetInstanceSecurityGroups(ctx context.Context, id int64, groupIDs []int64) error {
+	ids := append([]int64{}, groupIDs...)
+	slices.Sort(ids)
+	return c.do(ctx, http.MethodPost, "/api/instances/"+itoa(id)+"/security-groups", nil, map[string]any{"securityGroupIds": ids}, nil)
+}
+
+// DeleteInstance deletes an instance. One that is already gone counts as deleted.
+func (c *Client) DeleteInstance(ctx context.Context, id int64) error {
+	return ignoreNotFound(c.do(ctx, http.MethodDelete, "/api/instances/"+itoa(id), nil, nil, nil))
+}
+
+// WaitForInstance polls an instance until its status settles (running, or failed / error) and
+// returns it. A 404 just after the create is retried (rule 13). A failed instance is returned with
+// no error: the caller reports the status and keeps the instance in state.
+func (c *Client) WaitForInstance(ctx context.Context, id int64) (*Instance, error) {
+	return poll(ctx, c, func(ctx context.Context) (*Instance, error) { return c.GetInstance(ctx, id) },
+		func(in *Instance, err error) (bool, error) {
+			switch {
+			case IsNotFound(err):
+				return false, nil
+			case err != nil:
+				return false, err
+			}
+			return instanceSettled(in.Status), nil
+		})
+}
+
+// WaitForInstanceGone polls until a deleted instance reads as 404. Under a delayed-delete policy
+// the platform keeps it as "pendingRemoval" instead: it is gone for the customer, so that counts.
+func (c *Client) WaitForInstanceGone(ctx context.Context, id int64) error {
+	_, err := poll(ctx, c, func(ctx context.Context) (*Instance, error) { return c.GetInstance(ctx, id) },
+		func(in *Instance, err error) (bool, error) {
+			if IsNotFound(err) {
+				return true, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			return strings.EqualFold(in.Status, "pendingRemoval"), nil
+		})
+	return err
+}

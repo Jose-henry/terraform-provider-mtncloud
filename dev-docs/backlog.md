@@ -18,7 +18,8 @@
 3. `mtncloud_security_group` (+ rule)
 4. `mtncloud_network` (MTN Network)
 5. `mtncloud_router` (MTN Router)
-6. `mtncloud_instance` (OpenStack), with an optional floating IP
+6. ~~`mtncloud_instance` (OpenStack)~~ core slice done; floating IP, availability zone, workflow,
+   lifecycle, scaling and deployments still to come
 7. `mtncloud_project`
 8. `mtncloud_catalog_order`
 9. `mtncloud_object_storage` (MOS)
@@ -114,3 +115,19 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
   GET carries a status message to show with them.
 - `external_network` written in another case than MTN Cloud's (or a full project name) gives one
   no-op update after an import.
+
+## B-013 Instance behaviour still to prove live
+- With a fixed instance-name policy, is a `name` sent in the create body ignored, refused, or kept?
+  Same question for `hostName` under a fixed hostname policy.
+- Does `PUT /api/instances/{id}/resize` accept existing volumes and interfaces as sent (IDs, sizes),
+  and does the GET show added ones once the status is back to "running"?
+- Does `PUT /api/instances/{id}` with an empty `labels` or `tags` list clear them?
+- Delete: does the instance go straight to `pendingRemoval` or 404, or does a delete policy (delayed
+  delete) keep it longer than the 30 minute timeout?
+- Floating IP: the pool list (option source `openstackFloatingIpOptions` answers 500) and the call
+  that attaches one after create. Availability zone list (`openstackAvailabilityZone`, also 500).
+  Both need the console's own request from the browser Network tab.
+- Does an instance created without `domain` get its network's domain? (`domain` is Optional+Computed
+  in case it does.) Are user `evars` read back unmasked, or masked so `env_vars` would diff?
+- Status words besides `provisioning`, `running`, `failed`, `error`, and where the reason lives
+  (`statusMessage` or `errorMessage`).

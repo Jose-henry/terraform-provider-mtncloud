@@ -20,9 +20,14 @@ func (c *Client) ProjectByName(ctx context.Context, name string) (Option, error)
 	if err != nil {
 		return Option{}, err
 	}
+	return matchProject(projects, name, who.AccountName)
+}
+
+// matchProject picks the project a customer means by name, with an error listing the valid ones.
+func matchProject(projects []Option, name, tenant string) (Option, error) {
 	var found []Option
 	for _, p := range projects {
-		if normalize.ProjectMatches(name, p.Name, who.AccountName) {
+		if normalize.ProjectMatches(name, p.Name, tenant) {
 			found = append(found, p)
 		}
 	}
@@ -32,7 +37,7 @@ func (c *Client) ProjectByName(ctx context.Context, name string) (Option, error)
 	case 0:
 		names := make([]string, len(projects))
 		for i, p := range projects {
-			names[i] = normalize.ProjectShortName(p.Name, who.AccountName)
+			names[i] = normalize.ProjectShortName(p.Name, tenant)
 		}
 		return Option{}, fmt.Errorf("no project named %q. Your projects: %s", name, list(names))
 	}
@@ -79,6 +84,145 @@ func (c *Client) ImageByCode(ctx context.Context, code string) (InstanceType, er
 		}
 	}
 	return InstanceType{}, fmt.Errorf("no image with code %q. Available images: %s", code, list(images))
+}
+
+// ImageByName finds an OS image by its name ("MTN Ubuntu Server 24.04.3LTS", case ignored) or its
+// code ("MTN-U24.04LTS"). Only images with an OpenStack layout can be provisioned.
+func (c *Client) ImageByName(ctx context.Context, name string) (InstanceType, error) {
+	types, err := c.InstanceTypes(ctx)
+	if err != nil {
+		return InstanceType{}, err
+	}
+	var images []string
+	for _, t := range types {
+		if t.Code == name || strings.EqualFold(t.Name, name) {
+			if t.LayoutID == 0 {
+				return InstanceType{}, fmt.Errorf("image %q has no OpenStack layout, so it can't be provisioned on MTN Cloud", name)
+			}
+			return t, nil
+		}
+		if t.Category == "os" {
+			images = append(images, t.Name)
+		}
+	}
+	return InstanceType{}, fmt.Errorf("no image named %q. Available images: %s", name, list(images))
+}
+
+// PlanByName finds a size, for example "G2S4", among the ones a project offers for a layout.
+func (c *Client) PlanByName(ctx context.Context, p *Placement, projectID, layoutID int64, name string) (Plan, error) {
+	plans, err := c.PlansAt(ctx, p, projectID, layoutID)
+	if err != nil {
+		return Plan{}, err
+	}
+	names := make([]string, len(plans))
+	for i, pl := range plans {
+		if strings.EqualFold(pl.Name, name) {
+			return pl, nil
+		}
+		names[i] = pl.Name
+	}
+	return Plan{}, fmt.Errorf("no plan named %q for this image in this project. Available plans: %s", name, list(names))
+}
+
+// ProjectByNameAt is ProjectByName for one placement's cloud.
+func (c *Client) ProjectByNameAt(ctx context.Context, p *Placement, name string) (Option, error) {
+	who, err := c.WhoAmI(ctx)
+	if err != nil {
+		return Option{}, err
+	}
+	projects, err := c.ProjectsAt(ctx, p)
+	if err != nil {
+		return Option{}, err
+	}
+	return matchProject(projects, name, who.AccountName)
+}
+
+// SecurityGroupByName finds a security group placed in the project, by name (case ignored).
+func (c *Client) SecurityGroupByName(ctx context.Context, p *Placement, projectID int64, name string) (Option, error) {
+	groups, err := c.SecurityGroupsAt(ctx, p, projectID)
+	if err != nil {
+		return Option{}, err
+	}
+	names := make([]string, len(groups))
+	for i, g := range groups {
+		if strings.EqualFold(g.Name, name) {
+			return g, nil
+		}
+		names[i] = g.Name
+	}
+	return Option{}, fmt.Errorf("no security group named %q in this project (a group needs the project as a location). "+
+		"Available: %s", name, list(names))
+}
+
+// DefaultSecurityGroup is the project's synced OpenStack default group, named "default" or
+// "<Tenant>-Default-SG" (dev-docs/api-research.md P3). ok is false while the project has none yet.
+func (c *Client) DefaultSecurityGroup(ctx context.Context, p *Placement, projectID int64) (Option, bool, error) {
+	groups, err := c.SecurityGroupsAt(ctx, p, projectID)
+	if err != nil {
+		return Option{}, false, err
+	}
+	for _, g := range groups {
+		if IsDefaultSecurityGroup(g.Name) {
+			return g, true, nil
+		}
+	}
+	return Option{}, false, nil
+}
+
+// IsDefaultSecurityGroup reports the name of a project's synced default group.
+func IsDefaultSecurityGroup(name string) bool {
+	n := strings.ToLower(name)
+	return n == "default" || strings.HasSuffix(n, "-default-sg")
+}
+
+// DatastoreByName finds a project's datastore, for example "__DEFAULT__" or "ENCR_AT_REST".
+func (c *Client) DatastoreByName(ctx context.Context, p *Placement, projectID int64, name string) (Option, error) {
+	stores, err := c.DatastoresAt(ctx, p, projectID)
+	if err != nil {
+		return Option{}, err
+	}
+	names := make([]string, len(stores))
+	for i, s := range stores {
+		if strings.EqualFold(s.Name, name) {
+			return s, nil
+		}
+		names[i] = s.Name
+	}
+	return Option{}, fmt.Errorf("no datastore named %q in this project. Available: %s", name, list(names))
+}
+
+// EnvironmentByName finds an environment by its name ("Production") or code ("production"), case
+// ignored.
+func (c *Client) EnvironmentByName(ctx context.Context, name string) (NamedValue, error) {
+	envs, err := c.Environments(ctx)
+	if err != nil {
+		return NamedValue{}, err
+	}
+	names := make([]string, len(envs))
+	for i, e := range envs {
+		if strings.EqualFold(e.Name, name) || strings.EqualFold(e.Value, name) {
+			return e, nil
+		}
+		names[i] = e.Name
+	}
+	return NamedValue{}, fmt.Errorf("no environment named %q. Available: %s", name, list(names))
+}
+
+// NetworkDomainByName finds a network domain by name, case and a trailing dot ignored.
+func (c *Client) NetworkDomainByName(ctx context.Context, name string) (NetworkDomain, error) {
+	domains, err := c.NetworkDomains(ctx)
+	if err != nil {
+		return NetworkDomain{}, err
+	}
+	want := strings.TrimSuffix(name, ".")
+	names := make([]string, len(domains))
+	for i, d := range domains {
+		if strings.EqualFold(strings.TrimSuffix(d.Name, "."), want) {
+			return d, nil
+		}
+		names[i] = d.Name
+	}
+	return NetworkDomain{}, fmt.Errorf("no network domain named %q. Available: %s", name, list(names))
 }
 
 func list(names []string) string {

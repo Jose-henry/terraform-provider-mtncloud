@@ -1,0 +1,1 @@
+{"networkDomains":[{"id":16,"name":"example.com","fqdn":"example.com.","active":true},{"id":17,"name":"corp.example.org","fqdn":"corp.example.org.","active":true}],"meta":{"offset":0,"max":200,"size":2,"total":2}}

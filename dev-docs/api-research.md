@@ -268,8 +268,43 @@ done. Fixtures: `internal/client/testdata/security_groups/` (scrubbed copies of 
   block on the instance, plus a standalone `mtncloud_floating_ip` for IPs that outlive the VM.
 - MTN constraints (from Drive docs): changing the plan restarts the VM; the root disk can't grow;
   the primary NIC is immutable (`RequiresReplace`).
-- **Needs payload P4** (the MTN "Create Instance" request the UI sends, to see the OpenStack
-  `config` keys MTN actually uses, such as availability zone and key pair).
+- ~~Needs payload P4~~ Captured 2026-10-27 (sub-tenant, reads and a `-d` dry run only):
+  - CLI create body: `{zoneId, instance {name, site {id: group}, type, instanceType {code},
+    layout {id}, plan {id}}, config {createUser: true, ...}, volumes [{id: -1, rootVolume: true,
+    name: "root", size, storageType: 11, datastoreId: "auto"}], networkInterfaces [{network {id:
+    "network-<id>"}, ipMode: "dhcp"}], layoutSize: 1}`.
+  - Instances made in the console keep in `config`: `resourcePoolId: "pool-<id>"`,
+    `securityGroups: [{id}, ...]` (or one `securityGroup`), `availabilityZone`,
+    `osExternalNetworkId: "pool-<id>"` (floating IP at create), `serverGroup`, `noAgent`. So these
+    belong in `config`, not at the top level where the CLI puts `-O` values.
+  - OpenStack provision type (33) options: `availabilityZone` (source `openstackAvailabilityZone`),
+    `securityGroup` (`openstackSecurityGroupById`), `serverGroup` (`openstackServerGroup`),
+    `noAgent`, `osExternalNetworkId` (`openstackFloatingIpOptions`). The two option sources answer
+    500 to `zoneId/siteId/resourcePoolId` queries: their parameters are still unknown.
+  - GET instance: `status`, `statusMessage`, `errorMessage`, `interfaces[] {network {id, name}}`,
+    `volumes[] {id, name, size, rootVolume, storageType, datastoreId, resizeable}`,
+    `connectionInfo[] {ip, port, name}` (the public IP when one is attached), `plan {id, code,
+    name}`, `layout`, `instanceType {id, code, name}`, `hostName`, `containers[]`, `servers[]`.
+  - Statuses (owner, 2026-10-27): instances and apps go through `provisioning`, and end in
+    `running`, or in `failed` / `error`.
+- More create keys (CLI dry run 2026-10-27, upstream provider, Context7):
+  `instance.{hostName, instanceContext (environment code), labels[], expireDays, shutdownDays,
+  networkDomain {id}}`, top level `tags [{name, value}]`, `evars [{name, value}]`, `copies`,
+  `layoutSize` (scale factor), `createBackup`, `taskSetId` (provisioning workflow),
+  `config.noAgent`. After create: `PUT /api/instances/{id}` (name, description, instanceContext,
+  labels, tags), `PUT .../resize` (plan, volumes, networkInterfaces), `POST .../security-groups
+  {securityGroupIds}`, `PUT .../threshold {instanceThreshold}`, `POST .../deploys {appDeploy}`.
+- Naming (platform docs via NotebookLM): instance-name and hostname policies are separate, either
+  "user configurable" or "fixed"; with no name sent, the policy pattern names the instance.
+  Customers get 403 on `/api/policies`, so the provider can't read the pattern beforehand.
+- Floating IP rules (owner, 2026-10-27): only possible when the instance's network is attached to
+  a router with an external network; it can be attached after provisioning. Customers get 403
+  on `/api/networks/floating-ips`, so the attach call a customer can make is still unknown.
+- MTN docs read: "VM Provisioning Workflow" (default security group at create, more groups after;
+  fault domain = availability zone; Windows root at least 40 GB; agent install needs a router),
+  "Reconfiguring Instances" (plan change restarts the VM; root disk can't grow; primary NIC can't
+  change; data volumes and extra NICs can be added), "Instance Access & Security" (user and
+  password live in User Settings, not on the instance).
 
 ## Captured payloads (2026-10-26, master login, CLI 9.0.0)
 

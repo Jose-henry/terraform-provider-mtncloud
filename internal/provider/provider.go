@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
+	"github.com/mtn/terraform-provider-mtncloud/internal/services/compute"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/lookup"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/network"
 )
@@ -161,7 +162,7 @@ func stringOrEnv(v types.String, env string) string {
 }
 
 func (p *mtncloudProvider) Resources(context.Context) []func() resource.Resource {
-	return network.Resources()
+	return append(network.Resources(), compute.Resources()...)
 }
 
 func (p *mtncloudProvider) DataSources(context.Context) []func() datasource.DataSource {

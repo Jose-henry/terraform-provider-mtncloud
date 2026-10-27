@@ -95,10 +95,16 @@ Last updated 2026-10-26 (PR #3, client and lookup data sources). Update this fil
   in-place network and gateway changes, waits for "ok" with `timeouts {}`. First async resource:
   the client's `poll` is shared by everything that waits (instances, projects, catalog orders).
 
+- `mtncloud_instance` (on `main`, core slice): group, project, image, plan, networks, security
+  groups and datastores by name, resolved at plan time; optional name (the tenant's naming template
+  names it otherwise); data volumes and networks appended in place; plan change in place (restarts);
+  root resize and Windows under 40 GB refused at plan time; default SG always applied; waits for
+  "running" and reports "failed"/"error" with the platform's reason. Not proven live yet (B-013).
+
 ## Next (in order, each one a PR with tests, after the owner approves its plan)
 
-1. **`mtncloud_instance`** (OpenStack, OS images only, several security groups). The floating IP
-   endpoint for customers is unknown (403 on `/api/networks/floating-ips`).
+1. Instance slice 2: workflow (`taskSetId`), lifecycle days, scale thresholds, deployments. Slice 3,
+   after a console capture: floating IP (pool list and attach call), availability zone.
 2. `mtncloud_project` → `mtncloud_catalog_order` → `mtncloud_object_storage` (MOS) → app, SSL
    certificate. Load balancer on hold (D-013).
 3. `internal/tenancy` (master gating, D-004) once Q1 is answered.

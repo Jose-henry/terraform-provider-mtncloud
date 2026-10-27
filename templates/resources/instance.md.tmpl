@@ -1,0 +1,66 @@
+---
+page_title: "mtncloud_instance Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_instance
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_instance/resource.tf"}}
+
+Several identical instances: use `count` or `for_each`, and leave `name` out so the naming template
+numbers them, or set it from the key.
+
+```terraform
+resource "mtncloud_instance" "worker" {
+  for_each = toset(["a", "b", "c"])
+
+  name     = "worker-${each.key}"
+  group    = "MTNNG_CLOUD_AZ_1"
+  project  = "web-prod"
+  image    = "MTN-U24.04LTS"
+  plan     = "G1S1"
+  networks = [mtncloud_network.app.id]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_instance/import.sh" }}
+
+Write the project's short name (`web-prod`) and the image as the console shows it, and the first
+plan after import is empty. `create_user` can't be read back and is taken as `true`.
+
+## Notes
+
+- **Waits until running.** A new instance is "provisioning" for a few minutes; create and update
+  wait until MTN Cloud reports it running (default timeout 30 minutes, see `timeouts`). An instance
+  that ends "failed" or "error" (then or later) is reported with MTN Cloud's reason, kept in state,
+  and replaced by the next apply.
+- **Restarts the VM:** changing `plan`. `status` and `public_ip` are read again after any update.
+- **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`,
+  `plan`, networks added at the end of `networks`, and volumes added at the end of `data_volume`.
+- **Replaces the instance:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`,
+  `env_vars`, `install_agent`, `create_user`, `scale_factor`, the primary (first) network, and
+  removing, reordering or changing existing networks or data volumes.
+- **Refused at plan time:** a new `root_volume_size` (MTN Cloud can't resize a root volume), a
+  Windows image with a root volume under 40 GB, and any name (plan, security group, datastore,
+  environment, domain) the project doesn't have; the error lists the valid ones.
+- **Default security group.** The project's default security group is always applied, as MTN
+  Cloud requires. It shows in `security_groups` only if you list it.
+- **Names.** With `name` set, an instance of that name already in the project is refused with its
+  ID, so you can import it instead. Left out, your tenant's naming template names the instance.
+- **Values known only at apply.** If `group`, `project` or `image` comes from a resource created in
+  the same apply, Terraform can't tell whether it changed, so the plan replaces the instance.
+- **`env_vars` are sensitive:** hidden in plan output, but stored in state like every attribute.
+- **Floating IPs** are not managed by this resource yet. A floating IP attached in the console shows
+  in `public_ip`.

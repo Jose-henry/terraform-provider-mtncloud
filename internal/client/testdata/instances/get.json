@@ -1,0 +1,47 @@
+{
+  "instance": {
+    "id": 9701,
+    "name": "app-1",
+    "description": "App server",
+    "hostName": "app-1",
+    "status": "running",
+    "statusMessage": null,
+    "errorMessage": null,
+    "instanceContext": "production",
+    "environmentPrefix": "MTN_UBUNTU_SERVER_24_04_3LTS",
+    "group": { "id": 9101, "name": "MTNNG_CLOUD_AZ_1" },
+    "cloud": { "id": 4, "name": "MTNNG_CLOUD_AZ_1" },
+    "instanceType": { "id": 89, "code": "MTN-U24.04LTS", "category": "os", "name": "MTN Ubuntu Server 24.04.3LTS" },
+    "layout": { "id": 309, "name": "MTN-Ubuntu Server 24.04.3LTS", "provisionTypeCode": "openstack" },
+    "plan": { "id": 9402, "code": "openstack.flavor.4.00000000000000000000000000009201.10069", "name": "G2S4" },
+    "networkDomain": { "id": 16, "name": "example.com" },
+    "labels": ["web"],
+    "tags": [{ "name": "team", "value": "payments" }],
+    "evars": [
+      { "name": "APP_ENV", "value": "prod", "export": true, "masked": false },
+      { "name": "MTN_UBUNTU_SERVER_24_04_3LTS_IP", "value": "10.20.1.15", "export": true, "masked": false },
+      { "name": "MTN_UBUNTU_SERVER_24_04_3LTS_HOST", "value": "container9801", "export": true, "masked": false },
+      { "name": "MTN_UBUNTU_SERVER_24_04_3LTS_PORT_SSH", "value": 22, "export": true, "masked": false }
+    ],
+    "config": {
+      "resourcePoolId": "pool-9201",
+      "createUser": true,
+      "noAgent": false,
+      "layoutSize": 1,
+      "availabilityZone": "",
+      "osExternalNetworkId": "pool-43",
+      "securityGroups": [{ "id": 9301 }, { "id": 9302 }]
+    },
+    "volumes": [
+      { "id": 9811, "name": "data-1", "size": 100, "rootVolume": false, "storageType": 11, "datastoreId": "2", "resizeable": true },
+      { "id": 9810, "name": "root", "size": 40, "rootVolume": true, "storageType": 11, "datastoreId": "auto", "resizeable": false }
+    ],
+    "interfaces": [
+      { "id": "9821", "row": 1, "network": { "id": 9302, "name": "db-net" }, "ipAddress": null, "primaryInterface": false },
+      { "id": "9820", "row": 0, "network": { "id": 9301, "name": "app-net" }, "ipAddress": null, "primaryInterface": true }
+    ],
+    "connectionInfo": [{ "ip": "203.0.113.20", "port": 22, "name": "SSH" }],
+    "containers": [9801],
+    "servers": [9831]
+  }
+}

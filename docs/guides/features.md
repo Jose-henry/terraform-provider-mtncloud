@@ -12,11 +12,11 @@ The provider targets MTN Cloud on OpenStack. The cloud (`MTNNG_CLOUD_AZ_1`) is f
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 116 | 70 |
-| Usable with a customer (sub-tenant) login | 80 | 53 |
+| Available today | 117 | 70 |
+| Usable with a customer (sub-tenant) login | 81 | 53 |
 | Master tenant only | 36 | 12 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 8 | 1 |
+| Coming next | 7 | 1 |
 
 ## Who can use what
 
@@ -215,6 +215,14 @@ Service plans and the prices attached to them. Master tenant only; customers pic
 | [`mtncloud_price_set`](../resources/price_set.md) | No: master tenant only |
 | [`mtncloud_service_plan`](../resources/service_plan.md) | No: master tenant only |
 
+### Compute
+
+Instances: OpenStack virtual machines from MTN's OS images.
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_instance`](../resources/instance.md) | Yes, built for customers |
+
 ### Networking
 
 MTN Networks and MTN Routers, security groups (instance firewalls) and their rules, IP pools (static IP ranges for a network) and DNS domains (instance hostnames and domain join).
@@ -385,8 +393,7 @@ Designed, **not available yet**, and all meant for customers. Until `mtncloud_in
 
 | Type | Status | What it does |
 |---|---|---|
-| `mtncloud_instance` | Next | OpenStack VM from an MTN OS image: plan by size name (for example `G2S4`), project, networks, several security groups, volumes on any Cinder datastore, optional floating IP. |
-| `mtncloud_floating_ip` | Planned | A public IP that can outlive an instance. |
+| `mtncloud_floating_ip` | Next | A public IP for an instance whose network is on an MTN Router with an external network, attached at create or later. |
 | `mtncloud_project` | Planned | Order a project (resource pool) by name and wait until it and its default security group have synced. |
 | `mtncloud_catalog_order` | Planned | Order any catalog service (Kubernetes, managed databases, VPN, firewall, NAT, BYOL appliances and more), with its inputs. |
 | `mtncloud_object_storage` | Planned | MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource. |

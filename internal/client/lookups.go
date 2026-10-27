@@ -160,7 +160,43 @@ func (c *Client) Projects(ctx context.Context) ([]Option, error) {
 	if err != nil {
 		return nil, err
 	}
+	return c.ProjectsAt(ctx, p)
+}
+
+// ProjectsAt lists the projects of one placement's cloud.
+func (c *Client) ProjectsAt(ctx context.Context, p *Placement) ([]Option, error) {
 	return c.options(ctx, "zonePools", url.Values{"zoneId": {itoa(p.CloudID)}})
+}
+
+// Groups lists the groups the caller can provision into, for example "MTNNG_CLOUD_AZ_1".
+func (c *Client) Groups(ctx context.Context) ([]Option, error) {
+	return c.options(ctx, "groups", nil)
+}
+
+// PlacementForGroup is the placement of a named group: the group and its one OpenStack cloud.
+// Case is ignored, as the console does.
+func (c *Client) PlacementForGroup(ctx context.Context, name string) (*Placement, error) {
+	groups, err := c.Groups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(groups))
+	for i, g := range groups {
+		names[i] = g.Name
+		if !strings.EqualFold(g.Name, name) {
+			continue
+		}
+		clouds, err := c.options(ctx, "clouds", url.Values{"groupId": {itoa(g.ID)}})
+		if err != nil {
+			return nil, err
+		}
+		cloud, err := exactlyOne("cloud", clouds)
+		if err != nil {
+			return nil, err
+		}
+		return &Placement{CloudID: cloud.ID, CloudName: cloud.Name, GroupID: g.ID, GroupName: g.Name}, nil
+	}
+	return nil, fmt.Errorf("no group named %q. Your groups: %s", name, list(names))
 }
 
 // SecurityGroups lists the security groups placed in a project (its synced "default" included).
@@ -169,6 +205,11 @@ func (c *Client) SecurityGroups(ctx context.Context, projectID int64) ([]Option,
 	if err != nil {
 		return nil, err
 	}
+	return c.SecurityGroupsAt(ctx, p, projectID)
+}
+
+// SecurityGroupsAt lists the security groups placed in a project of one placement's cloud.
+func (c *Client) SecurityGroupsAt(ctx context.Context, p *Placement, projectID int64) ([]Option, error) {
 	return c.options(ctx, "zoneSecurityGroup", url.Values{"zoneId": {itoa(p.CloudID)}, "poolId": {itoa(projectID)}})
 }
 
@@ -188,6 +229,11 @@ func (c *Client) Datastores(ctx context.Context, projectID int64) ([]Option, err
 	if err != nil {
 		return nil, err
 	}
+	return c.DatastoresAt(ctx, p, projectID)
+}
+
+// DatastoresAt lists a project's datastores for one placement.
+func (c *Client) DatastoresAt(ctx context.Context, p *Placement, projectID int64) ([]Option, error) {
 	return c.options(ctx, "datastores", url.Values{
 		"zoneId": {itoa(p.CloudID)}, "siteId": {itoa(p.GroupID)}, "resourcePoolId": {itoa(projectID)},
 	})
@@ -253,6 +299,11 @@ func (c *Client) Plans(ctx context.Context, projectID, layoutID int64) ([]Plan, 
 	if err != nil {
 		return nil, err
 	}
+	return c.PlansAt(ctx, p, projectID, layoutID)
+}
+
+// PlansAt lists the sizes a project offers for a layout, for one placement.
+func (c *Client) PlansAt(ctx context.Context, p *Placement, projectID, layoutID int64) ([]Plan, error) {
 	q := url.Values{"zoneId": {itoa(p.CloudID)}, "siteId": {itoa(p.GroupID)}, "layoutId": {itoa(layoutID)}, "resourcePoolId": {itoa(projectID)}}
 	return cached(ctx, &c.cache, "service-plans?"+q.Encode(), func(ctx context.Context) ([]Plan, error) {
 		var resp struct {
@@ -345,6 +396,58 @@ func listAll[T any](ctx context.Context, c *Client, path, key string, q url.Valu
 			return all, nil
 		}
 	}
+}
+
+// NamedValue is an option whose value is a code, not an ID, for example an environment.
+type NamedValue struct {
+	Name  string
+	Value string
+}
+
+// Environments lists the environments an instance can be tagged with, for example "Production"
+// (code "production").
+func (c *Client) Environments(ctx context.Context) ([]NamedValue, error) {
+	return cached(ctx, &c.cache, "options/environments", func(ctx context.Context) ([]NamedValue, error) {
+		var resp struct {
+			Data []struct {
+				Name  string `json:"name"`
+				Value any    `json:"value"`
+			} `json:"data"`
+		}
+		if err := c.get(ctx, "/api/options/environments", nil, &resp); err != nil {
+			return nil, err
+		}
+		out := make([]NamedValue, 0, len(resp.Data))
+		for _, d := range resp.Data {
+			out = append(out, NamedValue{Name: d.Name, Value: fmt.Sprint(d.Value)})
+		}
+		return out, nil
+	})
+}
+
+// NetworkDomain is a DNS domain instances can join, for example "example.com".
+type NetworkDomain struct {
+	ID   int64
+	Name string
+}
+
+// NetworkDomains lists the network domains visible to the caller.
+func (c *Client) NetworkDomains(ctx context.Context) ([]NetworkDomain, error) {
+	return cached(ctx, &c.cache, "network-domains", func(ctx context.Context) ([]NetworkDomain, error) {
+		type item struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		}
+		items, err := listAll[item](ctx, c, "/api/networks/domains", "networkDomains", nil)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]NetworkDomain, len(items))
+		for i, x := range items {
+			out[i] = NetworkDomain(x)
+		}
+		return out, nil
+	})
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }

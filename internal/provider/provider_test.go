@@ -30,6 +30,7 @@ type fakeAPI struct {
 	sg     http.Handler
 	net    http.Handler // /api/networks, a stateful fake (network_test.go), when set
 	router http.Handler // /api/networks/routers, a stateful fake (router_test.go), when set
+	inst   http.Handler // /api/instances, a stateful fake (instance_test.go), when set
 }
 
 func newFakeAPI(t *testing.T) *fakeAPI {
@@ -48,18 +49,25 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		"/api/catalog/types":                     "catalog_types.json",
 		"/api/instance-types":                    "instance_types.json",
 		"/api/network-router-types":              "router_types.json",
+		"/api/options/environments":              "options_environments.json",
+		"/api/networks/domains":                  "network_domains.json",
 	}
 	f := &fakeAPI{calls: map[string]int{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.calls[r.URL.Path]++
-		sg, net, router := f.sg, f.net, f.router
+		sg, net, router, inst := f.sg, f.net, f.router, f.inst
 		f.mu.Unlock()
+		if inst != nil && strings.HasPrefix(r.URL.Path, "/api/instances") && r.URL.Path != "/api/instances/service-plans" &&
+			r.Header.Get("Authorization") == "Bearer test-token" {
+			inst.ServeHTTP(w, r)
+			return
+		}
 		if router != nil && strings.HasPrefix(r.URL.Path, "/api/networks/routers") && r.Header.Get("Authorization") == "Bearer test-token" {
 			router.ServeHTTP(w, r)
 			return
 		}
-		if net != nil && (r.URL.Path == "/api/networks" || strings.HasPrefix(r.URL.Path, "/api/networks/")) && r.Header.Get("Authorization") == "Bearer test-token" {
+		if net != nil && r.URL.Path != "/api/networks/domains" && (r.URL.Path == "/api/networks" || strings.HasPrefix(r.URL.Path, "/api/networks/")) && r.Header.Get("Authorization") == "Bearer test-token" {
 			net.ServeHTTP(w, r)
 			return
 		}
