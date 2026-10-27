@@ -43,7 +43,7 @@ The MTN Cloud provider supports a number of different methods for authenticating
 terraform {
   required_providers {
     mtncloud = {
-      source  = "mtn/mtncloud"
+      source  = "jose-henry/mtncloud"
       version = "0.12.0"
     }
   }

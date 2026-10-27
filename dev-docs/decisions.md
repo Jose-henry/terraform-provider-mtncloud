@@ -146,3 +146,11 @@ its `type.type`), from the API reference (`addcatalogorder`, `getcatalogitem`):
 One poller in `internal/client` with exponential backoff and jitter, honouring `timeouts {}` and
 `ctx`. To confirm before building: the item status values and where a workflow item exposes its
 execution (a read of `/api/catalog/items` on an existing order, as a customer).
+
+## D-021 Public registry address `jose-henry/mtncloud` (2026-10-27)
+Supersedes the registry part of D-003. The owner chose the public Terraform Registry, where the
+namespace is the GitHub owner of the repository (`github.com/Jose-henry/terraform-provider-mtncloud`).
+Users write `source = "jose-henry/mtncloud"`; `main.go` serves `registry.terraform.io/jose-henry/mtncloud`.
+The Go module path (`github.com/mtn/terraform-provider-mtncloud`) is internal and unchanged. Moving the
+repo to an MTN GitHub org later changes the address, so users would update `source`; decide that
+before many people depend on it.

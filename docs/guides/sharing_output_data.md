@@ -86,7 +86,7 @@ The file's hash is what needs to be made available to the downstream resource. I
 terraform {
   required_providers {
     mtncloud = {
-      source  = "mtn/mtncloud"
+      source  = "jose-henry/mtncloud"
       version = "0.10.0"
     }
   }
@@ -136,7 +136,7 @@ In a real scenario, the information being read from cypher would be a resource I
 terraform {
   required_providers {
     mtncloud = {
-      source  = "mtn/mtncloud"
+      source  = "jose-henry/mtncloud"
       version = "0.10.0"
     }
   }

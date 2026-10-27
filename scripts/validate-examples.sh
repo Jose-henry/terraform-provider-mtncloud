@@ -27,7 +27,7 @@ command -v cygpath > /dev/null && PLUGIN_DIR="$(cygpath -m "$PLUGIN_DIR")"
 cat > "$WORK/dev.tfrc" <<EOF
 provider_installation {
   dev_overrides {
-    "mtn/mtncloud" = "$PLUGIN_DIR"
+    "jose-henry/mtncloud" = "$PLUGIN_DIR"
   }
   direct {}
 }
@@ -45,7 +45,7 @@ while IFS= read -r -d '' f; do
   w="$WORK/case"
   rm -rf "$w" && mkdir -p "$w"
   cp "$f" "$w/main.tf"
-  printf 'terraform {\n  required_providers {\n    mtncloud = { source = "mtn/mtncloud" }\n  }\n}\n' > "$w/zz_required.tf"
+  printf 'terraform {\n  required_providers {\n    mtncloud = { source = "jose-henry/mtncloud" }\n  }\n}\n' > "$w/zz_required.tf"
   out="$(cd "$w" && "$TF" validate -no-color -json 2>/dev/null || true)"
   # Exit 0 = clean, 1 = schema defect, 2 = the check itself could not run (provider not
   # loaded, bad output). 2 aborts: a broken harness must never look like a clean example.

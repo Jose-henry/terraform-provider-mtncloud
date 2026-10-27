@@ -26,7 +26,7 @@ func main() {
 	if *debug {
 		opts = append(opts, tf6server.WithManagedDebug())
 	}
-	if err := tf6server.Serve("registry.terraform.io/mtn/mtncloud", server, opts...); err != nil {
+	if err := tf6server.Serve("registry.terraform.io/jose-henry/mtncloud", server, opts...); err != nil {
 		log.Fatal(err)
 	}
 }

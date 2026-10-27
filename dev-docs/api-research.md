@@ -92,7 +92,23 @@ Client-wide, found while building this: a 2xx response with `"success": false` i
 - Plan: `external_network` (by name) to set the gateway, and `internal_subnets` (set of network
   names) for interfaces. Interfaces may become their own resource (`mtncloud_router_interface`) so
   that networks and routers can be created in any order. That is decided after P2.
-- **Needs payload P2** (the router type on MTN and its option types).
+- **Captured 2026-10-27** (customer login, reads and `-d` only):
+  - One router type: id 1, code `neutronRouter`, "Neutron Router"; no network server, firewall, NAT,
+    BGP or routing features.
+  - Its option types: `name` (required), `enabled` (checkbox, required), `poolId` (project, required,
+    source `zonePoolsIgnoreDefaultZoneRequired`), `externalNetwork.id` (optional, source
+    `openstackExternalNetworks`), `interfaces.networkSubnet.id` (required multiSelect, source
+    `openstackInternalSubnets`, depends on cloud and project).
+  - A router from GET: `status: "ok"`, `routerType: "neutron"`, `enabled`, `externalIp`,
+    `externalNetwork {id, code, name}`, `zone {id, name}`, `site: null`, `poolId: null` (the project is
+    not echoed at the top level), `externalId` (Neutron UUID), `interfaces[]` (empty on the one read).
+  - Create answers `{"success": true, "id": N}` only (API reference), so the provider reads it back.
+  - The CLI cannot build the body for a customer: `network-routers add` reads `/api/zones/{id}`,
+    which returns 403. The cloud comes from the option lists instead (D-018).
+- **Still needed:** the wire format of `interfaces` on create (a list of `{networkSubnet: {id}}`, or
+  `interfaces.networkSubnet.id` as a list?), and whether interfaces can be added and removed by PUT.
+  Source: the browser request when creating a router in the console (owner), since the CLI path is
+  blocked.
 
 ## Security groups
 

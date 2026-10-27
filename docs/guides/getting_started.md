@@ -24,7 +24,7 @@ Create a `provider.tf` file with the following content to define the provider co
 terraform {
   required_providers {
     mtncloud = {
-      source  = "mtn/mtncloud"
+      source  = "jose-henry/mtncloud"
       version = "0.12.0"
     }
   }
@@ -59,9 +59,9 @@ $ terraform init
 Initializing the backend...
 
 Initializing provider plugins...
-- Finding example.com/mtn/mtncloud versions matching "0.12.0"...
-- Installing example.com/mtn/mtncloud v0.12.0...
-- Installed example.com/mtn/mtncloud v0.12.0 (unauthenticated)
+- Finding example.com/jose-henry/mtncloud versions matching "0.12.0"...
+- Installing example.com/jose-henry/mtncloud v0.12.0...
+- Installed example.com/jose-henry/mtncloud v0.12.0 (unauthenticated)
 
 Terraform has created a lock file .terraform.lock.hcl to record the provider
 selections it made above. Include this file in your version control repository
