@@ -408,7 +408,7 @@ func TestNetworks_DataSource(t *testing.T) {
 			{Config: cfg},
 			{
 				Config: cfg + list("web", `  project = "web-prod"`) + list("app", `  name_regex = "^app-"`) + list("data", `  project = "data-Acme"`) +
-					list("ok", `  status = "OK"`) + list("labelled", `  labels = ["nope"]`),
+					list("ok", `  status = "OK"`) + list("label_miss", `  labels = ["nope"]`),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// app-net and db-net, sorted by name.
 					statecheck.ExpectKnownValue("data.mtncloud_networks.web", tfjsonpath.New("networks"), knownvalue.ListSizeExact(2)),
@@ -420,7 +420,7 @@ func TestNetworks_DataSource(t *testing.T) {
 					statecheck.ExpectKnownValue("data.mtncloud_networks.app", tfjsonpath.New("networks"), knownvalue.ListSizeExact(1)),
 					statecheck.ExpectKnownValue("data.mtncloud_networks.data", at(0, "name"), knownvalue.StringExact("other-net")),
 					statecheck.ExpectKnownValue("data.mtncloud_networks.ok", tfjsonpath.New("networks"), knownvalue.ListSizeExact(3)),
-					statecheck.ExpectKnownValue("data.mtncloud_networks.labelled", tfjsonpath.New("networks"), knownvalue.ListSizeExact(0)),
+					statecheck.ExpectKnownValue("data.mtncloud_networks.label_miss", tfjsonpath.New("networks"), knownvalue.ListSizeExact(0)),
 				},
 			},
 			{Config: cfg + list("bad", `  project = "nope"`), ExpectError: regexp.MustCompile(`Unknown project`)},

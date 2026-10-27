@@ -132,7 +132,7 @@ func (d *instancesDataSource) Read(ctx context.Context, req datasource.ReadReque
 	m.Instances = []instanceModel{}
 	for _, in := range instances {
 		if !match(in.Name) || (projectID != 0 && in.ProjectID != projectID) || !textMatches(in.Status, m.Status) ||
-			!(textMatches(in.ImageName, m.Image) || textMatches(in.ImageCode, m.Image)) || !textMatches(in.PlanName, m.Plan) ||
+			!imageMatches(in.ImageName, in.ImageCode, m.Image) || !textMatches(in.PlanName, m.Plan) ||
 			!labelsMatch(in.Labels, m.Labels) || !tagsMatch(in.Tags, m.Tags) {
 			continue
 		}
@@ -153,4 +153,9 @@ func (d *instancesDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return cmp.Or(cmp.Compare(a.Name.ValueString(), b.Name.ValueString()), cmp.Compare(a.ID.ValueInt64(), b.ID.ValueInt64()))
 	})
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+}
+
+// imageMatches reports whether an instance's image passes the image filter, given by name or code.
+func imageMatches(name, code string, want types.String) bool {
+	return textMatches(name, want) || textMatches(code, want)
 }
