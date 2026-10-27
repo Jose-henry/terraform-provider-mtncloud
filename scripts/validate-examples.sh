@@ -88,5 +88,15 @@ if [ -n "$fixed" ]; then
   echo "$fixed" | sed 's/^/  /'
   status=1
 fi
+# Every resource and data source an example declares must still exist (a removed type would only
+# show up as a schema error if the example were planned, which validate doesn't do for data).
+known="$(cd "$ROOT" && go run ./tools/listtypes | tr -d '\r' | awk '{print $2}' | sort -u)"
+unknown="$(grep -rhoE '(data|resource) "mtncloud_[a-z0-9_]+"' "$ROOT/examples" \
+  | sed -E 's/.*"(mtncloud_[a-z0-9_]+)"/\1/' | tr -d '\r' | sort -u | comm -23 - <(echo "$known"))"
+if [ -n "$unknown" ]; then
+  echo "FAIL: examples use types the provider doesn't have:"
+  echo "$unknown" | sed 's/^/  /'
+  status=1
+fi
 [ "$status" -eq 0 ] && echo "OK"
 exit "$status"

@@ -114,6 +114,9 @@ Last updated 2026-10-27 (floating IP wait, compute lookups, planned list). Updat
   "read verified". Availability zones remain blocked: `/api/options/openstackAvailabilityZone` answers 500.
 - Master-only types removed (D-024, 2026-10-27): 36 resources and 12 data sources. Now 82
   resources and 61 data sources, all usable by a customer login; the owner audits them next.
+- Owner's audit (D-025, 2026-10-27): 22 resources and 12 data sources removed; 60 resources and 49
+  data sources left. Plan in [audit-2026-10-27.md](audit-2026-10-27.md): phase 2 data sources,
+  phase 3 provider defaults (group, cloud, project), phase 4 new resources. No live testing until done.
 - Fixes from the owner's tester (2026-10-27): `private_ip` on console-made instances, plans by
   image name, and `mtncloud_network` (data source) rebuilt with project, group and cloud.
 - Guides: "Sharing Data Between ..." removed (it needed master-only Cypher policies). A private,

@@ -1,1 +1,0 @@
-terraform import mtncloud_node_type.tf_example_node_type 1

@@ -1,1 +1,0 @@
-terraform import mtncloud_helm_spec_template.tf_example_helm_spec_template 1

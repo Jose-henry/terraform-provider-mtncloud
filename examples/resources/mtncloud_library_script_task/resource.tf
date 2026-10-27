@@ -1,5 +1,6 @@
-data "mtncloud_script_template" "example_script_template" {
-  name = "My script template"
+# A script template MTN shares with your tenant: its name and ID are shown in the console.
+variable "script_template" {
+  type = object({ name = string, id = number })
 }
 
 resource "mtncloud_library_script_task" "tf_example_library_script_task" {
@@ -7,8 +8,8 @@ resource "mtncloud_library_script_task" "tf_example_library_script_task" {
   code                = "tf-example-library-script-task"
   labels              = ["demo", "library", "terraform"]
   execute_target      = "resource"
-  script_template     = data.mtncloud_script_template.example_script_template.name
-  script_template_id  = data.mtncloud_script_template.example_script_template.id
+  script_template     = var.script_template.name
+  script_template_id  = var.script_template.id
   retryable           = true
   retry_count         = 1
   retry_delay_seconds = 10

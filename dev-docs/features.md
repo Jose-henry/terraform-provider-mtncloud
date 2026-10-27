@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 82 | 61 |
-| Usable with a customer (sub-tenant) login | 82 | 56 |
+| Available today | 60 | 49 |
+| Usable with a customer (sub-tenant) login | 60 | 44 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 7 | 0 |
@@ -42,50 +42,25 @@ Users, roles, groups, identity sources and environments.
 | [`mtncloud_user_group`](../docs/resources/user_group.md) | Yes (read verified) |
 | [`mtncloud_user_role`](../docs/resources/user_role.md) | Yes (read verified) |
 
-### Library: instance types, layouts and templates
+### Wiki
 
-What can be provisioned and how: instance types, layouts, node types, cluster layouts, templates and scripts.
+Wiki pages for runbooks and notes.
 
 | Type | Customer login |
 |---|---|
-| [`mtncloud_boot_script`](../docs/resources/boot_script.md) | Yes (read verified) |
-| [`mtncloud_cluster_layout`](../docs/resources/cluster_layout.md) | Yes (read verified) |
-| [`mtncloud_file_template`](../docs/resources/file_template.md) | Yes (read verified) |
-| [`mtncloud_instance_layout`](../docs/resources/instance_layout.md) | Yes (read verified) |
-| [`mtncloud_instance_type`](../docs/resources/instance_type.md) | Yes (read verified) |
-| [`mtncloud_node_type`](../docs/resources/node_type.md) | Yes (read verified) |
-| [`mtncloud_preseed_script`](../docs/resources/preseed_script.md) | Yes (read verified) |
-| [`mtncloud_script_template`](../docs/resources/script_template.md) | Yes (read verified) |
-| [`mtncloud_security_package`](../docs/resources/security_package.md) | Yes (read verified) |
 | [`mtncloud_wiki_page`](../docs/resources/wiki_page.md) | Yes (read verified) |
 
-### Blueprints and spec templates
+### Forms and inputs
 
-Kubernetes, Helm and Terraform blueprints and spec templates.
-
-| Type | Customer login |
-|---|---|
-| [`mtncloud_helm_app_blueprint`](../docs/resources/helm_app_blueprint.md) | Yes (read verified) |
-| [`mtncloud_helm_spec_template`](../docs/resources/helm_spec_template.md) | Yes (read verified) |
-| [`mtncloud_kubernetes_app_blueprint`](../docs/resources/kubernetes_app_blueprint.md) | Yes (read verified) |
-| [`mtncloud_kubernetes_spec_template`](../docs/resources/kubernetes_spec_template.md) | Yes (read verified) |
-| [`mtncloud_terraform_app_blueprint`](../docs/resources/terraform_app_blueprint.md) | Yes (read verified) |
-| [`mtncloud_terraform_spec_template`](../docs/resources/terraform_spec_template.md) | Yes (read verified) |
-
-### Service catalog and forms
-
-Self-service catalog items and the forms customers fill in to order them.
+Forms, option lists and option types: the inputs used by workflows and forms.
 
 | Type | Customer login |
 |---|---|
-| [`mtncloud_app_blueprint_catalog_item`](../docs/resources/app_blueprint_catalog_item.md) | Yes (read verified) |
 | [`mtncloud_form`](../docs/resources/form.md) | Yes (read verified) |
-| [`mtncloud_instance_catalog_item`](../docs/resources/instance_catalog_item.md) | Yes (read verified) |
-| [`mtncloud_workflow_catalog_item`](../docs/resources/workflow_catalog_item.md) | Yes (read verified) |
 
 ### Inputs: option lists and option types
 
-The inputs used by catalog items, forms, workflows and layouts.
+The inputs used by forms and workflows.
 
 | Type | Customer login |
 |---|---|
@@ -112,15 +87,11 @@ Building blocks for workflows.
 | [`mtncloud_ansible_tower_task`](../docs/resources/ansible_tower_task.md) | Yes (read verified) |
 | [`mtncloud_chef_bootstrap_task`](../docs/resources/chef_bootstrap_task.md) | Yes (read verified) |
 | [`mtncloud_email_task`](../docs/resources/email_task.md) | Yes (read verified) |
-| [`mtncloud_groovy_script_task`](../docs/resources/groovy_script_task.md) | Yes (read verified) |
-| [`mtncloud_javascript_task`](../docs/resources/javascript_task.md) | Yes (read verified) |
 | [`mtncloud_library_script_task`](../docs/resources/library_script_task.md) | Yes (read verified) |
 | [`mtncloud_library_template_task`](../docs/resources/library_template_task.md) | Yes (read verified) |
 | [`mtncloud_nested_workflow_task`](../docs/resources/nested_workflow_task.md) | Yes (read verified) |
 | [`mtncloud_powershell_script_task`](../docs/resources/powershell_script_task.md) | Yes (read verified) |
-| [`mtncloud_python_script_task`](../docs/resources/python_script_task.md) | Yes (read verified) |
 | [`mtncloud_restart_task`](../docs/resources/restart_task.md) | Yes (read verified) |
-| [`mtncloud_ruby_script_task`](../docs/resources/ruby_script_task.md) | Yes (read verified) |
 | [`mtncloud_shell_script_task`](../docs/resources/shell_script_task.md) | Yes (read verified) |
 | [`mtncloud_vro_task`](../docs/resources/vro_task.md) | Yes (read verified) |
 | [`mtncloud_write_attributes_task`](../docs/resources/write_attributes_task.md) | Yes (read verified) |
@@ -228,13 +199,6 @@ Autoscaling thresholds.
 | [`mtncloud_user_groups`](../docs/data-sources/user_groups.md) | Yes (read verified) |
 | [`mtncloud_user_role`](../docs/data-sources/user_role.md) | Yes (read verified) |
 
-### Cloud, projects and capacity
-
-| Type | Customer login |
-|---|---|
-| [`mtncloud_cloud_type`](../docs/data-sources/cloud_type.md) | Yes (read verified) |
-| [`mtncloud_provision_type`](../docs/data-sources/provision_type.md) | Yes (read verified) |
-
 ### Networking
 
 | Type | Customer login |
@@ -253,19 +217,10 @@ Autoscaling thresholds.
 | [`mtncloud_instance`](../docs/data-sources/instance.md) | Yes, built for customers |
 | [`mtncloud_instances`](../docs/data-sources/instances.md) | Yes, built for customers |
 
-### Images, plans and library
+### Images
 
 | Type | Customer login |
 |---|---|
-| [`mtncloud_blueprint`](../docs/data-sources/blueprint.md) | Yes (read verified) |
-| [`mtncloud_cluster_type`](../docs/data-sources/cluster_type.md) | Yes (read verified) |
-| [`mtncloud_file_template`](../docs/data-sources/file_template.md) | Yes (read verified) |
-| [`mtncloud_instance_layout`](../docs/data-sources/instance_layout.md) | Yes (read verified) |
-| [`mtncloud_instance_type`](../docs/data-sources/instance_type.md) | Yes (read verified) |
-| [`mtncloud_node_type`](../docs/data-sources/node_type.md) | Yes (read verified) |
-| [`mtncloud_script_template`](../docs/data-sources/script_template.md) | Yes (read verified) |
-| [`mtncloud_security_package`](../docs/data-sources/security_package.md) | Yes (read verified) |
-| [`mtncloud_spec_template`](../docs/data-sources/spec_template.md) | Yes (read verified) |
 | [`mtncloud_virtual_image`](../docs/data-sources/virtual_image.md) | Yes (read verified) |
 | [`mtncloud_virtual_images`](../docs/data-sources/virtual_images.md) | Yes (read verified) |
 
@@ -277,7 +232,7 @@ Autoscaling thresholds.
 | [`mtncloud_storage_volume`](../docs/data-sources/storage_volume.md) | Yes (read verified) |
 | [`mtncloud_storage_volume_type`](../docs/data-sources/storage_volume_type.md) | Yes (read verified) |
 
-### Catalog and inputs
+### Catalog, forms and inputs
 
 | Type | Customer login |
 |---|---|
@@ -314,7 +269,6 @@ Autoscaling thresholds.
 
 | Type | Customer login |
 |---|---|
-| [`mtncloud_cypher_secret`](../docs/data-sources/cypher_secret.md) | Yes (read verified) |
 | [`mtncloud_key_pair`](../docs/data-sources/key_pair.md) | Yes (read verified) |
 
 ## Master tenant only

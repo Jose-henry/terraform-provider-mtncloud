@@ -2,4 +2,3 @@
 # This list only shrinks: scripts/validate-examples.sh fails if a listed file becomes clean
 # or an unlisted file breaks. Never add new code here.
 examples/resources/mtncloud_form/resource.tf
-examples/resources/mtncloud_terraform_app_blueprint/resource_json.tf

@@ -1,1 +1,0 @@
-terraform import mtncloud_boot_script.tf_example_boot_script 1

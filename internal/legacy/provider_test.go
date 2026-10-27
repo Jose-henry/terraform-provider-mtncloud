@@ -24,12 +24,23 @@ var (
 		"price_set", "provision_approval_policy", "provisioning_setting", "resource_pool_group",
 		"router_quota_policy", "service_plan", "tag_policy", "tenant", "tenant_role",
 		"user_creation_policy", "user_group_creation_policy", "workflow_policy",
+		// Not offered to customers in the Library, or task types their console lacks (owner audit, 2026-10-27).
+		"app_blueprint_catalog_item", "boot_script", "cluster_layout", "file_template",
+		"groovy_script_task", "helm_app_blueprint", "helm_spec_template", "instance_catalog_item",
+		"instance_layout", "instance_type", "javascript_task", "kubernetes_app_blueprint",
+		"kubernetes_spec_template", "node_type", "preseed_script", "python_script_task",
+		"ruby_script_task", "script_template", "security_package", "terraform_app_blueprint",
+		"terraform_spec_template", "workflow_catalog_item",
 	}
 	removedDataSources = []string{
 		"cloud_folder",
 		// Master tenant only (D-024). cloud_datastore was restored by D-010, then removed here.
 		"cloud", "cloud_datastore", "clouds", "plan", "policies", "policy", "price", "price_set",
 		"resource_pool", "tenant", "tenant_role", "tenants",
+		// Owner audit, 2026-10-27. cypher_secret is replaced by mtncloud_cypher.
+		"blueprint", "cloud_type", "cluster_type", "cypher_secret", "file_template", "instance_layout",
+		"instance_type", "node_type", "provision_type", "script_template", "security_package",
+		"spec_template",
 	}
 )
 

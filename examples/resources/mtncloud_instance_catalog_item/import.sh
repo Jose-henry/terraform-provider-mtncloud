@@ -1,1 +1,0 @@
-terraform import mtncloud_instance_catalog_item.tf_example_instance_catalog_item 1

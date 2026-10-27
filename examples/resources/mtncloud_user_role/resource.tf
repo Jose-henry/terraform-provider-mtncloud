@@ -10,12 +10,13 @@ data "mtncloud_group" "demo" {
   name = "Demo"
 }
 
-data "mtncloud_instance_type" "demo" {
-  name = "Demo"
+# IDs of an instance type and a blueprint MTN shares with your tenant, as shown in the console.
+variable "instance_type_id" {
+  type = number
 }
 
-data "mtncloud_blueprint" "demo" {
-  name = "Demo"
+variable "blueprint_id" {
+  type = number
 }
 
 data "mtncloud_catalog_item_type" "demo" {
@@ -59,12 +60,12 @@ data "mtncloud_permission_set" "base_permission_set" {
   }
 
   instance_type_permission {
-    id     = data.mtncloud_instance_type.demo.id
+    id     = var.instance_type_id
     access = "full"
   }
 
   blueprint_permission {
-    id     = data.mtncloud_blueprint.demo.id
+    id     = var.blueprint_id
     access = "full"
   }
 

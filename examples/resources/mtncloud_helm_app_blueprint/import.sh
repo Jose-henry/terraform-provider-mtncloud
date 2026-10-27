@@ -1,1 +1,0 @@
-terraform import mtncloud_helm_app_blueprint.tf_example_helm_app_blueprint 1

@@ -14,8 +14,9 @@ Provides a MTN Cloud library template task resource
 Creating the library template task using a file template data source:
 
 ```terraform
-data "mtncloud_file_template" "example_file_template" {
-  name = "My file template"
+# A file template MTN shares with your tenant: its name and ID are shown in the console.
+variable "file_template" {
+  type = object({ name = string, id = number })
 }
 
 resource "mtncloud_library_template_task" "tf_example_library_template_task" {
@@ -23,8 +24,8 @@ resource "mtncloud_library_template_task" "tf_example_library_template_task" {
   code                = "tf-example-library-template-task"
   labels              = ["demo", "library", "terraform"]
   execute_target      = "resource"
-  file_template       = data.mtncloud_file_template.example_file_template.name
-  file_template_id    = data.mtncloud_file_template.example_file_template.id
+  file_template       = var.file_template.name
+  file_template_id    = var.file_template.id
   retryable           = true
   retry_count         = 1
   retry_delay_seconds = 10

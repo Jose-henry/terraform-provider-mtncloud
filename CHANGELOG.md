@@ -5,6 +5,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 ## Unreleased
 
 - Docs: the examples now pin `~> 0.3`.
+- **Breaking:** removed what customers can't create in MTN Cloud's Library: instance types, layouts, node types, cluster layouts, file and script templates, boot and preseed scripts, security packages, blueprints, spec templates and catalog items, with their lookups; the Groovy, JavaScript, Python and jRuby script tasks; the cloud type and provision type lookups; and the `mtncloud_cypher_secret` data source (a `mtncloud_cypher` lookup replaces it).
 - **Breaking:** removed the 36 resources and 12 data sources only the MTN Cloud master tenant can use (tenants, appliance settings, policies, service plans, prices, licenses, cloud and resource pool lookups and others). Customers pick sizes with `mtncloud_plans` and datastores with `mtncloud_datastores`.
 - Fixed: instances made in the console showed an empty `private_ip`.
 - Fixed: `mtncloud_plans` accepts the image by name (for example `MTN Ubuntu Server 24.04.3LTS`) as well as by code.

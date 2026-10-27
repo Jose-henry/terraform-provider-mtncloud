@@ -185,3 +185,12 @@ groups, every policy, service plans, prices and price sets; and the cloud(s), cl
 resource pool, plan, policy/policies, price, price set and tenant(s) data sources. Supersedes the
 master-only half of D-004 (master gating is no longer needed for these). `TestProvider_RemovedTypesStayRemoved`
 keeps them out. The owner audits the remaining types next and names further removals.
+
+## D-025 Owner's audit of the remaining types (2026-10-27)
+Customers' Library holds automation, virtual images and integrations, plus forms, inputs and
+option lists. Removed: instance types, layouts, node types, cluster layouts, templates, scripts,
+security packages, blueprints, spec templates and catalog items (resources and lookups), the
+Groovy/JavaScript/Python/jRuby task types their console doesn't offer, the cloud type and
+provision type lookups, and the `cypher_secret` data source (replaced by `mtncloud_cypher`). Kept:
+identity sources (customers use them). The full audit, answers and phased plan are in
+[audit-2026-10-27.md](audit-2026-10-27.md).

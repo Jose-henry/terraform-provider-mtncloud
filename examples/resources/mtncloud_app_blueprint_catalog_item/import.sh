@@ -1,1 +1,0 @@
-terraform import mtncloud_app_blueprint_catalog_item.tf_example_app_blueprint_catalog_item 1
