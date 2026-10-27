@@ -194,3 +194,17 @@ Groovy/JavaScript/Python/jRuby task types their console doesn't offer, the cloud
 provision type lookups, and the `cypher_secret` data source (replaced by `mtncloud_cypher`). Kept:
 identity sources (customers use them). The full audit, answers and phased plan are in
 [audit-2026-10-27.md](audit-2026-10-27.md).
+
+## D-026 One typed resource per catalog item (owner, 2026-10-27)
+Each orderable catalog item gets its own resource, named after the service (`mtncloud_mysql`,
+`mtncloud_managed_database`, `mtncloud_kubernetes_cluster`, ...), not a generic order with an
+inputs map: state then holds what the order created, so plan shows drift, destroy removes the right
+thing, import works, inputs are validated at plan time, and each has its own docs page. One shared
+core places the order, polls its execution, finds what it created and waits for it; two families:
+execution only (project, MOS, NFS, SMB, Let's Encrypt SSL) and execution plus instance provisioning
+(the items that deploy VMs). The shared VM inputs use `mtncloud_instance`'s attribute names.
+Passwords are write-only arguments (never in state; Terraform 1.11 or newer, documented).
+Not built: "Create Instance" (`mtncloud_instance` does it), "Trouble Ticketing" (not
+infrastructure), and a generic `mtncloud_catalog_order`. Inputs per item:
+[catalog-forms.md](catalog-forms.md). Each resource's order is confirmed with a CLI dry run first.
+
