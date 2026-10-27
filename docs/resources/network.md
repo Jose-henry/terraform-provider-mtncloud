@@ -51,7 +51,6 @@ output "app_subnet_id" {
 - `cidr` (String) IPv4 address range, for example `10.0.1.0/24`. It can't change: a new range replaces the network.
 - `gateway` (String) Gateway address inside `cidr`, usually its first address (`10.0.1.1` for `10.0.1.0/24`).
 - `name` (String) Name of the network.
-- `project` (String) Project the network is created in, by name (for example `web-prod`; the full name with the tenant suffix also works). Changing it to another project replaces the network.
 
 ### Optional
 
@@ -61,6 +60,7 @@ output "app_subnet_id" {
 - `dns_primary` (String) Primary DNS server. Defaults to MTN's resolver `102.88.134.41`. MTN's resolvers are `102.88.134.41`, `102.90.109.125`, `102.89.90.112` and `120.91.123.54`.
 - `dns_secondary` (String) Secondary DNS server. Defaults to MTN's resolver `102.90.109.125`. Both DNS servers are always set: a network imported without one gets MTN's resolver on the next apply.
 - `ipv6` (Attributes) IPv6 settings. Leave it out to keep IPv6 off (the default). Turning IPv6 on or off, or changing its `cidr`, replaces the network. (see [below for nested schema](#nestedatt--ipv6))
+- `project` (String) Project the network is created in, by name (for example `web-prod`; the full name with the tenant suffix also works). Defaults to the provider's `project`; changing that default later replaces a network that relies on it. Changing it to another project replaces the network.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only

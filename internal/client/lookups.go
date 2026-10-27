@@ -57,7 +57,7 @@ func (c *Client) Placement(ctx context.Context) (*Placement, error) {
 		if err != nil {
 			return nil, err
 		}
-		group, err := exactlyOne("group", groups)
+		group, err := pick("group", groups, c.cfg.Defaults.Group)
 		if err != nil {
 			return nil, err
 		}
@@ -65,7 +65,7 @@ func (c *Client) Placement(ctx context.Context) (*Placement, error) {
 		if err != nil {
 			return nil, err
 		}
-		cloud, err := exactlyOne("cloud", clouds)
+		cloud, err := pick("cloud", clouds, c.cfg.Defaults.Cloud)
 		if err != nil {
 			return nil, err
 		}
@@ -138,6 +138,25 @@ func (c *Client) options(ctx context.Context, source string, q url.Values) ([]Op
 	})
 }
 
+// pick returns the group or cloud named want (case ignored), or, with no name, the only one there is.
+func pick(kind string, opts []Option, want string) (Option, error) {
+	if want == "" {
+		o, err := exactlyOne(kind, opts)
+		if err != nil && len(opts) > 1 {
+			err = fmt.Errorf("%w. Choose one with %s in the provider block, or the MTNCLOUD_%s environment variable", err, kind, strings.ToUpper(kind))
+		}
+		return o, err
+	}
+	names := make([]string, len(opts))
+	for i, o := range opts {
+		if strings.EqualFold(o.Name, want) {
+			return o, nil
+		}
+		names[i] = o.Name
+	}
+	return Option{}, &NoMatchError{fmt.Sprintf("no %s named %q. Yours: %s", kind, want, list(names))}
+}
+
 func exactlyOne(kind string, opts []Option) (Option, error) {
 	switch len(opts) {
 	case 1:
@@ -190,7 +209,7 @@ func (c *Client) PlacementForGroup(ctx context.Context, name string) (*Placement
 		if err != nil {
 			return nil, err
 		}
-		cloud, err := exactlyOne("cloud", clouds)
+		cloud, err := pick("cloud", clouds, c.cfg.Defaults.Cloud)
 		if err != nil {
 			return nil, err
 		}

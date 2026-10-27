@@ -60,13 +60,13 @@ resource "mtncloud_router" "edge" {
 
 - `name` (String) Name of the router. MTN Cloud doesn't allow renaming a router: a new name replaces it.
 - `networks` (Set of String) IDs of the MTN Networks the router connects, for example `[mtncloud_network.app.id]`. Networks are added and removed in place. Use the `mtncloud_network` data source for networks made outside Terraform.
-- `project` (String) Project the router is created in, by name (for example `web-prod`; the full name with the tenant suffix also works). Its networks must be in the same project. Changing it to another project replaces the router.
 
 ### Optional
 
 - `description` (String) Description of the router.
 - `enabled` (Boolean) Whether the router is enabled. Defaults to `true`.
 - `external_network` (String) External network that gives the router its gateway and external IP, by name, for example `public-network-02`. Changing it moves the gateway in place, and the external IP changes. Leave it out for a router that only connects your networks.
+- `project` (String) Project the router is created in, by name (for example `web-prod`; the full name with the tenant suffix also works). Defaults to the provider's `project`; changing that default later replaces a router that relies on it. Its networks must be in the same project. Changing it to another project replaces the router.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only

@@ -52,11 +52,11 @@ output "web_rules" {
 ### Required
 
 - `name` (String) Name of the security group.
-- `project` (String) Project the group is created in, by name (for example `web-prod`; the full name with the tenant suffix also works). Changing it to another project replaces the group.
 
 ### Optional
 
 - `description` (String) Description of the security group.
+- `project` (String) Project the group is created in, by name (for example `web-prod`; the full name with the tenant suffix also works). Defaults to the provider's `project`; changing that default later replaces a group that relies on it. Changing it to another project replaces the group.
 - `remove_default_egress` (Boolean) Remove the two default egress rules (allow all outbound traffic). Defaults to `false`. They are added when the group is created, but MTN Cloud only shows them after its sync, some time later; they are removed by the first `terraform apply` after that (`terraform plan` shows the pending change). **Until then the group allows all outbound traffic.**
 - `rules` (Attributes Set) The rules Terraform manages. When set, rules added outside Terraform are removed on the next apply, except the default egress rules (see `remove_default_egress`). Leave it out to let Terraform ignore the rules, for example when they are managed with `mtncloud_security_group_rule`; never use both on one group. (see [below for nested schema](#nestedatt--rules))
 

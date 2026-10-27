@@ -258,7 +258,8 @@ func TestSecurityGroup_Lifecycle(t *testing.T) {
 				}},
 				ConfigStateChecks: []statecheck.StateCheck{
 					allRules(2),
-					statecheck.ExpectKnownValue("mtncloud_security_group.web", tfjsonpath.New("project"), knownvalue.StringExact("web-prod-Acme")),
+					// The same project by another name: the state's spelling stays.
+					statecheck.ExpectKnownValue("mtncloud_security_group.web", tfjsonpath.New("project"), knownvalue.StringExact("web-prod")),
 				},
 			},
 			{

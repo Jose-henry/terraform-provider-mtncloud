@@ -195,6 +195,22 @@ provision type lookups, and the `cypher_secret` data source (replaced by `mtnclo
 identity sources (customers use them). The full audit, answers and phased plan are in
 [audit-2026-10-27.md](audit-2026-10-27.md).
 
+## D-027 Provider-wide project, group and cloud (2026-10-28)
+
+`project`, `group` and `cloud` on the provider block, or `MTNCLOUD_PROJECT`, `MTNCLOUD_GROUP`,
+`MTNCLOUD_CLOUD` (owner: tfvars or env, no profile file). Order: the resource's value, then the
+provider block, then the environment. None set is a plan-time error naming all three places.
+- Resources: `project` on instance, network, router and security group; `group` on instance. They
+  are Optional+Computed, and state keeps the value used, so a new default shows as a replacement.
+- The fill is in each resource's `ModifyPlan` (`planmodifiers.FillDefault`), not an attribute plan
+  modifier: the framework builds the schema on an unconfigured resource instance, so a modifier
+  can't reach the client (found by test, 2026-10-28).
+- `group`/`cloud` also choose among several when the account has more than one (`client.pick`);
+  with one of each, nothing changes.
+- Data source filters do **not** take the defaults: a filter is something the reader asks for, and
+  a list that silently narrowed to the provider's project would hide resources.
+- The legacy half declares the same three attributes so the mux schemas match; it doesn't read them.
+
 ## D-026 One typed resource per catalog item (owner, 2026-10-27)
 Each orderable catalog item gets its own resource, named after the service (`mtncloud_mysql`,
 `mtncloud_managed_database`, `mtncloud_kubernetes_cluster`, ...), not a generic order with an

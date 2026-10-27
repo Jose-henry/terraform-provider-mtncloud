@@ -225,7 +225,8 @@ func TestNetwork_Lifecycle(t *testing.T) {
 				}},
 				ConfigStateChecks: []statecheck.StateCheck{
 					netCheck("gateway", knownvalue.StringExact("10.20.1.254")),
-					netCheck("project", knownvalue.StringExact("web-prod-Acme")),
+					// The same project by another name: the state's spelling stays.
+					netCheck("project", knownvalue.StringExact("web-prod")),
 				},
 			},
 			{
@@ -307,6 +308,63 @@ func TestNetwork_Lifecycle(t *testing.T) {
 	if n := len(store.networks); n != 0 {
 		t.Errorf("%d networks left after destroy", n)
 	}
+}
+
+// The provider's project fills in a network that names none; state keeps it, so a new default
+// replaces the network, and with no project anywhere the plan fails.
+func TestNetwork_ProviderProject(t *testing.T) {
+	f := newFakeAPI(t)
+	store := newNetStore()
+	f.net = store
+	withProject := func(project, attrs string) string {
+		cfg := netConfig(f, attrs)
+		if project == "" {
+			return cfg
+		}
+		return strings.Replace(cfg, `access_token = "test-token"`, `access_token = "test-token"
+  project      = "`+project+`"`, 1)
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: withProject("", ""), ExpectError: regexp.MustCompile(`(?s)No project set.*MTNCLOUD_PROJECT`)},
+			{
+				Config:            withProject("web-prod", ""),
+				ConfigStateChecks: []statecheck.StateCheck{netCheck("project", knownvalue.StringExact("web-prod"))},
+			},
+			{
+				// The resource's own project wins over the provider's; the same project by its full name is
+				// no change.
+				Config:            withProject("data", `  project = "web-prod-Acme"`),
+				ConfigPlanChecks:  resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				ConfigStateChecks: []statecheck.StateCheck{netCheck("project", knownvalue.StringExact("web-prod"))},
+			},
+			{
+				// A provider default spelled in full, against state's short name: no change either.
+				Config:           withProject("web-prod-Acme", ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{
+				// An import block relying on the default plans a no-op import, with no update.
+				Config:          withProject("web-prod-Acme", ""),
+				ResourceName:    "mtncloud_network.app",
+				ImportState:     true,
+				ImportStateKind: resource.ImportBlockWithID,
+			},
+			{
+				Config: withProject("data", ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_network.app", plancheck.ResourceActionReplace),
+				}},
+				ConfigStateChecks: []statecheck.StateCheck{netCheck("project", knownvalue.StringExact("data"))},
+			},
+			{
+				PreConfig:        func() { t.Setenv("MTNCLOUD_PROJECT", "data") },
+				Config:           withProject("", ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+		},
+	})
 }
 
 func TestNetwork_Refusals(t *testing.T) {

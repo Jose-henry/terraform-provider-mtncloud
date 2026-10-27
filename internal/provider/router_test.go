@@ -446,3 +446,31 @@ func TestRouter_ImportWithoutNetworks(t *testing.T) {
 		},
 	})
 }
+
+// The router's project from the provider, and the same project by its full name on the router:
+// neither is a change, though the router's computed values aren't kept from state by the schema.
+func TestRouter_ProviderProject(t *testing.T) {
+	f, _, _ := newRouterFakes(t)
+	cfg := func(provider, routerProject string) string {
+		c := strings.Replace(routerConfig(f, `  name = "edge"
+  networks = [mtncloud_network.app.id]`), `  project = "web-prod"
+`+"` + attrs + `", "", 1)
+		c = strings.Replace(c, "resource \"mtncloud_router\" \"edge\" {\n  project = \"web-prod\"\n", "resource \"mtncloud_router\" \"edge\" {\n"+routerProject, 1)
+		if provider != "" {
+			c = strings.Replace(c, `access_token = "test-token"`, `access_token = "test-token"
+  project      = "`+provider+`"`, 1)
+		}
+		return c
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("", ""), ExpectError: regexp.MustCompile(`(?s)No project set.*MTNCLOUD_PROJECT`)},
+			{Config: cfg("web-prod", ""), ConfigStateChecks: []statecheck.StateCheck{routerCheck("project", knownvalue.StringExact("web-prod"))}},
+			{Config: cfg("web-prod-Acme", ""), ConfigPlanChecks: routerPlan(plancheck.ResourceActionNoop)},
+			{Config: cfg("", "  project = \"web-prod-Acme\"\n"), ConfigPlanChecks: routerPlan(plancheck.ResourceActionNoop),
+				ConfigStateChecks: []statecheck.StateCheck{routerCheck("project", knownvalue.StringExact("web-prod"))}},
+			{Config: cfg("web-prod-Acme", ""), ResourceName: "mtncloud_router.edge", ImportState: true, ImportStateKind: resource.ImportBlockWithID},
+		},
+	})
+}

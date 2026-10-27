@@ -30,6 +30,7 @@ var recordFixtures = map[string]string{
 
 func newRecordsAPI(t *testing.T) string {
 	t.Helper()
+	clearDefaults(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			w.WriteHeader(http.StatusUnauthorized)

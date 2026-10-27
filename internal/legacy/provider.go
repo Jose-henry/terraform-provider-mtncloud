@@ -53,6 +53,23 @@ func Provider() *schema.Provider {
 				ConflictsWith: []string{"access_token"},
 			},
 
+			// Read by the Framework half only (internal/provider); here so the two schemas match.
+			"group": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Default group, by name, for resources that don't set one, and the group to use when your account has several. Can also be set with the MTNCLOUD_GROUP environment variable.",
+			},
+			"cloud": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "The cloud to use when your group has several, by name, for example MTNNG_CLOUD_AZ_1. Can also be set with the MTNCLOUD_CLOUD environment variable.",
+			},
+			"project": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Default project, by name (for example web-prod), for resources that don't set one. Can also be set with the MTNCLOUD_PROJECT environment variable.",
+			},
+
 			// Verification is on unless the user turns it off (owner's decision, B-005).
 			"secure": {
 				Type:        schema.TypeBool,

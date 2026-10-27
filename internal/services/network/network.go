@@ -9,8 +9,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
 )
 
 // Resources lists every resource in this package, for the provider to register.
@@ -96,8 +98,52 @@ func (b *base) planProject(ctx context.Context, req resource.ModifyPlanRequest, 
 	}
 	if errFrom != nil || from.ID != to.ID {
 		resp.RequiresReplace.Append(at)
+		return
+	}
+	// The same project spelled another way ("web-prod" vs "web-prod-Acme", or a provider default):
+	// no change, the state's spelling stays.
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, at, state)...)
+	keepStateIfUnchanged(req, resp)
+}
+
+// keepStateIfUnchanged undoes the framework marking computed values unknown when the configuration
+// differed from state only in a spelling ModifyPlan has put back: if the plan, with each unknown
+// read from state, is the state, the plan is the state. Only with a fully known configuration: an
+// unknown there is a real pending change.
+func keepStateIfUnchanged(req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if !req.Config.Raw.IsFullyKnown() || resp.Diagnostics.HasError() {
+		return
+	}
+	filled, err := tftypes.Transform(resp.Plan.Raw, func(p *tftypes.AttributePath, v tftypes.Value) (tftypes.Value, error) {
+		if v.IsKnown() {
+			return v, nil
+		}
+		was, _, err := tftypes.WalkAttributePath(req.State.Raw, p)
+		if err != nil {
+			return v, nil //nolint:nilerr // no such path in state: leave the value unknown
+		}
+		if s, ok := was.(tftypes.Value); ok {
+			return s, nil
+		}
+		return v, nil
+	})
+	if err == nil && filled.Equal(req.State.Raw) {
+		resp.Plan.Raw = req.State.Raw
 	}
 }
 
 // objectAsOptions reads a nested object into a struct; unknown values were handled by the caller.
 var objectAsOptions = basetypes.ObjectAsOptions{}
+
+// fillDefaults fills the attributes the configuration leaves out from the provider-wide defaults
+// (the provider block, or env), in resp.Plan and in req.Plan, which the rest of ModifyPlan reads.
+func (b *base) fillDefaults(ctx context.Context, req *resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse, attrs ...string) {
+	d := b.client.Defaults()
+	values := map[string][2]string{
+		"project": {d.Project, "MTNCLOUD_PROJECT"}, "group": {d.Group, "MTNCLOUD_GROUP"}, "cloud": {d.Cloud, "MTNCLOUD_CLOUD"},
+	}
+	for _, a := range attrs {
+		resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, a, values[a][1], values[a][0])...)
+	}
+	req.Plan = resp.Plan
+}

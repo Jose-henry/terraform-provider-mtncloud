@@ -154,15 +154,16 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown(), stringplanmodifier.RequiresReplaceIfConfigured()},
 			},
 			"description": schema.StringAttribute{Optional: true, Description: "Description of the instance."},
+			// Optional+Computed (group and project): left out, the provider's value is used, and state keeps it.
 			"group": schema.StringAttribute{
-				Required: true,
-				Description: "Group the instance is provisioned into, by name, for example `MTNNG_CLOUD_AZ_1`. Changing it " +
-					"replaces the instance.",
+				Optional: true, Computed: true,
+				Description: "Group the instance is provisioned into, by name, for example `MTNNG_CLOUD_AZ_1`. Defaults to the " +
+					"provider's `group`. Changing it, or that default when you rely on it, replaces the instance.",
 			},
 			"project": schema.StringAttribute{
-				Required: true,
+				Optional: true, Computed: true,
 				Description: "Project the instance runs in, by name (for example `web-prod`; the full name with the tenant " +
-					"suffix also works). Changing it to another project replaces the instance.",
+					"suffix also works). Defaults to the provider's `project`. Changing it to another project, or that default when you rely on it, replaces the instance.",
 			},
 			"image": schema.StringAttribute{
 				Required: true,
@@ -334,6 +335,9 @@ func usageRange(what string) schema.SingleNestedAttribute {
 func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() || r.client == nil {
 		return // destroy, or validation before the provider is configured
+	}
+	if r.fillDefaults(ctx, &req, resp, "group", "project"); resp.Diagnostics.HasError() {
+		return
 	}
 	var plan instanceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)

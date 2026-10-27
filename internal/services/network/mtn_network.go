@@ -102,10 +102,11 @@ func (r *networkResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 				Optional:    true,
 				Description: "Description of the network.",
 			},
+			// Optional+Computed: left out, the provider's project is used, and state keeps it.
 			"project": schema.StringAttribute{
-				Required: true,
+				Optional: true, Computed: true,
 				Description: "Project the network is created in, by name (for example `web-prod`; the full name with the tenant " +
-					"suffix also works). Changing it to another project replaces the network.",
+					"suffix also works). Defaults to the provider's `project`; changing that default later replaces a network that relies on it. Changing it to another project replaces the network.",
 			},
 			"cidr": schema.StringAttribute{
 				Required:      true,
@@ -241,6 +242,9 @@ func gatewayInside(cidr, gateway types.String, at path.Path) diag.Diagnostics {
 func (r *networkResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() || r.client == nil {
 		return // destroy, or validation before the provider is configured
+	}
+	if r.fillDefaults(ctx, &req, resp, "project"); resp.Diagnostics.HasError() {
+		return
 	}
 	r.planProject(ctx, req, resp)
 	if req.State.Raw.IsNull() || resp.Diagnostics.HasError() {

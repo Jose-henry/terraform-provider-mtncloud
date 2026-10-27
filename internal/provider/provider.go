@@ -40,6 +40,9 @@ type providerModel struct {
 	Username        types.String `tfsdk:"username"`
 	Password        types.String `tfsdk:"password"`
 	Secure          types.Bool   `tfsdk:"secure"`
+	Group           types.String `tfsdk:"group"`
+	Cloud           types.String `tfsdk:"cloud"`
+	Project         types.String `tfsdk:"project"`
 }
 
 func (p *mtncloudProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -74,6 +77,18 @@ func (p *mtncloudProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 				Sensitive:   true,
 				Description: "Password of MTN Cloud user for authentication",
 			},
+			"group": schema.StringAttribute{
+				Optional:    true,
+				Description: "Default group, by name, for resources that don't set one, and the group to use when your account has several. Can also be set with the MTNCLOUD_GROUP environment variable.",
+			},
+			"cloud": schema.StringAttribute{
+				Optional:    true,
+				Description: "The cloud to use when your group has several, by name, for example MTNNG_CLOUD_AZ_1. Can also be set with the MTNCLOUD_CLOUD environment variable.",
+			},
+			"project": schema.StringAttribute{
+				Optional:    true,
+				Description: "Default project, by name (for example web-prod), for resources that don't set one. Can also be set with the MTNCLOUD_PROJECT environment variable.",
+			},
 			"secure": schema.BoolAttribute{
 				Optional:    true,
 				Description: `Verify the MTN Cloud console's TLS certificate. Defaults to "true". Set to "false" only for a console with a self-signed certificate.`,
@@ -89,7 +104,7 @@ func (p *mtncloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 	unknown := cfg.Secure.IsUnknown() // an unknown "secure" must never fall back to false
-	for _, v := range []types.String{cfg.URL, cfg.AccessToken, cfg.TenantSubdomain, cfg.Username, cfg.Password} {
+	for _, v := range []types.String{cfg.URL, cfg.AccessToken, cfg.TenantSubdomain, cfg.Username, cfg.Password, cfg.Group, cfg.Cloud, cfg.Project} {
 		unknown = unknown || v.IsUnknown()
 	}
 	if unknown {
@@ -120,11 +135,16 @@ func (p *mtncloudProvider) Configure(ctx context.Context, req provider.Configure
 
 	auth := resolveAuth(cfg)
 	c, err := client.New(client.Config{
-		URL:       url,
-		Token:     auth.token,
-		Username:  auth.username,
-		Password:  auth.password,
-		Tenant:    auth.tenant,
+		URL:      url,
+		Token:    auth.token,
+		Username: auth.username,
+		Password: auth.password,
+		Tenant:   auth.tenant,
+		Defaults: client.Defaults{
+			Group:   stringOrEnv(cfg.Group, "MTNCLOUD_GROUP"),
+			Cloud:   stringOrEnv(cfg.Cloud, "MTNCLOUD_CLOUD"),
+			Project: stringOrEnv(cfg.Project, "MTNCLOUD_PROJECT"),
+		},
 		Insecure:  !secure,
 		UserAgent: "terraform-provider-mtncloud/" + p.version,
 		Logger: func(ctx context.Context, msg string, fields map[string]any) {

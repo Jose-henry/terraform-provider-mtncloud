@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
 )
 
 // Resources lists every resource in this package, for the provider to register.
@@ -42,4 +43,17 @@ func (b *base) ready(diags *diag.Diagnostics) bool {
 		return false
 	}
 	return true
+}
+
+// fillDefaults fills the attributes the configuration leaves out from the provider-wide defaults
+// (the provider block, or env), in resp.Plan and in req.Plan, which the rest of ModifyPlan reads.
+func (b *base) fillDefaults(ctx context.Context, req *resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse, attrs ...string) {
+	d := b.client.Defaults()
+	values := map[string][2]string{
+		"project": {d.Project, "MTNCLOUD_PROJECT"}, "group": {d.Group, "MTNCLOUD_GROUP"}, "cloud": {d.Cloud, "MTNCLOUD_CLOUD"},
+	}
+	for _, a := range attrs {
+		resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, a, values[a][1], values[a][0])...)
+	}
+	req.Plan = resp.Plan
 }

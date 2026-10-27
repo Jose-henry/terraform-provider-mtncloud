@@ -34,8 +34,17 @@ type fakeAPI struct {
 	order  http.Handler // /api/catalog/orders and /items, a stateful fake (project_test.go), when set
 }
 
+// clearDefaults keeps the developer's MTNCLOUD_PROJECT, _GROUP and _CLOUD out of a test.
+func clearDefaults(t *testing.T) {
+	t.Helper()
+	for _, env := range []string{"MTNCLOUD_PROJECT", "MTNCLOUD_GROUP", "MTNCLOUD_CLOUD"} {
+		t.Setenv(env, "")
+	}
+}
+
 func newFakeAPI(t *testing.T) *fakeAPI {
 	t.Helper()
+	clearDefaults(t)
 	routes := map[string]string{
 		"/api/whoami":                            "whoami_subtenant.json",
 		"/api/options/groups":                    "options_groups.json",

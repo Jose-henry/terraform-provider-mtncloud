@@ -970,3 +970,37 @@ func TestInstance_FloatingIPFailures(t *testing.T) {
 		},
 	})
 }
+
+// Group and project left out come from the provider; the instance's own value wins.
+func TestInstance_ProviderDefaults(t *testing.T) {
+	f, _ := newInstFakes(t)
+	cfg := func(provider, attrs string) string {
+		return strings.Replace(f.providerConfig(), `access_token = "test-token"`, `access_token = "test-token"
+`+provider, 1) + `
+resource "mtncloud_instance" "app" {
+  name     = "app-1"
+  image    = "MTN Ubuntu Server 24.04.3LTS"
+  plan     = "G1S1"
+  networks = ["9301"]
+` + attrs + `
+}
+`
+	}
+	both := `  group   = "mtnng_cloud_az_1"
+  project = "web-prod"`
+	check := func(attr, want string) statecheck.StateCheck {
+		return statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New(attr), knownvalue.StringExact(want))
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg(`  project = "web-prod"`, ""), ExpectError: regexp.MustCompile(`(?s)No group set.*MTNCLOUD_GROUP`)},
+			{Config: cfg(both, ""), ConfigStateChecks: []statecheck.StateCheck{check("group", "mtnng_cloud_az_1"), check("project", "web-prod")}},
+			// The same group and project set on the instance: no change.
+			{Config: cfg(both, `  group = "MTNNG_CLOUD_AZ_1"
+  project = "web-prod"`), ConfigPlanChecks: instPlan(plancheck.ResourceActionNoop)},
+			{Config: cfg(both, `  project = "data"`), ConfigPlanChecks: instPlan(plancheck.ResourceActionReplace),
+				ConfigStateChecks: []statecheck.StateCheck{check("project", "data")}},
+		},
+	})
+}

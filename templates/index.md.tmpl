@@ -29,6 +29,21 @@ A customer login also needs your tenant's subdomain, set with `tenant_subdomain`
 TLS certificates are verified by default. Set `secure = false` (or `MTNCLOUD_API_SECURE=false`) only
 for a console with a self-signed certificate, never in production.
 
+## Defaults for project, group and cloud
+
+Set `project` (and `group`) once on the provider block, or with `MTNCLOUD_PROJECT` and
+`MTNCLOUD_GROUP`, and leave them out of `mtncloud_instance`, `mtncloud_network`, `mtncloud_router`
+and `mtncloud_security_group`. A value on the resource always wins. With neither set, the plan
+fails and names the attribute.
+
+`group` and `cloud` also choose the group and cloud when your account has several, for example for
+`mtncloud_project`. With one of each, you don't need them.
+
+State records the project each resource was created in. If you later change the provider's
+`project`, resources that rely on it show as **replaced** in the plan: read the plan before
+applying. Data source filters never use these defaults: a list with no `project` lists every
+project.
+
 ## Example Usage
 
 {{tffile "examples/provider/provider.tf"}}

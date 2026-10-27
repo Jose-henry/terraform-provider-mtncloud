@@ -76,10 +76,12 @@ func (r *routerResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 				Optional:    true,
 				Description: "Description of the router.",
 			},
+			// Optional+Computed: left out, the provider's project is used, and state keeps it.
 			"project": schema.StringAttribute{
-				Required: true,
+				Optional: true, Computed: true,
 				Description: "Project the router is created in, by name (for example `web-prod`; the full name with the tenant " +
-					"suffix also works). Its networks must be in the same project. Changing it to another project replaces the router.",
+					"suffix also works). Defaults to the provider's `project`; changing that default later replaces a router that relies on it. Its networks must be in the same project. " +
+					"Changing it to another project replaces the router.",
 			},
 			"networks": schema.SetAttribute{
 				Required:    true,
@@ -123,6 +125,9 @@ func (r *routerResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 func (r *routerResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() || r.client == nil {
 		return // destroy, or validation before the provider is configured
+	}
+	if r.fillDefaults(ctx, &req, resp, "project"); resp.Diagnostics.HasError() {
+		return
 	}
 	r.planProject(ctx, req, resp)
 	var plan routerModel

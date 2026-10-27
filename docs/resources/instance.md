@@ -84,11 +84,9 @@ resource "mtncloud_instance" "worker" {
 
 ### Required
 
-- `group` (String) Group the instance is provisioned into, by name, for example `MTNNG_CLOUD_AZ_1`. Changing it replaces the instance.
 - `image` (String) Operating system image, by name (`MTN Ubuntu Server 24.04.3LTS`) or code (`MTN-U24.04LTS`); the `mtncloud_images` data source lists them. Changing it replaces the instance.
 - `networks` (List of String) IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`. The first is the primary network: changing it replaces the instance. Networks added at the end are attached in place (the guest OS must configure the new card); removing or reordering networks replaces the instance.
 - `plan` (String) Size of the VM, for example `G2S4` (the `mtncloud_plans` data source lists a project's sizes). **Changing it restarts the VM**, in place.
-- `project` (String) Project the instance runs in, by name (for example `web-prod`; the full name with the tenant suffix also works). Changing it to another project replaces the instance.
 
 ### Optional
 
@@ -101,10 +99,12 @@ resource "mtncloud_instance" "worker" {
 - `environment` (String) Environment, by name or code, for example `Production`. Changed in place.
 - `expire_days` (Number) Delete the instance this many days after it is created. Set at create only: afterwards extend or cancel the expiry in the console (a change here is refused at plan time).
 - `floating_ip_pool` (String) Give the instance a floating (public) IP from this pool, for example `public-network-02` (the `mtncloud_external_networks` data source lists the names). It is attached once the VM is running, and works only when the instance's network is on an MTN Router with an external network. Changed in place: the old address is released and a new one attached. Apply waits until the instance shows the address (in `public_ip`), and fails if it doesn't.
+- `group` (String) Group the instance is provisioned into, by name, for example `MTNNG_CLOUD_AZ_1`. Defaults to the provider's `group`. Changing it, or that default when you rely on it, replaces the instance.
 - `hostname` (String) Hostname set inside the VM. Left out, MTN Cloud derives it from the name or your hostname template. Changing it replaces the instance.
 - `install_agent` (Boolean) Install the MTN Cloud agent, for monitoring, logs and automation. Defaults to `true`. The agent needs the network to be on an MTN Router. Changing it replaces the instance.
 - `labels` (Set of String) Labels (keywords). Changed in place.
 - `name` (String) Name of the instance. Leave it out to use your tenant's naming template (for example `<initials>-<account>-MTN-CLOUD-<type>-<n>`); the generated name is then shown here. Renaming is done in place.
+- `project` (String) Project the instance runs in, by name (for example `web-prod`; the full name with the tenant suffix also works). Defaults to the provider's `project`. Changing it to another project, or that default when you rely on it, replaces the instance.
 - `root_volume_size` (Number) Root volume size in GB. Left out, the plan's size applies (10 GB). MTN Cloud can't resize a root volume: add a `data_volume` instead. Windows images need at least 40 GB.
 - `scale` (Attributes) Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and removes one below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. Changed in place; removing it turns scaling off. (see [below for nested schema](#nestedatt--scale))
 - `scale_factor` (Number) Number of VMs in the instance. Defaults to 1. For several separate instances use `count` or `for_each`. Changing it replaces the instance.

@@ -29,6 +29,21 @@ A customer login also needs your tenant's subdomain, set with `tenant_subdomain`
 TLS certificates are verified by default. Set `secure = false` (or `MTNCLOUD_API_SECURE=false`) only
 for a console with a self-signed certificate, never in production.
 
+## Defaults for project, group and cloud
+
+Set `project` (and `group`) once on the provider block, or with `MTNCLOUD_PROJECT` and
+`MTNCLOUD_GROUP`, and leave them out of `mtncloud_instance`, `mtncloud_network`, `mtncloud_router`
+and `mtncloud_security_group`. A value on the resource always wins. With neither set, the plan
+fails and names the attribute.
+
+`group` and `cloud` also choose the group and cloud when your account has several, for example for
+`mtncloud_project`. With one of each, you don't need them.
+
+State records the project each resource was created in. If you later change the provider's
+`project`, resources that rely on it show as **replaced** in the plan: read the plan before
+applying. Data source filters never use these defaults: a list with no `project` lists every
+project.
+
 ## Example Usage
 
 ```terraform
@@ -45,6 +60,9 @@ provider "mtncloud" {
   url      = var.mtncloud_url
   username = var.mtncloud_username
   password = var.mtncloud_password
+
+  # Optional defaults: resources that leave out project (or group) use these.
+  project = var.mtncloud_project
 }
 ```
 
@@ -54,7 +72,10 @@ provider "mtncloud" {
 ### Optional
 
 - `access_token` (String, Sensitive) Access Token of MTN Cloud user. This can be used instead of authenticating with Username and Password.
+- `cloud` (String) The cloud to use when your group has several, by name, for example MTNNG_CLOUD_AZ_1. Can also be set with the MTNCLOUD_CLOUD environment variable.
+- `group` (String) Default group, by name, for resources that don't set one, and the group to use when your account has several. Can also be set with the MTNCLOUD_GROUP environment variable.
 - `password` (String, Sensitive) Password of MTN Cloud user for authentication
+- `project` (String) Default project, by name (for example web-prod), for resources that don't set one. Can also be set with the MTNCLOUD_PROJECT environment variable.
 - `secure` (Boolean) Verify the MTN Cloud console's TLS certificate. Defaults to "true". Set to "false" only for a console with a self-signed certificate.
 - `tenant_subdomain` (String) The tenant subdomain used for authentication
 - `url` (String) The URL of the MTN Cloud console where requests will be directed.

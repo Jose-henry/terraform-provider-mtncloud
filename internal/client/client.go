@@ -35,6 +35,10 @@ type Config struct {
 	Password string
 	Tenant   string
 
+	// Defaults from the provider block or MTNCLOUD_GROUP, MTNCLOUD_CLOUD, MTNCLOUD_PROJECT: the group
+	// and cloud picked when the account has several, and the project used when a resource names none.
+	Defaults Defaults
+
 	Insecure  bool   // skip TLS verification
 	UserAgent string // for example terraform-provider-mtncloud/1.2.3
 
@@ -52,6 +56,11 @@ type Config struct {
 	PollMax time.Duration // default 15s
 }
 
+// Defaults are the provider-wide group, cloud and project, by name. Empty means not set.
+type Defaults struct {
+	Group, Cloud, Project string
+}
+
 // Client is an authenticated MTN Cloud API client.
 type Client struct {
 	cfg     Config
@@ -65,6 +74,9 @@ type Client struct {
 
 	cache lookupCache
 }
+
+// Defaults returns the provider-wide group, cloud and project.
+func (c *Client) Defaults() Defaults { return c.cfg.Defaults }
 
 // New validates cfg and returns a Client. It does not call the API: login happens on first use.
 func New(cfg Config) (*Client, error) {

@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 
 hits="$(git ls-files -z --cached --others --exclude-standard \
   | grep -zvE '^(go\.mod|go\.sum|LICENSE|CLAUDE\.md|scripts/check-names\.sh)$|^(dev-docs|\.claude)/' \
-  | xargs -0 grep -nIiE 'morpheus|morhpeus|morpehus|morpheous|\bhpe\b' 2>/dev/null \
+  | xargs -0 grep -nIiE 'morpheus|morhpeus|morpehus|morpheous|moprheus|mopheus|morphues|morphus|\bhpe\b' 2>/dev/null \
   | grep -v 'github.com/gomorpheus/morpheus-go-sdk' \
   | grep -v 'mtncloud:allow-upstream-name' || true)"
 

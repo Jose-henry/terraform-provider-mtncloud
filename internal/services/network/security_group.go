@@ -154,10 +154,11 @@ func (r *securityGroupResource) Schema(_ context.Context, _ resource.SchemaReque
 				Optional:    true,
 				Description: "Description of the security group.",
 			},
+			// Optional+Computed: left out, the provider's project is used, and state keeps it.
 			"project": schema.StringAttribute{
-				Required: true,
+				Optional: true, Computed: true,
 				Description: "Project the group is created in, by name (for example `web-prod`; the full name with the tenant suffix also works). " +
-					"Changing it to another project replaces the group.",
+					"Defaults to the provider's `project`; changing that default later replaces a group that relies on it. Changing it to another project replaces the group.",
 			},
 			"rules": schema.SetNestedAttribute{
 				Optional: true,
@@ -290,6 +291,9 @@ func desiredRules(ctx context.Context, set types.Set) (rules []rule, ok bool, di
 func (r *securityGroupResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() || r.client == nil {
 		return // destroy, or validation before the provider is configured
+	}
+	if r.fillDefaults(ctx, &req, resp, "project"); resp.Diagnostics.HasError() {
+		return
 	}
 	r.planProject(ctx, req, resp)
 	if req.State.Raw.IsNull() || resp.Diagnostics.HasError() {

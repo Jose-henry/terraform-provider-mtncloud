@@ -318,8 +318,37 @@ func TestPlacement_AmbiguousGroupIsAnError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[{"name":"one","value":1},{"name":"two","value":2}]}`))
 	})
 	_, err := f.client(t).Placement(t.Context())
-	if err == nil || !strings.Contains(err.Error(), "2 groups (one, two)") {
+	if err == nil || !strings.Contains(err.Error(), "2 groups (one, two)") || !strings.Contains(err.Error(), "MTNCLOUD_GROUP") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// The provider's group and cloud pick among several (case ignored); a wrong name lists the choices.
+func TestPlacement_DefaultsPick(t *testing.T) {
+	f := newFakeAPI(t)
+	f.route("GET", "/api/options/groups", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"name":"one","value":1},{"name":"two","value":2}]}`))
+	})
+	f.route("GET", "/api/options/clouds", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"name":"AZ_1","value":4},{"name":"AZ_2","value":5}]}`))
+	})
+	p, err := f.client(t, func(c *Config) { c.Defaults = Defaults{Group: "TWO", Cloud: "az_2"} }).Placement(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.GroupID != 2 || p.CloudID != 5 || p.GroupName != "two" {
+		t.Errorf("got %+v", p)
+	}
+	if q := f.last("/api/options/clouds").URL.Query().Get("groupId"); q != "2" {
+		t.Errorf("clouds asked for group %q", q)
+	}
+	_, err = f.client(t, func(c *Config) { c.Defaults = Defaults{Group: "two"} }).Placement(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "2 clouds (AZ_1, AZ_2)") || !strings.Contains(err.Error(), "MTNCLOUD_CLOUD") {
+		t.Errorf("no cloud chosen: got %v", err)
+	}
+	_, err = f.client(t, func(c *Config) { c.Defaults = Defaults{Group: "three"} }).Placement(t.Context())
+	if !IsNoMatch(err) || !strings.Contains(err.Error(), `no group named "three"`) {
+		t.Errorf("unknown group: got %v", err)
 	}
 }
 
