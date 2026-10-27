@@ -4,6 +4,9 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+- New data sources `mtncloud_routers`, `mtncloud_instances` and `mtncloud_instance`: look up MTN Routers and instances, including those made in the console, by name or ID.
+- `mtncloud_instance`: an attach whose address hasn't shown when the timeout ends is never sent again (no second address); a warning shows until it appears. A timeout message now suggests raising `timeouts`.
+- Removed the "Sharing Data Between Apps/Instances" guide: it needs master-only secret policies.
 - Docs: removed a deprecation notice and an outdated TLS warning carried over from the upstream provider; neither applied to this provider. The front page now describes MTN Cloud, and the examples pin `~> 0.1`.
 - Forked from the upstream provider (MIT) and renamed to `mtncloud` (`mtn/mtncloud`).
 - Scope reduced to OpenStack: removed AWS, Azure, vSphere, standard and MVM clouds and instances, ARM and CloudFormation blueprints and spec templates, and the `cloud_folder` data source. `cloud_datastore` was restored: datastores are OpenStack Cinder volume types.

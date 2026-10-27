@@ -185,6 +185,19 @@ func (c *Client) FindRouters(ctx context.Context, name string) ([]*Router, error
 	return out, nil
 }
 
+// ListRouters returns every router the caller can see.
+func (c *Client) ListRouters(ctx context.Context) ([]*Router, error) {
+	items, err := listAll[wireRouter](ctx, c, "/api/networks/routers", "networkRouters", nil)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Router, len(items))
+	for i, w := range items {
+		out[i] = w.router()
+	}
+	return out, nil
+}
+
 // UpdateRouter changes the description, enabled flag, gateway and interfaces. The API refuses a
 // new name ("Field name cannot be changed"), so the name is never sent.
 func (c *Client) UpdateRouter(ctx context.Context, id int64, in RouterInput) error {

@@ -102,7 +102,9 @@ DATA_SOURCES = [
     ("Cloud, projects and capacity",
      ["cloud", "clouds", "cloud_type", "cloud_datastore", "resource_pool", "provision_type"]),
     ("Networking",
-     ["network", "networks", "network_group", "network_subnet", "domain"]),
+     ["network", "networks", "network_group", "network_subnet", "domain", "routers"]),
+    ("Compute",
+     ["instance", "instances"]),
     ("Images, plans and library",
      ["instance_type", "instance_layout", "node_type", "cluster_type", "plan", "virtual_image",
       "virtual_images", "spec_template", "file_template", "script_template", "security_package",
@@ -140,7 +142,7 @@ MASTER_ONLY = {
 # Built for customers on the endpoints the console's own wizard uses (D-016).
 FOR_CUSTOMERS = {"resource": {"project", "instance", "network", "router", "security_group", "security_group_rule"},
                  "data": {"projects", "images", "plans", "datastores", "security_groups",
-                          "external_networks", "catalog_items"}}
+                          "external_networks", "catalog_items", "routers", "instances", "instance"}}
 # Need an integration first; the probed tenant had none.
 NOT_CHECKED = {"data": {"ansible_tower_inventory", "ansible_tower_job_template", "chef_server",
                         "servicenow_workflow", "vro_workflow"}}
@@ -174,9 +176,7 @@ PLANNED = [
         ("mtncloud_datastore", "Planned", "Datastores: the storage that volumes are created on."),
         ("mtncloud_load_balancer", "Planned", "Load balancers (OpenStack Octavia): listeners, pools and members."),
     ]),
-    ("Data sources", [
-        ("mtncloud_routers", "Planned", "MTN Routers in a project."),
-    ]),
+    ("Data sources", []),
 ]
 
 

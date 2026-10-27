@@ -35,7 +35,9 @@ with more than one is an error, not a guess.
 | `mtncloud_security_groups` | `GET /api/options/zoneSecurityGroup?zoneId&poolId` | `project`, `name_regex` | `id`, `name`, `external_id` |
 | `mtncloud_external_networks` | `GET /api/options/openstackExternalNetworks?zoneId=` | `name_regex` | `id`, `name` |
 | `mtncloud_catalog_items` | `GET /api/catalog/types` (paged; no `code` field) | `name_regex`, `type` | `id`, `name`, `description`, `type`, `featured` |
-| `mtncloud_routers` | planned | | |
+| `mtncloud_routers` | `GET /api/networks/routers` (paged) | `name_regex` | `id`, `name`, `description`, `status`, `enabled`, `external_network`, `external_ip`, `networks` |
+| `mtncloud_instances` | `GET /api/instances` (paged) + projects for names | `name_regex`, `project` | `id`, `name`, `status`, `project`, `image`, `plan`, `private_ip`, `public_ip`, `labels` |
+| `mtncloud_instance` | `GET /api/instances/{id}`, or the list by exact name | `id` or `name`, `project` | the same, for one instance |
 
 `project` accepts the short name (`web-prod`) or the full name (`web-prod-<TENANT>`), matched
 case-sensitively. TENANT is the account name from `/api/whoami`, not the login subdomain: user

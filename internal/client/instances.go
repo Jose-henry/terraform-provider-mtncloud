@@ -431,6 +431,35 @@ func (c *Client) FindInstances(ctx context.Context, name string, projectID int64
 	return out, nil
 }
 
+// ListInstances returns every instance the caller can see.
+func (c *Client) ListInstances(ctx context.Context) ([]*Instance, error) {
+	items, err := listAll[wireInstance](ctx, c, "/api/instances", "instances", nil)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Instance, len(items))
+	for i, w := range items {
+		out[i] = w.instance()
+	}
+	return out, nil
+}
+
+// ListInstancesNamed returns the instances with exactly this name, in any project. The server
+// filters by name (loosely), so only those are fetched.
+func (c *Client) ListInstancesNamed(ctx context.Context, name string) ([]*Instance, error) {
+	items, err := listAll[wireInstance](ctx, c, "/api/instances", "instances", url.Values{"name": {name}})
+	if err != nil {
+		return nil, err
+	}
+	var out []*Instance
+	for _, w := range items {
+		if in := w.instance(); in.Name == name {
+			out = append(out, in)
+		}
+	}
+	return out, nil
+}
+
 // UpdateInstance changes the name, description, environment, labels and tags in place. Tags are
 // sent as the full list.
 func (c *Client) UpdateInstance(ctx context.Context, id int64, u InstanceUpdate) error {

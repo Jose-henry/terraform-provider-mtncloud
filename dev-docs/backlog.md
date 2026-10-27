@@ -14,7 +14,8 @@
 ## Build order (after approval)
 
 1. ~~`internal/client`~~ done.
-2. ~~Catalog data sources~~ done: projects, images, plans, datastores, security groups, external networks, catalog items.
+2. ~~Catalog data sources~~ done: projects, images, plans, datastores, security groups, external networks, catalog items;
+   then routers, instances and instance (2026-10-27).
 3. `mtncloud_security_group` (+ rule)
 4. `mtncloud_network` (MTN Network)
 5. `mtncloud_router` (MTN Router)
@@ -23,7 +24,8 @@
 7. `mtncloud_project`
 8. `mtncloud_catalog_order`
 9. `mtncloud_object_storage` (MOS)
-10. `mtncloud_app`, `mtncloud_load_balancer`, `mtncloud_ssl_certificate`
+10. `mtncloud_app`, `mtncloud_ssl_certificate`, `mtncloud_cluster`, `mtncloud_datastore`,
+    `mtncloud_load_balancer` (D-023)
 
 ## B-001 Real bugs inherited in legacy
 - 32 `json.Unmarshal` calls whose error is dropped: a bad API response becomes an empty struct, and
@@ -124,6 +126,9 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
 - Does `PUT /api/instances/{id}` with an empty `labels` or `tags` list clear them?
 - Delete: does the instance go straight to `pendingRemoval` or 404, or does a delete policy (delayed
   delete) keep it longer than the 30 minute timeout?
+- Floating IP with `scale_factor` above 1: the wait and drift check look at the instance's one
+  `public_ip`, not each VM's. Does a stopped VM keep its floating IP in `connectionInfo` (if not,
+  every plan re-attaches)? Both need the live run.
 - Floating IP (built from docs + reads; the apply waits for the address): how long until it shows in
   `connectionInfo`, and is the default timeout enough? Does detach release the address back to the pool? What does the
   attach error say when the network has no router? Availability zone list

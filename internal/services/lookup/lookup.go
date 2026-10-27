@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
@@ -31,6 +32,9 @@ func DataSources() []func() datasource.DataSource {
 		newSecurityGroups,
 		newExternalNetworks,
 		newCatalogItems,
+		newRouters,
+		newInstances,
+		newInstance,
 	}
 }
 
@@ -91,6 +95,16 @@ func matcher(re types.String) (func(string) bool, diag.Diagnostics) {
 		return nil, diags
 	}
 	return r.MatchString, diags
+}
+
+// projectError reports a failed project lookup: a name that matched nothing on the project
+// attribute, anything else (the API or the network failing) as an API error.
+func projectError(diags *diag.Diagnostics, err error) {
+	if client.IsNoMatch(err) {
+		diags.AddAttributeError(path.Root("project"), "Unknown project", err.Error())
+		return
+	}
+	apiError(diags, "projects", err)
 }
 
 // apiError reports a client error as a diagnostic, naming what was being looked up.

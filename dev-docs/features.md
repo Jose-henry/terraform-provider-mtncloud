@@ -6,11 +6,11 @@ The provider targets MTN Cloud on OpenStack. The cloud (`MTNNG_CLOUD_AZ_1`) is f
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 118 | 70 |
-| Usable with a customer (sub-tenant) login | 82 | 53 |
+| Available today | 118 | 73 |
+| Usable with a customer (sub-tenant) login | 82 | 56 |
 | Master tenant only | 36 | 12 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 7 | 1 |
+| Coming next | 7 | 0 |
 
 ## Who can use what
 
@@ -308,6 +308,14 @@ Autoscaling thresholds.
 | [`mtncloud_network_group`](../docs/data-sources/network_group.md) | Yes (read verified) |
 | [`mtncloud_network_subnet`](../docs/data-sources/network_subnet.md) | Yes (read verified) |
 | [`mtncloud_networks`](../docs/data-sources/networks.md) | Yes (read verified) |
+| [`mtncloud_routers`](../docs/data-sources/routers.md) | Yes, built for customers |
+
+### Compute
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_instance`](../docs/data-sources/instance.md) | Yes, built for customers |
+| [`mtncloud_instances`](../docs/data-sources/instances.md) | Yes, built for customers |
 
 ### Images, plans and library
 
@@ -407,4 +415,3 @@ Designed, **not available yet**, and all meant for customers.
 
 | Type | Status | What it does |
 |---|---|---|
-| `mtncloud_routers` | Planned | MTN Routers in a project. |

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -45,7 +46,7 @@ func matchProject(projects []Option, name, tenant string) (Option, error) {
 		for i, p := range projects {
 			names[i] = normalize.ProjectShortName(p.Name, tenant)
 		}
-		return Option{}, fmt.Errorf("no project named %q. Your projects: %s. %s", name, list(names), SyncHint)
+		return Option{}, &NoMatchError{fmt.Sprintf("no project named %q. Your projects: %s. %s", name, list(names), SyncHint)}
 	}
 	full := make([]string, len(found))
 	for i, p := range found {
@@ -238,4 +239,15 @@ func list(names []string) string {
 	s := slices.Clone(names)
 	slices.Sort(s)
 	return strings.Join(slices.Compact(s), ", ")
+}
+
+// NoMatchError says a name matched nothing the caller can see: the user's input is wrong, not the API.
+type NoMatchError struct{ msg string }
+
+func (e *NoMatchError) Error() string { return e.msg }
+
+// IsNoMatch reports whether err is a NoMatchError.
+func IsNoMatch(err error) bool {
+	var e *NoMatchError
+	return errors.As(err, &e)
 }

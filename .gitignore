@@ -39,3 +39,6 @@ Thumbs.db
 
 # CLI payload captures (real tenant data)
 .captures/
+
+# --- Owner-only working documents ---
+/private/

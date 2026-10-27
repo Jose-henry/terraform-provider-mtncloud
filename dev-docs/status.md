@@ -1,6 +1,6 @@
 # Status: what's done, what's next
 
-Last updated 2026-10-26 (PR #3, client and lookup data sources). Update this file at the end of every PR.
+Last updated 2026-10-27 (floating IP wait, compute lookups, planned list). Update this file at the end of every PR.
 
 ## Done
 
@@ -103,6 +103,17 @@ Last updated 2026-10-26 (PR #3, client and lookup data sources). Update this fil
   `floating_ip_pool` (attached after running; the apply waits for the address) on `main`.
 - `mtncloud_project` (`internal/services/catalog`, on `main`): orders "Create Project", waits for
   the workflow's execution only (D-020, D-022). ID = catalog order item. Not proven live (B-015).
+- Floating IP wait (2026-10-27, owner: an attach that fails, fails the apply): each attach/detach
+  polls the instance's address. An attach sent but never seen is kept in private state and never
+  re-sent; a detach counts only once the address is gone. Timeouts suggest raising `timeouts`.
+- Lookup data sources for console-made objects (2026-10-27): `mtncloud_routers` (name_regex),
+  `mtncloud_instances` (name_regex, project) and `mtncloud_instance` (id or name, optional project;
+  errors on none or several). A customer login reads `/api/networks/routers`, `/api/instances`,
+  `/api/networks`, `/api/networks/domains`, `/api/environments` and `/api/key-pairs` (200, re-checked
+  2026-10-27), so the inherited network, domain, environment and key pair data sources stay
+  "read verified". Availability zones remain blocked: `/api/options/openstackAvailabilityZone` answers 500.
+- Guides: "Sharing Data Between ..." removed (it needed master-only Cypher policies). A private,
+  git-ignored use-and-test guide (`private/*.pdf`, rebuilt with `python private/make_guide_pdf.py .`) is generated from the examples.
 
 ## Next (in order, each one a PR with tests, after the owner approves its plan)
 

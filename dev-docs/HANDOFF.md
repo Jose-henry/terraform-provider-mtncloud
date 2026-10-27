@@ -23,20 +23,22 @@ provider and renamed throughout.
 4. `dev-docs/status.md`: what's done and what's next. Then `backlog.md` (open questions Q1–Q6),
    `prerequisites.md` (project name → pool ID resolution, synced default security group),
    `catalog-lookups.md` (names, not IDs), `api-research.md` (payloads P1–P10 still needed),
-   `mtn-cloud-domain.md` (catalog items, images, MOS), and `decisions.md` (D-001…D-017).
+   `mtn-cloud-domain.md` (catalog items, images, MOS), and `decisions.md` (D-001…D-023).
 
 **Where things stand:** `main` has the scaffold, the features guide (PR #2) and, from PR #3, the
-Plugin Framework provider muxed with legacy, `internal/client`, and seven name-lookup data sources
-(projects, images, plans, datastores, security groups, external networks, catalog items). Read
-`dev-docs/status.md` for details. No MTN-specific **resource** exists yet. The next one is
-`mtncloud_security_group`.
+Plugin Framework provider muxed with legacy, `internal/client`, ten lookup data sources
+(projects, images, plans, datastores, security groups, external networks, catalog items, routers,
+instances, instance) and the resources project, network, router, security group (+ rule) and
+instance (with floating IP). Read `dev-docs/status.md` for details. Next: a live proof of project and
+floating IP (B-015, B-013), then `mtncloud_catalog_order`.
 
 **Domain facts you must not get wrong:**
 - Customers type a **project name**. Its resource pool is named `<project>-<tenant account name>`.
   Resolve it to the pool ID inside the caller's tenant (filter `tenants[]` by tenant ID). Report the
   short name back.
-- A new project takes about 10 minutes and syncs in a default security group and pools. Dependents
-  must wait for that sync.
+- A new project's order takes about 10 minutes; its default security group and floating IP pools
+  then sync in, which can take up to an hour. Nothing waits for that sync (owner, D-022): lookups that
+  find nothing say to wait up to an hour (`client.SyncHint`).
 - Networking is **MTN Network** / **MTN Router** (Neutron). Network first, then router (external
   network optional, internal networks).
 - Object storage is **MOS**. Keys come from catalog item 13 (`s32311`), are stored in Cypher, and
