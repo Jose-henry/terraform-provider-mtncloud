@@ -12,11 +12,11 @@ The provider targets MTN Cloud on OpenStack. The cloud (`MTNNG_CLOUD_AZ_1`) is f
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 115 | 70 |
-| Usable with a customer (sub-tenant) login | 79 | 53 |
+| Available today | 116 | 70 |
+| Usable with a customer (sub-tenant) login | 80 | 53 |
 | Master tenant only | 36 | 12 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 9 | 1 |
+| Coming next | 8 | 1 |
 
 ## Who can use what
 
@@ -217,13 +217,14 @@ Service plans and the prices attached to them. Master tenant only; customers pic
 
 ### Networking
 
-MTN Networks, security groups (instance firewalls) and their rules, IP pools (static IP ranges for a network) and DNS domains (instance hostnames and domain join). The MTN Router resource is next (see below).
+MTN Networks and MTN Routers, security groups (instance firewalls) and their rules, IP pools (static IP ranges for a network) and DNS domains (instance hostnames and domain join).
 
 | Type | Customer login |
 |---|---|
 | [`mtncloud_ipv4_ip_pool`](../resources/ipv4_ip_pool.md) | Yes (read verified) |
 | [`mtncloud_network`](../resources/network.md) | Yes, built for customers |
 | [`mtncloud_network_domain`](../resources/network_domain.md) | Yes (read verified) |
+| [`mtncloud_router`](../resources/router.md) | Yes, built for customers |
 | [`mtncloud_security_group`](../resources/security_group.md) | Yes, built for customers |
 | [`mtncloud_security_group_rule`](../resources/security_group_rule.md) | Yes, built for customers |
 
@@ -384,8 +385,7 @@ Designed, **not available yet**, and all meant for customers. Until `mtncloud_in
 
 | Type | Status | What it does |
 |---|---|---|
-| `mtncloud_router` | Next | MTN Router: connects MTN Networks to each other and, optionally, to the internet through a public network. |
-| `mtncloud_instance` | Planned | OpenStack VM from an MTN OS image: plan by size name (for example `G2S4`), project, networks, several security groups, volumes on any Cinder datastore, optional floating IP. |
+| `mtncloud_instance` | Next | OpenStack VM from an MTN OS image: plan by size name (for example `G2S4`), project, networks, several security groups, volumes on any Cinder datastore, optional floating IP. |
 | `mtncloud_floating_ip` | Planned | A public IP that can outlive an instance. |
 | `mtncloud_project` | Planned | Order a project (resource pool) by name and wait until it and its default security group have synced. |
 | `mtncloud_catalog_order` | Planned | Order any catalog service (Kubernetes, managed databases, VPN, firewall, NAT, BYOL appliances and more), with its inputs. |

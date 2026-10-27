@@ -102,3 +102,15 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
 - Changing the gateway while a router port holds the old gateway address: refused by Neutron? If
   so, make `gateway` RequiresReplace or document it with `mtncloud_router`.
 - The status code of a security group "in use" refusal (the hint now covers 400, 409 and 2xx).
+
+## B-012 MTN Router behaviour still to prove live
+- Straight after a PUT, does GET already show the new interfaces, or "ok" with the old ones for a
+  moment? If the latter, update must wait for the interfaces to match, or apply fails with
+  "inconsistent result".
+- Does re-sending the same `externalNetwork` keep the external IP? (Update never does it, so this
+  only matters for documentation.)
+- Is the gateway interface's `ipAddress` set when the status turns "ok", or a moment later?
+- Router status words besides `provisioning`, `ok` (a failed router wasn't seen), and whether the
+  GET carries a status message to show with them.
+- `external_network` written in another case than MTN Cloud's (or a full project name) gives one
+  no-op update after an import.

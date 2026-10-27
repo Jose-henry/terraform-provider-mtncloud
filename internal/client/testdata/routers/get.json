@@ -1,0 +1,25 @@
+{
+  "networkRouter": {
+    "id": 9601,
+    "name": "edge",
+    "description": "Edge router",
+    "status": "ok",
+    "routerType": "neutron",
+    "enabled": true,
+    "externalId": "00000000-0000-0000-0000-000000009601",
+    "externalIp": "203.0.113.10",
+    "externalNetwork": {"id": 32, "code": "openstack.network.4.00000000-0000-0000-0000-000000000032", "name": "public-network-02"},
+    "site": {"id": 9101, "name": "MTNNG_CLOUD_AZ_1"},
+    "zone": {"id": 4, "code": "openstack", "name": "MTNNG_CLOUD_AZ_1"},
+    "poolId": null,
+    "type": {"id": 1, "code": "neutronRouter", "name": "Neutron Router"},
+    "config": {},
+    "locations": [],
+    "interfaces": [
+      {"id": 9611, "name": null, "ipAddress": null, "cidr": "10.20.1.0/24", "enabled": true,
+       "network": {"id": 9301, "name": "app-net", "code": "openstack.network.4.00000000-0000-0000-0000-000000009301"}},
+      {"id": 9612, "name": null, "ipAddress": "203.0.113.10", "cidr": "203.0.113.0/24", "enabled": true,
+       "network": {"id": 32, "name": "public-network-02", "code": "openstack.network.4.00000000-0000-0000-0000-000000000032"}}
+    ]
+  }
+}

@@ -1,0 +1,54 @@
+---
+page_title: "mtncloud_router Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_router
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_router/resource.tf"}}
+
+To attach a network made outside Terraform, look it up by name:
+
+```terraform
+data "mtncloud_network" "legacy" {
+  name = "legacy-net"
+}
+
+resource "mtncloud_router" "edge" {
+  name     = "edge"
+  project  = "web-prod"
+  networks = [data.mtncloud_network.legacy.id]
+}
+```
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_router/import.sh" }}
+
+MTN Cloud doesn't report which project a router is in, so import takes it from the router's first
+network (a router without networks takes the project from the configuration). Write the project's short name (`web-prod`) in the configuration to keep the first plan empty.
+
+## Notes
+
+- **Waits until ready.** A new router is "provisioning" for a few seconds; create and update wait
+  for MTN Cloud to report it ready (default timeout 10 minutes, see `timeouts`). A router that fails
+  is reported with MTN Cloud's status and replaced by the next apply.
+- **Can't change in place:** `name` (MTN Cloud refuses renames) and `project`. Each replaces the router.
+- **Changes in place:** `networks` (attach or detach), `external_network` (the external IP changes
+  with it; removing it removes the gateway), `description` and `enabled`.
+- **One project.** Every network must be in the router's project; another project's network is
+  refused before anything is sent.
+- **Order.** Because `networks` references the networks, Terraform creates them first and deletes the
+  router first, so a network is never deleted while the router still holds a port on it.
+- **Names are unique per project.** Creating a router whose name is already used in the project
+  fails and gives its ID, so you can import it instead.

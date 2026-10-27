@@ -46,6 +46,10 @@ type Config struct {
 	Burst          int           // default 20
 	HTTPClient     *http.Client  // default: 60s timeout
 	Logger         Logger
+
+	// Waiting for asynchronous work (routers, instances, catalog orders): the first wait and the cap.
+	PollMin time.Duration // default 500ms
+	PollMax time.Duration // default 15s
 }
 
 // Client is an authenticated MTN Cloud API client.
@@ -86,6 +90,7 @@ func New(cfg Config) (*Client, error) {
 	if cfg.Burst <= 0 {
 		cfg.Burst = 20
 	}
+	pollDefaults(&cfg)
 	hc := cfg.HTTPClient
 	if hc == nil {
 		tr := http.DefaultTransport.(*http.Transport).Clone()
@@ -166,6 +171,14 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 
 	for attempt := 1; ; attempt++ {
 		if err := c.limiter.Wait(ctx); err != nil {
+			// The limiter refuses a wait that would end after ctx's deadline, before ctx itself has
+			// ended: that is the deadline, and callers (timeouts {}) must see it as such.
+			if _, ok := ctx.Deadline(); ok && ctx.Err() == nil {
+				return nil, fmt.Errorf("%w (rate limit queue: %w)", context.DeadlineExceeded, err)
+			}
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			return nil, err
 		}
 		req, err := http.NewRequestWithContext(ctx, method, u.String(), bytes.NewReader(payload))

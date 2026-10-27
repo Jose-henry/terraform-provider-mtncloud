@@ -1,0 +1,1 @@
+{"networkRouterTypes": [{"id": 1, "code": "neutronRouter", "name": "Neutron Router", "enabled": true, "creatable": true, "selectable": true, "hasNetworkServer": false}], "meta": {"total": 1}}

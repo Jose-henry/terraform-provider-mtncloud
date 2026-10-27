@@ -71,10 +71,9 @@ RESOURCES = [
      "with the `mtncloud_plans` data source.",
      ["service_plan", "price", "price_set"]),
     ("Networking",
-     "MTN Networks, security groups (instance firewalls) and their rules, IP pools (static IP "
-     "ranges for a network) and DNS domains (instance hostnames and domain join). The MTN Router "
-     "resource is next (see below).",
-     ["network", "security_group", "security_group_rule", "ipv4_ip_pool", "network_domain"]),
+     "MTN Networks and MTN Routers, security groups (instance firewalls) and their rules, IP pools "
+     "(static IP ranges for a network) and DNS domains (instance hostnames and domain join).",
+     ["network", "router", "security_group", "security_group_rule", "ipv4_ip_pool", "network_domain"]),
     ("Secrets and keys",
      "Cypher secrets and SSH key pairs.",
      ["cypher_secret", "cypher_tfvars", "key_pair"]),
@@ -129,7 +128,7 @@ MASTER_ONLY = {
              "resource_pool", "plan", "policy", "policies", "price", "price_set"},
 }
 # Built for customers on the endpoints the console's own wizard uses (D-016).
-FOR_CUSTOMERS = {"resource": {"network", "security_group", "security_group_rule"},
+FOR_CUSTOMERS = {"resource": {"network", "router", "security_group", "security_group_rule"},
                  "data": {"projects", "images", "plans", "datastores", "security_groups",
                           "external_networks", "catalog_items"}}
 # Need an integration first; the probed tenant had none.
@@ -157,8 +156,7 @@ def access(kind, name):
 # (type, status, what it does). Status: Next, Planned or On hold.
 PLANNED = [
     ("Resources", [
-        ("mtncloud_router", "Next", "MTN Router: connects MTN Networks to each other and, optionally, to the internet through a public network."),
-        ("mtncloud_instance", "Planned", "OpenStack VM from an MTN OS image: plan by size name (for example `G2S4`), project, networks, several security groups, volumes on any Cinder datastore, optional floating IP."),
+        ("mtncloud_instance", "Next", "OpenStack VM from an MTN OS image: plan by size name (for example `G2S4`), project, networks, several security groups, volumes on any Cinder datastore, optional floating IP."),
         ("mtncloud_floating_ip", "Planned", "A public IP that can outlive an instance."),
         ("mtncloud_project", "Planned", "Order a project (resource pool) by name and wait until it and its default security group have synced."),
         ("mtncloud_catalog_order", "Planned", "Order any catalog service (Kubernetes, managed databases, VPN, firewall, NAT, BYOL appliances and more), with its inputs."),

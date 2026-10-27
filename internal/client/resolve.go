@@ -43,6 +43,23 @@ func (c *Client) ProjectByName(ctx context.Context, name string) (Option, error)
 	return Option{}, fmt.Errorf("project name %q is ambiguous, it matches %s: use the full name", name, list(full))
 }
 
+// ExternalNetworkByName finds a network an MTN Router can use as its gateway, for example
+// "public-network-02". Case is ignored, as the console does.
+func (c *Client) ExternalNetworkByName(ctx context.Context, name string) (Option, error) {
+	nets, err := c.ExternalNetworks(ctx)
+	if err != nil {
+		return Option{}, err
+	}
+	names := make([]string, len(nets))
+	for i, n := range nets {
+		if strings.EqualFold(n.Name, name) {
+			return n, nil
+		}
+		names[i] = n.Name
+	}
+	return Option{}, fmt.Errorf("no external network named %q. Available: %s", name, list(names))
+}
+
 // ImageByCode finds an instance type by its code, for example "MTN-U24.04LTS".
 func (c *Client) ImageByCode(ctx context.Context, code string) (InstanceType, error) {
 	types, err := c.InstanceTypes(ctx)

@@ -19,6 +19,7 @@ func Resources() []func() resource.Resource {
 		newSecurityGroup,
 		newSecurityGroupRule,
 		newNetwork,
+		newRouter,
 	}
 }
 
@@ -78,7 +79,9 @@ func (b *base) planProject(ctx context.Context, req resource.ModifyPlanRequest, 
 		return
 	}
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, at, &state)...)
-	if resp.Diagnostics.HasError() || plan.Equal(state) {
+	// Null after an import that couldn't tell the project (a router without networks): adopt the
+	// configured one rather than replace a resource that was only just imported.
+	if resp.Diagnostics.HasError() || plan.Equal(state) || state.IsNull() {
 		return
 	}
 	if plan.IsUnknown() {

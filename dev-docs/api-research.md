@@ -147,7 +147,9 @@ Client-wide, found while building this: a 2xx response with `"success": false` i
 | `external_ip` | Computed | From the gateway interface; null without a gateway (`externalIp` goes stale). |
 | `external_id` | Computed | Neutron UUID. |
 
-Create polls until `ok` (`failed`/`error` stop it with the platform message); delete polls until
+Update sends the gateway only when it changes (a PUT without `externalNetwork` keeps it; whether
+re-sending the same one keeps the external IP is unproven). Create polls until `ok`
+(`failed`/`error` stop it with the platform message); delete polls until
 404. Both honour `timeouts {}` (default 10 min). No separate interface resource: the API has no
 interface endpoints, and two resources rewriting one list would fight.
 

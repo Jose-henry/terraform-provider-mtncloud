@@ -1,0 +1,4 @@
+{"networkRouter": {"id": 9601, "name": "edge", "description": "Edge router", "status": "provisioning", "enabled": true, "externalId": null, "externalIp": null,
+ "externalNetwork": {"id": 32, "name": "public-network-02"}, "poolId": null,
+ "interfaces": [{"id": 9612, "ipAddress": null, "cidr": "203.0.113.0/24", "network": {"id": 32, "name": "public-network-02"}},
+                {"id": 9611, "ipAddress": null, "cidr": "10.20.1.0/24", "network": {"id": 9301, "name": "app-net"}}]}}

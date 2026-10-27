@@ -24,11 +24,12 @@ import (
 // fakeAPI serves the scrubbed fixtures the client contract tests use. Requests under
 // /api/security-groups go to sg, a stateful fake (security_group_test.go), when it is set.
 type fakeAPI struct {
-	srv   *httptest.Server
-	mu    sync.Mutex
-	calls map[string]int
-	sg    http.Handler
-	net   http.Handler // /api/networks, a stateful fake (network_test.go), when set
+	srv    *httptest.Server
+	mu     sync.Mutex
+	calls  map[string]int
+	sg     http.Handler
+	net    http.Handler // /api/networks, a stateful fake (network_test.go), when set
+	router http.Handler // /api/networks/routers, a stateful fake (router_test.go), when set
 }
 
 func newFakeAPI(t *testing.T) *fakeAPI {
@@ -46,13 +47,18 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		"/api/instances/service-plans":           "service_plans.json",
 		"/api/catalog/types":                     "catalog_types.json",
 		"/api/instance-types":                    "instance_types.json",
+		"/api/network-router-types":              "router_types.json",
 	}
 	f := &fakeAPI{calls: map[string]int{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.calls[r.URL.Path]++
-		sg, net := f.sg, f.net
+		sg, net, router := f.sg, f.net, f.router
 		f.mu.Unlock()
+		if router != nil && strings.HasPrefix(r.URL.Path, "/api/networks/routers") && r.Header.Get("Authorization") == "Bearer test-token" {
+			router.ServeHTTP(w, r)
+			return
+		}
 		if net != nil && (r.URL.Path == "/api/networks" || strings.HasPrefix(r.URL.Path, "/api/networks/")) && r.Header.Get("Authorization") == "Bearer test-token" {
 			net.ServeHTTP(w, r)
 			return
