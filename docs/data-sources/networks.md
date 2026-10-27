@@ -2,23 +2,24 @@
 page_title: "mtncloud_networks Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud networks data source.
+  Lists your networks, including those made in the console, with their project, group and cloud. For one network's full settings, use mtncloud_network.
 ---
 
 # mtncloud_networks (Data Source)
 
-Provides a MTN Cloud networks data source.
+Lists your networks, including those made in the console, with their project, group and cloud. For one network's full settings, use `mtncloud_network`.
 
 ## Example Usage
 
 ```terraform
-data "mtncloud_networks" "tf_example_networks" {
-  cloud_id       = 3
-  sort_ascending = true
-  filter {
-    name   = "name"
-    values = ["Test*"]
-  }
+# Networks of one project whose name starts with "app-".
+data "mtncloud_networks" "app" {
+  project    = "web-prod"
+  name_regex = "^app-"
+}
+
+output "app_networks" {
+  value = { for n in data.mtncloud_networks.app.networks : n.id => "${n.name} ${n.cidr}" }
 }
 ```
 
@@ -27,19 +28,24 @@ data "mtncloud_networks" "tf_example_networks" {
 
 ### Optional
 
-- `cloud_id` (Number) The id of the MTN Cloud cloud to search for the network.
-- `filter` (Block Set) Custom filter block as described below. (see [below for nested schema](#nestedblock--filter))
-- `sort_ascending` (Boolean) Whether to sort the IDs in ascending order. Defaults to true
+- `name_regex` (String) Only return networks whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `project` (String) Only list networks in this project (for example `web-prod`; the full platform name also works).
 
 ### Read-Only
 
-- `id` (String) The ID of this resource.
-- `ids` (List of String)
+- `ids` (List of Number) IDs of the networks listed, in the same order as `networks`.
+- `networks` (Attributes List) The networks, sorted by name, then ID. (see [below for nested schema](#nestedatt--networks))
 
-<a id="nestedblock--filter"></a>
-### Nested Schema for `filter`
+<a id="nestedatt--networks"></a>
+### Nested Schema for `networks`
 
-Required:
+Read-Only:
 
-- `name` (String) The name of the filter. Filter names are case-sensitive. Valid names are (name)
-- `values` (Set of String) The filter values. Filter values are case-sensitive. Filters values support the use of Golang regex and can be tested at https://regex101.com/
+- `cidr` (String) IPv4 CIDR, or empty.
+- `cloud` (String) Cloud the network is in.
+- `gateway` (String) IPv4 gateway, or empty.
+- `group` (String) Group the network belongs to.
+- `id` (Number) Network ID.
+- `name` (String) Network name.
+- `project` (String) Project, without the tenant suffix; empty for a network in no project (an external network).
+- `status` (String) Status, for example `ok`.

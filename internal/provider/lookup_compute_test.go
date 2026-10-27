@@ -70,6 +70,8 @@ data "mtncloud_instances" "` + name + `" {
 					statecheck.ExpectKnownValue("data.mtncloud_instances.web", at(0, "name"), knownvalue.StringExact("app-1")),
 					statecheck.ExpectKnownValue("data.mtncloud_instances.web", at(0, "project"), knownvalue.StringExact("web-prod")),
 					statecheck.ExpectKnownValue("data.mtncloud_instances.web", at(0, "status"), knownvalue.StringExact("running")),
+					statecheck.ExpectKnownValue("data.mtncloud_instances.web", at(0, "group"), knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
+					statecheck.ExpectKnownValue("data.mtncloud_instances.web", at(0, "cloud"), knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
 					statecheck.ExpectKnownValue("data.mtncloud_instances.other", tfjsonpath.New("instances"), knownvalue.ListSizeExact(0)),
 					statecheck.ExpectKnownValue("data.mtncloud_instances.named", tfjsonpath.New("instances"), knownvalue.ListSizeExact(1)),
 				},
@@ -102,6 +104,8 @@ data "mtncloud_instance" "one" {
 		check("name", knownvalue.StringExact("app-1")),
 		check("project", knownvalue.StringExact("web-prod")),
 		check("status", knownvalue.StringExact("running")),
+		check("cloud", knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
+		check("group", knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
 		check("id", knownvalue.NotNull()),
 	}
 	resource.UnitTest(t, resource.TestCase{
@@ -313,6 +317,94 @@ func TestCatalogItem_DataSource(t *testing.T) {
 			{Config: one(`  name = "nope"`), ExpectError: regexp.MustCompile(`(?s)No such catalog item.*You can order:\s+Create\s+Instance`)},
 			{Config: one(`  id = 1`), ExpectError: regexp.MustCompile(`No such catalog item`)},
 			{Config: one(`  id = 22`)},
+		},
+	})
+}
+
+func TestImage_DataSource(t *testing.T) {
+	f := newFakeAPI(t)
+	one := func(name string) string {
+		return f.providerConfig() + "\ndata \"mtncloud_image\" \"one\" {\n  name = \"" + name + "\"\n}\n"
+	}
+	found := []statecheck.StateCheck{
+		statecheck.ExpectKnownValue("data.mtncloud_image.one", tfjsonpath.New("code"), knownvalue.StringExact("MTN-U24.04LTS")),
+		statecheck.ExpectKnownValue("data.mtncloud_image.one", tfjsonpath.New("full_name"), knownvalue.StringExact("MTN Ubuntu Server 24.04.3LTS")),
+		statecheck.ExpectKnownValue("data.mtncloud_image.one", tfjsonpath.New("layout_id"), knownvalue.NotNull()),
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: one("MTN Ubuntu Server 24.04.3LTS"), ConfigStateChecks: found},
+			{Config: one("mtn ubuntu server 24.04.3lts"), ConfigStateChecks: found},
+			{Config: one("MTN-U24.04LTS"), ConfigStateChecks: found},
+			{Config: one("MTN-U99"), ExpectError: regexp.MustCompile(`(?s)No such image.*Available images`)},
+			{Config: one("MTN-U24.04LTS")},
+		},
+	})
+}
+
+func TestFloatingIPs_DataSource(t *testing.T) {
+	f, _ := newInstFakes(t)
+	cfg := instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+  floating_ip_pool = "public-network-02"
+`)
+	list := func(name, attrs string) string {
+		return "\ndata \"mtncloud_floating_ips\" \"" + name + "\" {\n" + attrs + "\n}\n"
+	}
+	at := func(attr string) tfjsonpath.Path {
+		return tfjsonpath.New("floating_ips").AtSliceIndex(0).AtMapKey(attr)
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg},
+			{
+				Config: cfg + list("all", "") + list("web", `  project = "web-prod"`) + list("other", `  project = "data"`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("data.mtncloud_floating_ips.all", tfjsonpath.New("floating_ips"), knownvalue.ListSizeExact(1)),
+					statecheck.ExpectKnownValue("data.mtncloud_floating_ips.web", at("ip"), knownvalue.StringRegexp(regexp.MustCompile(`^203\.0\.113\.`))),
+					statecheck.ExpectKnownValue("data.mtncloud_floating_ips.web", at("instance"), knownvalue.StringExact("app-1")),
+					statecheck.ExpectKnownValue("data.mtncloud_floating_ips.web", at("project"), knownvalue.StringExact("web-prod")),
+					statecheck.ExpectKnownValue("data.mtncloud_floating_ips.other", tfjsonpath.New("floating_ips"), knownvalue.ListSizeExact(0)),
+				},
+			},
+			{Config: cfg},
+		},
+	})
+}
+
+func TestNetworks_DataSource(t *testing.T) {
+	f, _, _ := newRouterFakes(t)
+	cfg := routerConfig(f, `  name = "edge"
+  networks = [mtncloud_network.app.id]`)
+	list := func(name, attrs string) string {
+		return "\ndata \"mtncloud_networks\" \"" + name + "\" {\n" + attrs + "\n}\n"
+	}
+	at := func(i int, attr string) tfjsonpath.Path {
+		return tfjsonpath.New("networks").AtSliceIndex(i).AtMapKey(attr)
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg},
+			{
+				Config: cfg + list("web", `  project = "web-prod"`) + list("app", `  name_regex = "^app-"`) + list("data", `  project = "data-Acme"`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					// app-net and db-net, sorted by name.
+					statecheck.ExpectKnownValue("data.mtncloud_networks.web", tfjsonpath.New("networks"), knownvalue.ListSizeExact(2)),
+					statecheck.ExpectKnownValue("data.mtncloud_networks.web", at(0, "name"), knownvalue.StringExact("app-net")),
+					statecheck.ExpectKnownValue("data.mtncloud_networks.web", at(0, "project"), knownvalue.StringExact("web-prod")),
+					statecheck.ExpectKnownValue("data.mtncloud_networks.web", at(0, "cloud"), knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
+					statecheck.ExpectKnownValue("data.mtncloud_networks.web", at(1, "cidr"), knownvalue.StringExact("10.20.2.0/24")),
+					statecheck.ExpectKnownValue("data.mtncloud_networks.web", tfjsonpath.New("ids"), knownvalue.ListSizeExact(2)),
+					statecheck.ExpectKnownValue("data.mtncloud_networks.app", tfjsonpath.New("networks"), knownvalue.ListSizeExact(1)),
+					statecheck.ExpectKnownValue("data.mtncloud_networks.data", at(0, "name"), knownvalue.StringExact("other-net")),
+				},
+			},
+			{Config: cfg + list("bad", `  project = "nope"`), ExpectError: regexp.MustCompile(`Unknown project`)},
+			{Config: cfg},
 		},
 	})
 }

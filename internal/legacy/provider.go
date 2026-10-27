@@ -136,7 +136,6 @@ func Provider() *schema.Provider {
 			"mtncloud_integration":                dataSourceIntegration(),
 			"mtncloud_job":                        dataSourceJob(),
 			"mtncloud_key_pair":                   dataSourceKeyPair(),
-			"mtncloud_networks":                   dataSourceNetworks(),
 			"mtncloud_network_group":              dataSourceNetworkGroup(),
 			"mtncloud_network_subnet":             dataSourceNetworkSubnet(),
 			"mtncloud_option_list":                dataSourceOptionList(),

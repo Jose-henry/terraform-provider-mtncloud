@@ -1,8 +1,9 @@
-data "mtncloud_networks" "tf_example_networks" {
-  cloud_id       = 3
-  sort_ascending = true
-  filter {
-    name   = "name"
-    values = ["Test*"]
-  }
+# Networks of one project whose name starts with "app-".
+data "mtncloud_networks" "app" {
+  project    = "web-prod"
+  name_regex = "^app-"
+}
+
+output "app_networks" {
+  value = { for n in data.mtncloud_networks.app.networks : n.id => "${n.name} ${n.cidr}" }
 }

@@ -44,6 +44,8 @@ output "web_private_ips" {
 
 Read-Only:
 
+- `cloud` (String) Cloud the instance is in, for example `MTNNG_CLOUD_AZ_1`.
+- `group` (String) Group the instance belongs to.
 - `id` (Number) Instance ID.
 - `image` (String) Image name, for example `MTN Ubuntu Server 24.04.3LTS`.
 - `labels` (List of String) Labels.

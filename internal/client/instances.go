@@ -25,6 +25,7 @@ type Instance struct {
 	StatusMessage string // the platform's own words for a failure, when it gives some
 
 	GroupName   string
+	CloudName   string
 	ProjectID   int64 // the resource pool, from config.resourcePoolId ("pool-<id>")
 	ImageCode   string
 	ImageName   string
@@ -128,6 +129,7 @@ type wireInstance struct {
 	InstanceContext   *string  `json:"instanceContext"`
 	EnvironmentPrefix string   `json:"environmentPrefix"`
 	Group             *wireRef `json:"group"`
+	Cloud             *wireRef `json:"cloud"`
 	InstanceType      *struct {
 		Code string `json:"code"`
 		Name string `json:"name"`
@@ -186,6 +188,9 @@ func (w wireInstance) instance() *Instance {
 	}
 	if w.Group != nil {
 		in.GroupName = w.Group.Name
+	}
+	if w.Cloud != nil {
+		in.CloudName = w.Cloud.Name
 	}
 	if w.InstanceType != nil {
 		in.ImageCode, in.ImageName = w.InstanceType.Code, w.InstanceType.Name

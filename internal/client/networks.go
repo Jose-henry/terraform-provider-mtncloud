@@ -245,6 +245,19 @@ func (c *Client) FindNetworksNamed(ctx context.Context, name string) ([]*Network
 	return out, nil
 }
 
+// ListNetworks returns every network the caller can see, external ones included.
+func (c *Client) ListNetworks(ctx context.Context) ([]*Network, error) {
+	items, err := listAll[wireNetwork](ctx, c, "/api/networks", "networks", nil)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Network, len(items))
+	for i, w := range items {
+		out[i] = w.network()
+	}
+	return out, nil
+}
+
 // UpdateNetwork changes the settings that can change in place (not the project or the CIDR).
 func (c *Client) UpdateNetwork(ctx context.Context, id int64, in NetworkInput) error {
 	return c.do(ctx, http.MethodPut, "/api/networks/"+itoa(id), nil, map[string]any{"network": networkBody(in)}, nil)

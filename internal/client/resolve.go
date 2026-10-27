@@ -104,7 +104,7 @@ func (c *Client) ImageByName(ctx context.Context, name string) (InstanceType, er
 	for _, t := range types {
 		if t.Code == name || strings.EqualFold(t.Name, name) {
 			if t.LayoutID == 0 {
-				return InstanceType{}, fmt.Errorf("image %q has no layout MTN Cloud can provision", name)
+				return InstanceType{}, &NoMatchError{fmt.Sprintf("image %q has no layout MTN Cloud can provision", name)}
 			}
 			return t, nil
 		}
@@ -112,7 +112,7 @@ func (c *Client) ImageByName(ctx context.Context, name string) (InstanceType, er
 			images = append(images, t.Name)
 		}
 	}
-	return InstanceType{}, fmt.Errorf("no image named %q. Available images: %s", name, list(images))
+	return InstanceType{}, &NoMatchError{fmt.Sprintf("no image named %q. Available images: %s", name, list(images))}
 }
 
 // PlanByName finds a size, for example "G2S4", among the ones a project offers for a layout.

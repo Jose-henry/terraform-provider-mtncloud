@@ -213,6 +213,7 @@ func (s *instStore) create(body map[string]any, reply func(int, any)) {
 		"id": id, "name": name, "hostName": host, "status": "running", "environmentPrefix": prefix,
 		"description": req["description"], "instanceContext": req["instanceContext"], "labels": req["labels"], "tags": body["tags"],
 		"group":        map[string]any{"id": req["site"].(map[string]any)["id"], "name": "MTNNG_CLOUD_AZ_1"},
+		"cloud":        map[string]any{"id": 4, "name": "MTNNG_CLOUD_AZ_1"},
 		"instanceType": map[string]any{"code": code, "name": fakeImages[code]},
 		"plan":         map[string]any{"id": plan, "name": fakePlans[plan]},
 		"config":       map[string]any{"resourcePoolId": cfg["resourcePoolId"], "noAgent": cfg["noAgent"], "createUser": cfg["createUser"], "layoutSize": body["layoutSize"]},

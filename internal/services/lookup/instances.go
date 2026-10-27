@@ -27,6 +27,8 @@ type instanceModel struct {
 	Name      types.String   `tfsdk:"name"`
 	Status    types.String   `tfsdk:"status"`
 	Project   types.String   `tfsdk:"project"`
+	Group     types.String   `tfsdk:"group"`
+	Cloud     types.String   `tfsdk:"cloud"`
 	Image     types.String   `tfsdk:"image"`
 	Plan      types.String   `tfsdk:"plan"`
 	PrivateIP types.String   `tfsdk:"private_ip"`
@@ -57,6 +59,8 @@ func (d *instancesDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 					"name":       schema.StringAttribute{Computed: true, Description: "Instance name."},
 					"status":     schema.StringAttribute{Computed: true, Description: "Status, for example `running` or `stopped`."},
 					"project":    schema.StringAttribute{Computed: true, Description: "Project name, without the tenant suffix."},
+					"group":      schema.StringAttribute{Computed: true, Description: "Group the instance belongs to."},
+					"cloud":      schema.StringAttribute{Computed: true, Description: "Cloud the instance is in, for example `MTNNG_CLOUD_AZ_1`."},
 					"image":      schema.StringAttribute{Computed: true, Description: "Image name, for example `MTN Ubuntu Server 24.04.3LTS`."},
 					"plan":       schema.StringAttribute{Computed: true, Description: "Plan (size) name, for example `G2S4`."},
 					"private_ip": schema.StringAttribute{Computed: true, Description: "Private address, or empty."},
@@ -118,7 +122,7 @@ func (d *instancesDataSource) Read(ctx context.Context, req datasource.ReadReque
 		}
 		m.Instances = append(m.Instances, instanceModel{
 			ID: types.Int64Value(in.ID), Name: types.StringValue(in.Name), Status: types.StringValue(in.Status),
-			Project: types.StringValue(names[in.ProjectID]), Image: types.StringValue(in.ImageName),
+			Project: types.StringValue(names[in.ProjectID]), Group: types.StringValue(in.GroupName), Cloud: types.StringValue(in.CloudName), Image: types.StringValue(in.ImageName),
 			Plan: types.StringValue(in.PlanName), PrivateIP: types.StringValue(in.PrivateIP),
 			PublicIP: types.StringValue(in.PublicIP), Labels: labels,
 		})

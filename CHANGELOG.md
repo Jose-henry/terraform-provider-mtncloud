@@ -6,6 +6,9 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 - Docs: the examples now pin `~> 0.3`.
 - New data sources, singular (by `id` or name) and plural (with `name_regex`): `app(s)`, `ssl_certificate(s)`, `load_balancer(s)`, `cluster(s)`, `catalog_order(s)` (what you ordered, with status), `user(s)`, `identity_source(s)`, `form(s)`; plural only: `user_roles`, `network_subnets`, `storage_buckets`, `storage_volumes`, `domains`, `key_pairs`, `credentials`, `workflows`, `jobs`, `integrations`, `cyphers` (keys and leases, never values); singular only: `project` (with group and cloud), `router`, `security_group` (with every rule), `datastore`, and `cypher` (reads one existing key on any mount, value sensitive; never creates one).
+- New data sources `mtncloud_image` (by name or code) and `mtncloud_floating_ips` (the public IPs on your instances; the floating IP endpoint refuses customer logins).
+- `mtncloud_instance` and `mtncloud_instances` return `group` and `cloud`.
+- **Breaking:** `mtncloud_networks` is rebuilt: `name_regex` and `project` replace `cloud_id`, `sort_ascending` and `filter`; it keeps `ids` and adds `networks`, each with project, group, cloud, CIDR, gateway and status.
 - New data source `mtncloud_catalog_item`: one service from the catalog, with the inputs its order form asks for.
 - Docs: datastore examples use `__DEFAULT__`, the default datastore.
 - **Breaking:** removed what customers can't create in MTN Cloud's Library: instance types, layouts, node types, cluster layouts, file and script templates, boot and preseed scripts, security packages, blueprints, spec templates and catalog items, with their lookups; the Groovy, JavaScript, Python and jRuby script tasks; the cloud type and provision type lookups; and the `mtncloud_cypher_secret` data source (a `mtncloud_cypher` lookup replaces it).

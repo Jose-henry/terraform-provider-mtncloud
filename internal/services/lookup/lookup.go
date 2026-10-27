@@ -40,6 +40,9 @@ func DataSources() []func() datasource.DataSource {
 		newRouter,
 		newCypher,
 		newCatalogItem,
+		newImage,
+		newFloatingIPs,
+		newNetworks,
 	}, recordDataSources()...)
 }
 
