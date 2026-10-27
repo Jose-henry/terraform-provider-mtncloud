@@ -59,7 +59,7 @@ func (r *routerResource) Metadata(_ context.Context, req resource.MetadataReques
 func (r *routerResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "An MTN Router: connects MTN Networks of one project to each other and, through an external network, " +
-			"to the outside. Creating it waits until OpenStack reports it ready, usually within seconds.",
+			"to the outside. Creating it waits until MTN Cloud reports it ready, usually within seconds.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,
@@ -110,7 +110,7 @@ func (r *routerResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 			},
 			"external_id": schema.StringAttribute{
 				Computed:      true,
-				Description:   "OpenStack (Neutron) router ID.",
+				Description:   "Router ID in the cloud (the external ID).",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 		},

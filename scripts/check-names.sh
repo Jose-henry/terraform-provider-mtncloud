@@ -21,4 +21,18 @@ if [ -n "$hits" ]; then
   echo "$hits" | head -50
   exit 1
 fi
+# The cloud software's name stays out of what customers read: docs, templates, examples, README,
+# CHANGELOG, and Go string literals (descriptions and errors). API wire values in Go are allowed:
+# endpoints and option names inside client calls, and lines marked mtncloud:allow-cloud-name.
+cloud="$(git ls-files -z --cached --others --exclude-standard -- docs templates examples README.md CHANGELOG.md \
+  | xargs -0 grep -nIi 'openstack' 2>/dev/null || true)"
+cloud+="$(git ls-files -z --cached --others --exclude-standard -- '*.go' \
+  | grep -zv '_test\.go$' \
+  | xargs -0 grep -nIE '"[^"]*[Oo]pen[Ss]tack[^"]*"' 2>/dev/null \
+  | grep -vE '"/api/|c\.options\(|ProvisionTypeCode ==|mtncloud:allow-cloud-name' || true)"
+if [ -n "$cloud" ]; then
+  echo "FAIL: the cloud software's name is shown to customers (say MTN Cloud, or mark an API value with mtncloud:allow-cloud-name):"
+  echo "$cloud" | head -50
+  exit 1
+fi
 echo "OK: no upstream product name outside the allowed places"

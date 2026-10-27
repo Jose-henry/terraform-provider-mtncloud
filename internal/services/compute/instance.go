@@ -131,7 +131,7 @@ func (r *instanceResource) Metadata(_ context.Context, req resource.MetadataRequ
 func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	keep := []planmodifier.String{stringplanmodifier.UseStateForUnknown()}
 	resp.Schema = schema.Schema{
-		Description: "An MTN Cloud instance: an OpenStack virtual machine in one of your projects. Creating it waits until " +
+		Description: "An MTN Cloud instance: a virtual machine in one of your projects. Creating it waits until " +
 			"MTN Cloud reports it running, usually a few minutes. The project's default security group is always applied, " +
 			"as MTN Cloud requires.",
 		Attributes: map[string]schema.Attribute{

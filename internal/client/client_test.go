@@ -570,7 +570,7 @@ func TestImageByCode(t *testing.T) {
 	if it, err := c.ImageByCode(t.Context(), "MTN-U24.04LTS"); err != nil || it.LayoutID != 309 {
 		t.Errorf("got %+v, %v", it, err)
 	}
-	if _, err := c.ImageByCode(t.Context(), "NO-LAYOUT"); err == nil || !strings.Contains(err.Error(), "no OpenStack layout") {
+	if _, err := c.ImageByCode(t.Context(), "NO-LAYOUT"); err == nil || !strings.Contains(err.Error(), "has no layout MTN Cloud can provision") {
 		t.Errorf("no layout: %v", err)
 	}
 	// App types resolve (catalog orders need them), but only OS images are suggested.

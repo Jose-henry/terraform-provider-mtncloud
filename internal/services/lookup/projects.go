@@ -49,7 +49,7 @@ func (d *projectsDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 					"id":          schema.Int64Attribute{Computed: true, Description: "Project ID."},
 					"name":        schema.StringAttribute{Computed: true, Description: "Project name as shown in the console, for example `web-prod`."},
 					"full_name":   schema.StringAttribute{Computed: true, Description: "Full platform name, with the tenant suffix, for example `web-prod-Acme`."},
-					"external_id": schema.StringAttribute{Computed: true, Description: "OpenStack project ID."},
+					"external_id": schema.StringAttribute{Computed: true, Description: "Project ID in the cloud (the external ID)."},
 				}},
 			},
 		},

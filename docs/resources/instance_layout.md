@@ -32,7 +32,7 @@ resource "mtncloud_instance_layout" "tf_example_instance_layout" {
 
 - `instance_type_id` (Number) The ID of the associated instance type
 - `name` (String) The name of the instance layout
-- `technology` (String) The technology of the instance layout (alibaba, amazon, arm, azure, maas, cloudFormation, docker, esxi, fusion, google, huawei, hyperv, kubernetes, kvm, nutanix, opentelekom, openstack, oraclecloud, oraclevm, scvmm, terraform, upcloud, vcd.vapp, vcd, vmware, workflow, xen)
+- `technology` (String) The technology of the instance layout: the provisioning type code the console shows for it.
 - `version` (String) The version of the instance layout
 
 ### Optional

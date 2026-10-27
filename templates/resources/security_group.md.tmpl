@@ -29,8 +29,8 @@ null: an update that changes nothing on MTN Cloud and stops Terraform managing t
 
 ## Notes
 
-- **Default egress rules.** OpenStack adds two allow-all outbound rules (IPv4 `0.0.0.0/0` and IPv6
-  `::/0`) to every new group. MTN Cloud shows them only after its next sync with OpenStack, which can
+- **Default egress rules.** MTN Cloud adds two allow-all outbound rules (IPv4 `0.0.0.0/0` and IPv6
+  `::/0`) to every new group. MTN Cloud shows them only after its next sync, which can
   take a while; Terraform never waits for it. They are listed in `all_rules` with `default = true`
   and never counted as drift. With `remove_default_egress = true`, the first `terraform apply`
   after they appear removes them (until then, `terraform plan` shows that pending change).

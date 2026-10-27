@@ -67,10 +67,10 @@ func resourceInstanceLayout() *schema.Resource {
 			},
 			"technology": {
 				Type:         schema.TypeString,
-				Description:  "The technology of the instance layout (alibaba, amazon, arm, azure, maas, cloudFormation, docker, esxi, fusion, google, huawei, hyperv, kubernetes, kvm, nutanix, opentelekom, openstack, oraclecloud, oraclevm, scvmm, terraform, upcloud, vcd.vapp, vcd, vmware, workflow, xen)",
+				Description:  "The technology of the instance layout: the provisioning type code the console shows for it.",
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"alibaba", "amazon", "arm", "azure", "maas", "cloudFormation", "docker", "esxi", "fusion", "google", "huawei", "hyperv", "kubernetes", "kvm", "nutanix", "opentelekom", "openstack", "oraclecloud", "oraclevm", "scvmm", "terraform", "upcloud", "vcd.vapp", "vcd", "vmware", "workflow", "xen"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"alibaba", "amazon", "arm", "azure", "maas", "cloudFormation", "docker", "esxi", "fusion", "google", "huawei", "hyperv", "kubernetes", "kvm", "nutanix", "opentelekom", "openstack", "oraclecloud", "oraclevm", "scvmm", "terraform", "upcloud", "vcd.vapp", "vcd", "vmware", "workflow", "xen"}, false), // mtncloud:allow-cloud-name (API value of a technology list)
 			},
 			"minimum_memory": {
 				Type:        schema.TypeInt,
@@ -206,7 +206,7 @@ func resourceInstanceLayoutCreate(ctx context.Context, d *schema.ResourceData, m
 	instanceLayout["environmentVariables"] = parseInstanceLayoutEnvironmentVariables(d.Get("evar").([]interface{}), d)
 
 	switch d.Get("technology") {
-	case "alibaba", "amazon", "azure", "maas", "docker", "esxi", "fusion", "google", "huawei", "hyperv", "kubernetes", "kvm", "nutanix", "opentelekom", "openstack", "oraclecloud", "oraclevm", "scvmm", "upcloud", "vcd.vapp", "vcd", "vmware", "xen":
+	case "alibaba", "amazon", "azure", "maas", "docker", "esxi", "fusion", "google", "huawei", "hyperv", "kubernetes", "kvm", "nutanix", "opentelekom", "openstack", "oraclecloud", "oraclevm", "scvmm", "upcloud", "vcd.vapp", "vcd", "vmware", "xen": // mtncloud:allow-cloud-name (API value of a technology list)
 		instanceLayout["containerTypes"] = d.Get("node_type_ids")
 	case "arm", "cloudFormation", "terraform":
 		instanceLayout["specTemplates"] = d.Get("spec_template_ids")
@@ -403,7 +403,7 @@ func resourceInstanceLayoutUpdate(ctx context.Context, d *schema.ResourceData, m
 	instanceLayout["environmentVariables"] = parseInstanceLayoutEnvironmentVariables(d.Get("evar").([]interface{}), d)
 
 	switch d.Get("technology") {
-	case "alibaba", "amazon", "azure", "maas", "docker", "esxi", "fusion", "google", "huawei", "hyperv", "kubernetes", "kvm", "nutanix", "opentelekom", "openstack", "oraclecloud", "oraclevm", "scvmm", "upcloud", "vcd.vapp", "vcd", "vmware", "xen":
+	case "alibaba", "amazon", "azure", "maas", "docker", "esxi", "fusion", "google", "huawei", "hyperv", "kubernetes", "kvm", "nutanix", "opentelekom", "openstack", "oraclecloud", "oraclevm", "scvmm", "upcloud", "vcd.vapp", "vcd", "vmware", "xen": // mtncloud:allow-cloud-name (API value of a technology list)
 		instanceLayout["containerTypes"] = d.Get("node_type_ids")
 	case "arm", "cloudFormation", "terraform":
 		instanceLayout["specTemplates"] = d.Get("spec_template_ids")

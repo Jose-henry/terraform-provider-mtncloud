@@ -136,7 +136,7 @@ func ruleAttributes(replace bool) map[string]schema.Attribute {
 
 func (r *securityGroupResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "A security group (firewall) for instances in one project. OpenStack adds two rules to every new " +
+		Description: "A security group (firewall) for instances in one project. MTN Cloud adds two rules to every new " +
 			"group that allow all outbound traffic (IPv4 and IPv6); they appear in MTN Cloud after its next sync. " +
 			"By default Terraform leaves them in place; set `remove_default_egress` to remove them.",
 		Attributes: map[string]schema.Attribute{
@@ -172,7 +172,7 @@ func (r *securityGroupResource) Schema(_ context.Context, _ resource.SchemaReque
 				Computed: true,
 				Default:  booldefault.StaticBool(false),
 				Description: "Remove the two default egress rules (allow all outbound traffic). Defaults to `false`. " +
-					"OpenStack adds them when the group is created, but MTN Cloud only shows them after its sync, some time later; " +
+					"They are added when the group is created, but MTN Cloud only shows them after its sync, some time later; " +
 					"they are removed by the first `terraform apply` after that (`terraform plan` shows the pending change). " +
 					"**Until then the group allows all outbound traffic.**",
 			},
@@ -188,12 +188,12 @@ func (r *securityGroupResource) Schema(_ context.Context, _ resource.SchemaReque
 					"cidr":                     schema.StringAttribute{Computed: true, Description: "Remote addresses; null for any address or a group rule."},
 					"source_security_group_id": schema.StringAttribute{Computed: true, Description: "Remote security group, for group rules."},
 					"description":              schema.StringAttribute{Computed: true, Description: "Rule name in the console."},
-					"default":                  schema.BoolAttribute{Computed: true, Description: "Whether this is one of the default egress rules OpenStack adds."},
+					"default":                  schema.BoolAttribute{Computed: true, Description: "Whether this is one of the default egress rules MTN Cloud adds."},
 				}},
 			},
 			"external_id": schema.StringAttribute{
 				Computed:      true,
-				Description:   "OpenStack (Neutron) security group ID.",
+				Description:   "Security group ID in the cloud (the external ID).",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 		},
@@ -245,7 +245,7 @@ func validateRule(rm ruleModel, at path.Path) diag.Diagnostics {
 	}
 	if toRule(rm).isDefaultEgressShape() {
 		diags.AddAttributeError(at, "This is a default egress rule",
-			"OpenStack already adds an allow-all egress rule for 0.0.0.0/0 and ::/0 to every security group, and refuses a duplicate. "+
+			"MTN Cloud already adds an allow-all egress rule for 0.0.0.0/0 and ::/0 to every security group, and refuses a duplicate. "+
 				"Remove this rule; the default stays unless remove_default_egress is true.")
 	}
 	return diags

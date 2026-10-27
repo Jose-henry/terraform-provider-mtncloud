@@ -84,8 +84,8 @@ func (r *networkResource) Metadata(_ context.Context, req resource.MetadataReque
 
 func (r *networkResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "An MTN Network: a private network in one project, created in OpenStack with one subnet of the same " +
-			"range. Connect it to other networks or the internet with an MTN Router. Creating it waits until OpenStack " +
+		Description: "An MTN Network: a private network in one project, created with one subnet of the same range. " +
+			"Connect it to other networks or the internet with an MTN Router. Creating it waits until MTN Cloud " +
 			"reports it ready, usually within seconds.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -182,12 +182,12 @@ func (r *networkResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 			},
 			"subnet_id": schema.StringAttribute{
 				Computed:      true,
-				Description:   "ID of the subnet OpenStack created with the network. An MTN Router attaches to it.",
+				Description:   "ID of the subnet created with the network. An MTN Router attaches to it.",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"external_id": schema.StringAttribute{
 				Computed:      true,
-				Description:   "OpenStack (Neutron) network ID.",
+				Description:   "Network ID in the cloud (the external ID).",
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 		},

@@ -2,12 +2,12 @@
 page_title: "mtncloud_security_group Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A security group (firewall) for instances in one project. OpenStack adds two rules to every new group that allow all outbound traffic (IPv4 and IPv6); they appear in MTN Cloud after its next sync. By default Terraform leaves them in place; set remove_default_egress to remove them.
+  A security group (firewall) for instances in one project. MTN Cloud adds two rules to every new group that allow all outbound traffic (IPv4 and IPv6); they appear in MTN Cloud after its next sync. By default Terraform leaves them in place; set remove_default_egress to remove them.
 ---
 
 # mtncloud_security_group
 
-A security group (firewall) for instances in one project. OpenStack adds two rules to every new group that allow all outbound traffic (IPv4 and IPv6); they appear in MTN Cloud after its next sync. By default Terraform leaves them in place; set `remove_default_egress` to remove them.
+A security group (firewall) for instances in one project. MTN Cloud adds two rules to every new group that allow all outbound traffic (IPv4 and IPv6); they appear in MTN Cloud after its next sync. By default Terraform leaves them in place; set `remove_default_egress` to remove them.
 
 ## Example Usage
 
@@ -27,7 +27,7 @@ resource "mtncloud_security_group" "web" {
 }
 
 # Outbound traffic limited to what is listed, once the default egress rules are gone.
-# OpenStack adds them at create; MTN Cloud shows them after its sync, and the first apply
+# They are added at create; MTN Cloud shows them after its sync, and the first apply
 # after that removes them. Until then this group still allows all outbound traffic.
 resource "mtncloud_security_group" "db" {
   name                  = "db"
@@ -57,13 +57,13 @@ output "web_rules" {
 ### Optional
 
 - `description` (String) Description of the security group.
-- `remove_default_egress` (Boolean) Remove the two default egress rules (allow all outbound traffic). Defaults to `false`. OpenStack adds them when the group is created, but MTN Cloud only shows them after its sync, some time later; they are removed by the first `terraform apply` after that (`terraform plan` shows the pending change). **Until then the group allows all outbound traffic.**
+- `remove_default_egress` (Boolean) Remove the two default egress rules (allow all outbound traffic). Defaults to `false`. They are added when the group is created, but MTN Cloud only shows them after its sync, some time later; they are removed by the first `terraform apply` after that (`terraform plan` shows the pending change). **Until then the group allows all outbound traffic.**
 - `rules` (Attributes Set) The rules Terraform manages. When set, rules added outside Terraform are removed on the next apply, except the default egress rules (see `remove_default_egress`). Leave it out to let Terraform ignore the rules, for example when they are managed with `mtncloud_security_group_rule`; never use both on one group. (see [below for nested schema](#nestedatt--rules))
 
 ### Read-Only
 
 - `all_rules` (Attributes List) Every rule on the group, including the default egress rules and rules managed elsewhere, sorted. Read-only: use it to see the group's complete rule set. (see [below for nested schema](#nestedatt--all_rules))
-- `external_id` (String) OpenStack (Neutron) security group ID.
+- `external_id` (String) Security group ID in the cloud (the external ID).
 - `id` (String) Security group ID.
 
 <a id="nestedatt--rules"></a>
@@ -88,7 +88,7 @@ Optional:
 Read-Only:
 
 - `cidr` (String) Remote addresses; null for any address or a group rule.
-- `default` (Boolean) Whether this is one of the default egress rules OpenStack adds.
+- `default` (Boolean) Whether this is one of the default egress rules MTN Cloud adds.
 - `description` (String) Rule name in the console.
 - `direction` (String) `ingress` or `egress`.
 - `id` (String) Rule ID.
@@ -112,8 +112,8 @@ null: an update that changes nothing on MTN Cloud and stops Terraform managing t
 
 ## Notes
 
-- **Default egress rules.** OpenStack adds two allow-all outbound rules (IPv4 `0.0.0.0/0` and IPv6
-  `::/0`) to every new group. MTN Cloud shows them only after its next sync with OpenStack, which can
+- **Default egress rules.** MTN Cloud adds two allow-all outbound rules (IPv4 `0.0.0.0/0` and IPv6
+  `::/0`) to every new group. MTN Cloud shows them only after its next sync, which can
   take a while; Terraform never waits for it. They are listed in `all_rules` with `default = true`
   and never counted as drift. With `remove_default_egress = true`, the first `terraform apply`
   after they appear removes them (until then, `terraform plan` shows that pending change).

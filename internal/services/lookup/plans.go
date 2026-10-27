@@ -67,7 +67,7 @@ func (d *plansDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"id":           schema.Int64Attribute{Computed: true, Description: "Plan ID in this project."},
 					"name":         schema.StringAttribute{Computed: true, Description: "Plan name, for example `G2S4`. Use this to pick a plan."},
-					"code":         schema.StringAttribute{Computed: true, Description: "Platform code of the OpenStack flavor."},
+					"code":         schema.StringAttribute{Computed: true, Description: "Plan code."},
 					"cores":        schema.Int64Attribute{Computed: true, Description: "vCPUs."},
 					"memory_gb":    schema.Float64Attribute{Computed: true, Description: "Memory in GB."},
 					"root_disk_gb": schema.Int64Attribute{Computed: true, Description: "Default root disk size in GB. The root disk can be made larger when the instance is created."},

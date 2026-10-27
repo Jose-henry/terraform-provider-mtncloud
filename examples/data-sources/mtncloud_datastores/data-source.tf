@@ -1,4 +1,4 @@
-# Where a project can store volumes (OpenStack Cinder volume types).
+# Where a project can store volumes.
 data "mtncloud_datastores" "web" {
   project = "web-prod"
 }

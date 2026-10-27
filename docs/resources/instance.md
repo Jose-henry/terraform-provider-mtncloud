@@ -2,12 +2,12 @@
 page_title: "mtncloud_instance Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  An MTN Cloud instance: an OpenStack virtual machine in one of your projects. Creating it waits until MTN Cloud reports it running, usually a few minutes. The project's default security group is always applied, as MTN Cloud requires.
+  An MTN Cloud instance: a virtual machine in one of your projects. Creating it waits until MTN Cloud reports it running, usually a few minutes. The project's default security group is always applied, as MTN Cloud requires.
 ---
 
 # mtncloud_instance
 
-An MTN Cloud instance: an OpenStack virtual machine in one of your projects. Creating it waits until MTN Cloud reports it running, usually a few minutes. The project's default security group is always applied, as MTN Cloud requires.
+An MTN Cloud instance: a virtual machine in one of your projects. Creating it waits until MTN Cloud reports it running, usually a few minutes. The project's default security group is always applied, as MTN Cloud requires.
 
 ## Example Usage
 

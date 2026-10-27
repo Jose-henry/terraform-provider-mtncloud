@@ -2,12 +2,12 @@
 page_title: "mtncloud_router Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  An MTN Router: connects MTN Networks of one project to each other and, through an external network, to the outside. Creating it waits until OpenStack reports it ready, usually within seconds.
+  An MTN Router: connects MTN Networks of one project to each other and, through an external network, to the outside. Creating it waits until MTN Cloud reports it ready, usually within seconds.
 ---
 
 # mtncloud_router
 
-An MTN Router: connects MTN Networks of one project to each other and, through an external network, to the outside. Creating it waits until OpenStack reports it ready, usually within seconds.
+An MTN Router: connects MTN Networks of one project to each other and, through an external network, to the outside. Creating it waits until MTN Cloud reports it ready, usually within seconds.
 
 ## Example Usage
 
@@ -71,7 +71,7 @@ resource "mtncloud_router" "edge" {
 
 ### Read-Only
 
-- `external_id` (String) OpenStack (Neutron) router ID.
+- `external_id` (String) Router ID in the cloud (the external ID).
 - `external_ip` (String) The router's address on the external network. Empty without `external_network`.
 - `id` (String) Router ID.
 

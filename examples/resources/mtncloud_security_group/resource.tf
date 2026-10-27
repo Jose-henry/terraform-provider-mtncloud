@@ -13,7 +13,7 @@ resource "mtncloud_security_group" "web" {
 }
 
 # Outbound traffic limited to what is listed, once the default egress rules are gone.
-# OpenStack adds them at create; MTN Cloud shows them after its sync, and the first apply
+# They are added at create; MTN Cloud shows them after its sync, and the first apply
 # after that removes them. Until then this group still allows all outbound traffic.
 resource "mtncloud_security_group" "db" {
   name                  = "db"

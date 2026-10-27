@@ -19,7 +19,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 - Removed the "Sharing Data Between Apps/Instances" guide: it needs master-only secret policies.
 - Docs: removed a deprecation notice and an outdated TLS warning carried over from the upstream provider; neither applied to this provider. The front page now describes MTN Cloud, and the examples pin a version.
 - Forked from the upstream provider (MIT) and renamed to `mtncloud` (`mtn/mtncloud`).
-- Scope reduced to OpenStack: removed AWS, Azure, vSphere, standard and MVM clouds and instances, ARM and CloudFormation blueprints and spec templates, and the `cloud_folder` data source. `cloud_datastore` was restored: datastores are OpenStack Cinder volume types.
+- Scope reduced to MTN Cloud: removed AWS, Azure, vSphere, standard and MVM clouds and instances, ARM and CloudFormation blueprints and spec templates, and the `cloud_folder` data source. `cloud_datastore` was restored (later removed as master-only).
 - Environment variables renamed to `MTNCLOUD_API_*`.
 - **Breaking:** TLS certificate verification is now on by default (`secure` defaults to `true`). For a console with a self-signed certificate, set `secure = false` or `MTNCLOUD_API_SECURE=false`.
 - `url` is optional in the schema (it can come from `MTNCLOUD_API_URL`); a clear error is shown when neither is set.
@@ -30,7 +30,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 - New resource `mtncloud_project`: orders MTN's "Create Project" catalog item and waits for its workflow, not for the project to sync in (allow up to an hour). Name and description can't change; destroy is refused (use a `removed` block). Import by the catalog order ID.
 - `mtncloud_instance` accepts `floating_ip_pool`: a public IP attached once the VM runs, changed in place, shown in `public_ip`. The apply waits for the address and fails if it isn't attached.
 - `mtncloud_instance` accepts `scale` (automatic scaling on CPU, memory or disk usage, changed in place) and `expire_days`/`shutdown_days` (set at create; `expire_date` and `shutdown_date` show the dates).
-- New resource `mtncloud_instance`: an OpenStack VM by names (group, project, image, plan, security groups, datastores, environment, domain), checked at plan time. The name is optional (the tenant's naming template applies), data volumes and networks are added in place, a plan change restarts the VM in place, and the project's default security group is always applied. Waits until running, with `timeouts`.
+- New resource `mtncloud_instance`: a VM by names (group, project, image, plan, security groups, datastores, environment, domain), checked at plan time. The name is optional (the tenant's naming template applies), data volumes and networks are added in place, a plan change restarts the VM in place, and the project's default security group is always applied. Waits until running, with `timeouts`.
 - `mtncloud_network` now waits until MTN Cloud reports a new network ready, and accepts `timeouts { create }`.
 - New resource `mtncloud_router` (MTN Router): connects networks of a project, with an optional gateway; waits until ready, with `timeouts`.
 - New resource `mtncloud_network` (MTN Network): project by name, DNS defaulting to MTN's resolvers, optional IPv6, and the subnet ID for routers.

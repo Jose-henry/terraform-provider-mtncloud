@@ -47,6 +47,6 @@ output "default_security_group_id" {
 
 Read-Only:
 
-- `external_id` (String) OpenStack (Neutron) security group ID.
+- `external_id` (String) Security group ID in the cloud (the external ID).
 - `id` (Number) Security group ID.
 - `name` (String) Security group name.

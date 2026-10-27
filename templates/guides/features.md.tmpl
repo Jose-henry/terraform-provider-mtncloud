@@ -132,7 +132,7 @@ Projects (resource pools), ordered from MTN's catalog.
 
 ### Compute
 
-Instances: OpenStack virtual machines from MTN's OS images.
+Instances: virtual machines from MTN's OS images.
 
 - [`mtncloud_instance`](../resources/instance.md)
 

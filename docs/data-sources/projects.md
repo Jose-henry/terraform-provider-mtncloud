@@ -41,7 +41,7 @@ output "project_names" {
 
 Read-Only:
 
-- `external_id` (String) OpenStack project ID.
+- `external_id` (String) Project ID in the cloud (the external ID).
 - `full_name` (String) Full platform name, with the tenant suffix, for example `web-prod-Acme`.
 - `id` (Number) Project ID.
 - `name` (String) Project name as shown in the console, for example `web-prod`.

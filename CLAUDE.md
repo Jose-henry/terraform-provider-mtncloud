@@ -47,7 +47,9 @@ schema descriptions or errors. The exceptions are: the LICENSE notice; the exter
 `github.com/gomorpheus/morpheus-go-sdk`, always aliased `sdk` (target: imported only in
 `internal/client/`; `internal/legacy` imports it until migrated); and API wire values marked
 `// mtncloud:allow-upstream-name (<reason>)`. `scripts/check-names.sh` enforces this in CI on
-everything that ships. Internal notes (`CLAUDE.md`, `dev-docs/`, `.claude/`) may name upstream tools.
+everything that ships. The cloud software's name (OpenStack) is also kept out of customer-facing text
+(docs, templates, examples, descriptions, errors), owner's rule 2026-10-27; API wire values are marked
+`// mtncloud:allow-cloud-name (<reason>)`. Internal notes (`CLAUDE.md`, `dev-docs/`, `.claude/`) may name upstream tools.
 
 **Customer names:** networking is **MTN Network** / **MTN Router** (`mtncloud_network`,
 `mtncloud_router`). Object storage is **MOS**: customers never see "S3", only "S3-compatible".

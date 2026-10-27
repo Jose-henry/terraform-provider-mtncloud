@@ -54,10 +54,10 @@ func resourceNodeType() *schema.Resource {
 			},
 			"technology": {
 				Type:         schema.TypeString,
-				Description:  "The technology of the node type (alibaba, amazon, azure, maas, esxi, fusion, google, huawei, hyperv, kvm, nutanix, opentelekom, openstack, oraclecloud, oraclevm, scvmm, upcloud, vcd.vapp, vcd, vmware, xen)",
+				Description:  "The technology of the node type: the provisioning type code the console shows for it.",
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validation.StringInSlice([]string{"alibaba", "amazon", "azure", "maas", "esxi", "fusion", "google", "huawei", "hyperv", "kvm", "nutanix", "opentelekom", "openstack", "oraclecloud", "oraclevm", "scvmm", "upcloud", "vcd.vapp", "vcd", "vmware", "xen"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"alibaba", "amazon", "azure", "maas", "esxi", "fusion", "google", "huawei", "hyperv", "kvm", "nutanix", "opentelekom", "openstack", "oraclecloud", "oraclevm", "scvmm", "upcloud", "vcd.vapp", "vcd", "vmware", "xen"}, false), // mtncloud:allow-cloud-name (API value of a technology list)
 			},
 			/* AWAITING API SUPPORT TO AVOID DUPLICATE ENTRIES
 			"evar": {
@@ -102,15 +102,15 @@ func resourceNodeType() *schema.Resource {
 			},
 			"stat_type_code": {
 				Type:         schema.TypeString,
-				Description:  "Supported technology of the node type (server,container,amazon, azure, esxi, google, hyperv, nutanix, openstack, scvmm, vmware, xen, docker, virtualbox, vm)",
+				Description:  "Supported technology of the node type: the type code the console shows for it.",
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"server", "container", "amazon", "azure", "esxi", "google", "hyperv", "nutanix", "openstack", "scvmm", "vmware", "xen", "docker", "virtualbox", "vm"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"server", "container", "amazon", "azure", "esxi", "google", "hyperv", "nutanix", "openstack", "scvmm", "vmware", "xen", "docker", "virtualbox", "vm"}, false), // mtncloud:allow-cloud-name (API value of a technology list)
 			},
 			"log_type_code": {
 				Type:         schema.TypeString,
-				Description:  "Supported technology of the node type (server,amazon, azure, esxi, google, hyperv, nutanix, openstack, scvmm, vmware, xen, docker, virtualbox, vm)",
+				Description:  "Supported technology of the node type: the type code the console shows for it.",
 				Optional:     true,
-				ValidateFunc: validation.StringInSlice([]string{"server", "amazon", "azure", "esxi", "google", "hyperv", "nutanix", "openstack", "scvmm", "vmware", "xen", "docker", "virtualbox", "vm"}, false),
+				ValidateFunc: validation.StringInSlice([]string{"server", "amazon", "azure", "esxi", "google", "hyperv", "nutanix", "openstack", "scvmm", "vmware", "xen", "docker", "virtualbox", "vm"}, false), // mtncloud:allow-cloud-name (API value of a technology list)
 			},
 			/* AWAITING API SUPPORT
 			"logs_folder": {

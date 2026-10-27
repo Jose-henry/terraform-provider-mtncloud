@@ -49,7 +49,7 @@ output "smallest_fit" {
 
 Read-Only:
 
-- `code` (String) Platform code of the OpenStack flavor.
+- `code` (String) Plan code.
 - `cores` (Number) vCPUs.
 - `id` (Number) Plan ID in this project.
 - `memory_gb` (Number) Memory in GB.

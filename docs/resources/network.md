@@ -2,12 +2,12 @@
 page_title: "mtncloud_network Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  An MTN Network: a private network in one project, created in OpenStack with one subnet of the same range. Connect it to other networks or the internet with an MTN Router. Creating it waits until OpenStack reports it ready, usually within seconds.
+  An MTN Network: a private network in one project, created with one subnet of the same range. Connect it to other networks or the internet with an MTN Router. Creating it waits until MTN Cloud reports it ready, usually within seconds.
 ---
 
 # mtncloud_network
 
-An MTN Network: a private network in one project, created in OpenStack with one subnet of the same range. Connect it to other networks or the internet with an MTN Router. Creating it waits until OpenStack reports it ready, usually within seconds.
+An MTN Network: a private network in one project, created with one subnet of the same range. Connect it to other networks or the internet with an MTN Router. Creating it waits until MTN Cloud reports it ready, usually within seconds.
 
 ## Example Usage
 
@@ -65,9 +65,9 @@ output "app_subnet_id" {
 
 ### Read-Only
 
-- `external_id` (String) OpenStack (Neutron) network ID.
+- `external_id` (String) Network ID in the cloud (the external ID).
 - `id` (String) Network ID.
-- `subnet_id` (String) ID of the subnet OpenStack created with the network. An MTN Router attaches to it.
+- `subnet_id` (String) ID of the subnet created with the network. An MTN Router attaches to it.
 
 <a id="nestedatt--ipv6"></a>
 ### Nested Schema for `ipv6`

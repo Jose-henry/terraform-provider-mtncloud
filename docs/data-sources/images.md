@@ -43,5 +43,5 @@ Read-Only:
 
 - `code` (String) Image code, for example `MTN-U24.04LTS`. Use this to pick an image.
 - `id` (Number) Image (instance type) ID.
-- `layout_id` (Number) OpenStack layout ID.
+- `layout_id` (Number) Layout ID used to provision the image.
 - `name` (String) Display name, for example `MTN Ubuntu Server 24.04.3LTS`.

@@ -82,7 +82,7 @@ func (c *Client) ImageByCode(ctx context.Context, code string) (InstanceType, er
 	for _, t := range types {
 		if t.Code == code {
 			if t.LayoutID == 0 {
-				return InstanceType{}, fmt.Errorf("image %q has no OpenStack layout, so it can't be provisioned on MTN Cloud", code)
+				return InstanceType{}, fmt.Errorf("image %q has no layout MTN Cloud can provision", code)
 			}
 			return t, nil
 		}
@@ -104,7 +104,7 @@ func (c *Client) ImageByName(ctx context.Context, name string) (InstanceType, er
 	for _, t := range types {
 		if t.Code == name || strings.EqualFold(t.Name, name) {
 			if t.LayoutID == 0 {
-				return InstanceType{}, fmt.Errorf("image %q has no OpenStack layout, so it can't be provisioned on MTN Cloud", name)
+				return InstanceType{}, fmt.Errorf("image %q has no layout MTN Cloud can provision", name)
 			}
 			return t, nil
 		}
