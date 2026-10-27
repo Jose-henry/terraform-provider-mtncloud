@@ -105,10 +105,46 @@ Client-wide, found while building this: a 2xx response with `"success": false` i
   - Create answers `{"success": true, "id": N}` only (API reference), so the provider reads it back.
   - The CLI cannot build the body for a customer: `network-routers add` reads `/api/zones/{id}`,
     which returns 403. The cloud comes from the option lists instead (D-018).
-- **Still needed:** the wire format of `interfaces` on create (a list of `{networkSubnet: {id}}`, or
-  `interfaces.networkSubnet.id` as a list?), and whether interfaces can be added and removed by PUT.
-  Source: the browser request when creating a router in the console (owner), since the CLI path is
-  blocked.
+- **Live test 2026-10-27** (owner-approved: one throwaway network and router, both deleted after;
+  raw output in `.captures/router/`):
+  - The network create body the provider sends (`internal/client/networks.go`) worked as is:
+    `{"success": true, "errors": {}, "network": {...}}`, status `ok` at once, and its subnet was
+    offered to routers straight away (no sync).
+  - Router create body that works:
+    `{"networkRouter": {"name", "description", "type": {"id": 1}, "site": {"id": <group>},
+    "zone": {"id": <cloud>}, "enabled": true, "poolId": <project>, "externalNetwork": {"id": <ext>},
+    "interfaces": {"networkSubnet": {"id": [<subnet id>, ...]}}}}`. Answer: `{"success": true, "id": N}`.
+  - **Not ready at once:** `status: "provisioning"` with no `externalId`/`externalIp`, then `ok`
+    within 9 s. The provider polls to `ok` (or a failure), honouring `timeouts`.
+  - Read: `site` is echoed, `poolId` is **not** (null). `interfaces[]` lists each internal network
+    (`network {id, name}`, `cidr`, `ipAddress: null`) **and** the gateway (the external network,
+    with the router's external IP). Internal and external are told apart by the external network ID.
+  - Update (PUT, partial): `name` is refused (`400 {"errors": {"name": "Field name cannot be
+    changed"}}`), so a new name replaces the router. `description` changes in place. Interfaces
+    change in place by sending the full list (`[]` removes all); a PUT without `interfaces` keeps
+    them. Changing the external network was not tried.
+  - Delete: `{"success": true}`; GET is 404 within seconds, even with an interface still attached.
+  - **Network still in use:** `DELETE /api/networks/{id}` answered **200** with `{"success": false,
+    "msg": "Unable to complete operation on network <uuid>. There are one or more ports still in use
+    ..."}`. Without the client's success:false check this looked like a successful delete.
+
+### Proposed design (awaiting the owner's approval)
+
+`mtncloud_router` (MTN Router)
+| Attribute | Kind | Why |
+|---|---|---|
+| `id` | Computed | Server ID; import by ID. |
+| `name` | Required, RequiresReplace | The API refuses renames. |
+| `description` | Optional | In place. |
+| `project` | Required, RequiresReplace | `poolId`; short or full name, checked at plan time. Not echoed, so Read keeps the configured value and import derives it from the first internal network's project (the option list only offers that project's subnets). |
+| `networks` | Required set of `mtncloud_network` IDs (at least 1) | Sent as their subnet IDs; read back from `interfaces[].network.id` (gateway excluded), so no diff. Changes in place. |
+| `external_network` | Optional, name from `openstackExternalNetworks`, RequiresReplace until an in-place change is proven | The gateway: the router's external IP comes from it. |
+| `enabled` | Optional, default `true` | In place. |
+| `external_ip`, `external_id` | Computed | Router's gateway IP and Neutron UUID. |
+
+Create polls until `ok` (`failed`/`error` stop it with the platform message); delete polls until
+404. Both honour `timeouts {}` (default 10 min). No separate interface resource: the API has no
+interface endpoints, and two resources rewriting one list would fight.
 
 ## Security groups
 

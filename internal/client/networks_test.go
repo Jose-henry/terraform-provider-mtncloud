@@ -107,8 +107,8 @@ func TestUpdateNetwork_Body(t *testing.T) {
 
 func TestDeleteNetwork_InUse(t *testing.T) {
 	f := newFakeAPI(t)
+	// Captured 2026-10-27: the refusal comes back as 200 with "success": false.
 	f.route("DELETE", "/api/networks/9301", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write(netFixture(t, "in_use.json"))
 	})
 	f.route("DELETE", "/api/networks/9302", func(w http.ResponseWriter, _ *http.Request) {

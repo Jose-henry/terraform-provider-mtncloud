@@ -133,7 +133,8 @@ func (s *netStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(http.StatusOK, map[string]any{"success": true, "network": n})
 	case http.MethodDelete:
 		if s.inUse[id] {
-			reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "Unable to complete operation on network " +
+			// The platform answers 200 with "success": false (captured 2026-10-27).
+			reply(http.StatusOK, map[string]any{"success": false, "msg": "Unable to complete operation on network " +
 				n["externalId"].(string) + ". There are one or more ports still in use on the network, id for these ports is: 00000000-0000-0000-0000-0000000000p1."})
 			return
 		}
