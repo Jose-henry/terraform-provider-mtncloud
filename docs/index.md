@@ -36,7 +36,7 @@ terraform {
   required_providers {
     mtncloud = {
       source  = "jose-henry/mtncloud"
-      version = "~> 0.1"
+      version = "~> 0.3"
     }
   }
 }
