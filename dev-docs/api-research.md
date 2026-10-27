@@ -122,13 +122,17 @@ Client-wide, found while building this: a 2xx response with `"success": false` i
   - Update (PUT, partial): `name` is refused (`400 {"errors": {"name": "Field name cannot be
     changed"}}`), so a new name replaces the router. `description` changes in place. Interfaces
     change in place by sending the full list (`[]` removes all); a PUT without `interfaces` keeps
-    them. Changing the external network was not tried.
+    them.
+  - Gateway (second owner-approved run, same cleanup): `{"externalNetwork": {"id": N}}` moves the
+    gateway in place (new external IP, internal interfaces kept); `{"externalNetwork": null}` removes
+    it, but **`externalIp` keeps the old address**, so the provider takes the external IP from the
+    gateway interface, never from `externalIp`. `{"externalNetwork": {"id": ""}}` is refused (400).
   - Delete: `{"success": true}`; GET is 404 within seconds, even with an interface still attached.
   - **Network still in use:** `DELETE /api/networks/{id}` answered **200** with `{"success": false,
     "msg": "Unable to complete operation on network <uuid>. There are one or more ports still in use
     ..."}`. Without the client's success:false check this looked like a successful delete.
 
-### Proposed design (awaiting the owner's approval)
+### Design (approved 2026-10-27: network IDs, gateway tested live)
 
 `mtncloud_router` (MTN Router)
 | Attribute | Kind | Why |
@@ -138,9 +142,10 @@ Client-wide, found while building this: a 2xx response with `"success": false` i
 | `description` | Optional | In place. |
 | `project` | Required, RequiresReplace | `poolId`; short or full name, checked at plan time. Not echoed, so Read keeps the configured value and import derives it from the first internal network's project (the option list only offers that project's subnets). |
 | `networks` | Required set of `mtncloud_network` IDs (at least 1) | Sent as their subnet IDs; read back from `interfaces[].network.id` (gateway excluded), so no diff. Changes in place. |
-| `external_network` | Optional, name from `openstackExternalNetworks`, RequiresReplace until an in-place change is proven | The gateway: the router's external IP comes from it. |
+| `external_network` | Optional, name from `openstackExternalNetworks` | The gateway. Changes in place; removing it sends `null`. |
 | `enabled` | Optional, default `true` | In place. |
-| `external_ip`, `external_id` | Computed | Router's gateway IP and Neutron UUID. |
+| `external_ip` | Computed | From the gateway interface; null without a gateway (`externalIp` goes stale). |
+| `external_id` | Computed | Neutron UUID. |
 
 Create polls until `ok` (`failed`/`error` stop it with the platform message); delete polls until
 404. Both honour `timeouts {}` (default 10 min). No separate interface resource: the API has no
