@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Fails if the upstream product name appears anywhere in tracked files, except:
+# Fails if the upstream product or vendor name, or a misspelling of it, appears anywhere in tracked
+# files, except:
 #   - go.mod / go.sum and import lines of the external SDK (github.com/gomorpheus/morpheus-go-sdk)
 #   - LICENSE (the MIT notice must be kept)
 #   - lines marked "mtncloud:allow-upstream-name" (API wire values, with a reason)
@@ -11,7 +12,7 @@ cd "$(dirname "$0")/.."
 
 hits="$(git ls-files -z --cached --others --exclude-standard \
   | grep -zvE '^(go\.mod|go\.sum|LICENSE|CLAUDE\.md|scripts/check-names\.sh)$|^(dev-docs|\.claude)/' \
-  | xargs -0 grep -nIi 'morpheus' 2>/dev/null \
+  | xargs -0 grep -nIiE 'morpheus|morhpeus|morpehus|morpheous|\bhpe\b' 2>/dev/null \
   | grep -v 'github.com/gomorpheus/morpheus-go-sdk' \
   | grep -v 'mtncloud:allow-upstream-name' || true)"
 

@@ -4,6 +4,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+- Docs: removed a deprecation notice and an outdated TLS warning carried over from the upstream provider; neither applied to this provider. The front page now describes MTN Cloud, and the examples pin `~> 0.1`.
 - Forked from the upstream provider (MIT) and renamed to `mtncloud` (`mtn/mtncloud`).
 - Scope reduced to OpenStack: removed AWS, Azure, vSphere, standard and MVM clouds and instances, ARM and CloudFormation blueprints and spec templates, and the `cloud_folder` data source. `cloud_datastore` was restored: datastores are OpenStack Cinder volume types.
 - Environment variables renamed to `MTNCLOUD_API_*`.
