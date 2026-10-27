@@ -1,1 +1,0 @@
-terraform import mtncloud_tenant_role.tf_example_tenant_role 1

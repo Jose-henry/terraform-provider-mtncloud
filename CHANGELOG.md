@@ -5,6 +5,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 ## Unreleased
 
 - Docs: the examples now pin `~> 0.3`.
+- **Breaking:** removed the 36 resources and 12 data sources only the MTN Cloud master tenant can use (tenants, appliance settings, policies, service plans, prices, licenses, cloud and resource pool lookups and others). Customers pick sizes with `mtncloud_plans` and datastores with `mtncloud_datastores`.
 - Fixed: instances made in the console showed an empty `private_ip`.
 - Fixed: `mtncloud_plans` accepts the image by name (for example `MTN Ubuntu Server 24.04.3LTS`) as well as by code.
 - `mtncloud_network` (data source) is rebuilt: look up by ID or name, optionally in a project; it now returns the network's `project`, `group`, `cloud`, gateway, DNS, DHCP and subnet ID.

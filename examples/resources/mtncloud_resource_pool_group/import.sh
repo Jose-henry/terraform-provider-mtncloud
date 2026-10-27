@@ -1,1 +1,0 @@
-terraform import mtncloud_resource_pool_group.tf_example_resource_pool_group 1

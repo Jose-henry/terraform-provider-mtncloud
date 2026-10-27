@@ -1,4 +1,3 @@
 # Copy to terraform.tfvars (git-ignored) and fill in. Never commit real values.
 mtncloud_url          = "https://console.cloud.mtn.ng"
 mtncloud_access_token = "your-access-token"
-cloud_name            = "MTNNG_CLOUD_AZ_1"

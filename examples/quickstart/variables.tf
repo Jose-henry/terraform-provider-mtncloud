@@ -9,9 +9,3 @@ variable "mtncloud_access_token" {
   type        = string
   sensitive   = true
 }
-
-variable "cloud_name" {
-  description = "The availability-zone cloud to look up."
-  type        = string
-  default     = "MTNNG_CLOUD_AZ_1"
-}

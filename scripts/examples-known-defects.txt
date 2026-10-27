@@ -1,25 +1,5 @@
 # Upstream example files with schema defects, inherited 2026-10-26 (dev-docs/backlog.md B-003).
 # This list only shrinks: scripts/validate-examples.sh fails if a listed file becomes clean
 # or an unlisted file breaks. Never add new code here.
-examples/resources/mtncloud_backup_creation_policy/resource_role.tf
-examples/resources/mtncloud_budget_policy/resource_role.tf
-examples/resources/mtncloud_cluster_resource_name_policy/resource_role.tf
-examples/resources/mtncloud_delete_approval_policy/resource_role.tf
 examples/resources/mtncloud_form/resource.tf
-examples/resources/mtncloud_hostname_policy/resource_role.tf
-examples/resources/mtncloud_instance_name_policy/resource_role.tf
-examples/resources/mtncloud_max_containers_policy/resource_role.tf
-examples/resources/mtncloud_max_cores_policy/resource_role.tf
-examples/resources/mtncloud_max_hosts_policy/resource_role.tf
-examples/resources/mtncloud_max_memory_policy/resource_role.tf
-examples/resources/mtncloud_max_storage_policy/resource_role.tf
-examples/resources/mtncloud_max_vms_policy/resource_role.tf
-examples/resources/mtncloud_motd_policy/resource.tf
-examples/resources/mtncloud_network_quota_policy/resource_role.tf
-examples/resources/mtncloud_provision_approval_policy/resource_role.tf
-examples/resources/mtncloud_router_quota_policy/resource_role.tf
 examples/resources/mtncloud_terraform_app_blueprint/resource_json.tf
-examples/resources/mtncloud_user_creation_policy/resource_role.tf
-examples/resources/mtncloud_user_group_creation_policy/resource_role.tf
-examples/resources/mtncloud_workflow_policy/resource_role.tf
-examples/data-sources/mtncloud_plan/data-source.tf

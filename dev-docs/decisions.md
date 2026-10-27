@@ -176,3 +176,12 @@ Owner's direction. Reopens D-013: `mtncloud_load_balancer` is planned again (Oct
 needs a capture before design). `mtncloud_cluster` and `mtncloud_datastore` join the planned
 resources. Each needs the usual research (MTN Drive docs, Context7, a read-only capture) and an
 approved plan before code.
+
+## D-024 Master-only types removed (2026-10-27)
+Owner's direction: the provider is for customers (sub-tenants), so the 36 resources and 12 data
+sources that only the master tenant can use are removed: tenants and tenant roles, appliance,
+backup, guidance, monitoring and provisioning settings, licenses, cluster packages, resource pool
+groups, every policy, service plans, prices and price sets; and the cloud(s), cloud datastore,
+resource pool, plan, policy/policies, price, price set and tenant(s) data sources. Supersedes the
+master-only half of D-004 (master gating is no longer needed for these). `TestProvider_RemovedTypesStayRemoved`
+keeps them out. The owner audits the remaining types next and names further removals.

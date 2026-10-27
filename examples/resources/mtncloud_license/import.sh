@@ -1,1 +1,0 @@
-terraform import mtncloud_license.tf_example_license 1

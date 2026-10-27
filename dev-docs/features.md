@@ -6,9 +6,9 @@ The provider targets MTN Cloud on OpenStack. The cloud (`MTNNG_CLOUD_AZ_1`) is f
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 118 | 73 |
+| Available today | 82 | 61 |
 | Usable with a customer (sub-tenant) login | 82 | 56 |
-| Master tenant only | 36 | 12 |
+| Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 7 | 0 |
 
@@ -37,26 +37,10 @@ Users, roles, groups, identity sources and environments.
 | [`mtncloud_credential`](../docs/resources/credential.md) | Yes (read verified) |
 | [`mtncloud_environment`](../docs/resources/environment.md) | Yes (read verified) |
 | [`mtncloud_group`](../docs/resources/group.md) | Yes (read verified) |
-| [`mtncloud_resource_pool_group`](../docs/resources/resource_pool_group.md) | No: master tenant only |
 | [`mtncloud_saml_identity_source`](../docs/resources/saml_identity_source.md) | Yes (read verified) |
-| [`mtncloud_tenant`](../docs/resources/tenant.md) | No: master tenant only |
-| [`mtncloud_tenant_role`](../docs/resources/tenant_role.md) | No: master tenant only |
 | [`mtncloud_user`](../docs/resources/user.md) | Yes (read verified) |
 | [`mtncloud_user_group`](../docs/resources/user_group.md) | Yes (read verified) |
 | [`mtncloud_user_role`](../docs/resources/user_role.md) | Yes (read verified) |
-
-### Appliance configuration
-
-Platform-wide settings. Only the MTN Cloud master tenant can manage these.
-
-| Type | Customer login |
-|---|---|
-| [`mtncloud_appliance_setting`](../docs/resources/appliance_setting.md) | No: master tenant only |
-| [`mtncloud_backup_setting`](../docs/resources/backup_setting.md) | No: master tenant only |
-| [`mtncloud_guidance_setting`](../docs/resources/guidance_setting.md) | No: master tenant only |
-| [`mtncloud_license`](../docs/resources/license.md) | No: master tenant only |
-| [`mtncloud_monitoring_setting`](../docs/resources/monitoring_setting.md) | No: master tenant only |
-| [`mtncloud_provisioning_setting`](../docs/resources/provisioning_setting.md) | No: master tenant only |
 
 ### Library: instance types, layouts and templates
 
@@ -66,7 +50,6 @@ What can be provisioned and how: instance types, layouts, node types, cluster la
 |---|---|
 | [`mtncloud_boot_script`](../docs/resources/boot_script.md) | Yes (read verified) |
 | [`mtncloud_cluster_layout`](../docs/resources/cluster_layout.md) | Yes (read verified) |
-| [`mtncloud_cluster_package`](../docs/resources/cluster_package.md) | No: master tenant only |
 | [`mtncloud_file_template`](../docs/resources/file_template.md) | Yes (read verified) |
 | [`mtncloud_instance_layout`](../docs/resources/instance_layout.md) | Yes (read verified) |
 | [`mtncloud_instance_type`](../docs/resources/instance_type.md) | Yes (read verified) |
@@ -169,46 +152,6 @@ Connections to configuration management, source control, registries and ITSM too
 | [`mtncloud_servicenow_integration`](../docs/resources/servicenow_integration.md) | Yes (read verified) |
 | [`mtncloud_vro_integration`](../docs/resources/vro_integration.md) | Yes (read verified) |
 
-### Policies and governance
-
-Quotas, approvals, naming and other guard rails. The master tenant applies these to sub-tenants: customers can't read or manage policies.
-
-| Type | Customer login |
-|---|---|
-| [`mtncloud_backup_creation_policy`](../docs/resources/backup_creation_policy.md) | No: master tenant only |
-| [`mtncloud_budget_policy`](../docs/resources/budget_policy.md) | No: master tenant only |
-| [`mtncloud_cluster_resource_name_policy`](../docs/resources/cluster_resource_name_policy.md) | No: master tenant only |
-| [`mtncloud_cypher_access_policy`](../docs/resources/cypher_access_policy.md) | No: master tenant only |
-| [`mtncloud_delayed_delete_policy`](../docs/resources/delayed_delete_policy.md) | No: master tenant only |
-| [`mtncloud_delete_approval_policy`](../docs/resources/delete_approval_policy.md) | No: master tenant only |
-| [`mtncloud_hostname_policy`](../docs/resources/hostname_policy.md) | No: master tenant only |
-| [`mtncloud_instance_name_policy`](../docs/resources/instance_name_policy.md) | No: master tenant only |
-| [`mtncloud_max_containers_policy`](../docs/resources/max_containers_policy.md) | No: master tenant only |
-| [`mtncloud_max_cores_policy`](../docs/resources/max_cores_policy.md) | No: master tenant only |
-| [`mtncloud_max_hosts_policy`](../docs/resources/max_hosts_policy.md) | No: master tenant only |
-| [`mtncloud_max_memory_policy`](../docs/resources/max_memory_policy.md) | No: master tenant only |
-| [`mtncloud_max_storage_policy`](../docs/resources/max_storage_policy.md) | No: master tenant only |
-| [`mtncloud_max_vms_policy`](../docs/resources/max_vms_policy.md) | No: master tenant only |
-| [`mtncloud_motd_policy`](../docs/resources/motd_policy.md) | No: master tenant only |
-| [`mtncloud_network_quota_policy`](../docs/resources/network_quota_policy.md) | No: master tenant only |
-| [`mtncloud_power_schedule_policy`](../docs/resources/power_schedule_policy.md) | No: master tenant only |
-| [`mtncloud_provision_approval_policy`](../docs/resources/provision_approval_policy.md) | No: master tenant only |
-| [`mtncloud_router_quota_policy`](../docs/resources/router_quota_policy.md) | No: master tenant only |
-| [`mtncloud_tag_policy`](../docs/resources/tag_policy.md) | No: master tenant only |
-| [`mtncloud_user_creation_policy`](../docs/resources/user_creation_policy.md) | No: master tenant only |
-| [`mtncloud_user_group_creation_policy`](../docs/resources/user_group_creation_policy.md) | No: master tenant only |
-| [`mtncloud_workflow_policy`](../docs/resources/workflow_policy.md) | No: master tenant only |
-
-### Plans and pricing
-
-Service plans and the prices attached to them. Master tenant only; customers pick sizes with the `mtncloud_plans` data source.
-
-| Type | Customer login |
-|---|---|
-| [`mtncloud_price`](../docs/resources/price.md) | No: master tenant only |
-| [`mtncloud_price_set`](../docs/resources/price_set.md) | No: master tenant only |
-| [`mtncloud_service_plan`](../docs/resources/service_plan.md) | No: master tenant only |
-
 ### Projects
 
 Projects (resource pools), ordered from MTN's catalog.
@@ -281,9 +224,6 @@ Autoscaling thresholds.
 | [`mtncloud_group`](../docs/data-sources/group.md) | Yes (read verified) |
 | [`mtncloud_groups`](../docs/data-sources/groups.md) | Yes (read verified) |
 | [`mtncloud_permission_set`](../docs/data-sources/permission_set.md) | Yes (no API call) |
-| [`mtncloud_tenant`](../docs/data-sources/tenant.md) | No: master tenant only |
-| [`mtncloud_tenant_role`](../docs/data-sources/tenant_role.md) | No: master tenant only |
-| [`mtncloud_tenants`](../docs/data-sources/tenants.md) | No: master tenant only |
 | [`mtncloud_user_group`](../docs/data-sources/user_group.md) | Yes (read verified) |
 | [`mtncloud_user_groups`](../docs/data-sources/user_groups.md) | Yes (read verified) |
 | [`mtncloud_user_role`](../docs/data-sources/user_role.md) | Yes (read verified) |
@@ -292,12 +232,8 @@ Autoscaling thresholds.
 
 | Type | Customer login |
 |---|---|
-| [`mtncloud_cloud`](../docs/data-sources/cloud.md) | No: master tenant only |
-| [`mtncloud_cloud_datastore`](../docs/data-sources/cloud_datastore.md) | No: master tenant only |
 | [`mtncloud_cloud_type`](../docs/data-sources/cloud_type.md) | Yes (read verified) |
-| [`mtncloud_clouds`](../docs/data-sources/clouds.md) | No: master tenant only |
 | [`mtncloud_provision_type`](../docs/data-sources/provision_type.md) | Yes (read verified) |
-| [`mtncloud_resource_pool`](../docs/data-sources/resource_pool.md) | No: master tenant only |
 
 ### Networking
 
@@ -327,7 +263,6 @@ Autoscaling thresholds.
 | [`mtncloud_instance_layout`](../docs/data-sources/instance_layout.md) | Yes (read verified) |
 | [`mtncloud_instance_type`](../docs/data-sources/instance_type.md) | Yes (read verified) |
 | [`mtncloud_node_type`](../docs/data-sources/node_type.md) | Yes (read verified) |
-| [`mtncloud_plan`](../docs/data-sources/plan.md) | No: master tenant only |
 | [`mtncloud_script_template`](../docs/data-sources/script_template.md) | Yes (read verified) |
 | [`mtncloud_security_package`](../docs/data-sources/security_package.md) | Yes (read verified) |
 | [`mtncloud_spec_template`](../docs/data-sources/spec_template.md) | Yes (read verified) |
@@ -369,15 +304,11 @@ Autoscaling thresholds.
 | [`mtncloud_vro_workflow`](../docs/data-sources/vro_workflow.md) | Not checked yet |
 | [`mtncloud_workflow`](../docs/data-sources/workflow.md) | Yes (read verified) |
 
-### Policies, plans and pricing
+### Budgets
 
 | Type | Customer login |
 |---|---|
 | [`mtncloud_budget`](../docs/data-sources/budget.md) | Yes (read verified) |
-| [`mtncloud_policies`](../docs/data-sources/policies.md) | No: master tenant only |
-| [`mtncloud_policy`](../docs/data-sources/policy.md) | No: master tenant only |
-| [`mtncloud_price`](../docs/data-sources/price.md) | No: master tenant only |
-| [`mtncloud_price_set`](../docs/data-sources/price_set.md) | No: master tenant only |
 
 ### Secrets and keys
 
@@ -390,8 +321,8 @@ Autoscaling thresholds.
 
 These need the MTN Cloud master tenant. A customer login gets HTTP 403.
 
-- **Resources:** `mtncloud_appliance_setting`, `mtncloud_backup_creation_policy`, `mtncloud_backup_setting`, `mtncloud_budget_policy`, `mtncloud_cluster_package`, `mtncloud_cluster_resource_name_policy`, `mtncloud_cypher_access_policy`, `mtncloud_delayed_delete_policy`, `mtncloud_delete_approval_policy`, `mtncloud_guidance_setting`, `mtncloud_hostname_policy`, `mtncloud_instance_name_policy`, `mtncloud_license`, `mtncloud_max_containers_policy`, `mtncloud_max_cores_policy`, `mtncloud_max_hosts_policy`, `mtncloud_max_memory_policy`, `mtncloud_max_storage_policy`, `mtncloud_max_vms_policy`, `mtncloud_monitoring_setting`, `mtncloud_motd_policy`, `mtncloud_network_quota_policy`, `mtncloud_power_schedule_policy`, `mtncloud_price`, `mtncloud_price_set`, `mtncloud_provision_approval_policy`, `mtncloud_provisioning_setting`, `mtncloud_resource_pool_group`, `mtncloud_router_quota_policy`, `mtncloud_service_plan`, `mtncloud_tag_policy`, `mtncloud_tenant`, `mtncloud_tenant_role`, `mtncloud_user_creation_policy`, `mtncloud_user_group_creation_policy`, `mtncloud_workflow_policy`
-- **Data sources:** `mtncloud_cloud`, `mtncloud_cloud_datastore`, `mtncloud_clouds`, `mtncloud_plan`, `mtncloud_policies`, `mtncloud_policy`, `mtncloud_price`, `mtncloud_price_set`, `mtncloud_resource_pool`, `mtncloud_tenant`, `mtncloud_tenant_role`, `mtncloud_tenants`
+- **Resources:** 
+- **Data sources:** 
 
 Customers use `mtncloud_projects` instead of `mtncloud_resource_pool`, `mtncloud_plans` instead of `mtncloud_plan`, and `mtncloud_datastores` instead of `mtncloud_cloud_datastore`. They don't need `mtncloud_cloud`: the provider finds the cloud.
 

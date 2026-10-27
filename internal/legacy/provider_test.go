@@ -14,9 +14,23 @@ var (
 		"vsphere_mks_cluster", "mvm_instance",
 		"arm_app_blueprint", "arm_spec_template",
 		"cloud_formation_app_blueprint", "cloud_formation_spec_template",
+		// Master tenant only (D-024): customers can't use them.
+		"appliance_setting", "backup_creation_policy", "backup_setting", "budget_policy",
+		"cluster_package", "cluster_resource_name_policy", "cypher_access_policy",
+		"delayed_delete_policy", "delete_approval_policy", "guidance_setting", "hostname_policy",
+		"instance_name_policy", "license", "max_containers_policy", "max_cores_policy",
+		"max_hosts_policy", "max_memory_policy", "max_storage_policy", "max_vms_policy",
+		"monitoring_setting", "motd_policy", "network_quota_policy", "power_schedule_policy", "price",
+		"price_set", "provision_approval_policy", "provisioning_setting", "resource_pool_group",
+		"router_quota_policy", "service_plan", "tag_policy", "tenant", "tenant_role",
+		"user_creation_policy", "user_group_creation_policy", "workflow_policy",
 	}
-	// cloud_datastore was restored (D-010): OpenStack Cinder volume types are cloud datastores.
-	removedDataSources = []string{"cloud_folder"}
+	removedDataSources = []string{
+		"cloud_folder",
+		// Master tenant only (D-024). cloud_datastore was restored by D-010, then removed here.
+		"cloud", "cloud_datastore", "clouds", "plan", "policies", "policy", "price", "price_set",
+		"resource_pool", "tenant", "tenant_role", "tenants",
+	}
 )
 
 func TestProvider_InternalValidate(t *testing.T) {

@@ -1,9 +1,10 @@
-data "mtncloud_tenant" "demo_tenant" {
-  name = "Demo"
+# Your tenant's ID, shown in the console under Administration > Tenants (or in /api/whoami).
+variable "tenant_id" {
+  type = number
 }
 
 resource "mtncloud_saml_identity_source" "addemo" {
-  tenant_id                      = mtncloud_tenant.demo_tenant.id
+  tenant_id                      = var.tenant_id
   name                           = "samldemo"
   description                    = "TF example SAML identity source"
   login_redirect_url             = "https://tfexamplesaml.test.local:8443/realms/master/protocol/saml"

@@ -1,1 +1,0 @@
-terraform import mtncloud_provision_approval_policy.tf_example_provision_approval_policy 1

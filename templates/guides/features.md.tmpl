@@ -243,7 +243,7 @@ Autoscaling thresholds.
 - [`mtncloud_tasks`](../data-sources/tasks.md)
 - [`mtncloud_workflow`](../data-sources/workflow.md)
 
-### Policies, plans and pricing
+### Budgets
 
 - [`mtncloud_budget`](../data-sources/budget.md)
 

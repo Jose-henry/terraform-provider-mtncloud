@@ -1,1 +1,0 @@
-terraform import mtncloud_user_group_creation_policy.tf_example_user_group_creation_policy 1

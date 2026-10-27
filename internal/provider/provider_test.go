@@ -138,12 +138,12 @@ func TestMux_ProviderSchemasMatch(t *testing.T) {
 			t.Errorf("%s: %s", d.Summary, d.Detail)
 		}
 	}
-	for _, name := range []string{"mtncloud_projects", "mtncloud_images", "mtncloud_plans", "mtncloud_datastores", "mtncloud_security_groups", "mtncloud_external_networks", "mtncloud_catalog_items", "mtncloud_cloud_datastore"} {
+	for _, name := range []string{"mtncloud_projects", "mtncloud_images", "mtncloud_plans", "mtncloud_datastores", "mtncloud_security_groups", "mtncloud_external_networks", "mtncloud_catalog_items"} {
 		if _, ok := resp.DataSourceSchemas[name]; !ok {
 			t.Errorf("data source %s is not served", name)
 		}
 	}
-	if _, ok := resp.ResourceSchemas["mtncloud_tenant"]; !ok {
+	if _, ok := resp.ResourceSchemas["mtncloud_user"]; !ok {
 		t.Error("legacy resources are not served through the mux")
 	}
 }

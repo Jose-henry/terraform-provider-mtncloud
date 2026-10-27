@@ -112,6 +112,10 @@ Last updated 2026-10-27 (floating IP wait, compute lookups, planned list). Updat
   `/api/networks`, `/api/networks/domains`, `/api/environments` and `/api/key-pairs` (200, re-checked
   2026-10-27), so the inherited network, domain, environment and key pair data sources stay
   "read verified". Availability zones remain blocked: `/api/options/openstackAvailabilityZone` answers 500.
+- Master-only types removed (D-024, 2026-10-27): 36 resources and 12 data sources. Now 82
+  resources and 61 data sources, all usable by a customer login; the owner audits them next.
+- Fixes from the owner's tester (2026-10-27): `private_ip` on console-made instances, plans by
+  image name, and `mtncloud_network` (data source) rebuilt with project, group and cloud.
 - Guides: "Sharing Data Between ..." removed (it needed master-only Cypher policies). A private,
   git-ignored use-and-test guide (`private/*.pdf`, rebuilt with `python private/make_guide_pdf.py .`) is generated from the examples.
 
