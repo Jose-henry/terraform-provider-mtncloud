@@ -458,3 +458,29 @@ func TestFloatingIP_PoolsAttachDetach(t *testing.T) {
 		t.Errorf("detach: %v %v", err, detach)
 	}
 }
+
+func TestWaitForPublicIP(t *testing.T) {
+	f := newFakeAPI(t)
+	get := instanceFixture(t, "get.json")
+	var reads int
+	f.route("GET", "/api/instances/9701", func(w http.ResponseWriter, _ *http.Request) {
+		reads++
+		if reads < 3 {
+			// No floating IP yet: connectionInfo shows the private address.
+			_, _ = w.Write([]byte(strings.Replace(string(get), `"connectionInfo"`, `"connectionInfoX"`, 1)))
+			return
+		}
+		_, _ = w.Write(get)
+	})
+	c := f.client(t)
+	in, err := c.WaitForPublicIP(t.Context(), 9701, true)
+	if err != nil || in.PublicIP == "" || reads != 3 {
+		t.Fatalf("got %+v, %v after %d reads", in, err, reads)
+	}
+	// Waiting for a release that never comes stops when the context does.
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := c.WaitForPublicIP(ctx, 9701, false); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("want the context's deadline, got %v", err)
+	}
+}

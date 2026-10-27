@@ -674,3 +674,15 @@ func (c *Client) AttachFloatingIP(ctx context.Context, containerID, poolID int64
 func (c *Client) DetachFloatingIP(ctx context.Context, containerID int64) error {
 	return c.do(ctx, http.MethodPut, "/api/containers/"+itoa(containerID)+"/detach-floating-ip", nil, map[string]any{}, nil)
 }
+
+// WaitForPublicIP polls until the instance shows a floating IP (want) or none (!want), so an attach
+// or detach is known to have worked before the apply ends.
+func (c *Client) WaitForPublicIP(ctx context.Context, id int64, want bool) (*Instance, error) {
+	return poll(ctx, c, func(ctx context.Context) (*Instance, error) { return c.GetInstance(ctx, id) },
+		func(in *Instance, err error) (bool, error) {
+			if err != nil {
+				return false, err
+			}
+			return (in.PublicIP != "") == want, nil
+		})
+}

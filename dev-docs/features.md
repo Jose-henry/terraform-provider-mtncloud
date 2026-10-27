@@ -10,7 +10,7 @@ The provider targets MTN Cloud on OpenStack. The cloud (`MTNNG_CLOUD_AZ_1`) is f
 | Usable with a customer (sub-tenant) login | 82 | 53 |
 | Master tenant only | 36 | 12 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 5 | 1 |
+| Coming next | 7 | 1 |
 
 ## Who can use what
 
@@ -399,7 +399,9 @@ Designed, **not available yet**, and all meant for customers.
 | `mtncloud_object_storage` | Planned | MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource. |
 | `mtncloud_app` | Planned | Apps from blueprints: several instances or containers deployed together. |
 | `mtncloud_ssl_certificate` | Planned | Certificates. |
-| `mtncloud_load_balancer` | On hold | Load balancers (OpenStack Octavia). |
+| `mtncloud_cluster` | Planned | Clusters: Kubernetes and other cluster types, with their worker nodes. |
+| `mtncloud_datastore` | Planned | Datastores: the storage that volumes are created on. |
+| `mtncloud_load_balancer` | Planned | Load balancers (OpenStack Octavia): listeners, pools and members. |
 
 ### Data sources
 

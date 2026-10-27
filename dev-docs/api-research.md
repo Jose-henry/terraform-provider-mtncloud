@@ -369,9 +369,10 @@ Never paste tokens, secret keys or passwords. `-V` already masks the bearer toke
   instance lists its containers in `containers`.
 - Attach: `PUT /api/containers/{id}/attach-floating-ip {config:{osExternalNetworkId:"pool-<id>"}}`;
   detach: `PUT /api/containers/{id}/detach-floating-ip` (Context7). Not yet sent live.
-- Nothing waits for the address to sync in (owner, 2026-10-27, as D-020): a successful attach is
-  done. Only an attach that failed at create is reported as drift (private-state flag), so a slow
-  sync never attaches a second address.
+- The apply waits for each attach and detach to show on the instance (`connectionInfo`), like a
+  network's provisioning status, and fails if it doesn't (owner, 2026-10-27: an attach that fails,
+  fails the apply that ran it). A 5xx on the call is followed by the same wait, which tells whether it
+  worked. With every attach confirmed, an instance with no address is drift and is re-attached.
 - `/api/networks/floating-ips` (allocate, list) stays 403 for customers, so a standalone floating IP
   resource that outlives an instance isn't possible with a customer login.
 

@@ -270,13 +270,14 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				},
 			},
 			"floating_ip_pool": schema.StringAttribute{
-				// Kept as configured: a customer can't read which pool an attached address came from.
+				// Kept as configured while the instance has an address: a customer can't read which pool it
+				// came from. No address means none is attached.
 				Optional: true,
 				Description: "Give the instance a floating (public) IP from this pool, for example `public-network-02` (the " +
 					"`mtncloud_external_networks` data source lists the names). It is attached once the VM is running, " +
 					"and works only when the instance's network is on an MTN Router with an external network. Changed in " +
-					"place: the old address is released and a new one attached. The address shows in `public_ip` once it " +
-					"syncs into MTN Cloud, which can take up to an hour.",
+					"place: the old address is released and a new one attached. Apply waits until the instance shows the " +
+					"address (in `public_ip`), and fails if it doesn't.",
 			},
 			"expire_days": schema.Int64Attribute{
 				Optional: true,
@@ -793,20 +794,17 @@ func (r *instanceResource) Create(ctx context.Context, req resource.CreateReques
 			scaleFailed = true
 		}
 	}
-	plannedPool, fipFailed := plan.FloatingIPPool, false
+	fipFailed := false
 	if err == nil && !client.InstanceFailed(inst.Status) && known(plan.FloatingIPPool) {
-		if got, _, ferr := r.setFloatingIP(ctx, inst, types.StringNull(), plan.FloatingIPPool); ferr != nil {
-			// A warning, not an error: an error would taint (and so replace) a healthy VM.
-			if client.MayHaveSucceeded(ferr) {
-				// It may be attached and syncing: retrying could attach a second address.
-				resp.Diagnostics.AddAttributeWarning(path.Root("floating_ip_pool"), "Floating IP may not be attached",
-					fmt.Sprintf("Instance %d was created, but the floating IP call had no clear answer: %s. Check the "+
-						"instance in the console within the hour; if it has no public IP, remove floating_ip_pool, apply, "+
-						"then add it back.", id, ferr))
-			} else {
-				resp.Diagnostics.AddAttributeWarning(path.Root("floating_ip_pool"), "Floating IP not attached yet",
-					fmt.Sprintf("Instance %d was created, but its floating IP wasn't attached: %s. The next apply tries again.", id, ferr))
-				fipFailed = true
+		if got, done, ferr := r.setFloatingIP(ctx, inst, types.StringNull(), plan.FloatingIPPool); ferr != nil {
+			// The apply that asked for it fails (owner, 2026-10-27). The VM is kept in state, so Terraform
+			// marks it tainted: `terraform untaint` keeps it, and the next apply then attaches again.
+			resp.Diagnostics.AddAttributeError(path.Root("floating_ip_pool"), "Floating IP not attached",
+				fmt.Sprintf("Instance %d was created, but its floating IP wasn't attached: %s. Terraform marks the instance "+
+					"tainted, so the next apply replaces it; run terraform untaint to keep it and try the attach again.", id, ferr))
+			fipFailed = !done.unconfirmed
+			if done.unconfirmed {
+				recordUnconfirmed(ctx, resp.Private, &resp.Diagnostics)
 			}
 		} else {
 			inst = got
@@ -817,8 +815,7 @@ func (r *instanceResource) Create(ctx context.Context, req resource.CreateReques
 		plan.Scale = planned // as planned, so the apply is consistent; the next refresh shows it unset
 	}
 	if fipFailed {
-		plan.FloatingIPPool = plannedPool // as planned; Read reports it unattached, so the next apply tries again
-		resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipPendingKey, []byte(`true`))...)
+		plan.FloatingIPPool = types.StringNull() // not attached
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -898,16 +895,23 @@ func (r *instanceResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 	r.refresh(ctx, &state, inst, &resp.Diagnostics)
-	// Only an attach that failed at create shows as drift; an address that is merely slow to sync
-	// must not, or a second one would be attached.
-	if pending, d := req.Private.GetKey(ctx, fipPendingKey); !d.HasError() && pending != nil && inst.PublicIP == "" {
+	// Every attach waits for its address, so a missing one was released outside Terraform and the next
+	// apply attaches one again; except an attach that was sent but never seen, which may yet arrive.
+	pending, d := req.Private.GetKey(ctx, fipUnconfirmedKey)
+	resp.Diagnostics.Append(d...)
+	switch {
+	case inst.PublicIP != "" && pending != nil:
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipUnconfirmedKey, nil)...)
+	case inst.PublicIP == "" && pending != nil && !state.FloatingIPPool.IsNull():
+		resp.Diagnostics.AddAttributeWarning(path.Root("floating_ip_pool"), "Floating IP not attached yet",
+			fmt.Sprintf("A floating IP from %s was asked for but hasn't shown on instance %s. It isn't asked for again, "+
+				"so no second address is attached. If it never appears, remove floating_ip_pool, apply, then add it back.",
+				state.FloatingIPPool.ValueString(), state.ID.ValueString()))
+	case inst.PublicIP == "" && !state.FloatingIPPool.IsUnknown():
 		state.FloatingIPPool = types.StringNull()
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
-
-// fipPendingKey marks, in private state, a floating IP whose attach failed at create.
-const fipPendingKey = "floating_ip_pending"
 
 func (r *instanceResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	if !r.ready(&resp.Diagnostics) {
@@ -986,18 +990,25 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 		if err != nil {
 			plan.FloatingIPPool = state.FloatingIPPool // not changed: the next apply tries again
 		} else {
-			got, detached, ferr := r.setFloatingIP(ctx, inst, state.FloatingIPPool, plan.FloatingIPPool)
+			got, done, ferr := r.setFloatingIP(ctx, inst, state.FloatingIPPool, plan.FloatingIPPool)
 			if ferr != nil {
 				resp.Diagnostics.AddAttributeError(path.Root("floating_ip_pool"), "Unable to change the floating IP", ferr.Error())
-				if detached {
-					// The old address is gone: record none, so the next apply attaches one.
+				switch {
+				case done.unconfirmed:
+					// Sent but not seen: record it as asked, so no second one is attached.
+					resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("floating_ip_pool"), plan.FloatingIPPool)...)
+					resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("public_ip"), types.StringNull())...)
+					resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("timeouts"), plan.Timeouts)...)
+					recordUnconfirmed(ctx, resp.Private, &resp.Diagnostics)
+				case done.released:
+					// The old address is confirmed gone: record none, so the next apply attaches one.
 					resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("floating_ip_pool"), types.StringNull())...)
 					resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("public_ip"), types.StringNull())...)
 				}
 				return
 			}
 			inst = got
-			resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipPendingKey, nil)...)
+			resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipUnconfirmedKey, nil)...)
 		}
 	}
 	r.settle(ctx, &plan, inst, err, "update", &resp.Diagnostics)
@@ -1400,42 +1411,77 @@ func scaleOf(ctx context.Context, th *client.Threshold) types.Object {
 	return o
 }
 
+// fipChange is what a failed setFloatingIP is known to have done, for the caller to record.
+type fipChange struct {
+	released    bool // the old address is confirmed gone
+	unconfirmed bool // an attach was sent but its address never showed: it may still arrive
+}
+
 // setFloatingIP moves the instance's VMs from one floating IP pool to another (either may be null):
-// it detaches the old address and attaches one from the new pool. Nothing waits for the address to
-// sync into MTN Cloud (owner, 2026-10-27): a successful call is done, and public_ip fills in later.
-// An address the instance already has with no pool recorded (import, or attached in the console) is
-// adopted as the configured pool: attaching would add a second one. detached reports whether an old
-// address was released, for the caller to record when the attach then fails.
-func (r *instanceResource) setFloatingIP(ctx context.Context, inst *client.Instance, from, to types.String) (_ *client.Instance, detached bool, _ error) {
+// it detaches the old address and attaches one from the new pool, and waits for each change to show
+// on the instance (owner, 2026-10-27: an attach that fails, fails the apply that ran it). An address
+// the instance already has with no pool recorded (import, or attached in the console) is adopted.
+func (r *instanceResource) setFloatingIP(ctx context.Context, inst *client.Instance, from, to types.String) (*client.Instance, fipChange, error) {
+	var done fipChange
 	if from.IsNull() && inst.PublicIP != "" {
-		return inst, false, nil
+		return inst, done, nil
 	}
 	if len(inst.ContainerIDs) == 0 {
-		return inst, false, fmt.Errorf("instance %d has no VM to attach a floating IP to yet", inst.ID)
+		return inst, done, fmt.Errorf("instance %d has no VM to attach a floating IP to yet", inst.ID)
 	}
 	if !from.IsNull() {
 		for _, c := range inst.ContainerIDs {
-			if err := r.client.DetachFloatingIP(ctx, c); err != nil {
-				return inst, detached, fmt.Errorf("detaching the floating IP: %w", err)
-			}
-			detached = true
-		}
-	}
-	if known(to) {
-		for i, c := range inst.ContainerIDs {
-			pool, err := r.client.FloatingIPPoolByName(ctx, c, to.ValueString())
-			if err != nil {
-				return inst, detached, err
-			}
-			if err := r.client.AttachFloatingIP(ctx, c, pool.ID); err != nil {
-				return inst, detached, fmt.Errorf("attaching a floating IP from %s to VM %d of %d: %w. A floating IP needs "+
-					"the instance's network to be on an MTN Router with an external network", pool.Name, i+1, len(inst.ContainerIDs), err)
+			// A 5xx or lost answer may still have released it: the wait below tells.
+			if err := r.client.DetachFloatingIP(ctx, c); err != nil && !client.MayHaveSucceeded(err) {
+				return inst, done, fmt.Errorf("detaching the floating IP: %w", err)
 			}
 		}
+		got, err := r.client.WaitForPublicIP(ctx, inst.ID, false)
+		if err != nil {
+			return inst, done, fmt.Errorf("waiting for the floating IP to be released: %w%s", err, timeoutHint(err))
+		}
+		inst, done.released = got, true
 	}
-	// One read for whatever has synced already; an error keeps the instance as it was.
-	if got, err := r.client.GetInstance(ctx, inst.ID); err == nil {
-		inst = got
+	if !known(to) {
+		return inst, done, nil
 	}
-	return inst, detached, nil
+	for i, c := range inst.ContainerIDs {
+		pool, err := r.client.FloatingIPPoolByName(ctx, c, to.ValueString())
+		if err != nil {
+			return inst, done, err
+		}
+		// A 5xx or lost answer may still have attached it: the wait below tells.
+		err = r.client.AttachFloatingIP(ctx, c, pool.ID)
+		if err != nil && !client.MayHaveSucceeded(err) {
+			return inst, done, fmt.Errorf("attaching a floating IP from %s to VM %d of %d: %w. A floating IP needs "+
+				"the instance's network to be on an MTN Router with an external network", pool.Name, i+1, len(inst.ContainerIDs), err)
+		}
+		done.unconfirmed = true
+	}
+	got, err := r.client.WaitForPublicIP(ctx, inst.ID, true)
+	if err != nil {
+		return inst, done, fmt.Errorf("waiting for the floating IP from %s: %w. Check that the instance's network is "+
+			"on an MTN Router with an external network%s", to.ValueString(), err, timeoutHint(err))
+	}
+	done.unconfirmed = false
+	return got, done, nil
 }
+
+// timeoutHint suggests a longer timeout when a wait ran out of time.
+func timeoutHint(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return `. If MTN Cloud is slow, raise the timeout, for example timeouts { update = "60m" }`
+	}
+	return ""
+}
+
+// recordUnconfirmed keeps a floating IP whose attach was sent but never showed: Read then waits for
+// it instead of attaching a second one.
+func recordUnconfirmed(ctx context.Context, priv interface {
+	SetKey(context.Context, string, []byte) diag.Diagnostics
+}, diags *diag.Diagnostics) {
+	diags.Append(priv.SetKey(ctx, fipUnconfirmedKey, []byte(`true`))...)
+}
+
+// fipUnconfirmedKey marks, in private state, an attach that was sent but whose address never showed.
+const fipUnconfirmedKey = "floating_ip_unconfirmed"

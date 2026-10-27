@@ -170,7 +170,9 @@ PLANNED = [
         ("mtncloud_object_storage", "Planned", "MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource."),
         ("mtncloud_app", "Planned", "Apps from blueprints: several instances or containers deployed together."),
         ("mtncloud_ssl_certificate", "Planned", "Certificates."),
-        ("mtncloud_load_balancer", "On hold", "Load balancers (OpenStack Octavia)."),
+        ("mtncloud_cluster", "Planned", "Clusters: Kubernetes and other cluster types, with their worker nodes."),
+        ("mtncloud_datastore", "Planned", "Datastores: the storage that volumes are created on."),
+        ("mtncloud_load_balancer", "Planned", "Load balancers (OpenStack Octavia): listeners, pools and members."),
     ]),
     ("Data sources", [
         ("mtncloud_routers", "Planned", "MTN Routers in a project."),

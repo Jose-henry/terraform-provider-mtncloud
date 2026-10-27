@@ -124,8 +124,8 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
 - Does `PUT /api/instances/{id}` with an empty `labels` or `tags` list clear them?
 - Delete: does the instance go straight to `pendingRemoval` or 404, or does a delete policy (delayed
   delete) keep it longer than the 30 minute timeout?
-- Floating IP (built from docs + reads, no waiting for the sync): how long until the address shows in
-  `connectionInfo`? Does detach release the address back to the pool? What does the
+- Floating IP (built from docs + reads; the apply waits for the address): how long until it shows in
+  `connectionInfo`, and is the default timeout enough? Does detach release the address back to the pool? What does the
   attach error say when the network has no router? Availability zone list
   (`openstackAvailabilityZone` answers 500; try it with `containerId` too).
 - Does an instance created without `domain` get its network's domain? (`domain` is Optional+Computed

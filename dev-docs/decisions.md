@@ -170,3 +170,9 @@ resource pool named `<projectName>-<tenant>` to `/api/zones/{cloud}/resource-poo
 - **Destroy** is refused with an error that names the `removed` block and `terraform state rm`.
 - Existing project items read `execution: null`, `status: ORDERED`. If new orders behave the same,
   Create ends at its timeout with the warning; B-015 checks this live.
+
+## D-023 Load balancer back on the plan; cluster and datastore added (2026-10-27)
+Owner's direction. Reopens D-013: `mtncloud_load_balancer` is planned again (Octavia; its API still
+needs a capture before design). `mtncloud_cluster` and `mtncloud_datastore` join the planned
+resources. Each needs the usual research (MTN Drive docs, Context7, a read-only capture) and an
+approved plan before code.

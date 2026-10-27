@@ -100,7 +100,7 @@ resource "mtncloud_instance" "worker" {
 - `env_vars` (Map of String, Sensitive) Environment variables for the instance's automation, name to value. Sensitive: values are hidden in plans, but stored in state. The variables MTN Cloud adds itself (address, host, ports) are not shown. Changing them replaces the instance.
 - `environment` (String) Environment, by name or code, for example `Production`. Changed in place.
 - `expire_days` (Number) Delete the instance this many days after it is created. Set at create only: afterwards extend or cancel the expiry in the console (a change here is refused at plan time).
-- `floating_ip_pool` (String) Give the instance a floating (public) IP from this pool, for example `public-network-02` (the `mtncloud_external_networks` data source lists the names). It is attached once the VM is running, and works only when the instance's network is on an MTN Router with an external network. Changed in place: the old address is released and a new one attached. The address shows in `public_ip` once it syncs into MTN Cloud, which can take up to an hour.
+- `floating_ip_pool` (String) Give the instance a floating (public) IP from this pool, for example `public-network-02` (the `mtncloud_external_networks` data source lists the names). It is attached once the VM is running, and works only when the instance's network is on an MTN Router with an external network. Changed in place: the old address is released and a new one attached. Apply waits until the instance shows the address (in `public_ip`), and fails if it doesn't.
 - `hostname` (String) Hostname set inside the VM. Left out, MTN Cloud derives it from the name or your hostname template. Changing it replaces the instance.
 - `install_agent` (Boolean) Install the MTN Cloud agent, for monitoring, logs and automation. Defaults to `true`. The agent needs the network to be on an MTN Router. Changing it replaces the instance.
 - `labels` (Set of String) Labels (keywords). Changed in place.
@@ -229,12 +229,16 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
 - **Workflows and deployments** aren't managed by this resource yet. MTN's workflows are operations
   you run on an existing instance from the console.
 - **Floating IP.** `floating_ip_pool` attaches a public address once the VM is running (never in the
-  create request). Nothing waits for the address to sync into MTN Cloud: it shows in `public_ip` once
-  it has, which can take up to an hour. It needs the instance's network to be on an `mtncloud_router`
-  with an `external_network`; reference the router (for example in `depends_on`) so it exists first.
-  If the attach fails at create, the instance is kept and the next apply tries again. Changing the
-  pool releases the old address and attaches a new one. A floating IP attached in the console, with
-  no `floating_ip_pool` set, shows in `public_ip` and is left alone; setting `floating_ip_pool` later
-  (or after an import) adopts that address without attaching another. If an attach call gets no clear
-  answer (a gateway error), the instance is kept and nothing is retried, so no second address is
-  attached; check `public_ip` within the hour. With `scale_factor` above 1, each VM gets an address.
+  create request), and the apply waits until the instance shows it in `public_ip`. If the attach
+  fails, or the address doesn't show before the timeout, that apply fails. At create, Terraform then
+  marks the instance tainted, so the next apply replaces it; run `terraform untaint` to keep the VM
+  and try the attach again. It needs the instance's network to be on an `mtncloud_router` with an
+  `external_network`; reference the router (for example in `depends_on`) so it exists first.
+  Changing the pool releases the old address and attaches a new one, waiting for each. An address
+  released in the console is attached again by the next apply. A floating IP attached in the console,
+  with no `floating_ip_pool` set, shows in `public_ip` and is left alone; setting `floating_ip_pool`
+  later (or after an import) adopts that address without attaching another. If an attach was sent but
+  its address never showed before the timeout, it isn't sent again (that could attach a second
+  address); a warning says so on each plan until it appears. With `scale_factor` above 1, an attach is
+  sent for each VM, but the wait and the drift check look at the instance as a whole, so check each
+  VM's address in the console.

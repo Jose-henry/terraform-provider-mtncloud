@@ -15,7 +15,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 - The provider now serves the legacy and Plugin Framework implementations together (terraform-plugin-mux).
 - The provider address is `jose-henry/mtncloud` on the public Terraform Registry (D-021).
 - New resource `mtncloud_project`: orders MTN's "Create Project" catalog item and waits for its workflow, not for the project to sync in (allow up to an hour). Name and description can't change; destroy is refused (use a `removed` block). Import by the catalog order ID.
-- `mtncloud_instance` accepts `floating_ip_pool`: a public IP attached once the VM runs, changed in place, shown in `public_ip`.
+- `mtncloud_instance` accepts `floating_ip_pool`: a public IP attached once the VM runs, changed in place, shown in `public_ip`. The apply waits for the address and fails if it isn't attached.
 - `mtncloud_instance` accepts `scale` (automatic scaling on CPU, memory or disk usage, changed in place) and `expire_days`/`shutdown_days` (set at create; `expire_date` and `shutdown_date` show the dates).
 - New resource `mtncloud_instance`: an OpenStack VM by names (group, project, image, plan, security groups, datastores, environment, domain), checked at plan time. The name is optional (the tenant's naming template applies), data volumes and networks are added in place, a plan change restarts the VM in place, and the project's default security group is always applied. Waits until running, with `timeouts`.
 - `mtncloud_network` now waits until MTN Cloud reports a new network ready, and accepts `timeouts { create }`.

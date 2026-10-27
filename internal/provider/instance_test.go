@@ -28,7 +28,10 @@ type instStore struct {
 	thresholds   map[int64]map[string]any
 	thresholdErr bool // PUT /threshold answers 400
 	fipErr       bool // attach answers 400, as for a network with no router
-	fip504       bool // attach answers 504 without attaching: the address may yet appear
+	fip504       bool // attach is applied but answers 504, so only the wait can tell
+	fipSilent    bool // attach answers 200 but no address ever shows
+	detachStuck  bool // detach answers 200 but the address stays
+	attachCalls  int
 	attached     []int64
 	pending      map[int64]bool
 	fail         string // the next create ends in this status
@@ -738,18 +741,24 @@ func (s *instStore) floating(w http.ResponseWriter, r *http.Request, reply func(
 	}
 	switch parts[1] {
 	case "attach-floating-ip":
+		s.attachCalls++
 		if s.fipErr {
 			reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "No router with an external gateway for this network"})
 			return
 		}
+		if s.fipSilent {
+			break
+		}
+		in["connectionInfo"] = []any{map[string]any{"ip": fmt.Sprintf("203.0.113.%d", cid%200), "port": 22, "name": "SSH"}}
+		s.attached = append(s.attached, cid)
 		if s.fip504 {
 			reply(http.StatusGatewayTimeout, map[string]any{"success": false, "msg": "Gateway Timeout"})
 			return
 		}
-		in["connectionInfo"] = []any{map[string]any{"ip": fmt.Sprintf("203.0.113.%d", cid%200), "port": 22, "name": "SSH"}}
-		s.attached = append(s.attached, cid)
 	case "detach-floating-ip":
-		in["connectionInfo"] = []any{map[string]any{"ip": private, "port": 22, "name": "SSH"}}
+		if !s.detachStuck {
+			in["connectionInfo"] = []any{map[string]any{"ip": private, "port": 22, "name": "SSH"}}
+		}
 	}
 	reply(http.StatusOK, map[string]any{"success": true})
 }
@@ -794,16 +803,16 @@ func TestInstance_FloatingIP(t *testing.T) {
 				ConfigStateChecks: ip(`^203\.0\.113\.`),
 			},
 			{
-				// Not synced yet (or released in the console): no address is no change, so a slow sync
-				// never attaches a second one.
+				// Released in the console: every attach was confirmed, so this is drift, fixed in place.
 				PreConfig: lock(func() {
 					for _, in := range s.insts {
 						in["connectionInfo"] = []any{map[string]any{"ip": "10.20.1.99"}}
 						in["evars"] = append(in["evars"].([]any), map[string]any{"name": in["environmentPrefix"].(string) + "_IP", "value": "10.20.1.99"})
 					}
 				}),
-				Config:           cfg(`  floating_ip_pool = "public-network-01"`),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				Config:            cfg(`  floating_ip_pool = "public-network-01"`),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: ip(`^203\.0\.113\.`),
 			},
 			{
 				// Removed: detached.
@@ -815,16 +824,16 @@ func TestInstance_FloatingIP(t *testing.T) {
 				ExpectError: regexp.MustCompile(`(?s)Unknown floating IP pool.*public-network-01,\s+public-network-02`)},
 			{Config: f.providerConfig()},
 			{
-				// No router: the VM is kept (a warning), and the next plan tries again.
-				PreConfig:          lock(func() { s.fipErr = true }),
-				Config:             cfg(`  floating_ip_pool = "public-network-02"`),
-				ExpectNonEmptyPlan: true,
+				// No router: the apply that asked for the address fails, and the VM is tainted.
+				PreConfig:   lock(func() { s.fipErr = true }),
+				Config:      cfg(`  floating_ip_pool = "public-network-02"`),
+				ExpectError: regexp.MustCompile(`(?s)Floating IP not attached.*No router with an\s+external gateway`),
 			},
 			{
-				// The router is fixed: the next apply attaches in place.
+				// The router is fixed: the tainted VM is replaced, and the new one gets its address.
 				PreConfig:         lock(func() { s.fipErr = false }),
 				Config:            cfg(`  floating_ip_pool = "public-network-02"`),
-				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionDestroyBeforeCreate),
 				ConfigStateChecks: ip(`^203\.0\.113\.`),
 			},
 			{Config: f.providerConfig()},
@@ -832,8 +841,8 @@ func TestInstance_FloatingIP(t *testing.T) {
 	})
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.creates != 2 {
-		t.Errorf("%d creates, want 2: a failed attach must not replace the VM", s.creates)
+	if s.creates != 3 {
+		t.Errorf("%d creates, want 3: the tainted VM is replaced once", s.creates)
 	}
 }
 
@@ -849,7 +858,7 @@ func TestInstance_FloatingIPFailures(t *testing.T) {
 	pool := func(want knownvalue.Check) []statecheck.StateCheck {
 		return []statecheck.StateCheck{statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("floating_ip_pool"), want)}
 	}
-	attaches := 0
+	attaches, calls := 0, 0
 	countAttaches := func(want int) func() {
 		return lock(func() {
 			if len(s.attached) != want {
@@ -898,7 +907,7 @@ func TestInstance_FloatingIPFailures(t *testing.T) {
 			},
 			{Config: f.providerConfig()},
 			{
-				// No clear answer at create: a warning, and no retry that could attach a second address.
+				// A gateway error after the attach was applied: the wait sees the address, so it worked.
 				PreConfig: lock(func() { s.fip504 = true }),
 				Config:    cfg(`  floating_ip_pool = "public-network-02"`),
 			},
@@ -907,6 +916,56 @@ func TestInstance_FloatingIPFailures(t *testing.T) {
 				Config:           cfg(`  floating_ip_pool = "public-network-02"`),
 				ConfigPlanChecks: empty,
 			},
+			{
+				// Accepted but never shows: the apply fails when the update timeout ends.
+				PreConfig: lock(func() { s.fipSilent = true }),
+				Config: cfg(`  floating_ip_pool = "public-network-01"
+  timeouts {
+    update = "3s"
+  }`),
+				ExpectError: regexp.MustCompile(`(?s)Unable to change the floating IP.*waiting for the floating IP.*raise the\s+timeout`),
+			},
+			{
+				// The address may still arrive: a warning, and the attach is never sent again.
+				PreConfig: lock(func() { calls = s.attachCalls }),
+				Config: cfg(`  floating_ip_pool = "public-network-01"
+  timeouts {
+    update = "3s"
+  }`),
+				ConfigPlanChecks: empty,
+			},
+			{
+				PreConfig: lock(func() {
+					if s.attachCalls != calls {
+						t.Errorf("attach sent %d more times after an unconfirmed attach, want 0", s.attachCalls-calls)
+					}
+					s.fipSilent = false
+				}),
+				Config: f.providerConfig(),
+			},
+			{Config: cfg(`  floating_ip_pool = "public-network-02"`)},
+			{
+				// A release that never shows: the old pool stays recorded, as the address is still there.
+				PreConfig: lock(func() { s.detachStuck = true }),
+				Config: cfg(`  floating_ip_pool = "public-network-01"
+  timeouts {
+    update = "3s"
+  }`),
+				ExpectError: regexp.MustCompile(`(?s)waiting for the floating IP to be released`),
+			},
+			{
+				PreConfig:          lock(func() { s.detachStuck = false }),
+				RefreshState:       true,
+				ExpectNonEmptyPlan: true,
+				Check:              resource.TestCheckResourceAttr("mtncloud_instance.app", "floating_ip_pool", "public-network-02"),
+			},
+			{
+				// A gateway error on an update's attach that was applied: the wait sees it, so it worked.
+				PreConfig:         lock(func() { s.fip504 = true }),
+				Config:            cfg(`  floating_ip_pool = "public-network-01"`),
+				ConfigStateChecks: pool(knownvalue.StringExact("public-network-01")),
+			},
+			{PreConfig: lock(func() { s.fip504 = false }), Config: f.providerConfig()},
 		},
 	})
 }
