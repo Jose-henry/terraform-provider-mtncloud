@@ -11,7 +11,8 @@ import (
 
 // MTN Networks: POST/GET/PUT/DELETE /api/networks[/{id}]. Shapes were captured as a customer
 // (sub-tenant) on MTN Cloud, 2026-10-26, with reads and dry runs: see dev-docs/api-research.md.
-// A network is created synchronously in OpenStack together with one subnet of the same CIDR.
+// A network is created in OpenStack together with one subnet of the same CIDR. It is "provisioning"
+// when the create returns and "ok" shortly after (captured 2026-10-27): see WaitForNetwork.
 
 // Network is an MTN Network as the API returns it.
 type Network struct {
@@ -219,6 +220,32 @@ func (c *Client) UpdateNetwork(ctx context.Context, id int64, in NetworkInput) e
 // DeleteNetwork deletes a network and its subnet. A network that is already gone counts as deleted.
 func (c *Client) DeleteNetwork(ctx context.Context, id int64) error {
 	return ignoreNotFound(c.do(ctx, http.MethodDelete, "/api/networks/"+itoa(id), nil, nil, nil))
+}
+
+// NetworkFailed reports a network the platform marks as broken. Healthy networks report "ok".
+func NetworkFailed(status string) bool {
+	switch strings.ToLower(status) {
+	case "failed", "error", "deprovisioned":
+		return true
+	}
+	return false
+}
+
+// WaitForNetwork polls a new network until it is "ok" or failed, and returns it. A network is
+// "provisioning" when the create returns (captured 2026-10-27), and routers and instances should
+// only use it after. A 404 just after the create is retried (rule 13). A failed network is
+// returned with no error.
+func (c *Client) WaitForNetwork(ctx context.Context, id int64) (*Network, error) {
+	return poll(ctx, c, func(ctx context.Context) (*Network, error) { return c.GetNetwork(ctx, id) },
+		func(n *Network, err error) (bool, error) {
+			switch {
+			case IsNotFound(err):
+				return false, nil
+			case err != nil:
+				return false, err
+			}
+			return strings.EqualFold(n.Status, "ok") || NetworkFailed(n.Status), nil
+		})
 }
 
 // IsInUse reports an OpenStack refusal to delete something still attached elsewhere, for example

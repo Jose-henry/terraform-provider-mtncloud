@@ -2,12 +2,12 @@
 page_title: "mtncloud_network Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  An MTN Network: a private network in one project, created in OpenStack with one subnet of the same range. Connect it to other networks or the internet with an MTN Router. It is ready as soon as it is created.
+  An MTN Network: a private network in one project, created in OpenStack with one subnet of the same range. Connect it to other networks or the internet with an MTN Router. Creating it waits until OpenStack reports it ready, usually within seconds.
 ---
 
 # mtncloud_network
 
-An MTN Network: a private network in one project, created in OpenStack with one subnet of the same range. Connect it to other networks or the internet with an MTN Router. It is ready as soon as it is created.
+An MTN Network: a private network in one project, created in OpenStack with one subnet of the same range. Connect it to other networks or the internet with an MTN Router. Creating it waits until OpenStack reports it ready, usually within seconds.
 
 ## Example Usage
 
@@ -61,6 +61,7 @@ output "app_subnet_id" {
 - `dns_primary` (String) Primary DNS server. Defaults to MTN's resolver `102.88.134.41`. MTN's resolvers are `102.88.134.41`, `102.90.109.125`, `102.89.90.112` and `120.91.123.54`.
 - `dns_secondary` (String) Secondary DNS server. Defaults to MTN's resolver `102.90.109.125`. Both DNS servers are always set: a network imported without one gets MTN's resolver on the next apply.
 - `ipv6` (Attributes) IPv6 settings. Leave it out to keep IPv6 off (the default). Turning IPv6 on or off, or changing its `cidr`, replaces the network. (see [below for nested schema](#nestedatt--ipv6))
+- `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
@@ -82,6 +83,14 @@ Optional:
 - `dns_primary` (String) Primary IPv6 DNS server.
 - `dns_secondary` (String) Secondary IPv6 DNS server.
 
+
+<a id="nestedblock--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+
 ## Import
 
 Import is supported using the following syntax:
@@ -92,8 +101,9 @@ terraform import mtncloud_network.app 9301
 
 ## Notes
 
-- **Ready when created.** OpenStack creates the network and its subnet in the same call; nothing
-  waits for a sync.
+- **Waits until ready.** A new network is "provisioning" for a few seconds; create waits for MTN Cloud
+  to report it ready (default timeout 10 minutes, see `timeouts`), so routers and instances in the
+  same apply only use it once it works. A network that fails is reported and replaced by the next apply.
 - **Can't change in place:** `cidr`, `project` (another project), and IPv6 turned on or off or given
   a new range. Each replaces the network, which fails while instances or a router use it.
 - **Rejected designs.** MTN Cloud refuses a network whose range clashes with another one in the

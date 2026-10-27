@@ -23,8 +23,9 @@ Import is supported using the following syntax:
 
 ## Notes
 
-- **Ready when created.** OpenStack creates the network and its subnet in the same call; nothing
-  waits for a sync.
+- **Waits until ready.** A new network is "provisioning" for a few seconds; create waits for MTN Cloud
+  to report it ready (default timeout 10 minutes, see `timeouts`), so routers and instances in the
+  same apply only use it once it works. A network that fails is reported and replaced by the next apply.
 - **Can't change in place:** `cidr`, `project` (another project), and IPv6 turned on or off or given
   a new range. Each replaces the network, which fails while instances or a router use it.
 - **Rejected designs.** MTN Cloud refuses a network whose range clashes with another one in the

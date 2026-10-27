@@ -45,7 +45,8 @@ They are left out until a real value is seen (backlog B-010).
 ### Built design (owner's answers, 2026-10-27)
 
 The owner settled the open points: IPv6 is supported but off by default; `gateway` is required;
-networks (and routers) are ready when the create call returns, with no sync to wait for; and a
+networks (and routers) need no sync, only their own provisioning (corrected 2026-10-27: both are
+"provisioning" when the create returns and "ok" within seconds, so the provider waits); and a
 network still in use fails to delete with `{"success": false, "msg": "Unable to complete operation
 on network <uuid>. There are one or more ports still in use on the network, id for these ports is:
 <uuids>"}`. A badly designed network can also be refused by the API.
@@ -108,8 +109,9 @@ Client-wide, found while building this: a 2xx response with `"success": false` i
 - **Live test 2026-10-27** (owner-approved: one throwaway network and router, both deleted after;
   raw output in `.captures/router/`):
   - The network create body the provider sends (`internal/client/networks.go`) worked as is:
-    `{"success": true, "errors": {}, "network": {...}}`, status `ok` at once, and its subnet was
-    offered to routers straight away (no sync).
+    `{"success": true, "errors": {}, "network": {..., "status": "provisioning"}}`, then `ok` on a
+    read 15 s later, with its subnet offered to routers (no sync). The owner pointed out the
+    provisioning state; the provider now waits for `ok` (`WaitForNetwork`, `timeouts { create }`).
   - Router create body that works:
     `{"networkRouter": {"name", "description", "type": {"id": 1}, "site": {"id": <group>},
     "zone": {"id": <cloud>}, "enabled": true, "poolId": <project>, "externalNetwork": {"id": <ext>},

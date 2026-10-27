@@ -2,11 +2,13 @@ package network
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
 	"strconv"
-	"strings"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -32,6 +34,9 @@ const (
 	mtnDNSSecondary = "102.90.109.125"
 )
 
+// A network is usually "ok" within seconds (captured 2026-10-27); this bounds a stuck one.
+const networkTimeout = 10 * time.Minute
+
 var (
 	_ resource.ResourceWithConfigure      = (*networkResource)(nil)
 	_ resource.ResourceWithImportState    = (*networkResource)(nil)
@@ -44,19 +49,20 @@ func newNetwork() resource.Resource { return &networkResource{} }
 type networkResource struct{ base }
 
 type networkModel struct {
-	ID              types.String `tfsdk:"id"`
-	Name            types.String `tfsdk:"name"`
-	Description     types.String `tfsdk:"description"`
-	Project         types.String `tfsdk:"project"`
-	CIDR            types.String `tfsdk:"cidr"`
-	Gateway         types.String `tfsdk:"gateway"`
-	DNSPrimary      types.String `tfsdk:"dns_primary"`
-	DNSSecondary    types.String `tfsdk:"dns_secondary"`
-	DHCPEnabled     types.Bool   `tfsdk:"dhcp_enabled"`
-	AllowIPOverride types.Bool   `tfsdk:"allow_ip_override"`
-	IPv6            types.Object `tfsdk:"ipv6"`
-	SubnetID        types.String `tfsdk:"subnet_id"`
-	ExternalID      types.String `tfsdk:"external_id"`
+	ID              types.String   `tfsdk:"id"`
+	Name            types.String   `tfsdk:"name"`
+	Description     types.String   `tfsdk:"description"`
+	Project         types.String   `tfsdk:"project"`
+	CIDR            types.String   `tfsdk:"cidr"`
+	Gateway         types.String   `tfsdk:"gateway"`
+	DNSPrimary      types.String   `tfsdk:"dns_primary"`
+	DNSSecondary    types.String   `tfsdk:"dns_secondary"`
+	DHCPEnabled     types.Bool     `tfsdk:"dhcp_enabled"`
+	AllowIPOverride types.Bool     `tfsdk:"allow_ip_override"`
+	IPv6            types.Object   `tfsdk:"ipv6"`
+	SubnetID        types.String   `tfsdk:"subnet_id"`
+	ExternalID      types.String   `tfsdk:"external_id"`
+	Timeouts        timeouts.Value `tfsdk:"timeouts"`
 }
 
 type ipv6Model struct {
@@ -76,10 +82,11 @@ func (r *networkResource) Metadata(_ context.Context, req resource.MetadataReque
 	resp.TypeName = req.ProviderTypeName + "_network"
 }
 
-func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *networkResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "An MTN Network: a private network in one project, created in OpenStack with one subnet of the same " +
-			"range. Connect it to other networks or the internet with an MTN Router. It is ready as soon as it is created.",
+			"range. Connect it to other networks or the internet with an MTN Router. Creating it waits until OpenStack " +
+			"reports it ready, usually within seconds.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,
@@ -184,6 +191,9 @@ func (r *networkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true}),
+		},
 	}
 }
 
@@ -283,9 +293,13 @@ func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest
 	var plan networkModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	in := r.input(ctx, plan, &resp.Diagnostics)
+	timeout, d := plan.Timeouts.Create(ctx, networkTimeout)
+	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	project, err := r.client.ProjectByName(ctx, plan.Project.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddAttributeError(path.Root("project"), "Unknown project", err.Error())
@@ -307,27 +321,43 @@ func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 	n, err := r.client.CreateNetwork(ctx, in)
 	if err != nil {
-		// The request may have been applied (rule 11). None existed a moment ago, so one now is ours.
-		if !client.MayHaveSucceeded(err) || ctx.Err() != nil {
+		// The request may have been applied (rule 11): the reply was lost, or the timeout ended the
+		// wait for it. None existed a moment ago, so one now is ours. The lookup gets its own short
+		// deadline, because ctx may be the one that just ran out.
+		if !client.MayHaveSucceeded(err) && ctx.Err() == nil {
 			resp.Diagnostics.AddError("Unable to create network", err.Error())
 			return
 		}
-		if n, _ = r.client.FindNetwork(ctx, in.Name, project.ID); n == nil {
+		lookup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		n, _ = r.client.FindNetwork(lookup, in.Name, project.ID)
+		cancel()
+		if n == nil {
 			resp.Diagnostics.AddError("Unable to create network", err.Error())
 			return
 		}
 	}
-	if failedStatus(n.Status) {
-		// Saved so the next apply replaces it, and reported with the platform's own status.
+	// From here the network exists: it goes into state whatever happens, so a failed or stuck one
+	// is replaced by the next apply instead of being orphaned.
+	created := n
+	n, err = r.client.WaitForNetwork(ctx, created.ID)
+	switch {
+	case err != nil && errors.Is(err, context.DeadlineExceeded):
+		status := created.Status
+		if n != nil {
+			status = n.Status
+		}
+		resp.Diagnostics.AddError("Timed out waiting for the network",
+			fmt.Sprintf("Network %d is still %q after the create timeout. Check it in the console, or raise "+
+				"`timeouts { create = \"20m\" }`; the next apply replaces it.", created.ID, status))
+	case err != nil:
+		resp.Diagnostics.AddError("Unable to read network", err.Error())
+	case client.NetworkFailed(n.Status):
 		resp.Diagnostics.AddError("Network creation failed",
 			fmt.Sprintf("MTN Cloud created network %d but reports status %q. Check the range, gateway and DNS for clashes "+
 				"with other networks in the project; the next apply replaces it.", n.ID, n.Status))
 	}
-	if n.SubnetID == 0 {
-		// The create response may not list the subnet; the network is ready, so one read has it.
-		if got, err := r.client.GetNetwork(ctx, n.ID); err == nil {
-			n = got
-		}
+	if n == nil {
+		n = created
 	}
 	resp.Diagnostics.Append(refreshNetwork(ctx, &plan, n, r.tenant(ctx, &resp.Diagnostics))...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -442,15 +472,6 @@ func refreshNetwork(ctx context.Context, m *networkModel, n *client.Network, ten
 	diags.Append(d...)
 	m.IPv6 = obj
 	return diags
-}
-
-// failedStatus reports a network the platform marks as broken. Healthy networks report "ok".
-func failedStatus(s string) bool {
-	switch strings.ToLower(s) {
-	case "failed", "error", "deprovisioned":
-		return true
-	}
-	return false
 }
 
 // canonicalCIDR and canonicalAddr write an address the way the validators require it in the

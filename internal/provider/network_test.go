@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -32,10 +33,15 @@ type netStore struct {
 	lostReplies int
 	status      string
 	upperIPv6   bool
+	// A new network answers "provisioning" in the create reply and on its first read, as the
+	// platform does (captured 2026-10-27); stuck keeps every network there.
+	pending   map[int64]bool
+	stuck     bool
+	slowReply time.Duration // creates are applied at once but answered this late
 }
 
 func newNetStore() *netStore {
-	return &netStore{nextID: 9300, networks: map[int64]map[string]any{}, inUse: map[int64]bool{},
+	return &netStore{nextID: 9300, networks: map[int64]map[string]any{}, inUse: map[int64]bool{}, pending: map[int64]bool{},
 		projects: map[int64]string{9201: "web-prod-Acme", 9202: "data-Acme"}}
 }
 
@@ -65,14 +71,25 @@ func (s *netStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	view := func(id int64) map[string]any {
+		out := map[string]any{}
+		for k, v := range s.networks[id] {
+			out[k] = v
+		}
+		if s.pending[id] || s.stuck {
+			out["status"] = "provisioning"
+			delete(s.pending, id)
+		}
+		return out
+	}
 	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/networks"), "/")
 	if rest == "" {
 		switch r.Method {
 		case http.MethodGet:
 			list := []any{}
-			for _, n := range s.networks {
+			for id, n := range s.networks {
 				if name := r.URL.Query().Get("name"); name == "" || n["name"] == name {
-					list = append(list, n)
+					list = append(list, view(id))
 				}
 			}
 			reply(http.StatusOK, map[string]any{"networks": list, "meta": map[string]any{"total": len(list)}})
@@ -108,12 +125,23 @@ func (s *netStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			s.networks[id] = n
+			s.pending[id] = true
+			created := view(id)
+			s.pending[id] = true // the first read is still "provisioning" too
+			if d := s.slowReply; d > 0 {
+				s.mu.Unlock() // reads go on while this reply is late
+				select {
+				case <-time.After(d):
+				case <-r.Context().Done():
+				}
+				s.mu.Lock()
+			}
 			if s.lostReplies > 0 {
 				s.lostReplies--
 				reply(http.StatusBadGateway, map[string]any{"success": false, "msg": "Bad Gateway"})
 				return
 			}
-			reply(http.StatusOK, map[string]any{"success": true, "network": n})
+			reply(http.StatusOK, map[string]any{"success": true, "network": created})
 		}
 		return
 	}
@@ -125,7 +153,7 @@ func (s *netStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		reply(http.StatusOK, map[string]any{"network": n})
+		reply(http.StatusOK, map[string]any{"network": view(id)})
 	case http.MethodPut:
 		for k, v := range body["network"].(map[string]any) {
 			n[k] = v
@@ -385,11 +413,52 @@ func TestNetwork_FailuresAndIPv6(t *testing.T) {
 				ExpectError: regexp.MustCompile(`Network creation failed`),
 			},
 			{
-				PreConfig: lock(func() { store.status = "" }),
-				Config:    netConfig(f, moved),
+				// Stuck in "provisioning": the create timeout ends the wait, and it is kept in state.
+				PreConfig: lock(func() { store.status, store.stuck = "", true }),
+				Config: netConfig(f, moved+`
+  timeouts {
+    create = "2s"
+  }`),
+				ExpectError: regexp.MustCompile(`(?s)Timed out waiting for the network.*still "provisioning"`),
+			},
+			{
+				// The timeout ends the wait for the create's reply: the network is found and kept.
+				PreConfig: lock(func() {
+					store.stuck, store.slowReply = false, 5*time.Second
+					for id, n := range store.networks {
+						if n["cidr"] == "10.20.9.0/24" {
+							delete(store.networks, id) // the stuck one: gone, so the next create starts clean
+						}
+					}
+				}),
+				Config: netConfig(f, moved+`
+  timeouts {
+    create = "1s"
+  }`),
+				ExpectError: regexp.MustCompile(`Timed out waiting for the network`),
+			},
+			{
+				PreConfig: lock(func() {
+					n := 0
+					for _, x := range store.networks {
+						if x["cidr"] == "10.20.9.0/24" {
+							n++
+						}
+					}
+					if n != 1 {
+						t.Errorf("%d networks after a timed-out create, want 1 (kept in state, not orphaned)", n)
+					}
+					store.slowReply = 0
+				}),
+				Config: netConfig(f, moved),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
 					plancheck.ExpectResourceAction("mtncloud_network.app", plancheck.ResourceActionDestroyBeforeCreate),
 				}},
+			},
+			{
+				// Replaced and healthy: nothing left to do.
+				Config:           netConfig(f, moved),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
 			},
 		},
 	})
