@@ -15,7 +15,7 @@ Lists the instance sizes (plans) a project offers for an image, for example `G2S
 # Sizes the "web-prod" project offers for Ubuntu 24.04 with at least 2 vCPUs and 4 GB of memory.
 data "mtncloud_plans" "web" {
   project       = "web-prod"
-  image         = "MTN-U24.04LTS"
+  image         = "MTN Ubuntu Server 24.04.3LTS"
   min_cores     = 2
   min_memory_gb = 4
 }
@@ -31,7 +31,7 @@ output "smallest_fit" {
 
 ### Required
 
-- `image` (String) Image code the plans are for, for example `MTN-U24.04LTS`. See `mtncloud_images`.
+- `image` (String) Image the plans are for, by name (for example `MTN Ubuntu Server 24.04.3LTS`, case ignored) or code (`MTN-U24.04LTS`). See `mtncloud_images`.
 - `project` (String) Project name, as shown in the console (for example `web-prod`). The full platform name, with the tenant suffix, also works.
 
 ### Optional

@@ -152,3 +152,41 @@ data "mtncloud_instance" "one" {
 		},
 	})
 }
+
+func TestNetwork_DataSource(t *testing.T) {
+	f, _, _ := newRouterFakes(t)
+	cfg := routerConfig(f, `  name = "edge"
+  networks = [mtncloud_network.app.id]`)
+	one := func(attrs string) string {
+		return cfg + `
+data "mtncloud_network" "one" {
+` + attrs + `
+}
+`
+	}
+	check := func(attr string, v knownvalue.Check) statecheck.StateCheck {
+		return statecheck.ExpectKnownValue("data.mtncloud_network.one", tfjsonpath.New(attr), v)
+	}
+	found := []statecheck.StateCheck{
+		check("name", knownvalue.StringExact("app-net")),
+		check("project", knownvalue.StringExact("web-prod")),
+		check("cloud", knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
+		check("cidr", knownvalue.StringExact("10.20.1.0/24")),
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg},
+			{Config: one(`  name = "app-net"`), ConfigStateChecks: found},
+			{Config: one(`  id = mtncloud_network.app.id`), ConfigStateChecks: found},
+			{Config: one(`  name = "app-net"
+  project = "web-prod-Acme"`), ConfigStateChecks: found},
+			{Config: one(`  name = "app-net"
+  project = "data"`), ExpectError: regexp.MustCompile(`(?s)No such network.*in\s+project\s+data`)},
+			{Config: one(`  name = "nope"`), ExpectError: regexp.MustCompile(`No such network`)},
+			{Config: one(`  id = mtncloud_network.app.id
+  project = "data"`), ExpectError: regexp.MustCompile(`Network in another project`)},
+			{Config: cfg},
+		},
+	})
+}

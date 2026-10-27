@@ -48,7 +48,7 @@ func (d *plansDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 			"project": projectAttribute(),
 			"image": schema.StringAttribute{
 				Required:    true,
-				Description: "Image code the plans are for, for example `MTN-U24.04LTS`. See `mtncloud_images`.",
+				Description: "Image the plans are for, by name (for example `MTN Ubuntu Server 24.04.3LTS`, case ignored) or code (`MTN-U24.04LTS`). See `mtncloud_images`.",
 			},
 			"name_regex": nameRegexAttribute("plans"),
 			"min_cores": schema.Int64Attribute{
@@ -93,7 +93,7 @@ func (d *plansDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		resp.Diagnostics.AddAttributeError(pathOf("project"), "Unknown project", err.Error())
 		return
 	}
-	image, err := d.client.ImageByCode(ctx, m.Image.ValueString())
+	image, err := d.client.ImageByName(ctx, m.Image.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddAttributeError(pathOf("image"), "Unknown image", err.Error())
 		return

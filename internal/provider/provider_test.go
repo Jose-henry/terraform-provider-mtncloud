@@ -161,7 +161,7 @@ data "mtncloud_images" "ubuntu" {
 data "mtncloud_images" "all" {}
 data "mtncloud_plans" "big" {
   project       = "web-prod"
-  image         = "MTN-U24.04LTS"
+  image         = "mtn ubuntu server 24.04.3lts" # the name, case ignored
   min_memory_gb = 4
 }
 data "mtncloud_datastores" "web" {
@@ -246,7 +246,7 @@ func TestDataSources_ClearErrors(t *testing.T) {
   project = "web-prod"
   image   = "MTN-U99"
 }`,
-			`no image with code "MTN-U99". Available images: MTN-U24.04LTS, MTN-WINSVR2025`,
+			`no image named "MTN-U99". Available images: MTN Ubuntu Server 24.04.3LTS,`,
 		},
 		"bad regex fails at plan time": {
 			`data "mtncloud_images" "x" { name_regex = "(" }`,

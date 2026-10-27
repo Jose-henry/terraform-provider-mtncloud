@@ -5,6 +5,9 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 ## Unreleased
 
 - Docs: the examples now pin `~> 0.3`.
+- Fixed: instances made in the console showed an empty `private_ip`.
+- Fixed: `mtncloud_plans` accepts the image by name (for example `MTN Ubuntu Server 24.04.3LTS`) as well as by code.
+- `mtncloud_network` (data source) is rebuilt: look up by ID or name, optionally in a project; it now returns the network's `project`, `group`, `cloud`, gateway, DNS, DHCP and subnet ID.
 
 ## 0.3.0 (2026-10-27)
 

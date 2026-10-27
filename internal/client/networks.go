@@ -30,7 +30,12 @@ type Network struct {
 	DHCP            bool
 	AllowIPOverride bool
 	IPv6            *NetworkIPv6 // nil when IPv6 is off
-	SubnetID        int64        // the subnet OpenStack made with the network; 0 if none yet
+	SubnetID        int64        // the subnet made with the network; 0 if none yet
+	// Read only.
+	DisplayName, Visibility string
+	Labels                  []string
+	Active                  bool
+	GroupName, CloudName    string
 }
 
 // NetworkIPv6 is a network's IPv6 settings.
@@ -63,6 +68,12 @@ type wireNetwork struct {
 	ExternalID          *string  `json:"externalId"`
 	Status              string   `json:"status"`
 	ZonePool            *wireRef `json:"zonePool"`
+	Group               *wireRef `json:"group"`
+	Zone                *wireRef `json:"zone"`
+	DisplayName         *string  `json:"displayName"`
+	Visibility          *string  `json:"visibility"`
+	Labels              []string `json:"labels"`
+	Active              bool     `json:"active"`
 	CIDR                *string  `json:"cidr"`
 	Gateway             *string  `json:"gateway"`
 	DNSPrimary          *string  `json:"dnsPrimary"`
@@ -88,6 +99,13 @@ func (w wireNetwork) network() *Network {
 	}
 	if w.ZonePool != nil {
 		n.ProjectID, n.ProjectName = w.ZonePool.ID, w.ZonePool.Name
+	}
+	n.DisplayName, n.Visibility, n.Labels, n.Active = deref(w.DisplayName), deref(w.Visibility), w.Labels, w.Active
+	if w.Group != nil {
+		n.GroupName = w.Group.Name
+	}
+	if w.Zone != nil {
+		n.CloudName = w.Zone.Name
 	}
 	if w.IPv6Enabled {
 		n.IPv6 = &NetworkIPv6{
@@ -210,6 +228,21 @@ func (c *Client) FindNetwork(ctx context.Context, name string, projectID int64) 
 		}
 	}
 	return nil, nil
+}
+
+// FindNetworksNamed returns the networks with exactly this name, in any project.
+func (c *Client) FindNetworksNamed(ctx context.Context, name string) ([]*Network, error) {
+	items, err := listAll[wireNetwork](ctx, c, "/api/networks", "networks", url.Values{"name": {name}})
+	if err != nil {
+		return nil, err
+	}
+	var out []*Network
+	for _, w := range items {
+		if w.Name == name {
+			out = append(out, w.network())
+		}
+	}
+	return out, nil
 }
 
 // UpdateNetwork changes the settings that can change in place (not the project or the CIDR).

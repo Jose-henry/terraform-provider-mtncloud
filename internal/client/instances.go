@@ -234,6 +234,18 @@ func (w wireInstance) instance() *Instance {
 	// the platform always sets <PREFIX>_IP to the private address (captured 2026-10-27).
 	if w.EnvironmentPrefix != "" {
 		in.PrivateIP = in.EnvVars[w.EnvironmentPrefix+"_IP"]
+	} else {
+		// Instances made in the console can have no prefix (captured 2026-10-27): use the one
+		// <PREFIX>_IP variable there is, for example APACHE_WEB_SERVER_UBUNTU22_IP.
+		var ips []string
+		for k, v := range in.EnvVars {
+			if strings.HasSuffix(k, "_IP") {
+				ips = append(ips, v)
+			}
+		}
+		if len(ips) == 1 {
+			in.PrivateIP = ips[0]
+		}
 	}
 	for _, ci := range w.ConnectionInfo {
 		if ci.IP != "" && ci.IP != in.PrivateIP {

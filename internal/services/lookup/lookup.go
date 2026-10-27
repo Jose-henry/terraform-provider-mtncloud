@@ -35,6 +35,7 @@ func DataSources() []func() datasource.DataSource {
 		newRouters,
 		newInstances,
 		newInstance,
+		newNetwork,
 	}
 }
 

@@ -2,18 +2,29 @@
 page_title: "mtncloud_network Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud network data source.
+  Looks up one MTN Network by ID or by name, including one made in the console, with its project, group and cloud. A name must match exactly one network; add project when the same name is used in several projects.
 ---
 
 # mtncloud_network (Data Source)
 
-Provides a MTN Cloud network data source.
+Looks up one MTN Network by ID or by name, including one made in the console, with its project, group and cloud. A name must match exactly one network; add `project` when the same name is used in several projects.
 
 ## Example Usage
 
 ```terraform
-data "mtncloud_network" "vmnetwork" {
-  name = "VM Network"
+# A network made in the console, by name. Add project if the name is used in several projects.
+data "mtncloud_network" "app" {
+  name    = "app-net"
+  project = "web-prod"
+}
+
+output "app_network" {
+  value = {
+    id      = data.mtncloud_network.app.id
+    cidr    = data.mtncloud_network.app.cidr
+    project = data.mtncloud_network.app.project
+    cloud   = data.mtncloud_network.app.cloud
+  }
 }
 ```
 
@@ -22,14 +33,23 @@ data "mtncloud_network" "vmnetwork" {
 
 ### Optional
 
-- `name` (String) The name of the MTN Cloud network
+- `id` (Number) Network ID. Give this or `name`.
+- `name` (String) Network name, matched exactly. Give this or `id`.
+- `project` (String) Project name (for example `web-prod`), to tell apart networks with the same name. The full platform name, with the tenant suffix, also works. Always set to the network's project, without the suffix.
 
 ### Read-Only
 
-- `active` (Boolean) Whether the network is active or not
-- `cidr` (String) The cidr of the network
-- `description` (String) The description of the network
-- `display_name` (String) The display or friendly name of the network
-- `id` (Number) The ID of this resource.
-- `labels` (Set of String) The organization labels associated with the network
-- `visibility` (String) Whether the network is visible in sub-tenants or not
+- `active` (Boolean) Whether the network is active.
+- `cidr` (String) IPv4 CIDR, for example `10.20.1.0/24`.
+- `cloud` (String) Cloud the network is in, for example `MTNNG_CLOUD_AZ_1`.
+- `description` (String) Description, or empty.
+- `dhcp` (Boolean) Whether DHCP is on.
+- `display_name` (String) Display name, or empty.
+- `dns_primary` (String) Primary DNS server.
+- `dns_secondary` (String) Secondary DNS server.
+- `gateway` (String) IPv4 gateway.
+- `group` (String) Group the network belongs to.
+- `labels` (List of String) Labels.
+- `status` (String) Status, for example `ok`.
+- `subnet_id` (Number) ID of the network's subnet (what an MTN Router connects); 0 while it is created.
+- `visibility` (String) `private` or `public`.

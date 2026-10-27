@@ -108,6 +108,12 @@ func TestGetInstance_Reads(t *testing.T) {
 	if in.PrivateIP != "10.20.1.15" || in.PublicIP != "203.0.113.20" {
 		t.Errorf("ips %q %q", in.PrivateIP, in.PublicIP)
 	}
+	// Made in the console: no prefix, but still one <PREFIX>_IP variable.
+	noPrefix := strings.Replace(string(body), `"environmentPrefix": "MTN_UBUNTU_SERVER_24_04_3LTS"`, `"environmentPrefix": null`, 1)
+	f.route("GET", "/api/instances/9702", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(noPrefix)) })
+	if in, err := f.client(t).GetInstance(t.Context(), 9702); err != nil || in.PrivateIP != "10.20.1.15" || in.PublicIP != "203.0.113.20" {
+		t.Errorf("no prefix: ips %q %q, %v", in.PrivateIP, in.PublicIP, err)
+	}
 	// Root and primary come first whatever order the API uses.
 	if !in.Volumes[0].Root || in.Volumes[0].Size != 40 || in.Volumes[1].DatastoreID != "2" {
 		t.Errorf("volumes %+v", in.Volumes)
