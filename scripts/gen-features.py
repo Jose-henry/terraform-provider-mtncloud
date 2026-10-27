@@ -71,11 +71,10 @@ RESOURCES = [
      "with the `mtncloud_plans` data source.",
      ["service_plan", "price", "price_set"]),
     ("Networking",
-     "Security groups (instance firewalls) and their rules, IP pools (static IP ranges for a "
-     "network) and DNS domains (instance hostnames and domain join). MTN Network and MTN Router "
-     "resources are planned (see below); existing networks can already be read with the "
-     "`mtncloud_network` and `mtncloud_networks` data sources.",
-     ["security_group", "security_group_rule", "ipv4_ip_pool", "network_domain"]),
+     "MTN Networks, security groups (instance firewalls) and their rules, IP pools (static IP "
+     "ranges for a network) and DNS domains (instance hostnames and domain join). The MTN Router "
+     "resource is next (see below).",
+     ["network", "security_group", "security_group_rule", "ipv4_ip_pool", "network_domain"]),
     ("Secrets and keys",
      "Cypher secrets and SSH key pairs.",
      ["cypher_secret", "cypher_tfvars", "key_pair"]),
@@ -130,7 +129,7 @@ MASTER_ONLY = {
              "resource_pool", "plan", "policy", "policies", "price", "price_set"},
 }
 # Built for customers on the endpoints the console's own wizard uses (D-016).
-FOR_CUSTOMERS = {"resource": {"security_group", "security_group_rule"},
+FOR_CUSTOMERS = {"resource": {"network", "security_group", "security_group_rule"},
                  "data": {"projects", "images", "plans", "datastores", "security_groups",
                           "external_networks", "catalog_items"}}
 # Need an integration first; the probed tenant had none.
@@ -158,8 +157,7 @@ def access(kind, name):
 # (type, status, what it does). Status: Next, Planned or On hold.
 PLANNED = [
     ("Resources", [
-        ("mtncloud_network", "Next", "MTN Network: private network and subnet in a project (CIDR, gateway, DHCP). DNS defaults to MTN's resolvers and can be changed."),
-        ("mtncloud_router", "Planned", "MTN Router: connects MTN Networks to each other and, optionally, to the internet through a public network."),
+        ("mtncloud_router", "Next", "MTN Router: connects MTN Networks to each other and, optionally, to the internet through a public network."),
         ("mtncloud_instance", "Planned", "OpenStack VM from an MTN OS image: plan by size name (for example `G2S4`), project, networks, several security groups, volumes on any Cinder datastore, optional floating IP."),
         ("mtncloud_floating_ip", "Planned", "A public IP that can outlive an instance."),
         ("mtncloud_project", "Planned", "Order a project (resource pool) by name and wait until it and its default security group have synced."),

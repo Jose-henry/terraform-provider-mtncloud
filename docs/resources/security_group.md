@@ -104,7 +104,8 @@ Import is supported using the following syntax:
 terraform import mtncloud_security_group.web 9501
 ```
 
-An imported group adopts every rule it has (except the default egress rules) into `rules`. Write
+An imported group stores the project's short name (`web-prod`); write it that way to keep the first
+plan empty. It also adopts every rule it has (except the default egress rules) into `rules`. Write
 them all in the configuration, with the descriptions shown in the console, and the first plan after
 import is empty. If the configuration leaves `rules` out, that first plan shows `rules` going to
 null: an update that changes nothing on MTN Cloud and stops Terraform managing the rules.

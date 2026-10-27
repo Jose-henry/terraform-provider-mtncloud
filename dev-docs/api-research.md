@@ -21,8 +21,62 @@ Where docs and a real payload disagree, the payload wins and the difference is n
   (D-017): Optional with a schema default, overridable, never required.
 - Omitting `site` means the network is shared across groups. We will always send it explicitly
   (isolation rule).
-- **Unknown:** the OpenStack network type ID/code on MTN, and whether subnet creation is implicit or
-  a separate `POST /api/networks/{id}/subnets`. **Needs payload P1.**
+
+### Network captures as a customer (2026-10-26, sub-tenant, reads and `-d` only)
+
+Sources: MTN's Drive doc *Network-and-Router-Creation-Workflow-on-MTN-Cloud-v1.2* (the console
+flow), the API reference (`createNetworks`), the CLI help for `networks add`, and these captures:
+
+| Capture | Finding |
+|---|---|
+| `GET /api/options/creatableNetworkTypes` | One type for customers: `OpenStack Private Network` (id 12). Discover it here, never hard-code it. |
+| `GET /api/network-types/12` | Customers can read it. `code openstackPrivate`, `cidrEditable: false` (the CIDR can't change: RequiresReplace), `gatewayEditable`, `dnsEditable`, `dhcpServerEditable: true`. Option fields: `cidr`, `gateway`, `dnsPrimary`, `dnsSecondary`, `config.dhcpRange`, `config.hostRoutes`, `zonePool.id` (**required**, the project). |
+| `GET /api/options/networkServer?networkType.id=12` | One choice: the network server named like the cloud (`MTNNG_CLOUD_AZ_1`). The console calls it "Network Service". `/api/networks/servers` lists a second, unrelated server, so use this option list. |
+| `networks add ... -N -d` | `POST /api/networks` body: `name`, `description`, `site {id}` (group), `type {id}`, `networkServer {id}`, `zonePool {id}`, `cidr`, `gateway`, `dnsPrimary`, `dnsSecondary`, `ipv4Enabled: true`, `ipv6Enabled: false`, `dhcpServer`, `allowStaticOverride`, `active`, `visibility: private`, `resourcePermission {all: true}`. |
+| CLI trap | With `-N` and no project, the CLI fills in `zonePool.id` itself with the tenant's `admin` project, and most of the tenant's networks sit there. The provider makes `project` Required and always sends it. |
+| CLI quirk | `--cidr` is ignored (the type's option field wins): pass `-O cidr=...`. A comma inside an `-O` value splits the argument. |
+| `networks update ... -d` | `PUT /api/networks/{id}` takes a partial body (only the fields that changed). |
+| `networks remove ... -d` | `DELETE /api/networks/{id}`, no body. |
+| `GET /api/networks/{id}` | Echoes `zone {id,name}` (not `networkServer`), `group`, `zonePool {id,name}`, `config {dhcpRange: "", hostRoutes: ""}`, `status`, and one implicit subnet in `subnets[]` named `<network> subnet` with the same CIDR. A router attaches that subnet, so its ID is exposed. |
+
+No network in the tenant uses `dhcpRange` or `hostRoutes`, and no document gives their format.
+They are left out until a real value is seen (backlog B-010).
+
+### Built design (owner's answers, 2026-10-27)
+
+The owner settled the open points: IPv6 is supported but off by default; `gateway` is required;
+networks (and routers) are ready when the create call returns, with no sync to wait for; and a
+network still in use fails to delete with `{"success": false, "msg": "Unable to complete operation
+on network <uuid>. There are one or more ports still in use on the network, id for these ports is:
+<uuids>"}`. A badly designed network can also be refused by the API.
+
+`mtncloud_network` (MTN Network)
+| Attribute | Kind | Why |
+|---|---|---|
+| `id` | Computed, UseStateForUnknown | Server ID; import by ID. |
+| `name` | Required | Updated in place. |
+| `description` | Optional | Updated in place. Null stays null. |
+| `project` | Required | Short or full name (D-006), checked at plan time; only another project replaces the network. Never defaulted (see the CLI trap). |
+| `cidr` | Required, RequiresReplace | `cidrEditable: false`. IPv4 network address. |
+| `gateway` | Required | IPv4, inside `cidr`, not its network address (plan-time check). |
+| `dns_primary`, `dns_secondary` | Optional, defaults `102.88.134.41` / `102.90.109.125` | D-017. The description lists MTN's four resolvers. |
+| `dhcp_enabled`, `allow_ip_override` | Optional, default `true` | MTN's doc: enable both. |
+| `ipv6` | Optional object (`cidr`, `gateway` required; `dns_primary`, `dns_secondary`, `dhcp_enabled` default false) | Absent = IPv6 off. Turning it on or off, or a new IPv6 `cidr`, replaces the network (not proven to work in place); its DNS and DHCP change in place. |
+| `subnet_id` | Computed | The implicit subnet, for `mtncloud_router`. |
+| `external_id` | Computed | Neutron network UUID. |
+
+Not exposed: `visibility` (always private), `active` (always true), `resourcePermission`, network
+pool, network domain, `dhcp_range`, `host_routes` (B-010).
+
+Client (`internal/client/networks.go`): `NetworkPlacement` (type and server from the two option
+lists, cached, error when there isn't exactly one), `CreateNetwork` (refuses a missing project),
+`GetNetwork`, `FindNetwork`, `UpdateNetwork` (PUT without CIDR, project or type), `DeleteNetwork`
+(404 = done), `IsInUse`. Create never adopts an existing network of the same name and looks one up
+again only after a lost reply. A create that returns a network with a failed status is reported and
+kept in state, so the next apply replaces it.
+
+Client-wide, found while building this: a 2xx response with `"success": false` is now an
+`APIError` with the platform's message ("request refused: ..."), never a success.
 
 ## MTN Router (`POST /api/networks/routers`)
 

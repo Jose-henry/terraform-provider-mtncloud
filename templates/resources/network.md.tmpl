@@ -1,0 +1,40 @@
+---
+page_title: "mtncloud_network Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_network
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_network/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_network/import.sh" }}
+
+## Notes
+
+- **Ready when created.** OpenStack creates the network and its subnet in the same call; nothing
+  waits for a sync.
+- **Can't change in place:** `cidr`, `project` (another project), and IPv6 turned on or off or given
+  a new range. Each replaces the network, which fails while instances or a router use it.
+- **Rejected designs.** MTN Cloud refuses a network whose range clashes with another one in the
+  project, or whose settings don't fit together. The error shows MTN Cloud's own message and nothing
+  is saved in state.
+- **Deleting** a network that instances, a router or a load balancer still use fails ("ports still in
+  use"). Remove them first; Terraform does this itself when they reference the network in the same
+  configuration.
+- **Import** stores the project's short name (`web-prod`). Write it that way in the configuration:
+  with the full name (`web-prod-<tenant>`) the first plan shows an in-place update that changes
+  nothing.
+- **Names are unique per project.** Creating a network whose name is already used in the project
+  fails and gives its ID, so you can import it instead.

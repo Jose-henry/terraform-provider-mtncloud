@@ -127,3 +127,22 @@ the sync**. So:
   after the sync. Closing that gap would need a wait for the sync, which the owner ruled out.
 - Create never adopts a group it didn't make: it refuses a name already used in the project (and
   points at import), and only after a lost reply (transport error or 5xx) looks the group up again.
+
+## D-020 Catalog orders wait for their execution or provisioning, never for the sync (2026-10-26)
+Owner's direction, for `mtncloud_project`, MOS and every catalog-order resource. Nothing ever waits
+for what an order makes to sync into MTN Cloud (the project's resource pool, its default security
+group): "they'll come when they do", and are read when they appear, like the default egress rules
+(D-019). Networks and routers are ready when their create call returns.
+
+What Create waits for depends on the inventory item the order creates (`/api/catalog/items/{id}`,
+its `type.type`), from the API reference (`addcatalogorder`, `getcatalogitem`):
+- **Workflow items** (project, MOS, VPN, firewall, NAT: API task executions): poll the item's
+  execution to a terminal state, success or failure, and fail with the platform's own message.
+- **Instance items**: poll the item until it links its instance, then the instance's provisioning
+  status to `running` (done) or `failed`. The item's own status can stay "ordered" while the VM is
+  still provisioning, so it alone isn't enough.
+- **App (blueprint) items**: the same, with the app's status, which covers all its instances.
+
+One poller in `internal/client` with exponential backoff and jitter, honouring `timeouts {}` and
+`ctx`. To confirm before building: the item status values and where a workflow item exposes its
+execution (a read of `/api/catalog/items` on an existing order, as a customer).

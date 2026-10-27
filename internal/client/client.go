@@ -140,6 +140,14 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 			return err
 		}
 	}
+	// Some refusals (an invalid or overlapping network, for example) can come back as a 2xx with
+	// {"success": false, "msg": "..."}. They were not applied, so they are errors like any 4xx.
+	var outcome struct {
+		Success *bool `json:"success"`
+	}
+	if json.Unmarshal(resp, &outcome) == nil && outcome.Success != nil && !*outcome.Success {
+		return newAPIError(method, path, http.StatusOK, resp)
+	}
 	if out == nil {
 		return nil
 	}

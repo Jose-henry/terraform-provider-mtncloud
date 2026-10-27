@@ -673,3 +673,17 @@ func TestTransportError_HidesQueryString(t *testing.T) {
 		t.Fatalf("error leaks the query string: %v", err)
 	}
 }
+
+func TestDo_SuccessFalseIsAnError(t *testing.T) {
+	f := newFakeAPI(t)
+	f.route("PUT", "/api/networks/1", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"success":false,"msg":"Gateway is not in the network range"}`))
+	})
+	err := f.client(t).UpdateNetwork(t.Context(), 1, NetworkInput{Name: "n"})
+	if err == nil || !strings.Contains(err.Error(), "request refused: Gateway is not in the network range") {
+		t.Fatalf("got %v", err)
+	}
+	if MayHaveSucceeded(err) {
+		t.Error("a refusal was not applied")
+	}
+}

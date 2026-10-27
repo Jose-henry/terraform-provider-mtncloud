@@ -28,6 +28,7 @@ type fakeAPI struct {
 	mu    sync.Mutex
 	calls map[string]int
 	sg    http.Handler
+	net   http.Handler // /api/networks, a stateful fake (network_test.go), when set
 }
 
 func newFakeAPI(t *testing.T) *fakeAPI {
@@ -40,6 +41,8 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		"/api/options/zoneSecurityGroup":         "options_security_groups.json",
 		"/api/options/openstackExternalNetworks": "options_external_networks.json",
 		"/api/options/datastores":                "options_datastores.json",
+		"/api/options/creatableNetworkTypes":     "options_network_types.json",
+		"/api/options/networkServer":             "options_network_servers.json",
 		"/api/instances/service-plans":           "service_plans.json",
 		"/api/catalog/types":                     "catalog_types.json",
 		"/api/instance-types":                    "instance_types.json",
@@ -48,8 +51,12 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.calls[r.URL.Path]++
-		sg := f.sg
+		sg, net := f.sg, f.net
 		f.mu.Unlock()
+		if net != nil && (r.URL.Path == "/api/networks" || strings.HasPrefix(r.URL.Path, "/api/networks/")) && r.Header.Get("Authorization") == "Bearer test-token" {
+			net.ServeHTTP(w, r)
+			return
+		}
 		if sg != nil && strings.HasPrefix(r.URL.Path, "/api/security-groups") && r.Header.Get("Authorization") == "Bearer test-token" {
 			sg.ServeHTTP(w, r)
 			return

@@ -84,3 +84,21 @@ and need an acceptance run, or a read of a real group that has such rules:
 - A group with several locations: `project` is read from the first one.
 - Tests still missing: a failure partway through Update, the rule resource's disappears and
   drift steps, and the acceptance set (`_basic`, `_update`, `_import`, `_disappears`, `_drift`).
+
+## B-010 MTN Network DHCP allocation and host routes
+The network type offers `config.dhcpRange` ("DHCP Allocation") and `config.hostRoutes`, and MTN's
+doc lists both as optional, but no network in the probed tenant sets them and no document gives the
+format. Add `dhcp_range` and `host_routes` to `mtncloud_network` once a real value is captured
+(create one in the console on a test network, then `networks get`).
+
+## B-011 MTN Network behaviour still to prove live (acceptance run, test tenant)
+Assumed by the fake API; no IPv6 network or failed network has been captured.
+- `PUT` with `description: ""` (or no IPv6 DNS): does it clear the value? If not, removing it
+  plans forever.
+- IPv6: does the API fill a default IPv6 DNS when none is sent, and does it honour `ipv6Enabled`?
+  Either would give "inconsistent result" on apply.
+- The status words of a failed network (only `ok` was seen; `failed`, `error`, `deprovisioned` are
+  treated as failed).
+- Changing the gateway while a router port holds the old gateway address: refused by Neutron? If
+  so, make `gateway` RequiresReplace or document it with `mtncloud_router`.
+- The status code of a security group "in use" refusal (the hint now covers 400, 409 and 2xx).

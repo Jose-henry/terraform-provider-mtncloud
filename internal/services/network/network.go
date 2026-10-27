@@ -5,7 +5,10 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 )
@@ -15,6 +18,7 @@ func Resources() []func() resource.Resource {
 	return []func() resource.Resource{
 		newSecurityGroup,
 		newSecurityGroupRule,
+		newNetwork,
 	}
 }
 
@@ -44,3 +48,53 @@ func (b *base) ready(diags *diag.Diagnostics) bool {
 	}
 	return true
 }
+
+// tenant is the caller's tenant name, which ends every full project name.
+func (b *base) tenant(ctx context.Context, diags *diag.Diagnostics) string {
+	who, err := b.client.WhoAmI(ctx)
+	if err != nil {
+		diags.AddError("Unable to read your tenant", err.Error())
+		return ""
+	}
+	return who.AccountName
+}
+
+// planProject handles the "project" attribute of a resource that lives in one project. On create
+// it checks the name at plan time (rule 17). On update, "web-prod" and "web-prod-AcmeCorp" are the
+// same project: only a move to another project replaces the resource.
+func (b *base) planProject(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	at := path.Root("project")
+	var plan, state types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, at, &plan)...)
+	if resp.Diagnostics.HasError() || plan.IsNull() {
+		return
+	}
+	if req.State.Raw.IsNull() {
+		if !plan.IsUnknown() {
+			if _, err := b.client.ProjectByName(ctx, plan.ValueString()); err != nil {
+				resp.Diagnostics.AddAttributeError(at, "Unknown project", err.Error())
+			}
+		}
+		return
+	}
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, at, &state)...)
+	if resp.Diagnostics.HasError() || plan.Equal(state) {
+		return
+	}
+	if plan.IsUnknown() {
+		resp.RequiresReplace.Append(at)
+		return
+	}
+	from, errFrom := b.client.ProjectByName(ctx, state.ValueString())
+	to, errTo := b.client.ProjectByName(ctx, plan.ValueString())
+	if errTo != nil {
+		resp.Diagnostics.AddAttributeError(at, "Unknown project", errTo.Error())
+		return
+	}
+	if errFrom != nil || from.ID != to.ID {
+		resp.RequiresReplace.Append(at)
+	}
+}
+
+// objectAsOptions reads a nested object into a struct; unknown values were handled by the caller.
+var objectAsOptions = basetypes.ObjectAsOptions{}

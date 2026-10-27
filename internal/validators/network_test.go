@@ -43,6 +43,27 @@ func TestNetworkCIDR(t *testing.T) {
 	}
 }
 
+func TestCIDRFamily(t *testing.T) {
+	for s, want := range map[string][2]bool{ // {IPv4CIDR, IPv6CIDR}
+		"10.0.0.0/24": {true, false}, "2001:db8::/64": {false, true}, "::ffff:10.0.0.0/120": {false, false},
+	} {
+		if got := [2]bool{check(IPv4CIDR(), s), check(IPv6CIDR(), s)}; got != want {
+			t.Errorf("%q: got %v, want %v", s, got, want)
+		}
+	}
+}
+
+func TestIPAddress(t *testing.T) {
+	for s, want := range map[string][2]bool{ // {IPv4Address, IPv6Address}
+		"10.0.0.1": {true, false}, "2001:db8::1": {false, true}, "2001:DB8::1": {false, false},
+		"010.0.0.1": {false, false}, "10.0.0.0/24": {false, false}, "fe80::1%eth0": {false, false}, "": {false, false},
+	} {
+		if got := [2]bool{check(IPv4Address(), s), check(IPv6Address(), s)}; got != want {
+			t.Errorf("%q: got %v, want %v", s, got, want)
+		}
+	}
+}
+
 func TestRegex(t *testing.T) {
 	if !check(Regex(), "^web-") || check(Regex(), "(") {
 		t.Error("Regex validator")

@@ -291,15 +291,8 @@ func (r *securityGroupResource) ModifyPlan(ctx context.Context, req resource.Mod
 	if req.Plan.Raw.IsNull() || r.client == nil {
 		return // destroy, or validation before the provider is configured
 	}
-	if req.State.Raw.IsNull() {
-		// Create: catch a mistyped project now rather than at apply (rule 17).
-		var project types.String
-		resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("project"), &project)...)
-		if !project.IsUnknown() && !project.IsNull() {
-			if _, err := r.client.ProjectByName(ctx, project.ValueString()); err != nil {
-				resp.Diagnostics.AddAttributeError(path.Root("project"), "Unknown project", err.Error())
-			}
-		}
+	r.planProject(ctx, req, resp)
+	if req.State.Raw.IsNull() || resp.Diagnostics.HasError() {
 		return
 	}
 	var state, plan securityGroupModel
@@ -307,23 +300,6 @@ func (r *securityGroupResource) ModifyPlan(ctx context.Context, req resource.Mod
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
-	}
-
-	// "web-prod" and "web-prod-AcmeCorp" are the same project: only a real move replaces the group.
-	if !plan.Project.Equal(state.Project) {
-		if plan.Project.IsUnknown() {
-			resp.RequiresReplace.Append(path.Root("project"))
-		} else {
-			from, errFrom := r.client.ProjectByName(ctx, state.Project.ValueString())
-			to, errTo := r.client.ProjectByName(ctx, plan.Project.ValueString())
-			if errTo != nil {
-				resp.Diagnostics.AddAttributeError(path.Root("project"), "Unknown project", errTo.Error())
-				return
-			}
-			if errFrom != nil || from.ID != to.ID {
-				resp.RequiresReplace.Append(path.Root("project"))
-			}
-		}
 	}
 
 	// Default egress rules that synced in since the last apply are removed by this one.
@@ -514,7 +490,7 @@ func (r *securityGroupResource) Delete(ctx context.Context, req resource.DeleteR
 	id, _ := strconv.ParseInt(state.ID.ValueString(), 10, 64)
 	if err := r.client.DeleteSecurityGroup(ctx, id); err != nil {
 		msg := err.Error()
-		if client.IsConflict(err) || client.IsBadRequest(err) {
+		if client.IsConflict(err) || client.IsBadRequest(err) || client.IsInUse(err) || client.IsRefused(err) {
 			msg += ". A group still used by instances can't be deleted: remove it from them first."
 		}
 		resp.Diagnostics.AddError("Unable to delete security group", msg)
@@ -528,16 +504,6 @@ func (r *securityGroupResource) ImportState(ctx context.Context, req resource.Im
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
 	resp.Diagnostics.Append(resp.Private.SetKey(ctx, privateImported, []byte("true"))...)
-}
-
-// tenant is the caller's tenant name, which ends every full project name.
-func (r *securityGroupResource) tenant(ctx context.Context, diags *diag.Diagnostics) string {
-	who, err := r.client.WhoAmI(ctx)
-	if err != nil {
-		diags.AddError("Unable to read your tenant", err.Error())
-		return ""
-	}
-	return who.AccountName
 }
 
 // refresh copies the API's view of the group into the model. managed says whether "rules" is

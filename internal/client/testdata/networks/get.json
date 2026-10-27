@@ -1,0 +1,23 @@
+{
+  "network": {
+    "id": 9301, "name": "app-net", "displayName": "app-net", "labels": [], "tags": [],
+    "group": {"id": 9101, "name": "MTNNG_CLOUD_AZ_1"}, "zone": {"id": 4, "name": "MTNNG_CLOUD_AZ_1"},
+    "type": {"id": 12, "name": "OpenStack Private Network", "code": "openstackPrivate"},
+    "owner": {"id": 9001, "name": "Acme"},
+    "code": "openstack.network.4.00000000-0000-0000-0000-000000009301",
+    "ipv4Enabled": true, "ipv6Enabled": false, "category": "openstack.network.4",
+    "description": "application tier",
+    "externalId": "00000000-0000-0000-0000-000000009301", "internalId": "00000000-0000-0000-0000-00000000a301",
+    "externalType": "Network", "refType": "ComputeZone", "refId": 4, "vlanId": null,
+    "dhcpServer": true, "dhcpIp": null, "dhcpServerIPv6": false,
+    "gateway": "10.20.1.1", "netmask": "255.255.255.0", "broadcast": "10.20.1.255",
+    "dnsPrimary": "102.88.134.41", "dnsSecondary": "102.90.109.125",
+    "dnsPrimaryIPv6": null, "dnsSecondaryIPv6": null,
+    "cidr": "10.20.1.0/24", "cidrIPv6": null, "gatewayIPv6": null, "netmaskIPv6": null,
+    "networkRole": "internal", "status": "ok", "pool": null, "networkDomain": null, "searchDomains": null,
+    "visibility": "private", "active": true, "allowStaticOverride": true,
+    "zonePool": {"id": 9201, "name": "web-prod-Acme"},
+    "config": {"dhcpRange": "", "hostRoutes": ""},
+    "subnets": [{"id": 9311, "name": "app-net subnet", "labels": [], "cidr": "10.20.1.0/24", "dhcpServer": true, "visibility": "private", "active": true, "pool": null}]
+  }
+}

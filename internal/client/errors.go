@@ -22,7 +22,11 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "MTN Cloud API %s %s: %d %s", e.Method, e.Path, e.StatusCode, http.StatusText(e.StatusCode))
+	if e.StatusCode < 300 {
+		fmt.Fprintf(&b, "MTN Cloud API %s %s: request refused", e.Method, e.Path) // a 2xx with "success": false
+	} else {
+		fmt.Fprintf(&b, "MTN Cloud API %s %s: %d %s", e.Method, e.Path, e.StatusCode, http.StatusText(e.StatusCode))
+	}
 	if e.Message != "" {
 		fmt.Fprintf(&b, ": %s", e.Message)
 	}
@@ -59,6 +63,12 @@ func MayHaveSucceeded(err error) bool {
 		return err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 	}
 	return apiErr.StatusCode >= 500
+}
+
+// IsRefused reports a request the platform turned down in a 2xx answer with "success": false.
+func IsRefused(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode < 300
 }
 
 // IsBadRequest reports whether err is an API 400.

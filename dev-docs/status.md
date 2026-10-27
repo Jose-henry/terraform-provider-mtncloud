@@ -87,15 +87,17 @@ Last updated 2026-10-26 (PR #3, client and lookup data sources). Update this fil
   `remove_default_egress` (D-019). Proven with one live create/delete as a customer; unit, client
   contract and provider lifecycle tests (plan, apply, empty plan, import, drift, disappear, replace).
 
+- `mtncloud_network` (MTN Network, same branch, local): project by name, CIDR replaces, gateway
+  required, MTN DNS defaults (D-017), optional IPv6, `subnet_id` for routers, in-use delete hint.
+  The client now treats `"success": false` in a 2xx answer as an error.
+
 ## Next (in order, each one a PR with tests, after the owner approves its plan)
 
-1. **`mtncloud_network`** (MTN Network), DNS defaulting to MTN's resolvers (D-017). Needs a
-   sub-tenant `networks add -d`.
-2. **`mtncloud_router`** (MTN Router). Needs `network-routers add -d`.
-3. **`mtncloud_instance`** (OpenStack, OS images only, several security groups). The floating IP
+1. **`mtncloud_router`** (MTN Router). Needs `network-routers add -d`.
+2. **`mtncloud_instance`** (OpenStack, OS images only, several security groups). The floating IP
    endpoint for customers is unknown (403 on `/api/networks/floating-ips`).
-4. `mtncloud_project` → `mtncloud_catalog_order` → `mtncloud_object_storage` (MOS) → app, SSL
+3. `mtncloud_project` → `mtncloud_catalog_order` → `mtncloud_object_storage` (MOS) → app, SSL
    certificate. Load balancer on hold (D-013).
-5. `internal/tenancy` (master gating, D-004) once Q1 is answered.
-6. Migrate the legacy resources customers use most, fixing B-001 on the way.
-7. First release: registry repo name (Q5), GPG key, `v0.1.0`. Acceptance tests need a test tenant (Q6).
+4. `internal/tenancy` (master gating, D-004) once Q1 is answered.
+5. Migrate the legacy resources customers use most, fixing B-001 on the way.
+6. First release: registry repo name (Q5), GPG key, `v0.1.0`. Acceptance tests need a test tenant (Q6).

@@ -59,15 +59,27 @@ func port(s string) (int, error) {
 // "10.0.0.5/24"), so the value stored by the platform always matches the configuration.
 func NetworkCIDR() validator.String { return cidrValidator{} }
 
-type cidrValidator struct{}
+// IPv4CIDR is NetworkCIDR limited to IPv4.
+func IPv4CIDR() validator.String { return cidrValidator{family: 4} }
 
-func (cidrValidator) Description(context.Context) string {
+// IPv6CIDR is NetworkCIDR limited to IPv6.
+func IPv6CIDR() validator.String { return cidrValidator{family: 6} }
+
+type cidrValidator struct{ family int } // 0 = either
+
+func (v cidrValidator) Description(context.Context) string {
+	switch v.family {
+	case 4:
+		return `must be an IPv4 CIDR written as its network address, for example "10.0.0.0/24"`
+	case 6:
+		return `must be an IPv6 CIDR written as its network address, for example "2001:db8::/64"`
+	}
 	return `must be a CIDR written as its network address, for example "10.0.0.0/24"`
 }
 
 func (v cidrValidator) MarkdownDescription(ctx context.Context) string { return v.Description(ctx) }
 
-func (cidrValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+func (v cidrValidator) ValidateString(_ context.Context, req validator.StringRequest, resp *validator.StringResponse) {
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
@@ -78,6 +90,10 @@ func (cidrValidator) ValidateString(_ context.Context, req validator.StringReque
 			fmt.Sprintf("%q is not a CIDR. Use an address and a prefix length, for example \"10.0.0.0/24\" or \"0.0.0.0/0\".", s))
 		return
 	}
+	if !familyOK(v.family, p.Addr()) {
+		resp.Diagnostics.AddAttributeError(req.Path, "Wrong address family", fmt.Sprintf("%q: %s.", s, v.Description(context.Background())))
+		return
+	}
 	if m := p.Masked(); m != p {
 		resp.Diagnostics.AddAttributeError(req.Path, "CIDR is not a network address",
 			fmt.Sprintf("%q has host bits set. Use %q.", s, m.String()))
@@ -85,5 +101,41 @@ func (cidrValidator) ValidateString(_ context.Context, req validator.StringReque
 		// The API may store the canonical form; anything else would read back as a diff.
 		resp.Diagnostics.AddAttributeError(req.Path, "CIDR is not in its usual form",
 			fmt.Sprintf("Write %q as %q.", s, p.String()))
+	}
+}
+
+func familyOK(family int, a netip.Addr) bool {
+	return family == 0 || (family == 4 && a.Is4()) || (family == 6 && a.Is6() && !a.Is4In6())
+}
+
+// IPv4Address checks an IPv4 address in its usual form ("10.0.0.1").
+func IPv4Address() validator.String { return addrValidator{family: 4} }
+
+// IPv6Address checks an IPv6 address in its usual, compressed lower-case form ("2001:db8::1").
+func IPv6Address() validator.String { return addrValidator{family: 6} }
+
+type addrValidator struct{ family int }
+
+func (v addrValidator) Description(context.Context) string {
+	if v.family == 4 {
+		return `must be an IPv4 address, for example "10.0.0.1"`
+	}
+	return `must be an IPv6 address, for example "2001:db8::1"`
+}
+
+func (v addrValidator) MarkdownDescription(ctx context.Context) string { return v.Description(ctx) }
+
+func (v addrValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	s := req.ConfigValue.ValueString()
+	a, err := netip.ParseAddr(s)
+	if err != nil || !familyOK(v.family, a) || a.Zone() != "" {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid IP address", fmt.Sprintf("%q %s.", s, v.Description(ctx)))
+		return
+	}
+	if a.String() != s {
+		resp.Diagnostics.AddAttributeError(req.Path, "IP address is not in its usual form", fmt.Sprintf("Write %q as %q.", s, a.String()))
 	}
 }
