@@ -7,8 +7,7 @@ terraform {
   }
 }
 
+# Credentials come from the environment (see below), so none are written here.
 provider "mtncloud" {
-  url      = "https://console.cloud.mtn.ng"
-  username = "administrator"
-  password = "password"
+  url = "https://console.cloud.mtn.ng"
 }

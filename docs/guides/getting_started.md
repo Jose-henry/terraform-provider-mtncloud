@@ -2,23 +2,41 @@
 subcategory: ""
 page_title: "Getting started with the MTN Cloud Terraform provider"
 description: |-
-    A guide to getting started with the MTN Cloud Terraform provider.
+    Set up your MTN Cloud account, then build a network, a router and a server with Terraform.
 ---
 
 # Getting Started with the MTN Cloud Provider
 
-This guide walks you through getting started with using the MTN Cloud Terraform provider to configure and manage your MTN Cloud platform.
+This guide takes you from a new MTN Cloud account to a running server with a public IP, built with
+Terraform.
 
-## Before you begin
+## 1. Set up your account in the MTN Cloud console
 
-[Install Terraform](https://www.terraform.io/intro/getting-started/install.html)
-and read the Terraform getting started guide that follows. This guide will
-assume basic proficiency with Terraform.
+Do these once, in the console, before you use Terraform.
 
-## Configuring the provider
+1. **Create your account** at [cloud.mtn.ng](https://cloud.mtn.ng), then log in to the console at
+   [console.cloud.mtn.ng](https://console.cloud.mtn.ng). You log in as `subdomain\username`: note
+   your subdomain, Terraform needs it.
+2. **Create a project.** Everything you build (networks, routers, security groups, servers) lives in
+   a project. In the console, open the catalog and order **Create Project**, with a name such as
+   `web-prod`. MTN Cloud names it `web-prod-<your tenant>`; in Terraform you can use the short name.
+   Allow **up to an hour** before using it: the project, its default security group, external
+   networks and floating IP pools sync in during that time, and until then Terraform reports them as
+   not found. (`mtncloud_project` can order a project too, but creating your first one in the console
+   is simpler: you see it arrive.)
+3. **Set your login details for servers.** Open **User Settings** and fill in the **Linux settings**
+   (username, password, SSH key) and the **Windows settings** (username, password). Every server you
+   create, from the console or from Terraform, takes its login from these. You can also manage SSH
+   keys with `mtncloud_key_pair`, but setting them here first means your first server is reachable.
 
-Configure the Terraform provider by specifying the provider information according the [Terraform 0.13-compliant](https://www.terraform.io/upgrade-guides/0-13.html#in-house-providers) provider installation standard.
-Create a `provider.tf` file with the following content to define the provider configuration.
+## 2. Install Terraform
+
+[Install Terraform](https://developer.hashicorp.com/terraform/install) 1.5 or later (or OpenTofu).
+This guide assumes you know the basics: `init`, `plan` and `apply`.
+
+## 3. Configure the provider
+
+Create a `provider.tf` file:
 
 ```terraform
 terraform {
@@ -30,106 +48,101 @@ terraform {
   }
 }
 
+# Credentials come from the environment (see below), so none are written here.
 provider "mtncloud" {
-  url      = "https://console.cloud.mtn.ng"
-  username = "administrator"
-  password = "password"
+  url = "https://console.cloud.mtn.ng"
 }
 ```
 
-The provider also supports the use of an [access token](auth.md#access-token) instead of specifying a username and password to authentication to the MTN Cloud platform. 
+Give it your login through environment variables, so no password is ever written in a file:
 
-## Creating your first MTN Cloud resource
-Once the provider is configured, you can apply the MTN Cloud resources defined in your Terraform file. The following is an example Terraform file containing a MTN Cloud environment resource. Create a `main.tf` file with the following content to define the environment resource.
+```shell
+export MTNCLOUD_API_TENANT="your-subdomain"
+export MTNCLOUD_API_USERNAME="your-username"
+export MTNCLOUD_API_PASSWORD="your-password"
+```
+
+An [access token](auth.md#access-token) works too. See [Authentication](auth.md) for every option.
+
+## 4. Build a server
+
+Create a `main.tf` file. It makes a private network, a router that connects it to the internet, a
+security group (firewall) and an Ubuntu server with a public IP, all in your `web-prod` project:
 
 ```terraform
-resource "mtncloud_environment" "tfdemo" {
-  active      = true
-  code        = "tfdemo"
-  description = "Terraform provider demo environment"
-  name        = "TFDemo"
+# "web-prod" is the project you created in the console.
+
+# A private network for the servers.
+resource "mtncloud_network" "app" {
+  name    = "app-net"
+  project = "web-prod"
+  cidr    = "10.20.1.0/24"
+  gateway = "10.20.1.1"
+}
+
+# Connects the network to the internet, so the server can have a public IP.
+resource "mtncloud_router" "edge" {
+  name             = "edge"
+  project          = "web-prod"
+  networks         = [mtncloud_network.app.id]
+  external_network = "public-network-02"
+}
+
+# Lets in HTTPS from anywhere, and SSH from your own address only.
+resource "mtncloud_security_group" "web" {
+  name    = "web"
+  project = "web-prod"
+
+  rules = [
+    { direction = "ingress", protocol = "tcp", port_range = "443", cidr = "0.0.0.0/0" },
+    { direction = "ingress", protocol = "tcp", port_range = "22", cidr = "203.0.113.10/32" },
+  ]
+}
+
+# An Ubuntu server. You log in with the Linux settings from your User Settings.
+resource "mtncloud_instance" "web" {
+  name             = "web-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod"
+  image            = "MTN Ubuntu Server 24.04.3LTS"
+  plan             = "G2S4"
+  networks         = [mtncloud_network.app.id]
+  security_groups  = [mtncloud_security_group.web.name]
+  floating_ip_pool = "public-network-02"
+
+  # The public IP needs the router first.
+  depends_on = [mtncloud_router.edge]
+}
+
+output "web_public_ip" {
+  value = mtncloud_instance.web.public_ip
 }
 ```
 
-Use `terraform init` to initialize the specified version of the MTN Cloud provider:
+Replace `203.0.113.10` with your own public IP address, so only you can reach the server over SSH.
+The [Features](features.md) page lists what else you can build, and each resource's page lists the
+names you can use (images, plans, external networks).
 
-```
-$ terraform init
+Then run:
 
-Initializing the backend...
-
-Initializing provider plugins...
-- Finding jose-henry/mtncloud versions matching "~> 0.1"...
-- Installing jose-henry/mtncloud v0.1.0...
-- Installed jose-henry/mtncloud v0.1.0 (self-signed, key ID 250BA2E7A7461055)
-
-Terraform has created a lock file .terraform.lock.hcl to record the provider
-selections it made above. Include this file in your version control repository
-so that Terraform can guarantee to make the same selections by default when
-you run "terraform init" in the future.
-
-Terraform has been successfully initialized!
-
-You may now begin working with Terraform. Try running "terraform plan" to see
-any changes that are required for your infrastructure. All Terraform commands
-should now work.
-
-If you ever set or change modules or backend configuration for Terraform,
-rerun this command to reinitialize your working directory. If you forget, other
-commands will detect it and remind you to do so if necessary.
+```shell
+terraform init     # downloads the provider
+terraform plan     # shows what will be created, and checks every name against your account
+terraform apply    # creates it
 ```
 
-Next, use `terraform plan` to display a list of resources to be created, and highlight any possible unknown attributes at apply time.
+`terraform plan` checks names (project, image, plan, external network) against your account before
+anything is created, and lists the valid ones when a name is wrong. `terraform apply` waits for each
+part to be ready, then prints the server's public IP. Log in with the username and SSH key from your
+User Settings:
 
-```
-terraform plan
-
-Terraform used the selected providers to generate the following execution plan. Resource actions are indicated with the following symbols:
-  + create
-
-Terraform will perform the following actions:
-
-  # mtncloud_environment.tfdemo will be created
-  + resource "mtncloud_environment" "tfdemo" {
-      + active      = true
-      + code        = "tfdemo"
-      + description = "Terraform provider demo environment"
-      + id          = (known after apply)
-      + name        = "TFDemo"
-      + visibility  = "private"
-    }
-
-Plan: 1 to add, 0 to change, 0 to destroy.
-
-Note: You didn't use the -out option to save this plan, so Terraform can't guarantee to take exactly these actions if you run "terraform apply" now.
+```shell
+ssh your-linux-username@<web_public_ip>
 ```
 
-Use `terraform apply` to create the resource shown above.
+Run `terraform plan` again: it says `No changes.` Your configuration and MTN Cloud match.
 
+## 5. Clean up
 
-```
-terraform apply --auto-approve
-
-Terraform used the selected providers to generate the following execution plan. Resource actions are indicated with the following symbols:
-  + create
-
-Terraform will perform the following actions:
-
-  # mtncloud_environment.tfdemo will be created
-  + resource "mtncloud_environment" "tfdemo" {
-      + active      = true
-      + code        = "tfdemo"
-      + description = "Terraform provider demo environment"
-      + id          = (known after apply)
-      + name        = "TFDemo"
-      + visibility  = "private"
-    }
-
-Plan: 1 to add, 0 to change, 0 to destroy.
-mtncloud_environment.tfdemo: Creating...
-mtncloud_environment.tfdemo: Creation complete after 1s [id=5]
-
-Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
-```
-
-Congratulations! You've successfully created your first MTN Cloud resource using the Terraform provider.
+`terraform destroy` removes the server, the security group, the router and the network. The project
+stays: projects are managed in the console.
