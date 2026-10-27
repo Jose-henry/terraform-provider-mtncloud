@@ -25,7 +25,11 @@ output "jobs" {
 
 ### Optional
 
+- `enabled` (Boolean) Only list jobs whose `enabled` is this.
+- `labels` (List of String) Only list jobs that have every one of these `labels` (case ignored).
 - `name_regex` (String) Only return jobs whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `target_type` (String) Only list jobs whose `target_type` is this (case ignored).
+- `type` (String) Only list jobs whose `type` is this (case ignored).
 
 ### Read-Only
 

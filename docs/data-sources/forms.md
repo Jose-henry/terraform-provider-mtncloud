@@ -25,6 +25,7 @@ output "forms" {
 
 ### Optional
 
+- `labels` (List of String) Only list forms that have every one of these `labels` (case ignored).
 - `name_regex` (String) Only return forms whose name matches this regular expression (RE2 syntax), for example `^web-`.
 
 ### Read-Only

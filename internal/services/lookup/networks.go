@@ -21,19 +21,22 @@ type networksDataSource struct{ base }
 type networksModel struct {
 	NameRegex types.String      `tfsdk:"name_regex"`
 	Project   types.String      `tfsdk:"project"`
+	Status    types.String      `tfsdk:"status"`
+	Labels    []types.String    `tfsdk:"labels"`
 	IDs       []types.Int64     `tfsdk:"ids"`
 	Networks  []networkRowModel `tfsdk:"networks"`
 }
 
 type networkRowModel struct {
-	ID      types.Int64  `tfsdk:"id"`
-	Name    types.String `tfsdk:"name"`
-	Project types.String `tfsdk:"project"`
-	Group   types.String `tfsdk:"group"`
-	Cloud   types.String `tfsdk:"cloud"`
-	CIDR    types.String `tfsdk:"cidr"`
-	Gateway types.String `tfsdk:"gateway"`
-	Status  types.String `tfsdk:"status"`
+	ID      types.Int64    `tfsdk:"id"`
+	Name    types.String   `tfsdk:"name"`
+	Project types.String   `tfsdk:"project"`
+	Group   types.String   `tfsdk:"group"`
+	Cloud   types.String   `tfsdk:"cloud"`
+	CIDR    types.String   `tfsdk:"cidr"`
+	Gateway types.String   `tfsdk:"gateway"`
+	Status  types.String   `tfsdk:"status"`
+	Labels  []types.String `tfsdk:"labels"`
 }
 
 func (d *networksDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -49,6 +52,11 @@ func (d *networksDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"project": schema.StringAttribute{
 				Optional:    true,
 				Description: "Only list networks in this project (for example `web-prod`; the full platform name also works).",
+			},
+			"status": schema.StringAttribute{Optional: true, Description: "Only list networks with this status, for example `ok` (case ignored)."},
+			"labels": schema.ListAttribute{
+				Optional: true, ElementType: types.StringType,
+				Description: "Only list networks that have every one of these labels (case ignored).",
 			},
 			"ids": schema.ListAttribute{
 				Computed: true, ElementType: types.Int64Type,
@@ -66,6 +74,7 @@ func (d *networksDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 					"cidr":    schema.StringAttribute{Computed: true, Description: "IPv4 CIDR, or empty."},
 					"gateway": schema.StringAttribute{Computed: true, Description: "IPv4 gateway, or empty."},
 					"status":  schema.StringAttribute{Computed: true, Description: "Status, for example `ok`."},
+					"labels":  schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Labels."},
 				}},
 			},
 		},
@@ -104,8 +113,12 @@ func (d *networksDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 	m.Networks = []networkRowModel{}
 	for _, n := range all {
-		if !match(n.Name) || (projectID != 0 && n.ProjectID != projectID) {
+		if !match(n.Name) || (projectID != 0 && n.ProjectID != projectID) || !textMatches(n.Status, m.Status) || !labelsMatch(n.Labels, m.Labels) {
 			continue
+		}
+		labels := make([]types.String, len(n.Labels))
+		for i, l := range n.Labels {
+			labels[i] = types.StringValue(l)
 		}
 		project := ""
 		if n.ProjectName != "" {
@@ -115,6 +128,7 @@ func (d *networksDataSource) Read(ctx context.Context, req datasource.ReadReques
 			ID: types.Int64Value(n.ID), Name: types.StringValue(n.Name), Project: types.StringValue(project),
 			Group: types.StringValue(n.GroupName), Cloud: types.StringValue(n.CloudName),
 			CIDR: types.StringValue(n.CIDR), Gateway: types.StringValue(n.Gateway), Status: types.StringValue(n.Status),
+			Labels: labels,
 		})
 	}
 	slices.SortFunc(m.Networks, func(a, b networkRowModel) int {

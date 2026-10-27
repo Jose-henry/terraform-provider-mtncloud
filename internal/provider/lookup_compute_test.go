@@ -48,6 +48,8 @@ func TestInstances_DataSource(t *testing.T) {
 	cfg := instConfig(f, `  name = "app-1"
   plan = "G1S1"
   networks = ["9301"]
+  labels = ["web"]
+  tags = { team = "payments" }
 `)
 	list := func(name, filters string) string {
 		return `
@@ -74,6 +76,21 @@ data "mtncloud_instances" "` + name + `" {
 					statecheck.ExpectKnownValue("data.mtncloud_instances.web", at(0, "cloud"), knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
 					statecheck.ExpectKnownValue("data.mtncloud_instances.other", tfjsonpath.New("instances"), knownvalue.ListSizeExact(0)),
 					statecheck.ExpectKnownValue("data.mtncloud_instances.named", tfjsonpath.New("instances"), knownvalue.ListSizeExact(1)),
+				},
+			},
+			{
+				// Filters: matches (case ignored for text and labels) and misses.
+				Config: cfg + list("hit", `  status = "RUNNING"
+  plan = "g1s1"
+  labels = ["WEB"]
+  tags = { team = "payments" }`) + list("stopped", `  status = "stopped"`) + list("label_miss", `  labels = ["web", "db"]`) +
+					list("tag_miss", `  tags = { team = "data" }`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("data.mtncloud_instances.hit", tfjsonpath.New("instances"), knownvalue.ListSizeExact(1)),
+					statecheck.ExpectKnownValue("data.mtncloud_instances.hit", at(0, "tags"), knownvalue.MapExact(map[string]knownvalue.Check{"team": knownvalue.StringExact("payments")})),
+					statecheck.ExpectKnownValue("data.mtncloud_instances.stopped", tfjsonpath.New("instances"), knownvalue.ListSizeExact(0)),
+					statecheck.ExpectKnownValue("data.mtncloud_instances.label_miss", tfjsonpath.New("instances"), knownvalue.ListSizeExact(0)),
+					statecheck.ExpectKnownValue("data.mtncloud_instances.tag_miss", tfjsonpath.New("instances"), knownvalue.ListSizeExact(0)),
 				},
 			},
 			{
@@ -390,7 +407,8 @@ func TestNetworks_DataSource(t *testing.T) {
 		Steps: []resource.TestStep{
 			{Config: cfg},
 			{
-				Config: cfg + list("web", `  project = "web-prod"`) + list("app", `  name_regex = "^app-"`) + list("data", `  project = "data-Acme"`),
+				Config: cfg + list("web", `  project = "web-prod"`) + list("app", `  name_regex = "^app-"`) + list("data", `  project = "data-Acme"`) +
+					list("ok", `  status = "OK"`) + list("labelled", `  labels = ["nope"]`),
 				ConfigStateChecks: []statecheck.StateCheck{
 					// app-net and db-net, sorted by name.
 					statecheck.ExpectKnownValue("data.mtncloud_networks.web", tfjsonpath.New("networks"), knownvalue.ListSizeExact(2)),
@@ -401,6 +419,8 @@ func TestNetworks_DataSource(t *testing.T) {
 					statecheck.ExpectKnownValue("data.mtncloud_networks.web", tfjsonpath.New("ids"), knownvalue.ListSizeExact(2)),
 					statecheck.ExpectKnownValue("data.mtncloud_networks.app", tfjsonpath.New("networks"), knownvalue.ListSizeExact(1)),
 					statecheck.ExpectKnownValue("data.mtncloud_networks.data", at(0, "name"), knownvalue.StringExact("other-net")),
+					statecheck.ExpectKnownValue("data.mtncloud_networks.ok", tfjsonpath.New("networks"), knownvalue.ListSizeExact(3)),
+					statecheck.ExpectKnownValue("data.mtncloud_networks.labelled", tfjsonpath.New("networks"), knownvalue.ListSizeExact(0)),
 				},
 			},
 			{Config: cfg + list("bad", `  project = "nope"`), ExpectError: regexp.MustCompile(`Unknown project`)},

@@ -25,7 +25,11 @@ output "load_balancers" {
 
 ### Optional
 
+- `cloud` (String) Only list load balancers whose `cloud` is this (case ignored).
+- `enabled` (Boolean) Only list load balancers whose `enabled` is this.
 - `name_regex` (String) Only return load balancers whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `type` (String) Only list load balancers whose `type` is this (case ignored).
+- `visibility` (String) Only list load balancers whose `visibility` is this (case ignored).
 
 ### Read-Only
 

@@ -17,9 +17,14 @@ func newInstances() datasource.DataSource { return &instancesDataSource{} }
 type instancesDataSource struct{ base }
 
 type instancesModel struct {
-	NameRegex types.String    `tfsdk:"name_regex"`
-	Project   types.String    `tfsdk:"project"`
-	Instances []instanceModel `tfsdk:"instances"`
+	NameRegex types.String            `tfsdk:"name_regex"`
+	Project   types.String            `tfsdk:"project"`
+	Status    types.String            `tfsdk:"status"`
+	Image     types.String            `tfsdk:"image"`
+	Plan      types.String            `tfsdk:"plan"`
+	Labels    []types.String          `tfsdk:"labels"`
+	Tags      map[string]types.String `tfsdk:"tags"`
+	Instances []instanceModel         `tfsdk:"instances"`
 }
 
 type instanceModel struct {
@@ -34,6 +39,7 @@ type instanceModel struct {
 	PrivateIP types.String   `tfsdk:"private_ip"`
 	PublicIP  types.String   `tfsdk:"public_ip"`
 	Labels    []types.String `tfsdk:"labels"`
+	Tags      types.Map      `tfsdk:"tags"`
 }
 
 func (d *instancesDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -51,6 +57,17 @@ func (d *instancesDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				Description: "Only return instances in this project, by name (for example `web-prod`). The full platform " +
 					"name, with the tenant suffix, also works.",
 			},
+			"status": schema.StringAttribute{Optional: true, Description: "Only return instances with this status, for example `running` (case ignored)."},
+			"image":  schema.StringAttribute{Optional: true, Description: "Only return instances of this image, by name or code (case ignored)."},
+			"plan":   schema.StringAttribute{Optional: true, Description: "Only return instances of this plan, for example `G2S4` (case ignored)."},
+			"labels": schema.ListAttribute{
+				Optional: true, ElementType: types.StringType,
+				Description: "Only return instances that have every one of these labels (case ignored).",
+			},
+			"tags": schema.MapAttribute{
+				Optional: true, ElementType: types.StringType,
+				Description: "Only return instances that have every one of these tags with the same value.",
+			},
 			"instances": schema.ListNestedAttribute{
 				Computed:    true,
 				Description: "The instances, sorted by name, then ID.",
@@ -66,6 +83,7 @@ func (d *instancesDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 					"private_ip": schema.StringAttribute{Computed: true, Description: "Private address, or empty."},
 					"public_ip":  schema.StringAttribute{Computed: true, Description: "Floating (public) address, or empty."},
 					"labels":     schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Labels."},
+					"tags":       schema.MapAttribute{Computed: true, ElementType: types.StringType, Description: "Tags."},
 				}},
 			},
 		},
@@ -113,9 +131,13 @@ func (d *instancesDataSource) Read(ctx context.Context, req datasource.ReadReque
 	}
 	m.Instances = []instanceModel{}
 	for _, in := range instances {
-		if !match(in.Name) || (projectID != 0 && in.ProjectID != projectID) {
+		if !match(in.Name) || (projectID != 0 && in.ProjectID != projectID) || !textMatches(in.Status, m.Status) ||
+			!(textMatches(in.ImageName, m.Image) || textMatches(in.ImageCode, m.Image)) || !textMatches(in.PlanName, m.Plan) ||
+			!labelsMatch(in.Labels, m.Labels) || !tagsMatch(in.Tags, m.Tags) {
 			continue
 		}
+		tags, d2 := types.MapValueFrom(ctx, types.StringType, nonNil(in.Tags))
+		resp.Diagnostics.Append(d2...)
 		labels := make([]types.String, len(in.Labels))
 		for i, l := range in.Labels {
 			labels[i] = types.StringValue(l)
@@ -124,7 +146,7 @@ func (d *instancesDataSource) Read(ctx context.Context, req datasource.ReadReque
 			ID: types.Int64Value(in.ID), Name: types.StringValue(in.Name), Status: types.StringValue(in.Status),
 			Project: types.StringValue(names[in.ProjectID]), Group: types.StringValue(in.GroupName), Cloud: types.StringValue(in.CloudName), Image: types.StringValue(in.ImageName),
 			Plan: types.StringValue(in.PlanName), PrivateIP: types.StringValue(in.PrivateIP),
-			PublicIP: types.StringValue(in.PublicIP), Labels: labels,
+			PublicIP: types.StringValue(in.PublicIP), Labels: labels, Tags: tags,
 		})
 	}
 	slices.SortFunc(m.Instances, func(a, b instanceModel) int {

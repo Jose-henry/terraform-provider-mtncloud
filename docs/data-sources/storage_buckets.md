@@ -25,7 +25,9 @@ output "storage_buckets" {
 
 ### Optional
 
+- `active` (Boolean) Only list storage buckets whose `active` is this.
 - `name_regex` (String) Only return storage buckets whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `provider_type` (String) Only list storage buckets whose `provider_type` is this (case ignored).
 
 ### Read-Only
 

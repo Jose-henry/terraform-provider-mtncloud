@@ -28,7 +28,15 @@ output "apps" {
 
 ### Optional
 
+- `app_status` (String) Only list apps whose `app_status` is this (case ignored).
+- `blueprint` (String) Only list apps whose `blueprint` is this (case ignored).
+- `environment` (String) Only list apps whose `environment` is this (case ignored).
+- `group` (String) Only list apps whose `group` is this (case ignored).
+- `labels` (List of String) Only list apps that have every one of these `labels` (case ignored).
 - `name_regex` (String) Only return apps whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `owner` (String) Only list apps whose `owner` is this (case ignored).
+- `status` (String) Only list apps whose `status` is this (case ignored).
+- `type` (String) Only list apps whose `type` is this (case ignored).
 
 ### Read-Only
 

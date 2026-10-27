@@ -25,7 +25,10 @@ output "ssl_certificates" {
 
 ### Optional
 
+- `cert_type` (String) Only list SSL certificates whose `cert_type` is this (case ignored).
+- `enabled` (Boolean) Only list SSL certificates whose `enabled` is this.
 - `name_regex` (String) Only return SSL certificates whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `type` (String) Only list SSL certificates whose `type` is this (case ignored).
 
 ### Read-Only
 

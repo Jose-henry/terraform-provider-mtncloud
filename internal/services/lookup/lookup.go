@@ -10,6 +10,8 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -105,6 +107,31 @@ func matcher(re types.String) (func(string) bool, diag.Diagnostics) {
 	return r.MatchString, diags
 }
 
+// textMatches reports whether a field passes an optional exact filter (case ignored).
+func textMatches(have string, want types.String) bool {
+	return want.IsNull() || strings.EqualFold(have, want.ValueString())
+}
+
+// labelsMatch reports whether every wanted label is among have (case ignored).
+func labelsMatch(have []string, want []types.String) bool {
+	for _, w := range want {
+		if !slices.ContainsFunc(have, func(h string) bool { return strings.EqualFold(h, w.ValueString()) }) {
+			return false
+		}
+	}
+	return true
+}
+
+// tagsMatch reports whether every wanted tag is in have with the same value.
+func tagsMatch(have map[string]string, want map[string]types.String) bool {
+	for k, v := range want {
+		if got, ok := have[k]; !ok || got != v.ValueString() {
+			return false
+		}
+	}
+	return true
+}
+
 // projectError reports a failed project lookup: a name that matched nothing on the project
 // attribute, anything else (the API or the network failing) as an API error.
 func projectError(diags *diag.Diagnostics, err error) {
@@ -118,4 +145,12 @@ func projectError(diags *diag.Diagnostics, err error) {
 // apiError reports a client error as a diagnostic, naming what was being looked up.
 func apiError(diags *diag.Diagnostics, what string, err error) {
 	diags.AddError(fmt.Sprintf("Unable to read %s", what), err.Error())
+}
+
+// nonNil turns a nil map into an empty one, so state holds {} rather than null.
+func nonNil(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
 }

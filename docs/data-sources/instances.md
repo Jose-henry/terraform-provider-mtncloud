@@ -32,8 +32,13 @@ output "web_private_ips" {
 
 ### Optional
 
+- `image` (String) Only return instances of this image, by name or code (case ignored).
+- `labels` (List of String) Only return instances that have every one of these labels (case ignored).
 - `name_regex` (String) Only return instances whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `plan` (String) Only return instances of this plan, for example `G2S4` (case ignored).
 - `project` (String) Only return instances in this project, by name (for example `web-prod`). The full platform name, with the tenant suffix, also works.
+- `status` (String) Only return instances with this status, for example `running` (case ignored).
+- `tags` (Map of String) Only return instances that have every one of these tags with the same value.
 
 ### Read-Only
 
@@ -55,3 +60,4 @@ Read-Only:
 - `project` (String) Project name, without the tenant suffix.
 - `public_ip` (String) Floating (public) address, or empty.
 - `status` (String) Status, for example `running` or `stopped`.
+- `tags` (Map of String) Tags.

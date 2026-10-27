@@ -25,7 +25,9 @@ output "users" {
 
 ### Optional
 
+- `enabled` (Boolean) Only list users whose `enabled` is this.
 - `name_regex` (String) Only return users whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `roles` (List of String) Only list users that have every one of these `roles` (case ignored).
 
 ### Read-Only
 

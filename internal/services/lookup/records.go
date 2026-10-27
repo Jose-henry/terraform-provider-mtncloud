@@ -328,6 +328,64 @@ type recordMany struct {
 	spec recordSpec
 }
 
+// Filters on a list: every field the API returns that people narrow a list by. Text fields
+// match exactly (case ignored), flags match their value, and label-like lists match when every
+// value given is there.
+var filterable = map[string]bool{
+	"status": true, "app_status": true, "execution_status": true, "type": true, "group": true, "cloud": true,
+	"visibility": true, "environment": true, "role_type": true, "provider_type": true, "catalog_item": true,
+	"network": true, "datastore": true, "target_type": true, "cert_type": true, "blueprint": true, "layout": true,
+	"owner": true, "platform": true, "enabled": true, "active": true, "online": true, "labels": true, "roles": true,
+}
+
+func (s recordSpec) filters() []field {
+	var out []field
+	for _, f := range s.fields {
+		if filterable[f.attr] && (f.kind == text || f.kind == flag || f.kind == texts) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func (f field) filterSchema(nouns string) schema.Attribute {
+	switch f.kind {
+	case flag:
+		return schema.BoolAttribute{Optional: true, Description: fmt.Sprintf("Only list %s whose `%s` is this.", nouns, f.attr)}
+	case texts:
+		return schema.ListAttribute{Optional: true, ElementType: types.StringType,
+			Description: fmt.Sprintf("Only list %s that have every one of these `%s` (case ignored).", nouns, f.attr)}
+	default:
+		return schema.StringAttribute{Optional: true, Description: fmt.Sprintf("Only list %s whose `%s` is this (case ignored).", nouns, f.attr)}
+	}
+}
+
+// keeps reports whether r passes the filter's configured value v (null passes everything).
+func (f field) keeps(r client.Record, v attr.Value) bool {
+	if v == nil || v.IsNull() || v.IsUnknown() {
+		return true
+	}
+	got := at(r, f.src)
+	switch x := v.(type) {
+	case types.Bool:
+		return asFlag(got) == x.ValueBool()
+	case types.List:
+		have := map[string]bool{}
+		for _, e := range asList(got) {
+			have[strings.ToLower(asText(e))] = true
+		}
+		for _, e := range x.Elements() {
+			if s, ok := e.(types.String); ok && !have[strings.ToLower(s.ValueString())] {
+				return false
+			}
+		}
+		return true
+	case types.String:
+		return strings.EqualFold(asText(got), x.ValueString())
+	}
+	return true
+}
+
 func (d *recordMany) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_" + d.spec.many
 }
@@ -341,16 +399,20 @@ func (d *recordMany) Schema(_ context.Context, _ datasource.SchemaRequest, resp 
 	for _, f := range s.fields {
 		item[f.attr] = f.schema()
 	}
+	attrs := map[string]schema.Attribute{
+		"name_regex": nameRegexAttribute(s.nouns),
+		s.many: schema.ListNestedAttribute{
+			Computed:     true,
+			Description:  fmt.Sprintf("The %s, sorted by name, then ID.", s.nouns),
+			NestedObject: schema.NestedAttributeObject{Attributes: item},
+		},
+	}
+	for _, f := range s.filters() {
+		attrs[f.attr] = f.filterSchema(s.nouns)
+	}
 	resp.Schema = schema.Schema{
 		Description: fmt.Sprintf("Lists your %s, including those made in the console. %s", s.nouns, s.about),
-		Attributes: map[string]schema.Attribute{
-			"name_regex": nameRegexAttribute(s.nouns),
-			s.many: schema.ListNestedAttribute{
-				Computed:     true,
-				Description:  fmt.Sprintf("The %s, sorted by name, then ID.", s.nouns),
-				NestedObject: schema.NestedAttributeObject{Attributes: item},
-			},
-		},
+		Attributes:  attrs,
 	}
 }
 
@@ -363,6 +425,12 @@ func (d *recordMany) Read(ctx context.Context, req datasource.ReadRequest, resp 
 	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("name_regex"), &re)...)
 	match, diags := matcher(re)
 	resp.Diagnostics.Append(diags...)
+	want := map[string]attr.Value{}
+	for _, f := range s.filters() {
+		var v attr.Value
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root(f.attr), &v)...)
+		want[f.attr] = v
+	}
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -373,7 +441,11 @@ func (d *recordMany) Read(ctx context.Context, req datasource.ReadRequest, resp 
 	}
 	var kept []client.Record
 	for _, r := range all {
-		if match(s.name(r)) {
+		ok := match(s.name(r))
+		for _, f := range s.filters() {
+			ok = ok && f.keeps(r, want[f.attr])
+		}
+		if ok {
 			kept = append(kept, r)
 		}
 	}
@@ -393,5 +465,10 @@ func (d *recordMany) Read(ctx context.Context, req datasource.ReadRequest, resp 
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name_regex"), re)...)
+	for name, v := range want {
+		if v != nil {
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(name), v)...)
+		}
+	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root(s.many), list)...)
 }

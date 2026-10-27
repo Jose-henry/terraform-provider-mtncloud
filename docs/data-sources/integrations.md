@@ -25,7 +25,10 @@ output "integrations" {
 
 ### Optional
 
+- `enabled` (Boolean) Only list integrations whose `enabled` is this.
 - `name_regex` (String) Only return integrations whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `status` (String) Only list integrations whose `status` is this (case ignored).
+- `type` (String) Only list integrations whose `type` is this (case ignored).
 
 ### Read-Only
 

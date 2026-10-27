@@ -25,7 +25,9 @@ output "domains" {
 
 ### Optional
 
+- `active` (Boolean) Only list domains whose `active` is this.
 - `name_regex` (String) Only return domains whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `visibility` (String) Only list domains whose `visibility` is this (case ignored).
 
 ### Read-Only
 

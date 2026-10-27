@@ -25,7 +25,9 @@ output "identity_sources" {
 
 ### Optional
 
+- `active` (Boolean) Only list identity sources whose `active` is this.
 - `name_regex` (String) Only return identity sources whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `type` (String) Only list identity sources whose `type` is this (case ignored).
 
 ### Read-Only
 

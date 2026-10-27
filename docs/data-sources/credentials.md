@@ -25,7 +25,9 @@ output "credentials" {
 
 ### Optional
 
+- `enabled` (Boolean) Only list credentials whose `enabled` is this.
 - `name_regex` (String) Only return credentials whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `type` (String) Only list credentials whose `type` is this (case ignored).
 
 ### Read-Only
 

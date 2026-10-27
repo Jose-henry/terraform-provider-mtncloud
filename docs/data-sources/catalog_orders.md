@@ -25,7 +25,10 @@ output "catalog_orders" {
 
 ### Optional
 
+- `catalog_item` (String) Only list catalog orders whose `catalog_item` is this (case ignored).
+- `execution_status` (String) Only list catalog orders whose `execution_status` is this (case ignored).
 - `name_regex` (String) Only return catalog orders whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `status` (String) Only list catalog orders whose `status` is this (case ignored).
 
 ### Read-Only
 

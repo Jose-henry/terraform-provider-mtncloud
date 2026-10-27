@@ -25,7 +25,11 @@ output "workflows" {
 
 ### Optional
 
+- `labels` (List of String) Only list workflows that have every one of these `labels` (case ignored).
 - `name_regex` (String) Only return workflows whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `platform` (String) Only list workflows whose `platform` is this (case ignored).
+- `type` (String) Only list workflows whose `type` is this (case ignored).
+- `visibility` (String) Only list workflows whose `visibility` is this (case ignored).
 
 ### Read-Only
 

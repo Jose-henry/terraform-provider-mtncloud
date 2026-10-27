@@ -25,7 +25,12 @@ output "clusters" {
 
 ### Optional
 
+- `cloud` (String) Only list clusters whose `cloud` is this (case ignored).
+- `group` (String) Only list clusters whose `group` is this (case ignored).
+- `layout` (String) Only list clusters whose `layout` is this (case ignored).
 - `name_regex` (String) Only return clusters whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `status` (String) Only list clusters whose `status` is this (case ignored).
+- `type` (String) Only list clusters whose `type` is this (case ignored).
 
 ### Read-Only
 

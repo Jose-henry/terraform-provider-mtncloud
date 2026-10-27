@@ -28,7 +28,11 @@ output "network_subnets" {
 
 ### Optional
 
+- `active` (Boolean) Only list subnets whose `active` is this.
+- `cloud` (String) Only list subnets whose `cloud` is this (case ignored).
 - `name_regex` (String) Only return subnets whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `network` (String) Only list subnets whose `network` is this (case ignored).
+- `status` (String) Only list subnets whose `status` is this (case ignored).
 
 ### Read-Only
 

@@ -122,6 +122,33 @@ provider "mtncloud" {
 		statecheck.ExpectKnownValue("data.mtncloud_cyphers.a", at("cyphers", "lease_timeout"), knownvalue.Int64Exact(1010)),
 	)
 
+	// Filters: text (case ignored), flags, and lists where every value given must be there.
+	b.WriteString(`
+data "mtncloud_apps" "status" {
+  status = "STATUS-102"
+}
+data "mtncloud_users" "enabled" {
+  enabled = true
+}
+data "mtncloud_users" "role" {
+  roles = ["ROLES-A", "roles-b"]
+}
+data "mtncloud_users" "no_role" {
+  roles = ["roles-a", "nope"]
+}
+data "mtncloud_workflows" "labels_and_name" {
+  labels     = ["labels-a"]
+  name_regex = "^b"
+}
+`)
+	checks = append(checks,
+		statecheck.ExpectKnownValue("data.mtncloud_apps.status", tfjsonpath.New("apps"), knownvalue.ListSizeExact(1)),
+		statecheck.ExpectKnownValue("data.mtncloud_apps.status", tfjsonpath.New("apps").AtSliceIndex(0).AtMapKey("id"), knownvalue.Int64Exact(102)),
+		statecheck.ExpectKnownValue("data.mtncloud_users.enabled", tfjsonpath.New("users"), knownvalue.ListSizeExact(3)),
+		statecheck.ExpectKnownValue("data.mtncloud_users.role", tfjsonpath.New("users"), knownvalue.ListSizeExact(3)),
+		statecheck.ExpectKnownValue("data.mtncloud_users.no_role", tfjsonpath.New("users"), knownvalue.ListSizeExact(0)),
+		statecheck.ExpectKnownValue("data.mtncloud_workflows.labels_and_name", tfjsonpath.New("workflows"), knownvalue.ListSizeExact(2)),
+	)
 	steps := []resource.TestStep{{Config: cfg + b.String(), ConfigStateChecks: checks}}
 	for ds, n := range one {
 		lookup := func(attrs string) string {

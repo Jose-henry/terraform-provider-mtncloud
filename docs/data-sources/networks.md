@@ -28,8 +28,10 @@ output "app_networks" {
 
 ### Optional
 
+- `labels` (List of String) Only list networks that have every one of these labels (case ignored).
 - `name_regex` (String) Only return networks whose name matches this regular expression (RE2 syntax), for example `^web-`.
 - `project` (String) Only list networks in this project (for example `web-prod`; the full platform name also works).
+- `status` (String) Only list networks with this status, for example `ok` (case ignored).
 
 ### Read-Only
 
@@ -46,6 +48,7 @@ Read-Only:
 - `gateway` (String) IPv4 gateway, or empty.
 - `group` (String) Group the network belongs to.
 - `id` (Number) Network ID.
+- `labels` (List of String) Labels.
 - `name` (String) Network name.
 - `project` (String) Project, without the tenant suffix; empty for a network in no project (an external network).
 - `status` (String) Status, for example `ok`.

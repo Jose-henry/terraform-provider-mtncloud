@@ -25,7 +25,11 @@ output "storage_volumes" {
 
 ### Optional
 
+- `cloud` (String) Only list storage volumes whose `cloud` is this (case ignored).
+- `datastore` (String) Only list storage volumes whose `datastore` is this (case ignored).
 - `name_regex` (String) Only return storage volumes whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `status` (String) Only list storage volumes whose `status` is this (case ignored).
+- `type` (String) Only list storage volumes whose `type` is this (case ignored).
 
 ### Read-Only
 

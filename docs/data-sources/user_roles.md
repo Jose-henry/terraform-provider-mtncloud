@@ -26,6 +26,7 @@ output "user_roles" {
 ### Optional
 
 - `name_regex` (String) Only return roles whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `role_type` (String) Only list roles whose `role_type` is this (case ignored).
 
 ### Read-Only
 
