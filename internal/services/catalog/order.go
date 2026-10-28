@@ -163,7 +163,7 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	if req.Plan.Raw.IsNull() || r.client == nil {
 		return // destroy (Delete explains), or an unconfigured provider
 	}
-	d := r.client.Defaults()
+	d := r.client.DefaultsFor(ctx)
 	for _, f := range r.spec.fields {
 		switch f.kind {
 		case kGroup:

@@ -994,8 +994,11 @@ resource "mtncloud_instance" "app" {
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
-			{Config: cfg(`  project = "web-prod"`, ""), ExpectError: regexp.MustCompile(`(?s)No group set.*MTNCLOUD_GROUP`)},
-			{Config: cfg(both, ""), ConfigStateChecks: []statecheck.StateCheck{check("group", "mtnng_cloud_az_1"), check("project", "web-prod")}},
+			// No group anywhere: the tenant's only group is used, as the configuration guide says.
+			{Config: cfg(`  project = "web-prod"`, ""), ConfigStateChecks: []statecheck.StateCheck{check("group", "MTNNG_CLOUD_AZ_1")}},
+			// The same group named in the provider, in another case: nothing changes.
+			{Config: cfg(both, ""), ConfigPlanChecks: instPlan(plancheck.ResourceActionNoop),
+				ConfigStateChecks: []statecheck.StateCheck{check("group", "MTNNG_CLOUD_AZ_1"), check("project", "web-prod")}},
 			// The same group and project set on the instance: no change.
 			{Config: cfg(both, `  group = "MTNNG_CLOUD_AZ_1"
   project = "web-prod"`), ConfigPlanChecks: instPlan(plancheck.ResourceActionNoop)},

@@ -263,7 +263,7 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if req.Plan.Raw.IsNull() || r.client == nil {
 		return
 	}
-	d := r.client.Defaults()
+	d := r.client.DefaultsFor(ctx)
 	resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, "group", "MTNCLOUD_GROUP", d.Group)...)
 	resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, "project", "MTNCLOUD_PROJECT", d.Project)...)
 	if resp.Diagnostics.HasError() {

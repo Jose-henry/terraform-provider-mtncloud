@@ -312,6 +312,27 @@ func TestPlacement(t *testing.T) {
 	}
 }
 
+// With no group configured, the caller's only group becomes the default; with several, none does.
+func TestDefaultsFor_SoleGroup(t *testing.T) {
+	one := newFakeAPI(t)
+	one.route("GET", "/api/options/groups", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"name":"MTNNG_CLOUD_AZ_1","value":73}]}`))
+	})
+	if g := one.client(t).DefaultsFor(t.Context()).Group; g != "MTNNG_CLOUD_AZ_1" {
+		t.Errorf("sole group: got %q", g)
+	}
+	if g := one.client(t, func(c *Config) { c.Defaults = Defaults{Group: "mine"} }).DefaultsFor(t.Context()).Group; g != "mine" {
+		t.Errorf("configured group: got %q", g)
+	}
+	two := newFakeAPI(t)
+	two.route("GET", "/api/options/groups", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"name":"one","value":1},{"name":"two","value":2}]}`))
+	})
+	if g := two.client(t).DefaultsFor(t.Context()).Group; g != "" {
+		t.Errorf("several groups: got %q, want none", g)
+	}
+}
+
 func TestPlacement_AmbiguousGroupIsAnError(t *testing.T) {
 	f := newFakeAPI(t)
 	f.route("GET", "/api/options/groups", func(w http.ResponseWriter, _ *http.Request) {

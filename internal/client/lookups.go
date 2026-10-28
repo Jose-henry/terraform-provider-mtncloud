@@ -187,6 +187,19 @@ func (c *Client) ProjectsAt(ctx context.Context, p *Placement) ([]Option, error)
 	return c.options(ctx, "zonePools", url.Values{"zoneId": {itoa(p.CloudID)}})
 }
 
+// DefaultsFor is Defaults with the group filled in, when none is set, from the caller's only group
+// (an MTN Cloud tenant normally has one). With several groups, or when the lookup fails, the group
+// stays empty and the resource asks for one.
+func (c *Client) DefaultsFor(ctx context.Context) Defaults {
+	d := c.cfg.Defaults
+	if d.Group == "" {
+		if groups, err := c.Groups(ctx); err == nil && len(groups) == 1 {
+			d.Group = groups[0].Name
+		}
+	}
+	return d
+}
+
 // Groups lists the groups the caller can provision into, for example "MTNNG_CLOUD_AZ_1".
 func (c *Client) Groups(ctx context.Context) ([]Option, error) {
 	return c.options(ctx, "groups", nil)
