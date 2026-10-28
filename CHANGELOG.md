@@ -4,6 +4,8 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+## 0.5.0 (2026-10-28)
+
 - `mtncloud_instance`: power control. `power_state` (`running`, `stopped`, `suspended`) powers the VM in place and puts back a change made in the console; left out, it only shows the state. A new `restart_trigger` value reboots the VM. A power call refused at create is a warning, so the new VM isn't tainted.
 - **Changed:** destroying a catalog-order resource now deletes what the order made, instead of refusing (D-029). Its instances are deleted with their disks and floating IPs, through their app for the managed services (database, MQ, streaming and Kubernetes), then the order's record in Catalog > Inventory. An app that also holds other instances is kept. Destroy refuses, deleting nothing, when it can't tell what the order made. `mtncloud_letsencrypt_certificate` deletes nothing and warns; `mtncloud_project` still refuses. To keep what an order made, use a `removed` block before you destroy.
 - Fixed: catalog services that build VMs were refused with "PLAN value [...] is not contained within the available options". The plan is now looked up in the order form's own plan list, by name, as the console does.
