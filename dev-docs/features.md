@@ -6,11 +6,11 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 87 | 84 |
-| Usable with a customer (sub-tenant) login | 87 | 79 |
+| Available today | 88 | 84 |
+| Usable with a customer (sub-tenant) login | 88 | 79 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 6 | 0 |
+| Coming next | 5 | 0 |
 
 ## Who can use what
 
@@ -199,7 +199,7 @@ MTN Networks and MTN Routers, security groups (instance firewalls) and their rul
 
 ### Secrets and keys
 
-Cypher secrets and SSH key pairs.
+Cypher secrets, SSH key pairs and SSL certificates you upload.
 
 | Type | Customer login |
 |---|---|
@@ -209,6 +209,7 @@ Cypher secrets and SSH key pairs.
 | [`mtncloud_cypher_tfvars`](../docs/resources/cypher_tfvars.md) | Yes (read verified) |
 | [`mtncloud_cypher_uuid`](../docs/resources/cypher_uuid.md) | Yes (read verified) |
 | [`mtncloud_key_pair`](../docs/resources/key_pair.md) | Yes (read verified) |
+| [`mtncloud_ssl_certificate`](../docs/resources/ssl_certificate.md) | Yes (read verified) |
 
 ### Scaling
 
@@ -373,7 +374,6 @@ Designed, **not available yet**, and all meant for customers.
 |---|---|---|
 | `mtncloud_object_storage` | Planned | MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource. |
 | `mtncloud_app` | Planned | Apps from blueprints: several instances or containers deployed together. |
-| `mtncloud_ssl_certificate` | Planned | Certificates. |
 | `mtncloud_cluster` | Planned | Clusters: Kubernetes and other cluster types, with their worker nodes. |
 | `mtncloud_datastore` | Planned | Datastores: the storage that volumes are created on. |
 | `mtncloud_load_balancer` | Planned | Load balancers: listeners, pools and members. |
