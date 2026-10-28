@@ -488,7 +488,10 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
   plan{id}, volumes, networkInterfaces, securityGroups, nodeCount, visibility, config{resourcePoolId,
   nodeCount, customOptions, podCidr, serviceCidr, defaultRepoAccount, createUser, osExternalNetworkId}},
   worker{...}}}`. To confirm on the first live build (QA): the `worker` block, `networkDomain` as `{id}`,
-  `securityGroups` as `[{id}]`.
+  `securityGroups` as `[{id}]`, and the add-worker body: the API reference names `server.config.resourcePool`
+  while the create form uses `resourcePoolId`, so both are sent (check added workers land in the project).
+- Known limit: the cluster's cloud comes from the group (and the provider's `cloud`); a group spanning several
+  clouds with a resource-level `cloud` different from the provider's fails the plan. MTN tenants have one cloud.
 - Plans: `/api/options/servicePlans?zoneId&siteId&provisionTypeId&layoutId&resourcePoolId`. Customers can't
   read `/api/servers/service-plans`; without resourcePoolId the list repeats every price set (about 11,000 rows).
 - Registries: `/api/options/dockerHubRegistries` (the public Docker Hub has an empty value). Workflows:

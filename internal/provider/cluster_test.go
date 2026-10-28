@@ -19,15 +19,16 @@ import (
 
 // clusterStore is an in-memory cluster API: a create is "ok" at once, with nodeCount workers.
 type clusterStore struct {
-	mu       sync.Mutex
-	next     int64
-	clusters map[int64]map[string]any
-	workers  map[int64][]int64
-	posted   []map[string]any // each create's "cluster"
-	added    []map[string]any // each worker add's "server"
-	removed  []int64
-	scaler   []map[string]any // each configure-autoscaler's "cluster"
-	updated  []map[string]any // each PUT's "cluster"
+	mu         sync.Mutex
+	next       int64
+	clusters   map[int64]map[string]any
+	workers    map[int64][]int64
+	posted     []map[string]any // each create's "cluster"
+	added      []map[string]any // each worker add's "server"
+	removed    []int64
+	scaler     []map[string]any // each configure-autoscaler's "cluster"
+	updated    []map[string]any // each PUT's "cluster"
+	failScaler int              // the next n configure-autoscaler calls fail with a 400
 }
 
 func newClusterStore() *clusterStore {
@@ -116,6 +117,10 @@ func (s *clusterStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		s.workers[id] = keep
 		reply(map[string]any{"success": true})
+	case parts[1] == "configure-autoscaler" && s.failScaler > 0:
+		s.failScaler--
+		w.WriteHeader(http.StatusBadRequest)
+		reply(map[string]any{"success": false, "msg": "autoscaler unavailable"})
 	case parts[1] == "configure-autoscaler":
 		s.scaler = append(s.scaler, body("cluster"))
 		reply(map[string]any{"success": true})
@@ -357,6 +362,149 @@ resource "mtncloud_cluster" "docker" {
 				},
 			},
 			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+func clusterConfig(f *fakeAPI, top, scaling string) string {
+	return f.providerConfig() + `
+resource "mtncloud_cluster" "k8s" {
+  name    = "apps"
+  group   = "MTNNG_CLOUD_AZ_1"
+  project = "web-prod-Acme"
+` + top + `
+  master = {
+    plan             = "G2S4"
+    root_volume_size = 40
+    data_volume      = [{ size = 50 }]
+    networks         = ["app-net"]
+  }
+` + scaling + `}
+`
+}
+
+// The autoscaler moves the workers; worker_count holds. Turning it off brings the count back.
+func TestCluster_AutoscalerMovesWorkers(t *testing.T) {
+	f, s := clusterFakes(t)
+	scaling := "  autoscaling = {\n    min_nodes = 1\n    max_nodes = 4\n  }\n"
+	addr := "mtncloud_cluster.k8s"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: clusterConfig(f, "  worker_count = 2", scaling)},
+			{
+				PreConfig:        func() { s.mu.Lock(); s.addWorkers(9601, 2); s.mu.Unlock() },
+				Config:           clusterConfig(f, "  worker_count = 2", scaling),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("worker_count"), knownvalue.Int64Exact(2)),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("worker_ids"), knownvalue.ListSizeExact(4)),
+				},
+			},
+			{
+				// The count in the configuration is unchanged, but there are 4 workers: back to 2.
+				Config: clusterConfig(f, "  worker_count = 2", ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)}},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("worker_ids"), knownvalue.ListSizeExact(2)),
+				},
+			},
+			{Config: clusterConfig(f, "  worker_count = 2", ""), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+// What you type is kept: a version given as its value, a layout in other casing.
+func TestCluster_KeepsWhatYouTyped(t *testing.T) {
+	f, s := clusterFakes(t)
+	cfg := clusterConfig(f, "  layout = \"mtn kubernetes single-master\"\n  kubernetes_version = \"1.35.3-1.1\"", "")
+	addr := "mtncloud_cluster.k8s"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("layout"), knownvalue.StringExact("mtn kubernetes single-master")),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("kubernetes_version"), knownvalue.StringExact("1.35.3-1.1")),
+				},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					custom := s.posted[0]["server"].(map[string]any)["config"].(map[string]any)["customOptions"].(map[string]any)
+					if custom["k8s_version"] != "1.35.3-1.1" {
+						t.Errorf("k8s_version sent %v", custom["k8s_version"])
+					}
+					return nil
+				},
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+// A worker count only known after apply stays unknown in the plan.
+func TestCluster_CountKnownAfterApply(t *testing.T) {
+	f, s := clusterFakes(t)
+	cfg := `
+resource "terraform_data" "n" {
+  input = 2
+}
+` + clusterConfig(f, "  worker_count = terraform_data.n.output", "")
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_cluster.k8s", tfjsonpath.New("worker_ids"), knownvalue.ListSizeExact(2)),
+				},
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+	if len(s.posted) != 1 {
+		t.Errorf("%d clusters built", len(s.posted))
+	}
+}
+
+// An autoscaler that fails after the build warns, never taints: the next apply configures it in place.
+// A cluster deleted out of band is planned again.
+func TestCluster_AutoscalerFailsAndDisappears(t *testing.T) {
+	f, s := clusterFakes(t)
+	s.failScaler = 1
+	cfg := clusterConfig(f, "", "  autoscaling = {\n    min_nodes = 1\n    max_nodes = 4\n  }\n")
+	addr := "mtncloud_cluster.k8s"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg, ExpectNonEmptyPlan: true,
+				Check: func(st *terraform.State) error {
+					if st.RootModule().Resources[addr].Primary.Tainted {
+						t.Error("the cluster was tainted")
+					}
+					return nil
+				},
+			},
+			{
+				Config: cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)}},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if len(s.posted) != 1 || len(s.scaler) != 1 {
+						t.Errorf("built %d, autoscaler configured %d times; want 1 and 1", len(s.posted), len(s.scaler))
+					}
+					return nil
+				},
+			},
+			{
+				PreConfig: func() { s.mu.Lock(); delete(s.clusters, 9601); s.mu.Unlock() },
+				Config:    cfg, PlanOnly: true, ExpectNonEmptyPlan: true,
+			},
 		},
 	})
 }

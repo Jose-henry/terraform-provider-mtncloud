@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -386,12 +387,16 @@ func (c *Client) ClusterWorkers(ctx context.Context, id int64) ([]ClusterNode, e
 	var list []wire
 	if err := json.Unmarshal(raw, &list); err != nil {
 		var wrapped struct {
-			Workers []wire `json:"workers"`
+			Workers *[]wire `json:"workers"`
 		}
 		if err := json.Unmarshal(raw, &wrapped); err != nil {
 			return nil, fmt.Errorf("unexpected workers response: %w", err)
 		}
-		list = wrapped.Workers
+		if wrapped.Workers == nil {
+			// Never read as "no workers": that would plan new ones.
+			return nil, errors.New("unexpected workers response: no workers list")
+		}
+		list = *wrapped.Workers
 	}
 	out := make([]ClusterNode, 0, len(list))
 	for _, w := range list {
@@ -418,4 +423,11 @@ func (c *Client) ConfigureAutoscaler(ctx context.Context, id int64, enabled bool
 		cl["autoScalerGroups"] = []any{map[string]any{"minNodes": minNodes, "maxNodes": maxNodes}}
 	}
 	return c.do(ctx, http.MethodPost, "/api/clusters/"+itoa(id)+"/configure-autoscaler", nil, map[string]any{"cluster": cl}, nil)
+}
+
+// WaitForClusterWorkers waits until the cluster lists exactly n workers.
+func (c *Client) WaitForClusterWorkers(ctx context.Context, id int64, n int) error {
+	_, err := poll(ctx, c, func(ctx context.Context) ([]ClusterNode, error) { return c.ClusterWorkers(ctx, id) },
+		func(ws []ClusterNode, err error) (bool, error) { return err == nil && len(ws) == n, err })
+	return err
 }

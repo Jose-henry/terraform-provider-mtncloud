@@ -30,6 +30,11 @@ import (
 	"github.com/mtn/terraform-provider-mtncloud/internal/validators"
 )
 
+// scalerPending, in private state, marks a cluster whose autoscaler still has to be configured:
+// the create built it but couldn't configure the autoscaler. It is private because autoscaling is
+// pure configuration, which an apply can't change.
+const scalerPending = "autoscaler_pending"
+
 const (
 	createTimeout = 90 * time.Minute
 	changeTimeout = 45 * time.Minute
@@ -264,8 +269,9 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	var plan model
+	var plan, config model
 	resp.Diagnostics.Append(resp.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -275,7 +281,7 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	}
 	adopting := !creating && state.Master.IsNull() // imported: what it was built with is unknown
-	if plan.Type.IsUnknown() || plan.Type.IsNull() {
+	if config.Type.IsNull() {
 		plan.Type = types.StringValue("kubernetes")
 		if !creating && !state.Type.IsNull() {
 			plan.Type = state.Type
@@ -284,25 +290,29 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if !creating && !adopting {
 		// Only name, description, labels, worker settings and autoscaling change in place; the
 		// rest keeps its planned (state) value or replaces the cluster through its modifier.
-		r.planUpdate(ctx, &plan, state, &resp.Diagnostics)
+		r.planUpdate(ctx, &plan, config, state, &resp.Diagnostics)
+		if pending, d := req.Private.GetKey(ctx, scalerPending); len(pending) > 0 && !plan.Autoscaling.IsNull() {
+			// The autoscaler was never configured: an update does it.
+			resp.Diagnostics.Append(d...)
+			plan.Status, plan.WorkerIDs = types.StringUnknown(), types.ListUnknown(types.StringType)
+		}
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
 	}
 	if adopting {
 		// Nothing is built: values left to their default keep what the import read (or nothing).
-		for _, v := range []struct{ p, s *types.String }{
-			{&plan.Layout, &state.Layout}, {&plan.Cloud, &state.Cloud}, {&plan.KubernetesVersion, &state.KubernetesVersion},
-			{&plan.PodCIDR, &state.PodCIDR}, {&plan.ServiceCIDR, &state.ServiceCIDR},
-		} {
-			if v.p.IsUnknown() {
-				*v.p = *v.s
-			}
-		}
-		if plan.WorkerCount.IsUnknown() {
-			plan.WorkerCount = state.WorkerCount
-		}
+		keepUnset(&plan, config, state)
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
+	}
+	// A value only known after apply stays unknown: a default planned in its place would contradict
+	// the configuration. The apply checks its names.
+	for _, v := range []attr.Value{config.Type, config.Layout, config.Cloud, config.KubernetesVersion, config.PodCIDR,
+		config.ServiceCIDR, config.WorkerCount} {
+		if v.IsUnknown() {
+			resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+			return
+		}
 	}
 	b := r.build(ctx, &plan, &resp.Diagnostics)
 	if b == nil || resp.Diagnostics.HasError() {
@@ -314,37 +324,42 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 
 // planUpdate checks an in-place change: worker settings and autoscaling are resolved now, so a
 // wrong name fails the plan, not the apply.
-func (r *clusterResource) planUpdate(ctx context.Context, plan *model, state model, diags *diag.Diagnostics) {
-	for _, keepState := range []struct{ p, s *types.String }{
-		{&plan.Layout, &state.Layout}, {&plan.Cloud, &state.Cloud},
-		{&plan.KubernetesVersion, &state.KubernetesVersion}, {&plan.PodCIDR, &state.PodCIDR}, {&plan.ServiceCIDR, &state.ServiceCIDR},
-	} {
-		if keepState.p.IsNull() || keepState.p.IsUnknown() {
-			*keepState.p = *keepState.s
-		}
-	}
-	if plan.WorkerCount.IsUnknown() || plan.WorkerCount.IsNull() {
-		plan.WorkerCount = state.WorkerCount
-	}
+func (r *clusterResource) planUpdate(ctx context.Context, plan *model, config, state model, diags *diag.Diagnostics) {
+	keepUnset(plan, config, state)
 	r.checkAutoscaling(ctx, plan, diags)
-	if !plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount) {
-		if r.build(ctx, plan, diags) == nil {
+	if (!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount)) && !plan.WorkerCount.IsUnknown() {
+		// Checked on a copy: building fills defaults (version, CIDRs) the cluster may not have.
+		check := *plan
+		if r.build(ctx, &check, diags) == nil {
 			return
 		}
 	}
 	changed := !plan.Name.Equal(state.Name) || !plan.Description.Equal(state.Description) || !plan.Labels.Equal(state.Labels) ||
 		!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount) || !plan.Autoscaling.Equal(state.Autoscaling)
 	if changed {
+		// The workers are listed again after any change, and the autoscaler may have moved them since the plan.
 		plan.Status, plan.WorkerIDs = types.StringUnknown(), types.ListUnknown(types.StringType)
-		if !plan.WorkerCount.Equal(state.WorkerCount) {
-			plan.WorkerIDs = types.ListUnknown(types.StringType)
-		} else {
-			plan.WorkerIDs = state.WorkerIDs
-		}
 	} else {
 		plan.Status, plan.WorkerIDs = state.Status, state.WorkerIDs
 	}
 	plan.APIURL = state.APIURL
+}
+
+// keepUnset gives what the configuration leaves out the value the cluster already has. A value only
+// known after apply stays unknown.
+func keepUnset(plan *model, config, state model) {
+	for _, v := range []struct{ p, c, s *types.String }{
+		{&plan.Layout, &config.Layout, &state.Layout}, {&plan.Cloud, &config.Cloud, &state.Cloud},
+		{&plan.KubernetesVersion, &config.KubernetesVersion, &state.KubernetesVersion},
+		{&plan.PodCIDR, &config.PodCIDR, &state.PodCIDR}, {&plan.ServiceCIDR, &config.ServiceCIDR, &state.ServiceCIDR},
+	} {
+		if v.c.IsNull() {
+			*v.p = *v.s
+		}
+	}
+	if config.WorkerCount.IsNull() {
+		plan.WorkerCount = state.WorkerCount
+	}
 }
 
 func (r *clusterResource) checkAutoscaling(ctx context.Context, m *model, diags *diag.Diagnostics) {
@@ -414,7 +429,9 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 		fail("layout", err)
 		return nil
 	}
-	m.Layout = types.StringValue(layout.Name)
+	if m.Layout.IsNull() || m.Layout.IsUnknown() {
+		m.Layout = types.StringValue(layout.Name) // set by the user, it is kept as typed
+	}
 	place, err := r.client.PlacementForGroup(ctx, m.Group.ValueString())
 	if err != nil {
 		fail("group", err)
@@ -424,7 +441,9 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 		fail("cloud", fmt.Errorf("group %q is on cloud %q, not %q", place.GroupName, place.CloudName, m.Cloud.ValueString()))
 		return nil
 	}
-	m.Cloud = types.StringValue(place.CloudName)
+	if m.Cloud.IsNull() || m.Cloud.IsUnknown() {
+		m.Cloud = types.StringValue(place.CloudName)
+	}
 	pr, err := r.client.ProjectByNameAt(ctx, place, m.Project.ValueString())
 	if err != nil {
 		fail("project", err)
@@ -490,8 +509,8 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 				*o.v = types.StringNull()
 				continue
 			}
-			want := o.v.ValueString()
-			if o.v.IsNull() || o.v.IsUnknown() {
+			want, given := o.v.ValueString(), !o.v.IsNull() && !o.v.IsUnknown()
+			if !given {
 				want = layout.Defaults[o.key]
 			}
 			if f.Type == "select" {
@@ -501,7 +520,9 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 					continue
 				}
 				custom[o.key] = c.Value
-				*o.v = types.StringValue(c.Name)
+				if !given {
+					*o.v = types.StringValue(c.Name) // set by the user (a name or a value), it is kept as typed
+				}
 				continue
 			}
 			custom[o.key] = want
@@ -695,31 +716,39 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 	if err != nil {
 		// A warning, not an error: an error would taint the cluster, and the next apply would rebuild it.
 		resp.Diagnostics.AddWarning("Cluster not ready yet", fmt.Sprintf("Cluster %d was created but isn't ready: %s. A later refresh reads its status.", id, err))
-		r.applyAutoscaling(ctx, id, m, &resp.Diagnostics)
+		if !m.Autoscaling.IsNull() {
+			resp.Diagnostics.Append(resp.Private.SetKey(ctx, scalerPending, []byte("true"))...)
+		}
 		return
 	}
 	if client.ClusterFailed(c.Status) {
 		resp.Diagnostics.AddError("Cluster failed", fmt.Sprintf("Cluster %d ended with %q: %s. The next apply replaces it.", id, c.Status, c.StatusMessage))
 		return
 	}
-	r.applyAutoscaling(ctx, id, m, &resp.Diagnostics)
-	r.refresh(ctx, &m, c, &resp.Diagnostics)
+	if err := r.applyAutoscaling(ctx, id, m, &resp.Diagnostics); err != nil {
+		// A warning: an error would taint a cluster that was built fine. Left out of state, the
+		// autoscaler is configured by the next apply.
+		resp.Diagnostics.AddWarning("Autoscaler not configured",
+			fmt.Sprintf("Cluster %d was built, but configuring its autoscaler failed: %s. The next apply tries again.", id, err))
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, scalerPending, []byte("true"))...)
+	}
+	r.refresh(ctx, &m, c, false, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }
 
-func (r *clusterResource) applyAutoscaling(ctx context.Context, id int64, m model, diags *diag.Diagnostics) {
+func (r *clusterResource) applyAutoscaling(ctx context.Context, id int64, m model, diags *diag.Diagnostics) error {
 	if m.Autoscaling.IsNull() {
-		return
+		return nil
 	}
 	var a autoscaling
 	diags.Append(m.Autoscaling.As(ctx, &a, basetypes.ObjectAsOptions{})...)
-	if err := r.client.ConfigureAutoscaler(ctx, id, true, a.MinNodes.ValueInt64(), a.MaxNodes.ValueInt64()); err != nil {
-		diags.AddError("Unable to configure the autoscaler", err.Error())
-	}
+	return r.client.ConfigureAutoscaler(ctx, id, true, a.MinNodes.ValueInt64(), a.MaxNodes.ValueInt64())
 }
 
 // refresh copies what MTN Cloud reports. What the nodes were built with isn't readable, so it stays.
-func (r *clusterResource) refresh(ctx context.Context, m *model, c *client.Cluster, diags *diag.Diagnostics) {
+// readCount takes worker_count from the workers listed. Only a plain refresh does: after a create
+// or an update the plan's count stands, even while workers are still coming.
+func (r *clusterResource) refresh(ctx context.Context, m *model, c *client.Cluster, readCount bool, diags *diag.Diagnostics) {
 	m.ID, m.Name, m.Status = types.StringValue(strconv.FormatInt(c.ID, 10)), types.StringValue(c.Name), types.StringValue(c.Status)
 	m.APIURL = types.StringNull()
 	if c.ServiceURL != "" {
@@ -728,7 +757,7 @@ func (r *clusterResource) refresh(ctx context.Context, m *model, c *client.Clust
 	if c.Description != "" || !m.Description.IsNull() {
 		m.Description = types.StringValue(c.Description)
 	}
-	if len(c.Labels) > 0 || !m.Labels.IsNull() {
+	if len(c.Labels) > 0 || len(m.Labels.Elements()) > 0 {
 		l, d := types.ListValueFrom(ctx, types.StringType, c.Labels)
 		diags.Append(d...)
 		m.Labels = l
@@ -740,7 +769,7 @@ func (r *clusterResource) refresh(ctx context.Context, m *model, c *client.Clust
 	}
 	if layouts, err := r.client.ClusterLayouts(ctx); err == nil {
 		for _, l := range layouts {
-			if l.ID == c.LayoutID {
+			if l.ID == c.LayoutID && !strings.EqualFold(m.Layout.ValueString(), l.Name) {
 				m.Layout = types.StringValue(l.Name)
 			}
 		}
@@ -760,8 +789,10 @@ func (r *clusterResource) refresh(ctx context.Context, m *model, c *client.Clust
 	l, d := types.ListValueFrom(ctx, types.StringType, ids)
 	diags.Append(d...)
 	m.WorkerIDs = l
-	// The autoscaler moves the count: then worker_count is only where it started.
-	if m.Autoscaling.IsNull() || m.WorkerCount.IsNull() {
+	// The autoscaler moves the count: then worker_count is only where it started. A cluster still
+	// building lists only some of its workers, so its count isn't read either.
+	settled := map[string]bool{"ok": true, "warning": true}[strings.ToLower(c.Status)] || client.ClusterFailed(c.Status)
+	if m.WorkerCount.IsNull() || (readCount && settled && m.Autoscaling.IsNull()) {
 		m.WorkerCount = types.Int64Value(int64(len(workers)))
 	}
 }
@@ -797,7 +828,7 @@ func (r *clusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 		m.Timeouts = timeouts.Value{Object: types.ObjectNull(map[string]attr.Type{
 			"create": types.StringType, "update": types.StringType, "delete": types.StringType})}
 	}
-	r.refresh(ctx, &m, c, &resp.Diagnostics)
+	r.refresh(ctx, &m, c, true, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }
 
@@ -828,21 +859,30 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 			return
 		}
 	}
-	if !plan.WorkerCount.Equal(state.WorkerCount) {
-		r.scale(ctx, id, &plan, &resp.Diagnostics)
+	scalerOff := !state.Autoscaling.IsNull() && plan.Autoscaling.IsNull()
+	if scalerOff {
+		if err := r.client.ConfigureAutoscaler(ctx, id, false, 0, 0); err != nil {
+			resp.Diagnostics.AddError("Unable to turn the autoscaler off", err.Error())
+			return
+		}
+	}
+	// With the autoscaler off, worker_count is the count again, wherever the autoscaler left it.
+	if !plan.WorkerCount.Equal(state.WorkerCount) || scalerOff {
+		r.scale(ctx, id, plan, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 	}
-	if !plan.Autoscaling.Equal(state.Autoscaling) {
-		if plan.Autoscaling.IsNull() {
-			if err := r.client.ConfigureAutoscaler(ctx, id, false, 0, 0); err != nil {
-				resp.Diagnostics.AddError("Unable to turn the autoscaler off", err.Error())
-				return
-			}
-		} else {
-			r.applyAutoscaling(ctx, id, plan, &resp.Diagnostics)
+	pending, d := req.Private.GetKey(ctx, scalerPending)
+	resp.Diagnostics.Append(d...)
+	if !plan.Autoscaling.IsNull() && (!plan.Autoscaling.Equal(state.Autoscaling) || len(pending) > 0) {
+		if err := r.applyAutoscaling(ctx, id, plan, &resp.Diagnostics); err != nil {
+			resp.Diagnostics.AddError("Unable to configure the autoscaler", err.Error())
+			return
 		}
+	}
+	if len(pending) > 0 {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, scalerPending, nil)...)
 	}
 	c, err := r.client.GetCluster(ctx, id)
 	if err != nil {
@@ -850,12 +890,12 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 	plan.ID = state.ID
-	r.refresh(ctx, &plan, c, &resp.Diagnostics)
+	r.refresh(ctx, &plan, c, false, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 // scale adds or removes workers to reach worker_count. New workers use the worker settings in plan.
-func (r *clusterResource) scale(ctx context.Context, id int64, plan *model, diags *diag.Diagnostics) {
+func (r *clusterResource) scale(ctx context.Context, id int64, plan model, diags *diag.Diagnostics) {
 	workers, err := r.client.ClusterWorkers(ctx, id)
 	if err != nil {
 		diags.AddError("Unable to list the cluster's workers", err.Error())
@@ -864,7 +904,7 @@ func (r *clusterResource) scale(ctx context.Context, id int64, plan *model, diag
 	want := int(plan.WorkerCount.ValueInt64())
 	switch {
 	case want > len(workers):
-		b := r.build(ctx, plan, diags)
+		b := r.build(ctx, &plan, diags) // a copy: building fills defaults the cluster may not have
 		if b == nil {
 			if !diags.HasError() {
 				diags.AddError("Unable to add workers", "A worker setting was still unknown at apply. This is a provider bug.")
@@ -874,6 +914,8 @@ func (r *clusterResource) scale(ctx context.Context, id int64, plan *model, diag
 		body := b.worker
 		body["nodeCount"] = want - len(workers)
 		body["cloud"] = map[string]any{"id": b.place.CloudID}
+		// The add-worker reference names config.resourcePool; the create form uses resourcePoolId. Both are sent.
+		body["config"].(map[string]any)["resourcePool"] = map[string]any{"id": b.projectID}
 		if err := r.client.AddClusterWorkers(ctx, id, body); err != nil {
 			diags.AddError("Unable to add workers", err.Error())
 			return
@@ -889,8 +931,10 @@ func (r *clusterResource) scale(ctx context.Context, id int64, plan *model, diag
 	default:
 		return
 	}
-	if _, err := r.client.WaitForCluster(ctx, id); err != nil {
-		diags.AddWarning("Workers still changing", "The cluster hadn't settled when the wait ended: "+err.Error())
+	// The cluster can stay "ok" while workers come and go: wait for the list itself.
+	if err := r.client.WaitForClusterWorkers(ctx, id, want); err != nil {
+		diags.AddWarning("Workers still changing",
+			fmt.Sprintf("The cluster didn't reach %d workers before the wait ended: %s. A later refresh reads the count.", want, err))
 	}
 }
 
