@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -61,6 +62,60 @@ func TestSMBShare(t *testing.T) {
 			got, _ := json.Marshal(s.sent[s.next-1]["config"])
 			if want := `{"deleteOnly":true,"updateOnly":false,"volumeName":"files"}`; string(got) != want {
 				t.Errorf("destroy order\n got %s\nwant %s", got, want)
+			}
+			return nil
+		},
+	})
+}
+
+// An NFS share updates in place with no password fields, and the next plan is empty.
+func TestNFSShare(t *testing.T) {
+	f, s, _ := orderFakes(t)
+	cfg := func(quota string) string {
+		return f.providerConfig() + "resource \"mtncloud_nfs_share\" \"data\" {\n  name = \"data\"\n  quota_gb = " + quota + "\n}\n"
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("10")},
+			{
+				Config: cfg("20"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_nfs_share.data", plancheck.ResourceActionUpdate),
+				}},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					got, _ := json.Marshal(s.sent[s.next-1]["config"])
+					if want := `{"deleteOnly":false,"quotaSize":21474836480,"updateClientIps":false,"updateOnly":true,"updateQuota":true,"volumeName":"data"}`; string(got) != want {
+						t.Errorf("update order\n got %s\nwant %s", got, want)
+					}
+					return nil
+				},
+			},
+			{Config: cfg("20"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+// A share whose workflow fails is reported and not kept; nothing is ordered twice in one apply.
+func TestShare_FailedOrder(t *testing.T) {
+	f, s, _ := orderFakes(t)
+	s.result = "failed"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{
+			Config:      f.providerConfig() + "resource \"mtncloud_nfs_share\" \"data\" {\n  name = \"data\"\n}\n",
+			ExpectError: regexp.MustCompile(`Order 9801 ended with "failed"`),
+		}},
+		CheckDestroy: func(st *terraform.State) error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if s.orders != 1 {
+				t.Errorf("%d orders placed, want 1", s.orders)
+			}
+			if len(st.RootModule().Resources) != 0 {
+				t.Errorf("a failed share was kept in state")
 			}
 			return nil
 		},

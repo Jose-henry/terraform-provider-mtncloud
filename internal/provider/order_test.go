@@ -194,6 +194,10 @@ resource "mtncloud_letsencrypt_certificate" "web" {
 				},
 			},
 			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// A new target instance, or an input left out at order time, would never reach MTN Cloud.
+			{Config: strings.Replace(cfg, `"9705"`, `"9706"`, 1), PlanOnly: true, ExpectError: regexp.MustCompile(`instance_id = "9705"`)},
+			{Config: strings.Replace(cfg, "staging     = true", "staging     = true\n  admin_email = \"ops@example.com\"", 1), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`admin_email = nothing \(left out\)`)},
 			{Config: forget(f, "mtncloud_letsencrypt_certificate.web")},
 		},
 	})

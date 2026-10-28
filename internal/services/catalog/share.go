@@ -77,7 +77,7 @@ func (r *shareResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 			Validators:  []validator.Int64{int64validator.AtLeast(1)}},
 		"client_ips": schema.ListAttribute{Optional: true, ElementType: types.StringType,
 			Description: "Addresses allowed to mount the share. Left out or empty, every address may. Changing it updates the share in place."},
-		"status": schema.StringAttribute{Computed: true, Description: "Result of the last order, for example `success`.", PlanModifiers: keep},
+		"status": schema.StringAttribute{Computed: true, Description: "Result of the last order, for example `success`."},
 	}
 	if r.smb {
 		attrs["password"] = schema.StringAttribute{Optional: true, Sensitive: true, WriteOnly: true,
@@ -97,12 +97,15 @@ func (r *shareResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 }
 
 // order places one share order and waits for its result. A failure is an error, with the
-// workflow's own message.
-func (r *shareResource) order(ctx context.Context, config map[string]any, what string, diags *diag.Diagnostics) *client.OrderedItem {
+// workflow's own message; an unknown result is a warning. placed runs as soon as the order is placed, before the wait.
+func (r *shareResource) order(ctx context.Context, config map[string]any, what string, diags *diag.Diagnostics, placed func(int64)) *client.OrderedItem {
 	item, err := r.client.OrderWorkflow(ctx, r.item, config)
 	if err != nil {
 		diags.AddError("Unable to "+what, err.Error())
 		return nil
+	}
+	if placed != nil {
+		placed(item.ID)
 	}
 	got, err := r.client.WaitForExecution(ctx, item.ID)
 	if got != nil {
@@ -113,8 +116,9 @@ func (r *shareResource) order(ctx context.Context, config map[string]any, what s
 		return nil
 	}
 	if err != nil {
-		diags.AddError("Unable to "+what, fmt.Sprintf("Order %d was placed, but its result isn't known: %s. Check it under Catalog > Inventory.", item.ID, err))
-		return nil
+		// Kept with a warning: placing the order again could make a second share.
+		diags.AddWarning("The share's order result isn't known", fmt.Sprintf("Order %d was placed, but its result isn't known: %s. "+
+			"Check it under Catalog > Inventory.", item.ID, err))
 	}
 	return item
 }
@@ -149,14 +153,21 @@ func (r *shareResource) Create(ctx context.Context, req resource.CreateRequest, 
 	defer cancel()
 	cfg := r.config(ctx, m, pw, &resp.Diagnostics)
 	cfg["updateOnly"], cfg["deleteOnly"] = false, false
-	item := r.order(ctx, cfg, "create the share", &resp.Diagnostics)
-	if item == nil {
-		return
-	}
-	m.ID, m.Status, m.Password = types.StringValue(strconv.FormatInt(item.ID, 10)), types.StringValue(executionStatus(item)), types.StringNull()
 	if !r.smb {
 		m.PasswordVersion = types.Int64Null()
 	}
+	// Saved as soon as the order is placed, so a timeout never leads to a second order. A failed
+	// workflow drops it: nothing was made, and the next apply orders again.
+	m.Password, m.Status = types.StringNull(), types.StringValue("ordered")
+	item := r.order(ctx, cfg, "create the share", &resp.Diagnostics, func(id int64) {
+		m.ID = types.StringValue(strconv.FormatInt(id, 10))
+		resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+	})
+	if item == nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+	m.Status = types.StringValue(executionStatus(item))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }
 
@@ -200,6 +211,9 @@ func (r *shareResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("password"), &pw)...)
+	if !r.smb {
+		plan.PasswordVersion = types.Int64Null()
+	}
 	timeout, d := plan.Timeouts.Update(ctx, shareTimeout)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
@@ -242,7 +256,7 @@ func (r *shareResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 		cfg["updateType"] = c.Value
 	}
-	item := r.order(ctx, cfg, "update the share", &resp.Diagnostics)
+	item := r.order(ctx, cfg, "update the share", &resp.Diagnostics, nil)
 	if item == nil {
 		return
 	}
@@ -263,7 +277,7 @@ func (r *shareResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	r.order(ctx, map[string]any{"volumeName": m.Name.ValueString(), "deleteOnly": true, "updateOnly": false}, "delete the share", &resp.Diagnostics)
+	r.order(ctx, map[string]any{"volumeName": m.Name.ValueString(), "deleteOnly": true, "updateOnly": false}, "delete the share", &resp.Diagnostics, nil)
 }
 
 func (r *shareResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

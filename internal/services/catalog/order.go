@@ -56,6 +56,9 @@ func (r *orderResource) Metadata(_ context.Context, req resource.MetadataRequest
 // inputs lists every argument path with its field, the volume parts expanded.
 func (r *orderResource) inputs() map[string]field {
 	out := map[string]field{}
+	if r.spec.target {
+		out["instance_id"] = field{attr: "instance_id", kind: kText}
+	}
 	for _, f := range r.spec.fields {
 		if f.kind == kVolumes {
 			for _, a := range []string{"root_volume_size", "datastore", "data_volume"} {
@@ -173,21 +176,28 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		return
 	}
 	if !req.State.Raw.IsNull() {
-		// After the order, nothing can change it; an imported order adopts its configuration (state null).
-		adopting := false
+		// After the order, nothing can change it. Only an import leaves every input null in state: that
+		// order adopts its configuration.
+		adopting := true
+		for name := range r.inputs() {
+			var before attr.Value
+			resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(name), &before)...)
+			if before != nil && !before.IsNull() {
+				if l, ok := before.(types.List); !ok || len(l.Elements()) > 0 {
+					adopting = false
+				}
+			}
+		}
 		for name := range r.inputs() {
 			var before, after attr.Value
 			resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(name), &before)...)
 			resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, path.Root(name), &after)...)
-			if (before == nil || before.IsNull()) && after != nil && !after.IsNull() {
-				adopting = true
-			}
-			if before == nil || before.IsNull() || after == nil || after.IsUnknown() || before.Equal(after) {
+			if adopting || after == nil || after.IsUnknown() || (before != nil && before.Equal(after)) {
 				continue
 			}
 			resp.Diagnostics.AddAttributeError(path.Root(name), "Can't change an ordered "+r.spec.item,
 				fmt.Sprintf("%s was ordered with %s = %s. An order can't be changed: change it in the console, or set it "+
-					"back. To order a new one, add a new resource.", r.spec.item, name, before))
+					"back. To order a new one, add a new resource.", r.spec.item, name, shown(before)))
 		}
 		if adopting && !r.spec.target {
 			// The adopting update looks for the instances by name.
@@ -203,6 +213,13 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		return // checked at apply
 	}
 	r.build(ctx, resp.Plan, req.Config, &resp.Diagnostics) // resolves every name; errors point at the attribute
+}
+
+func shown(v attr.Value) string {
+	if v == nil || v.IsNull() {
+		return "nothing (left out)"
+	}
+	return v.String()
 }
 
 func planKnown(ctx context.Context, p source, inputs map[string]field) bool {
@@ -285,6 +302,7 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 			if f.kind == kSelect {
 				ff, ok := form.Fields[f.key]
 				if !ok {
+					fail(f.attr, fmt.Errorf("the %s order form has no %q field any more; leave %s out, or update the provider", r.spec.item, f.key, f.attr))
 					continue
 				}
 				c, err := r.client.FormChoice(ctx, ff, strings.ReplaceAll(f.attr, "_", " "), v)
@@ -345,7 +363,12 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 			}
 		case kFloatingIP:
 			if v := str(p, f.attr); v != "" {
-				c, err := r.client.FormChoice(ctx, form.Fields[f.key], "floating IP pool", v)
+				ff, ok := form.Fields[f.key]
+				if !ok {
+					fail(f.attr, fmt.Errorf("the %s order form has no floating IP field", r.spec.item))
+					continue
+				}
+				c, err := r.client.FormChoice(ctx, ff, "floating IP pool", v)
 				if err != nil {
 					fail(f.attr, err)
 					continue
@@ -395,11 +418,18 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 		case kVolumes:
 			var root types.Int64
 			diags.Append(p.GetAttribute(ctx, path.Root(f.attr+"root_volume_size"), &root)...)
-			if root.IsNull() || place == nil {
-				continue
-			}
 			var data []volume
 			diags.Append(p.GetAttribute(ctx, path.Root(f.attr+"data_volume"), &data)...)
+			if root.IsNull() {
+				if len(data) > 0 || str(p, f.attr+"datastore") != "" {
+					diags.AddAttributeError(path.Root(f.attr+"root_volume_size"), "Root disk size missing",
+						"Set "+f.attr+"root_volume_size too: extra disks and a datastore are ordered with the root disk.")
+				}
+				continue
+			}
+			if place == nil {
+				continue
+			}
 			all := append([]volume{{Size: root, Datastore: types.StringValue(str(p, f.attr+"datastore"))}}, data...)
 			var vols []any
 			for i, v := range all {
@@ -511,16 +541,14 @@ func (r *orderResource) findInstances(ctx context.Context, p source, diags *diag
 		diags.AddWarning("Unable to list instances", err.Error())
 		return nil
 	}
-	var projectID int64
-	if pr, err := r.client.ProjectByName(ctx, project.ValueString()); err == nil {
-		projectID = pr.ID
+	pr, err := r.client.ProjectByName(ctx, project.ValueString())
+	if err != nil {
+		diags.AddWarning("Unable to find the order's instances", "The project couldn't be read: "+err.Error()+". The next refresh looks again.")
+		return nil
 	}
-	n := strings.ToLower(name.ValueString())
 	var ids []int64
 	for _, in := range all {
-		got := strings.ToLower(in.Name)
-		named := got == n || (strings.HasPrefix(got, n) && strings.ContainsAny(got[len(n):len(n)+1], "-_"))
-		if named && (projectID == 0 || in.ProjectID == projectID) {
+		if in.ProjectID == pr.ID && madeBy(in.Name, name.ValueString()) {
 			ids = append(ids, in.ID)
 		}
 	}
@@ -529,6 +557,25 @@ func (r *orderResource) findInstances(ctx context.Context, p source, diags *diag
 			fmt.Sprintf("The order succeeded, but no instance named %q is in the project yet. The next refresh looks again.", name.ValueString()))
 	}
 	return ids
+}
+
+// madeBy reports whether an instance is named after an order: "<name>", or "<name>-<n>" for the
+// nodes of a multi-node service. Case is ignored.
+func madeBy(instance, order string) bool {
+	got, n := strings.ToLower(instance), strings.ToLower(order)
+	if got == n {
+		return true
+	}
+	rest, ok := strings.CutPrefix(got, n+"-")
+	if !ok || rest == "" {
+		return false
+	}
+	for _, c := range rest {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func idList(ids []int64) types.List {
