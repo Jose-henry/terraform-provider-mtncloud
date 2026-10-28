@@ -62,6 +62,7 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		"/api/catalog/types/13":                             "catalog_type_13.json",
 		"/api/catalog/types/38":                             "catalog_type_38.json",
 		"/api/catalog/types/17":                             "catalog_type_17.json",
+		"/api/catalog/types/18":                             "catalog_type_18.json",
 		"/api/catalog/types/73":                             "catalog_type_73.json",
 		"/api/instance-types":                               "instance_types.json",
 		"/api/network-router-types":                         "router_types.json",

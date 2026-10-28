@@ -36,14 +36,14 @@ func TestSMBShare(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: cfg("  client_ips = [\"10.0.0.5\"]\n  password = \"pw-1\"\n  password_version = 1\n"),
-				Check:  last(`{"clientIps":"10.0.0.5","deleteOnly":false,"quotaSize":10737418240,"smbPassword":"pw-1","updateOnly":false,"volumeName":"files"}`),
+				Check:  last(`{"clientIps":"10.0.0.5","deleteOnly":false,"quotaSize":10737418240,"smbPassword":"pw-1","updateOnly":false,"updateType":"'Replace'","volumeName":"files"}`),
 			},
 			{Config: cfg("  client_ips = [\"10.0.0.5\"]\n  password = \"pw-1\"\n  password_version = 1\n"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 			{
 				// A bigger quota: only updateQuota, and no password sent.
 				Config: cfg("  quota_gb = 20\n  client_ips = [\"10.0.0.5\"]\n  password = \"pw-1\"\n  password_version = 1\n"), ConfigPlanChecks: inPlace,
-				Check: last(`{"clientIps":"10.0.0.5","deleteOnly":false,"quotaSize":21474836480,"updateClientIps":false,"updateOnly":true,"updatePassword":false,"updateQuota":true,"volumeName":"files"}`),
+				Check: last(`{"clientIps":"10.0.0.5","deleteOnly":false,"quotaSize":21474836480,"updateClientIps":false,"updateOnly":true,"updatePassword":false,"updateQuota":true,"updateType":"'Append'","volumeName":"files"}`),
 			},
 			{
 				// Every client allowed.
@@ -53,14 +53,14 @@ func TestSMBShare(t *testing.T) {
 			{
 				// A new password is noticed through password_version.
 				Config: cfg("  quota_gb = 20\n  password = \"pw-2\"\n  password_version = 2\n"), ConfigPlanChecks: inPlace,
-				Check: last(`{"deleteOnly":false,"quotaSize":21474836480,"smbPassword":"pw-2","updateClientIps":false,"updateOnly":true,"updatePassword":true,"updateQuota":false,"volumeName":"files"}`),
+				Check: last(`{"deleteOnly":false,"quotaSize":21474836480,"smbPassword":"pw-2","updateClientIps":false,"updateOnly":true,"updatePassword":true,"updateQuota":false,"updateType":"'Append'","volumeName":"files"}`),
 			},
 		},
 		CheckDestroy: func(*terraform.State) error {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			got, _ := json.Marshal(s.sent[s.next-1]["config"])
-			if want := `{"deleteOnly":true,"updateOnly":false,"volumeName":"files"}`; string(got) != want {
+			if want := `{"deleteOnly":true,"updateOnly":false,"updateType":"'Append'","volumeName":"files"}`; string(got) != want {
 				t.Errorf("destroy order\n got %s\nwant %s", got, want)
 			}
 			return nil
@@ -77,7 +77,20 @@ func TestNFSShare(t *testing.T) {
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
-			{Config: cfg("10")},
+			{
+				// The client update type always goes, quoted as the list spells it: the form's own
+				// default ("Append", unquoted) is refused by the platform (live QA 2026-10-28).
+				Config: cfg("10"),
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					got, _ := json.Marshal(s.sent[s.next-1]["config"])
+					if want := `{"deleteOnly":false,"quotaSize":10737418240,"updateOnly":false,"updateType":"'Allow All'","volumeName":"data"}`; string(got) != want {
+						t.Errorf("create order\n got %s\nwant %s", got, want)
+					}
+					return nil
+				},
+			},
 			{
 				Config: cfg("20"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
@@ -87,7 +100,7 @@ func TestNFSShare(t *testing.T) {
 					s.mu.Lock()
 					defer s.mu.Unlock()
 					got, _ := json.Marshal(s.sent[s.next-1]["config"])
-					if want := `{"deleteOnly":false,"quotaSize":21474836480,"updateClientIps":false,"updateOnly":true,"updateQuota":true,"volumeName":"data"}`; string(got) != want {
+					if want := `{"deleteOnly":false,"quotaSize":21474836480,"updateClientIps":false,"updateOnly":true,"updateQuota":true,"updateType":"'Append'","volumeName":"data"}`; string(got) != want {
 						t.Errorf("update order\n got %s\nwant %s", got, want)
 					}
 					return nil

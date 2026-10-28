@@ -153,6 +153,13 @@ func (r *shareResource) Create(ctx context.Context, req resource.CreateRequest, 
 	defer cancel()
 	cfg := r.config(ctx, m, pw, &resp.Diagnostics)
 	cfg["updateOnly"], cfg["deleteOnly"] = false, false
+	mode := "Replace"
+	if len(m.ClientIPs.Elements()) == 0 {
+		mode = "Allow All"
+	}
+	if !r.withUpdateType(ctx, cfg, mode, "create the share", &resp.Diagnostics) {
+		return
+	}
 	if !r.smb {
 		m.PasswordVersion = types.Int64Null()
 	}
@@ -239,22 +246,15 @@ func (r *shareResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			delete(cfg, "smbPassword")
 		}
 	}
+	mode := "Append" // ignored without updateClientIps, but the form refuses its own default
 	if clients {
-		mode := "Replace"
+		mode = "Replace"
 		if len(plan.ClientIPs.Elements()) == 0 {
 			mode = "Allow All"
 		}
-		form, err := r.client.CatalogForm(ctx, r.item)
-		if err != nil {
-			resp.Diagnostics.AddError("Unable to read the "+r.item+" order form", err.Error())
-			return
-		}
-		c, err := r.client.FormChoice(ctx, form.Fields["updateType"], "client update type", mode)
-		if err != nil {
-			resp.Diagnostics.AddError("Unable to update the share's clients", err.Error())
-			return
-		}
-		cfg["updateType"] = c.Value
+	}
+	if !r.withUpdateType(ctx, cfg, mode, "update the share", &resp.Diagnostics) {
+		return
 	}
 	item := r.order(ctx, cfg, "update the share", &resp.Diagnostics, nil)
 	if item == nil {
@@ -277,7 +277,29 @@ func (r *shareResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	r.order(ctx, map[string]any{"volumeName": m.Name.ValueString(), "deleteOnly": true, "updateOnly": false}, "delete the share", &resp.Diagnostics, nil)
+	cfg := map[string]any{"volumeName": m.Name.ValueString(), "deleteOnly": true, "updateOnly": false}
+	if !r.withUpdateType(ctx, cfg, "Append", "delete the share", &resp.Diagnostics) {
+		return
+	}
+	r.order(ctx, cfg, "delete the share", &resp.Diagnostics, nil)
+}
+
+// withUpdateType sets the form's client update type (Append, Replace, Allow All) in cfg, as the
+// list spells it ('Replace'). Every order needs one: left out, the platform fills in the field's
+// default, "Append" unquoted, and refuses it as not one of the choices (live QA 2026-10-28).
+func (r *shareResource) withUpdateType(ctx context.Context, cfg map[string]any, mode, what string, diags *diag.Diagnostics) bool {
+	form, err := r.client.CatalogForm(ctx, r.item)
+	if err != nil {
+		diags.AddError("Unable to read the "+r.item+" order form", err.Error())
+		return false
+	}
+	c, err := r.client.FormChoice(ctx, form.Fields["updateType"], "client update type", mode)
+	if err != nil {
+		diags.AddError("Unable to "+what, err.Error())
+		return false
+	}
+	cfg["updateType"] = c.Value
+	return true
 }
 
 func (r *shareResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
