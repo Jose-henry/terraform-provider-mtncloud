@@ -3,6 +3,7 @@ package provider
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -113,8 +114,6 @@ func TestMySQLOrder(t *testing.T) {
 				}},
 			{ResourceName: "mtncloud_mysql.db", ImportState: true, ImportStateId: "9795", Config: cfg(body),
 				ExpectError: regexp.MustCompile(`is a "Create Project", not a "MTN MySQL"`)},
-			// Destroy refuses and says where to delete it.
-			{Config: f.providerConfig(), ExpectError: regexp.MustCompile(`(?s)can.t be deleted from Terraform.*under\s+Instances`)},
 			{
 				// Its instance deleted in the console: the order is planned again (and the test's
 				// final destroy finds nothing to do).
@@ -130,6 +129,134 @@ func TestMySQLOrder(t *testing.T) {
 	})
 	if s.orders != 1 {
 		t.Errorf("%d orders placed, want 1", s.orders)
+	}
+}
+
+// Destroy deletes what the order made, then its inventory record: the instance directly, or the
+// app holding it (with its instances).
+func TestOrder_Destroy(t *testing.T) {
+	for name, tc := range map[string]struct {
+		apps map[int64][]int64
+		want []string
+	}{
+		"instance":      {want: []string{"item 9801"}},
+		"app":           {apps: map[int64][]int64{9901: {9701}}, want: []string{"app 9901", "item 9801"}},
+		"another app's": {apps: map[int64][]int64{9902: {9750}}, want: []string{"item 9801"}},
+		// The app also holds the user's own instance 9750: it is kept, and only 9701 is deleted.
+		"shared app": {apps: map[int64][]int64{9903: {9701, 9750}}, want: []string{"item 9801"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f, s, insts := orderFakes(t)
+			s.insts = insts
+			cfg := f.providerConfig() + `resource "mtncloud_mysql" "db" {
+  name             = "db-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 40
+  networks         = ["app-net"]
+  database_name    = "shop"
+  database_user    = "shop"
+  database_password = "s3cret-value"
+  timeouts {
+    delete = "20s"
+  }
+}
+`
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV6ProviderFactories: factories(),
+				Steps: []resource.TestStep{
+					{Config: cfg},
+					{
+						PreConfig: func() { s.mu.Lock(); s.apps = tc.apps; s.mu.Unlock() },
+						Config:    f.providerConfig(),
+						Check: func(*terraform.State) error {
+							s.mu.Lock()
+							defer s.mu.Unlock()
+							insts.mu.Lock()
+							defer insts.mu.Unlock()
+							if !slices.Equal(s.deleted, tc.want) {
+								t.Errorf("deleted %v, want %v", s.deleted, tc.want)
+							}
+							if _, ok := insts.insts[9701]; ok {
+								t.Error("the order's instance is still there")
+							}
+							return nil
+						},
+					},
+				},
+			})
+		})
+	}
+}
+
+// An order whose record has no execution at all (an older order) is destroyed without waiting
+// for one; with nothing named after it left, destroy refuses and deletes nothing.
+func TestOrder_DestroyEdges(t *testing.T) {
+	for name, tc := range map[string]struct {
+		prep    func(s *orderStore, insts *instStore)
+		wantErr string
+		want    []string
+	}{
+		"no execution": {
+			prep: func(s *orderStore, _ *instStore) {
+				s.items[9801]["execution"] = nil
+				s.result = ""
+			},
+			want: []string{"item 9801"},
+		},
+		// The saved instance was renamed, so it no longer matches the order's name: it is left alone,
+		// and with nothing else found, destroy refuses.
+		"saved instance renamed": {
+			prep:    func(_ *orderStore, insts *instStore) { insts.insts[9701]["name"] = "db-1-2" },
+			wantErr: "Nothing it made was found",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f, s, insts := orderFakes(t)
+			s.insts = insts
+			cfg := f.providerConfig() + `resource "mtncloud_mysql" "db" {
+  name             = "db-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 40
+  networks         = ["app-net"]
+  database_name    = "shop"
+  database_user    = "shop"
+  database_password = "s3cret-value"
+  timeouts {
+    delete = "20s"
+  }
+}
+`
+			destroy := resource.TestStep{
+				PreConfig: func() {
+					s.mu.Lock()
+					insts.mu.Lock()
+					tc.prep(s, insts)
+					insts.mu.Unlock()
+					s.mu.Unlock()
+				},
+				Config: f.providerConfig(),
+			}
+			steps := []resource.TestStep{{Config: cfg}, destroy}
+			if tc.wantErr != "" {
+				steps[1].ExpectError = regexp.MustCompile(tc.wantErr)
+				steps = append(steps, resource.TestStep{Config: forget(f, "mtncloud_mysql.db")})
+			}
+			resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: steps})
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if !slices.Equal(s.deleted, tc.want) {
+				t.Errorf("deleted %v, want %v", s.deleted, tc.want)
+			}
+			insts.mu.Lock()
+			defer insts.mu.Unlock()
+			if _, kept := insts.insts[9701]; kept != (tc.wantErr != "") {
+				t.Errorf("instance 9701 kept = %v", kept)
+			}
+		})
 	}
 }
 
@@ -198,7 +325,18 @@ resource "mtncloud_letsencrypt_certificate" "web" {
 			{Config: strings.Replace(cfg, `"9705"`, `"9706"`, 1), PlanOnly: true, ExpectError: regexp.MustCompile(`instance_id = "9705"`)},
 			{Config: strings.Replace(cfg, "staging     = true", "staging     = true\n  admin_email = \"ops@example.com\"", 1), PlanOnly: true,
 				ExpectError: regexp.MustCompile(`admin_email = nothing \(left out\)`)},
-			{Config: forget(f, "mtncloud_letsencrypt_certificate.web")},
+			{
+				// Destroy deletes nothing: the certificate stays on the instance.
+				Config: f.providerConfig(),
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if len(s.deleted) != 0 {
+						t.Errorf("deleted %v, want nothing", s.deleted)
+					}
+					return nil
+				},
+			},
 		},
 	})
 }

@@ -95,7 +95,8 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 			clu.ServeHTTP(w, r)
 			return
 		}
-		if order != nil && (r.URL.Path == "/api/catalog/orders" || strings.HasPrefix(r.URL.Path, "/api/catalog/items/")) &&
+		if order != nil && (r.URL.Path == "/api/catalog/orders" || strings.HasPrefix(r.URL.Path, "/api/catalog/items/") ||
+			strings.HasPrefix(r.URL.Path, "/api/apps")) &&
 			r.Header.Get("Authorization") == "Bearer test-token" {
 			order.ServeHTTP(w, r)
 			return

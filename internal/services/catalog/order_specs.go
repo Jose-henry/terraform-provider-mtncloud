@@ -39,7 +39,7 @@ type orderSpec struct {
 	typeName string // resource type, without the provider prefix
 	item     string // catalog item name
 	about    string
-	managed  bool // a managed service: it shows under Apps, not Instances
+	managed  bool // a managed service: an app (under Apps, not Instances), its VMs "<name>-<n>"
 	target   bool // runs against an existing instance (context "instance")
 	fields   []field
 }
@@ -203,7 +203,7 @@ func orderSpecs() []orderSpec {
 		appliance("MTN FortiADC (BYOL)", "fortiadc", "A FortiADC application delivery controller. Bring your own license."),
 		appliance("MTN FortiManager (BYOL)", "fortimanager", "A FortiManager. Bring your own license."),
 		appliance("MTN FortiAnalyzer (BYOL)", "fortianalyzer", "A FortiAnalyzer. Bring your own license."),
-		{typeName: "managed_kubernetes", item: "MTN KUBERNETES (MK8S)", about: "A Kubernetes cluster that MTN Cloud installs and manages.",
+		{typeName: "managed_kubernetes", item: "MTN KUBERNETES (MK8S)", managed: true, about: "A Kubernetes cluster that MTN Cloud installs and manages.",
 			fields: []field{
 				{attr: "name", key: "name", kind: kText, required: true, desc: "Cluster name. Its VMs are named after it."},
 				{attr: "group", key: "group-vpn", kind: kGroup},

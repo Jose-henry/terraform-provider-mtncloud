@@ -183,3 +183,34 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
     If it returns an object, `value` stays unset after import and the plan replaces the entry.
   - Adding a network to a running instance now replaces it: MTN Cloud reports card IDs as null, so a
     resize can't keep the existing cards. Revisit if a later platform version reports card IDs.
+
+## B-017 App lifecycle: `mtncloud_app` (plan, owner asked 2026-10-28)
+
+Today: the `mtncloud_app` and `mtncloud_apps` data sources read apps, and destroying a managed
+service's order deletes its app (D-029). Nothing creates or changes an app. Sources: Context7
+`/websites/apidocs_morpheusdata_reference` (POST/PUT/DELETE `/api/apps`, add-instance,
+remove-instance, security-groups). There is no app-level power call: power goes per instance
+(`mtncloud_instance.power_state`).
+
+| Need | API | Terraform design |
+|---|---|---|
+| Create an empty app | `POST /api/apps` with `blueprintId: "existing"`, name, group, defaultCloud, environment, labels | `mtncloud_app`: `name`, `group`, `cloud` (names, D-006), `description`, `environment`, `labels` |
+| Rename, describe, label, move environment | `PUT /api/apps/{id}` (name, description, labels, environment, ownerId) | in place |
+| Add or remove instances | `POST /api/apps/{id}/add-instance` (instanceId, tierName), `/remove-instance` | `instances` set of `{ id, tier }`; a set diff becomes adds and removes, in place |
+| Security groups | `PUT /api/apps/{id}/security-groups` (securityGroupIds) | `security_groups` set (names), in place |
+| Destroy | `DELETE /api/apps/{id}` with `removeInstances`, `preserveVolumes`, `releaseFloatingIps` | default `removeInstances=off`: the app goes, its instances stay (they are usually `mtncloud_instance` resources of their own); `delete_instances = true` opts in |
+| Import | `GET /api/apps/{id}` | by ID |
+
+Open questions before building:
+1. Does a sub-tenant login have `POST /api/apps` with `blueprintId: "existing"`? Needs one dry run
+   (`apps add -d`) and the role check (customer-permissions.md).
+2. Tier names: does add-instance need an existing tier, or create one by name? Read one managed
+   service's app (`apps get <id> -j`) once a managed order exists.
+3. Ownership: an instance in `instances` that is also a `mtncloud_instance` must not fight it. The
+   app resource only manages membership, never the instance's own settings.
+4. Managed services' apps come from catalog orders: they are read with the data source, not managed
+   by `mtncloud_app` (adopting one would let two resources delete the same VMs).
+
+Tests: unit (set diff to add/remove calls), client contract (add/remove/sg/delete query flags),
+provider unit (create → empty plan → add an instance → remove → import), acceptance in `admin`
+with two `tf-acc-*` VMs.

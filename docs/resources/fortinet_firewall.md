@@ -2,12 +2,12 @@
 page_title: "mtncloud_fortinet_firewall Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A Fortinet firewall. Bring your own license. Ordered from MTN Cloud's catalog (MTN Fortinet Firewall (BYOL)). The order's inputs can't be changed afterwards, and terraform destroy refuses: delete what it made in the console, under Instances, then remove the resource from state. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+  A Fortinet firewall. Bring your own license. Ordered from MTN Cloud's catalog (MTN Fortinet Firewall (BYOL)). The order's inputs can't be changed afterwards (replace it with terraform apply -replace=<address>). terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
 ---
 
 # mtncloud_fortinet_firewall
 
-A Fortinet firewall. Bring your own license. Ordered from MTN Cloud's catalog (MTN Fortinet Firewall (BYOL)). The order's inputs can't be changed afterwards, and `terraform destroy` refuses: delete what it made in the console, under Instances, then remove the resource from state. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+A Fortinet firewall. Bring your own license. Ordered from MTN Cloud's catalog (MTN Fortinet Firewall (BYOL)). The order's inputs can't be changed afterwards (replace it with `terraform apply -replace=<address>`). `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
 
 ## Example Usage
 
@@ -69,6 +69,7 @@ Optional:
 Optional:
 
 - `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
 
 ## Import
 
@@ -87,9 +88,15 @@ exactly as ordered. The first apply after an import records them, finds the inst
 - **An order, not a live object.** Create places the catalog order and waits for MTN's workflow to
   finish, then finds the instances it made by `name` in the project (`instance_ids`). The inputs
   can't be changed afterwards: the plan refuses, so nothing is ever ordered twice by accident.
-- **Destroy refuses.** Delete what the order made in the console (under Instances), then stop managing it
-  with a `removed` block (`lifecycle { destroy = false }`) or `terraform state rm`. If everything it
-  made is deleted, the next plan orders it again.
+- **Destroy deletes what the order made.** Its instances are deleted with their disks and floating
+  IPs, then the order's record in Catalog > Inventory. A managed service is an app (under Apps in the
+  console), so its app is deleted with all its instances. Another app is deleted only if it holds
+  nothing but this order's instances; otherwise only the order's instances leave it. Destroy waits
+  until they are gone (`timeouts { delete }`, default 90 minutes). It refuses, deleting nothing, while
+  the order's workflow still runs past the timeout, after an import that hasn't been applied, or when
+  nothing the order made can be found. To keep what it made, use a `removed` block
+  (`lifecycle { destroy = false }`) or `terraform state rm` instead. If everything it made is
+  deleted outside Terraform, the next plan orders it again.
 - **Secrets are write-only** (Terraform 1.11 or newer): they are sent with the order and never stored
   in state or plans.
 - **Names are checked when you plan**: project, plan, networks, security groups, floating IP pool,

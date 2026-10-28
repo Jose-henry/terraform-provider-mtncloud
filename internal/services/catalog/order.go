@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -34,8 +35,8 @@ var (
 )
 
 // orderResource is one catalog item, ordered (D-026). Its inputs can't change after the order:
-// nothing re-runs it. Destroy refuses, as for projects (D-028): what an order made is deleted in
-// the console, under Apps or Instances.
+// nothing re-runs it. Destroy deletes what the order made, its app or its instances, then its
+// inventory record (D-029); an order that makes nothing deletable is only removed from state.
 type orderResource struct {
 	base
 	spec orderSpec
@@ -77,19 +78,20 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 		where = "Apps"
 	}
 	desc := r.spec.about + " Ordered from MTN Cloud's catalog (" + r.spec.item + "). The order's inputs can't be changed " +
-		"afterwards, and `terraform destroy` refuses: delete what it made in the console, under " + where +
-		", then remove the resource from state. Secrets are write-only (Terraform 1.11 or newer): they are sent with " +
-		"the order and never stored."
+		"afterwards (replace it with `terraform apply -replace=<address>`). `terraform destroy` deletes what it made, " +
+		"shown under " + where + " in the console, with its disks and floating IPs, then the order's record in Catalog > " +
+		"Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored."
 	if r.spec.target {
 		desc = r.spec.about + " Ordered from MTN Cloud's catalog (" + r.spec.item + "). Its inputs can't be changed " +
-			"afterwards, and `terraform destroy` refuses: the certificate stays on the instance; remove the resource from state."
+			"afterwards. `terraform destroy` deletes nothing: the certificate stays on the instance, and the resource is " +
+			"only removed from state, with a warning."
 	}
 	keep := []planmodifier.String{stringplanmodifier.UseStateForUnknown()}
 	attrs := map[string]schema.Attribute{
 		"id":     schema.StringAttribute{Computed: true, Description: "Order ID (Catalog > Inventory).", PlanModifiers: keep},
 		"status": schema.StringAttribute{Computed: true, Description: "The order's workflow result, for example `success`.", PlanModifiers: keep},
 	}
-	blocks := map[string]schema.Block{"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true})}
+	blocks := map[string]schema.Block{"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Delete: true})}
 	if r.spec.target {
 		attrs["instance_id"] = schema.StringAttribute{Required: true,
 			Description: "ID of the instance to install the certificate on, for example `mtncloud_instance.web.id`."}
@@ -161,7 +163,7 @@ type source interface {
 // every name against MTN Cloud before anything is ordered.
 func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() || r.client == nil {
-		return // destroy (Delete explains), or an unconfigured provider
+		return // destroy, or an unconfigured provider
 	}
 	d := r.client.DefaultsFor(ctx)
 	for _, f := range r.spec.fields {
@@ -531,26 +533,14 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(ids))...)
 }
 
-// findInstances finds the instances an order made: named after it (or "<name>-<n>") in its project.
+// findInstances finds the instances an order made, by name in its project (instancesNamed).
 func (r *orderResource) findInstances(ctx context.Context, p source, diags *diag.Diagnostics) []int64 {
-	var name, project types.String
+	var name types.String
 	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
-	diags.Append(p.GetAttribute(ctx, path.Root("project"), &project)...)
-	all, err := r.client.ListInstances(ctx)
+	ids, err := r.instancesNamed(ctx, p, diags)
 	if err != nil {
-		diags.AddWarning("Unable to list instances", err.Error())
+		diags.AddWarning("Unable to find the order's instances", err.Error()+". The next refresh looks again.")
 		return nil
-	}
-	pr, err := r.client.ProjectByName(ctx, project.ValueString())
-	if err != nil {
-		diags.AddWarning("Unable to find the order's instances", "The project couldn't be read: "+err.Error()+". The next refresh looks again.")
-		return nil
-	}
-	var ids []int64
-	for _, in := range all {
-		if in.ProjectID == pr.ID && madeBy(in.Name, name.ValueString()) {
-			ids = append(ids, in.ID)
-		}
 	}
 	if len(ids) == 0 {
 		diags.AddWarning("No instance found for "+r.spec.item,
@@ -559,12 +549,38 @@ func (r *orderResource) findInstances(ctx context.Context, p source, diags *diag
 	return ids
 }
 
-// madeBy reports whether an instance is named after an order: "<name>", or "<name>-<n>" for the
-// nodes of a multi-node service. Case is ignored.
-func madeBy(instance, order string) bool {
+// instancesNamed lists the instances in the order's project named after it (madeBy).
+func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *diag.Diagnostics) ([]int64, error) {
+	var name, project types.String
+	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
+	diags.Append(p.GetAttribute(ctx, path.Root("project"), &project)...)
+	all, err := r.client.ListInstances(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("the instances couldn't be listed: %w", err)
+	}
+	pr, err := r.client.ProjectByName(ctx, project.ValueString())
+	if err != nil {
+		return nil, fmt.Errorf("the project couldn't be read: %w", err)
+	}
+	var ids []int64
+	for _, in := range all {
+		if in.ProjectID == pr.ID && madeBy(in.Name, name.ValueString(), r.spec.managed) {
+			ids = append(ids, in.ID)
+		}
+	}
+	return ids, nil
+}
+
+// madeBy reports whether an instance is named after an order: exactly "<name>", or "<name>-<n>"
+// for the nodes of a multi-node managed service. A single-VM order never claims "<name>-2", which
+// may be another order's or the user's own (destroy deletes what this matches). Case is ignored.
+func madeBy(instance, order string, nodes bool) bool {
 	got, n := strings.ToLower(instance), strings.ToLower(order)
 	if got == n {
 		return true
+	}
+	if !nodes {
+		return false
 	}
 	rest, ok := strings.CutPrefix(got, n+"-")
 	if !ok || rest == "" {
@@ -679,20 +695,164 @@ func (r *orderResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(found))...)
 }
 
-// Delete refuses: an order can't be undone from Terraform (owner, D-028).
+// Delete deletes what the order made (owner, D-029), then its inventory record. A managed service
+// is an app: its app (named after the order) is deleted with its instances. Other instances are
+// deleted through an app only when the app holds nothing else, directly otherwise; then it waits
+// until they are gone. It refuses rather than guess: while the order still runs, after an import
+// that hasn't been applied, when a lookup fails, or when nothing it made can be found. An order that
+// makes nothing deletable (a certificate) is only removed from state.
 func (r *orderResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var id types.String
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("id"), &id)...)
-	where := "under Instances"
-	switch {
-	case r.spec.managed:
-		where = "under Apps"
-	case r.spec.target:
-		where = "on the instance (the certificate stays until the instance is deleted)"
+	var idv, name types.String
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("id"), &idv)...)
+	if r.spec.target {
+		resp.Diagnostics.AddWarning("Nothing deleted",
+			fmt.Sprintf("Order %s (%s) made nothing Terraform can delete: the certificate stays on the instance until "+
+				"the instance is deleted. The order is only removed from Terraform state.", idv.ValueString(), r.spec.item))
+		return
 	}
-	resp.Diagnostics.AddError(r.spec.item+" can't be deleted from Terraform",
-		fmt.Sprintf("Order %s made something MTN Cloud deletes from the console: delete it %s. To stop managing it, "+
-			"use a removed block (lifecycle { destroy = false }) or run terraform state rm.", id.ValueString(), where))
+	if !r.ready(&resp.Diagnostics) {
+		return
+	}
+	var to timeouts.Value
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("timeouts"), &to)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("name"), &name)...)
+	timeout, d := to.Delete(ctx, orderTimeout)
+	resp.Diagnostics.Append(d...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	orderID, _ := strconv.ParseInt(idv.ValueString(), 10, 64)
+	refuse := func(why string) {
+		resp.Diagnostics.AddError("Order "+idv.ValueString()+" not deleted",
+			why+" Nothing was deleted. To stop managing it without deleting anything, use a removed block "+
+				"(lifecycle { destroy = false }) or terraform state rm.")
+	}
+	if name.IsNull() {
+		refuse("It was imported and not applied since, so the instances it made aren't known yet: run terraform apply first.")
+		return
+	}
+
+	// An order still running would go on creating instances after they are deleted.
+	item, err := r.client.GetOrderedItem(ctx, orderID)
+	if err != nil && !client.IsNotFound(err) {
+		refuse("The order couldn't be read: " + err.Error() + ".")
+		return
+	}
+	// An item with no execution at all (an older order) has nothing to wait for.
+	if item != nil && item.Execution != nil {
+		if done, _ := client.ExecutionDone(item.Execution); !done && !strings.EqualFold(item.Status, "failed") {
+			if _, err := r.client.WaitForExecution(ctx, orderID); err != nil {
+				refuse("Its workflow is still running (" + err.Error() + "): destroy again once it has finished.")
+				return
+			}
+		}
+	}
+
+	// Only instances named after the order in its project are deleted. Saved IDs narrow that
+	// further, and one that no longer matches (renamed, or claimed by an older version that also
+	// took "<name>-<n>" for a single-VM order) is left alone.
+	named, err := r.instancesNamed(ctx, req.State, &resp.Diagnostics)
+	if err != nil {
+		refuse("Its instances couldn't be looked up: " + err.Error() + ".")
+		return
+	}
+	var saved []string
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("instance_ids"), &saved)...)
+	ids := named
+	if len(saved) > 0 {
+		ids = nil
+		for _, id := range named {
+			if slices.Contains(saved, strconv.FormatInt(id, 10)) {
+				ids = append(ids, id)
+			}
+		}
+	}
+	apps, err := r.client.ListApps(ctx)
+	if err != nil {
+		refuse("Its apps couldn't be listed: " + err.Error() + ".")
+		return
+	}
+	plan := deletePlan(apps, ids, name.ValueString(), r.spec.managed)
+	if len(plan.apps) == 0 && len(plan.instances) == 0 {
+		refuse(fmt.Sprintf("Nothing it made was found: no instance named %q is in its project%s. Check it in the console.",
+			name.ValueString(), map[bool]string{true: ", and no app has that name", false: ""}[r.spec.managed]))
+		return
+	}
+	for _, appID := range plan.apps {
+		if err := r.client.DeleteApp(ctx, appID); err != nil {
+			resp.Diagnostics.AddError("Unable to delete app "+strconv.FormatInt(appID, 10),
+				fmt.Sprintf("Order %d's app wasn't deleted: %s. Apply again, or delete it under Apps.", orderID, err))
+			return
+		}
+	}
+	for _, id := range plan.instances {
+		if err := r.client.DeleteInstance(ctx, id); err != nil {
+			resp.Diagnostics.AddError("Unable to delete instance "+strconv.FormatInt(id, 10),
+				fmt.Sprintf("Order %d's instance %d wasn't deleted: %s. Apply again, or delete it under Instances.", orderID, id, err))
+			return
+		}
+	}
+	for _, id := range plan.gone {
+		if err := r.client.WaitForInstanceGone(ctx, id); err != nil {
+			resp.Diagnostics.AddError("Instance not deleted yet",
+				fmt.Sprintf("Order %d's instance %d still exists after the delete (%s). Check it in the console, or raise "+
+					"`timeouts { delete = \"120m\" }`.", orderID, id, err))
+			return
+		}
+	}
+	if err := r.client.DeleteOrderedItem(ctx, orderID); err != nil {
+		resp.Diagnostics.AddWarning("Order record not deleted",
+			fmt.Sprintf("What order %d made is deleted, but its record in Catalog > Inventory wasn't: %s. Delete the record "+
+				"in the console if you no longer want it listed.", orderID, err))
+	}
+}
+
+// orderDeletion is what destroying an order deletes: apps (with their instances), instances on
+// their own, and every instance to wait for.
+type orderDeletion struct {
+	apps, instances, gone []int64
+}
+
+// deletePlan decides how an order's instances are deleted. A managed service's own app (named after
+// the order, and holding at least one of its instances) goes with all its instances. Any other app goes whole only when every instance in it
+// is the order's: an app that also holds someone else's instance is left, and the order's
+// instances in it are deleted one by one.
+func deletePlan(apps []client.App, ids []int64, name string, managed bool) orderDeletion {
+	var out orderDeletion
+	mine := map[int64]bool{}
+	for _, id := range ids {
+		mine[id] = true
+	}
+	covered := map[int64]bool{}
+	for _, a := range apps {
+		holds, all := false, len(a.InstanceIDs) > 0
+		for _, id := range a.InstanceIDs {
+			holds = holds || mine[id]
+			all = all && mine[id]
+		}
+		// The name alone isn't enough: another project, or the user, may have an app of that name.
+		own := managed && holds && strings.EqualFold(a.Name, name)
+		if !own && (!holds || !all) {
+			continue
+		}
+		out.apps = append(out.apps, a.ID)
+		for _, id := range a.InstanceIDs {
+			if !covered[id] {
+				covered[id] = true
+				out.gone = append(out.gone, id)
+			}
+		}
+	}
+	for _, id := range ids {
+		if !covered[id] {
+			covered[id] = true
+			out.instances = append(out.instances, id)
+			out.gone = append(out.gone, id)
+		}
+	}
+	return out
 }
 
 func (r *orderResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

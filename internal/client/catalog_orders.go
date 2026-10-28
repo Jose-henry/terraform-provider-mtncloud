@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -107,4 +108,48 @@ func (c *Client) WaitForExecution(ctx context.Context, id int64) (*OrderedItem, 
 			done, _ := ExecutionDone(it.Execution)
 			return done || strings.EqualFold(it.Status, "failed"), nil
 		})
+}
+
+// DeleteOrderedItem deletes an order's record from the inventory (DELETE /api/catalog/items/{id}).
+// A workflow order isn't linked to what its workflow made, so this removes only the record: delete
+// the instances or apps first. One already gone counts as deleted.
+func (c *Client) DeleteOrderedItem(ctx context.Context, id int64) error {
+	return ignoreNotFound(c.do(ctx, http.MethodDelete, "/api/catalog/items/"+itoa(id), nil, nil, nil))
+}
+
+// App is an app with the instances it holds.
+type App struct {
+	ID          int64
+	Name        string
+	InstanceIDs []int64
+}
+
+// ListApps returns every app the caller can see, with its instances.
+func (c *Client) ListApps(ctx context.Context) ([]App, error) {
+	type wireApp struct {
+		ID        int64  `json:"id"`
+		Name      string `json:"name"`
+		Instances []struct {
+			ID int64 `json:"id"`
+		} `json:"instances"`
+	}
+	apps, err := listAll[wireApp](ctx, c, "/api/apps", "apps", nil)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]App, len(apps))
+	for i, a := range apps {
+		out[i] = App{ID: a.ID, Name: a.Name}
+		for _, in := range a.Instances {
+			out[i].InstanceIDs = append(out[i].InstanceIDs, in.ID)
+		}
+	}
+	return out, nil
+}
+
+// DeleteApp deletes an app with its instances, their disks and floating IPs. One already gone
+// counts as deleted.
+func (c *Client) DeleteApp(ctx context.Context, id int64) error {
+	q := url.Values{"removeInstances": {"on"}, "releaseFloatingIps": {"on"}}
+	return ignoreNotFound(c.do(ctx, http.MethodDelete, "/api/apps/"+itoa(id), q, nil, nil))
 }

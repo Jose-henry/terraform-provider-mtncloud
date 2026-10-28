@@ -2,12 +2,12 @@
 page_title: "mtncloud_letsencrypt_certificate Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Its inputs can't be changed afterwards, and terraform destroy refuses: the certificate stays on the instance; remove the resource from state.
+  Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Its inputs can't be changed afterwards. terraform destroy deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning.
 ---
 
 # mtncloud_letsencrypt_certificate
 
-Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Its inputs can't be changed afterwards, and `terraform destroy` refuses: the certificate stays on the instance; remove the resource from state.
+Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Its inputs can't be changed afterwards. `terraform destroy` deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning.
 
 ## Example Usage
 
@@ -44,6 +44,7 @@ resource "mtncloud_letsencrypt_certificate" "shop" {
 Optional:
 
 - `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
 
 ## Import
 
@@ -60,5 +61,5 @@ Write the inputs exactly as ordered: the first apply after an import records the
 
 - Create orders the certificate for the instance and waits for the workflow. The domain must already
   resolve to the instance's public IP.
-- The inputs can't be changed afterwards, and destroy refuses: the certificate stays on the
-  instance. Stop managing it with a `removed` block or `terraform state rm`.
+- The inputs can't be changed afterwards. Destroy deletes nothing: the certificate stays on the
+  instance until the instance is deleted, and the resource is only removed from state, with a warning.

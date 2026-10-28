@@ -307,10 +307,12 @@ stored in state as sensitive values, because you need to read them back.
 
 ## 9. Things worth knowing
 
-- **Catalog orders can't be destroyed from Terraform.** Resources such as `mtncloud_mysql`,
-  `mtncloud_managed_kubernetes` and `mtncloud_project` place a catalog order. Destroy refuses and says
-  where to delete what the order made in the console (under Instances, or under Apps for the managed
-  services). Then stop managing it with a `removed` block:
+- **Destroying a catalog order deletes what it made.** Resources such as `mtncloud_mysql` and
+  `mtncloud_managed_kubernetes` place a catalog order. Destroy deletes the instances it made, through
+  their app for the managed services, with their disks and floating IPs, then the order's record.
+  `mtncloud_letsencrypt_certificate` deletes nothing (the certificate stays on the instance), and
+  `mtncloud_project` refuses, as MTN Cloud has no order that deletes a project. To keep what an order
+  made, stop managing it with a `removed` block instead:
 
   ```terraform
   removed {

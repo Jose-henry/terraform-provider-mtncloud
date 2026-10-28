@@ -245,3 +245,34 @@ infrastructure), and a generic `mtncloud_catalog_order`. Inputs per item:
 - **Tasks:** everything but the type updates in place, the name included (tested).
 - **Cypher:** no `ttl`, or `0`, means no expiry (owner). Keys are stored with their size
   (`password/15/x`, `key/256/x`; platform docs via NotebookLM), so the provider uses one form.
+
+## D-029 Catalog orders are destroyed through what they made (owner, 2026-10-28)
+
+Reverses the "no destroy" part of D-028. The owner: "when a user does destroy for a catalog order
+that under the hood is an app or instance, the destroy should go to delete it from the actual app
+or instance api directly". The 29 catalog items' forms were read (captures `au-cat-<id>`): 23 ask
+for a cloud, resource pool, plan, disks and networks, so they provision VMs (every typed order
+resource except Let's Encrypt, including VPN, WireGuard, the Fortinet appliances and SIEM); the
+other six are Trouble Ticketing, Create Project, MOS, SMB, NFS and Let's Encrypt.
+
+- A workflow order's inventory item has `refType: Workflow` and no link to what it made, so
+  `DELETE /api/catalog/items/{id}` alone (documented to deprovision linked instances) can't be
+  relied on. Destroy deletes the order's instances (`instance_ids`, else found by name in the
+  project), waits until they are gone, then deletes the inventory record (a failure there is only
+  a warning).
+- Managed services, Kubernetes included (owner: "mk8s kubernetes is an app"), are apps: the app
+  named after the order and holding at least one of its instances is deleted with
+  `removeInstances=on` (a name alone could be another project's app). Any other app is deleted only when
+  every instance in it is the order's; a shared app is kept and only the order's instances go.
+- Matching by name is exact for a single-VM order; `<name>-<n>` only for managed services' nodes,
+  so `db` never claims a sibling order's or the user's `db-2` (review, 2026-10-28).
+  Destroy deletes only instances that match now: saved `instance_ids` narrow the name match, so a
+  renamed VM, or one an older version claimed, is left alone.
+- Destroy refuses, deleting nothing, rather than guess: a lookup that fails, a workflow still
+  running past the delete timeout, an import not yet applied (`name` unknown), or nothing found.
+- Let's Encrypt makes nothing deletable: destroy only removes it from state, with a warning that
+  nothing was deleted (owner's answer).
+- Inputs still can't change in place (D-028); `terraform apply -replace` now works, as destroy does.
+- Not yet verified live: the managed services' app names and node names (no managed order has been
+  placed in the test tenant).
+

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -30,6 +31,11 @@ type orderStore struct {
 	// made, when set, runs once when an order's execution succeeds: what the workflow creates.
 	made func(order map[string]any)
 	sent map[int64]map[string]any // each order's item, as posted
+	// apps maps an app ID to its instance IDs; deleting one (removeInstances=on) deletes them from
+	// insts. deleted lists the inventory records and apps deleted, in order ("item 9801", "app 9901").
+	apps    map[int64][]int64
+	insts   *instStore
+	deleted []string
 }
 
 func newOrderFakes(t *testing.T) (*fakeAPI, *orderStore) {
@@ -78,7 +84,21 @@ func (s *orderStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(http.StatusOK, map[string]any{"success": true, "order": map[string]any{"id": id - 1, "items": []any{item}}})
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/apps") {
+		s.serveApps(r, reply)
+		return
+	}
 	id, _ := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, "/api/catalog/items/"), 10, 64)
+	if r.Method == http.MethodDelete {
+		if _, ok := s.items[id]; !ok {
+			reply(http.StatusNotFound, map[string]any{"success": false, "msg": "Item not found"})
+			return
+		}
+		delete(s.items, id)
+		s.deleted = append(s.deleted, fmt.Sprint("item ", id))
+		reply(http.StatusOK, map[string]any{"success": true})
+		return
+	}
 	item, ok := s.items[id]
 	if r.Method != http.MethodGet || !ok {
 		reply(http.StatusNotFound, map[string]any{"success": false, "msg": "Item not found"})
@@ -94,6 +114,38 @@ func (s *orderStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	reply(http.StatusOK, map[string]any{"item": item})
+}
+
+// serveApps lists the apps, and deletes one with its instances.
+func (s *orderStore) serveApps(r *http.Request, reply func(int, any)) {
+	if r.Method == http.MethodGet && r.URL.Path == "/api/apps" {
+		list := []any{}
+		for id, held := range s.apps {
+			var insts []any
+			for _, i := range held {
+				insts = append(insts, map[string]any{"id": i, "name": fmt.Sprint("node-", i)})
+			}
+			list = append(list, map[string]any{"id": id, "name": fmt.Sprint("app-", id), "instances": insts})
+		}
+		reply(http.StatusOK, map[string]any{"apps": list, "meta": map[string]any{"total": len(list)}})
+		return
+	}
+	id, _ := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, "/api/apps/"), 10, 64)
+	held, ok := s.apps[id]
+	if r.Method != http.MethodDelete || !ok {
+		reply(http.StatusNotFound, map[string]any{"success": false, "msg": "App not found"})
+		return
+	}
+	if r.URL.Query().Get("removeInstances") == "on" && s.insts != nil {
+		s.insts.mu.Lock()
+		for _, i := range held {
+			delete(s.insts.insts, i)
+		}
+		s.insts.mu.Unlock()
+	}
+	delete(s.apps, id)
+	s.deleted = append(s.deleted, fmt.Sprint("app ", id))
+	reply(http.StatusOK, map[string]any{"success": true})
 }
 
 func projectConfig(f *fakeAPI, body string) string {
