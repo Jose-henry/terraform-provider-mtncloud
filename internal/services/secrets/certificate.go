@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -79,7 +80,7 @@ func (r *certificate) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 	}
 }
 
-func (r *certificate) input(ctx context.Context, m certModel, key string) client.CertificateInput {
+func (r *certificate) input(m certModel, key string) client.CertificateInput {
 	return client.CertificateInput{Name: m.Name.ValueString(), Description: m.Description.ValueString(), DomainName: m.DomainName.ValueString(),
 		Cert: m.Certificate.ValueString(), Chain: m.Chain.ValueString(), Key: key, Wildcard: m.Wildcard.ValueBool()}
 }
@@ -121,6 +122,26 @@ func (r *certificate) read(ctx context.Context, id string, diags *diag.Diagnosti
 	return c
 }
 
+// ModifyPlan keeps common_name and self_signed from state unless the certificate itself changes, so
+// a rename doesn't show them as "known after apply".
+func (r *certificate) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var before, after types.String
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("certificate"), &before)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("certificate"), &after)...)
+	if !before.Equal(after) {
+		return
+	}
+	var cn types.String
+	var self types.Bool
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("common_name"), &cn)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("self_signed"), &self)...)
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("common_name"), cn)...)
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("self_signed"), self)...)
+}
+
 func (r *certificate) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.ready(&resp.Diagnostics) {
 		return
@@ -143,17 +164,20 @@ func (r *certificate) Create(ctx context.Context, req resource.CreateRequest, re
 			fmt.Sprintf("A certificate named %q already exists (ID %d). Import it (terraform import ... %d) or choose another name.", m.Name.ValueString(), same[0].ID, same[0].ID))
 		return
 	}
-	id, err := r.client.CreateCertificate(ctx, r.input(ctx, m, key.ValueString()))
+	id, err := r.client.CreateCertificate(ctx, r.input(m, key.ValueString()))
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create the certificate", err.Error())
 		return
 	}
-	m.ID = types.StringValue(strconv.FormatInt(id, 10))
-	c := r.read(ctx, m.ID.ValueString(), &resp.Diagnostics)
-	if c == nil {
-		if !resp.Diagnostics.HasError() {
-			resp.Diagnostics.AddError("Certificate not found after create", fmt.Sprintf("Certificate %d was created but can't be read.", id))
-		}
+	// Saved before the read: a failed read never leaves the certificate unmanaged.
+	m.ID, m.PrivateKey = types.StringValue(strconv.FormatInt(id, 10)), types.StringNull()
+	m.CommonName, m.SelfSigned = types.StringNull(), types.BoolNull()
+	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+	wctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	c, err := r.client.WaitForCertificate(wctx, id)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to read the new certificate", fmt.Sprintf("Certificate %d was created, but reading it failed: %s. The next apply reads it again.", id, err))
 		return
 	}
 	desc, domain := m.Description, m.DomainName
@@ -205,14 +229,25 @@ func (r *certificate) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 	plan.ID = state.ID
-	// After an import the certificate isn't in state: the configuration is adopted, nothing is sent.
-	if !state.Certificate.IsNull() {
-		send := ""
-		if !plan.PrivateKeyVersion.Equal(state.PrivateKeyVersion) {
-			send = key.ValueString()
-		}
-		id, _ := strconv.ParseInt(state.ID.ValueString(), 10, 64)
-		if err := r.client.UpdateCertificate(ctx, id, r.input(ctx, plan, send)); err != nil {
+	id, err := strconv.ParseInt(state.ID.ValueString(), 10, 64)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid certificate ID", fmt.Sprintf("%q is not a certificate ID.", state.ID.ValueString()))
+		return
+	}
+	in := r.input(plan, "")
+	if !plan.PrivateKeyVersion.Equal(state.PrivateKeyVersion) {
+		in.Key = key.ValueString()
+	}
+	in.ClearChain = plan.Chain.IsNull() && !state.Chain.IsNull()
+	adopting := state.Certificate.IsNull() // after an import: the certificate and chain on file are unknown
+	if adopting {
+		in.Cert, in.Chain, in.ClearChain = "", "", false
+	}
+	same := plan.Name.Equal(state.Name) && plan.Description.ValueString() == state.Description.ValueString() &&
+		plan.DomainName.ValueString() == state.DomainName.ValueString() && plan.Wildcard.Equal(state.Wildcard)
+	// An adopted certificate is sent only what differs from what MTN Cloud has.
+	if !adopting || !same || in.Key != "" {
+		if err := r.client.UpdateCertificate(ctx, id, in); err != nil {
 			resp.Diagnostics.AddError("Unable to update the certificate", err.Error())
 			return
 		}
@@ -236,8 +271,12 @@ func (r *certificate) Delete(ctx context.Context, req resource.DeleteRequest, re
 	}
 	var m certModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &m)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	id, err := strconv.ParseInt(m.ID.ValueString(), 10, 64)
 	if err != nil {
+		resp.Diagnostics.AddError("Invalid certificate ID", fmt.Sprintf("%q is not a certificate ID; nothing was deleted.", m.ID.ValueString()))
 		return
 	}
 	if err := r.client.DeleteCertificate(ctx, id); err != nil {

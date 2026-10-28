@@ -475,4 +475,4 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
 - `certificates add -t internal -N -d` body: `{"certificate": {"type": "internal", "name", "description",
   "domainName", "certFile", "keyFile", "wildcard"}}`. PUT takes the same fields; a read never returns
   certFile, keyFile or chainFile, so the key is write-only and the certificate/chain are kept from config.
-- Assumed until QA: a PUT without `keyFile` keeps the stored key.
+- Assumed until QA: a PUT without `keyFile` or `certFile` keeps what is stored, and `chainFile: ""` removes the chain (the PUT reference doesn't list chainFile).

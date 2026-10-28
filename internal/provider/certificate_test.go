@@ -217,3 +217,70 @@ resource "mtncloud_ssl_certificate" "csr" {
 		}},
 	})
 }
+
+// keysSent lists the body keys of the last request, with the name and whether each file was empty.
+func (s *certStore) keysSent() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	last := s.sent[len(s.sent)-1]
+	var out []string
+	for _, k := range []string{"name", "certFile", "chainFile", "keyFile"} {
+		v, ok := last[k]
+		switch {
+		case !ok:
+		case k == "name":
+			out = append(out, "name="+v.(string))
+		case v == "":
+			out = append(out, k+"=empty")
+		default:
+			out = append(out, k)
+		}
+	}
+	return strings.Join(out, " ")
+}
+
+// An imported certificate adopts its configuration: only what differs is sent (never the unknown
+// certificate on file), and the next plan is empty. Removing the chain sends an empty one.
+func TestSSLCertificate_AdoptAndChain(t *testing.T) {
+	s, provider := newCertAPI(t)
+	s.certs[9800] = map[string]any{"id": 9800, "name": "shop", "type": map[string]any{"id": 1, "code": "internal"},
+		"commonName": "shop.example.com", "selfSigned": false, "wildcard": false}
+	cfg := func(chain string, imp bool) string {
+		out := provider + `
+resource "mtncloud_ssl_certificate" "shop" {
+  name                = "shop-2026"
+  certificate         = "` + testCert + `"
+  private_key         = "-----BEGIN PRIVATE KEY-----\nk1\n-----END PRIVATE KEY-----\n"
+  private_key_version = 1
+` + chain + `}
+`
+		if imp {
+			out += "import {\n  to = mtncloud_ssl_certificate.shop\n  id = \"9800\"\n}\n"
+		}
+		return out
+	}
+	want := func(w string) func(*terraform.State) error {
+		return func(*terraform.State) error {
+			if got := s.keysSent(); got != w {
+				t.Errorf("sent %q, want %q", got, w)
+			}
+			return nil
+		}
+	}
+	chain := `  chain = "` + testCert + `"` + "\n"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("", true), Check: want("name=shop-2026 keyFile")},
+			{Config: cfg("", false), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				Config: cfg(chain, false), Check: want("name=shop-2026 certFile chainFile"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					// Only the chain changes: the computed values stay known.
+					plancheck.ExpectKnownValue("mtncloud_ssl_certificate.shop", tfjsonpath.New("common_name"), knownvalue.StringExact("shop.example.com")),
+				}},
+			},
+			{Config: cfg("", false), Check: want("name=shop-2026 certFile chainFile=empty")},
+		},
+	})
+}

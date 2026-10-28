@@ -19,11 +19,11 @@ type Certificate struct {
 }
 
 // CertificateInput is what an internal (uploaded) certificate is created or updated with. An empty
-// Key or Chain isn't sent.
+// Cert, Key or Chain isn't sent, except that ClearChain sends an empty chain to remove it.
 type CertificateInput struct {
 	Name, Description, DomainName string
 	Cert, Key, Chain              string
-	Wildcard                      bool
+	Wildcard, ClearChain          bool
 }
 
 type wireCertificate struct {
@@ -50,15 +50,17 @@ func (w wireCertificate) cert() *Certificate {
 
 // certBody is the body `certificates add -t internal -d` sends (2026-10-28).
 func certBody(in CertificateInput, create bool) map[string]any {
-	c := map[string]any{"name": in.Name, "description": in.Description, "domainName": in.DomainName,
-		"certFile": in.Cert, "wildcard": in.Wildcard}
+	c := map[string]any{"name": in.Name, "description": in.Description, "domainName": in.DomainName, "wildcard": in.Wildcard}
 	if create {
 		c["type"] = "internal"
+	}
+	if in.Cert != "" {
+		c["certFile"] = in.Cert
 	}
 	if in.Key != "" {
 		c["keyFile"] = in.Key
 	}
-	if in.Chain != "" {
+	if in.Chain != "" || in.ClearChain {
 		c["chainFile"] = in.Chain
 	}
 	return map[string]any{"certificate": c}
@@ -89,6 +91,17 @@ func (c *Client) GetCertificate(ctx context.Context, id int64) (*Certificate, er
 		return nil, err
 	}
 	return resp.Certificate.cert(), nil
+}
+
+// WaitForCertificate reads a new certificate, retrying a 404 just after the create (rule 13).
+func (c *Client) WaitForCertificate(ctx context.Context, id int64) (*Certificate, error) {
+	return poll(ctx, c, func(ctx context.Context) (*Certificate, error) { return c.GetCertificate(ctx, id) },
+		func(_ *Certificate, err error) (bool, error) {
+			if IsNotFound(err) {
+				return false, nil
+			}
+			return err == nil, err
+		})
 }
 
 // FindCertificatesNamed lists the certificates with this exact name.
