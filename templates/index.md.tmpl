@@ -23,6 +23,7 @@ The provider signs in with a username and password, or an API token:
 
 * [Static credentials](guides/auth.md#static-credentials)
 * [Environment variables](guides/auth.md#environment-variables)
+* [Configuring the provider: every way to set it up](guides/configuration.md) (credentials, group, cloud and project, variables and files)
 
 A customer login also needs your tenant's subdomain, set with `tenant_subdomain` or `MTNCLOUD_API_TENANT`.
 
