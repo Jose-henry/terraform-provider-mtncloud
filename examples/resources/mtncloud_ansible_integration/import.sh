@@ -1,1 +1,0 @@
-terraform import mtncloud_ansible_integration.tf_example_ansible_integration 1

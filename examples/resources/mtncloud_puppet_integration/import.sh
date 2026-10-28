@@ -1,1 +1,0 @@
-terraform import mtncloud_puppet_integration.tf_example_puppet_integration 1

@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 70 | 84 |
-| Usable with a customer (sub-tenant) login | 70 | 79 |
+| Available today | 62 | 84 |
+| Usable with a customer (sub-tenant) login | 62 | 79 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 7 | 0 |
@@ -114,21 +114,6 @@ Workflows that chain tasks, and jobs that run them on a schedule.
 | [`mtncloud_provisioning_workflow`](../docs/resources/provisioning_workflow.md) | Yes (read verified) |
 | [`mtncloud_task_job`](../docs/resources/task_job.md) | Yes (read verified) |
 | [`mtncloud_workflow_job`](../docs/resources/workflow_job.md) | Yes (read verified) |
-
-### Integrations
-
-Connections to configuration management, source control, registries and ITSM tools.
-
-| Type | Customer login |
-|---|---|
-| [`mtncloud_ansible_integration`](../docs/resources/ansible_integration.md) | Yes (read verified) |
-| [`mtncloud_ansible_tower_integration`](../docs/resources/ansible_tower_integration.md) | Yes (read verified) |
-| [`mtncloud_chef_integration`](../docs/resources/chef_integration.md) | Yes (read verified) |
-| [`mtncloud_docker_registry_integration`](../docs/resources/docker_registry_integration.md) | Yes (read verified) |
-| [`mtncloud_git_integration`](../docs/resources/git_integration.md) | Yes (read verified) |
-| [`mtncloud_puppet_integration`](../docs/resources/puppet_integration.md) | Yes (read verified) |
-| [`mtncloud_servicenow_integration`](../docs/resources/servicenow_integration.md) | Yes (read verified) |
-| [`mtncloud_vro_integration`](../docs/resources/vro_integration.md) | Yes (read verified) |
 
 ### Projects
 

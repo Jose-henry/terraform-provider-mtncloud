@@ -1,1 +1,0 @@
-terraform import mtncloud_docker_registry_integration.tf_example_docker_registry_integration 1

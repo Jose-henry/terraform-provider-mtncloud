@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -172,58 +171,36 @@ func (r *generated) Create(ctx context.Context, req resource.CreateRequest, resp
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	// The size goes in the key pattern: password/15/db-admin, key/256/app.
-	asked := r.spec.mount + "/" + m.Name.ValueString()
-	short := asked
+	// The size is part of the stored key: password/15/db-admin, key/256/app (platform docs).
+	key := r.spec.mount + "/" + m.Name.ValueString()
 	if r.spec.size != "" {
-		asked = r.spec.mount + "/" + strconv.FormatInt(m.Size.ValueInt64(), 10) + "/" + m.Name.ValueString()
+		key = r.spec.mount + "/" + strconv.FormatInt(m.Size.ValueInt64(), 10) + "/" + m.Name.ValueString()
 	}
 	// Never overwrite: writing an existing key generates a new value, which would break whatever uses it.
-	for _, k := range []string{asked} {
-		exists, _, err := r.client.CypherKeyExists(ctx, k)
-		if err != nil {
-			resp.Diagnostics.AddError("MTN Cloud API error", "Unable to check Cypher for an existing key: "+err.Error())
-			return
-		}
-		if exists {
-			resp.Diagnostics.AddAttributeError(path.Root("name"), "Cypher key already exists",
-				fmt.Sprintf("%s is already in Cypher. Import it with `terraform import <address> %s`, or choose another name.", k, k))
-			return
-		}
+	exists, _, err := r.client.CypherKeyExists(ctx, key)
+	if err != nil {
+		resp.Diagnostics.AddError("MTN Cloud API error", "Unable to check Cypher for an existing key: "+err.Error())
+		return
 	}
-	ttl := m.TTL.ValueString()
-	if ttl == "" {
-		ttl = "0" // no lease: left out, the platform's default lease would expire the key
+	if exists {
+		resp.Diagnostics.AddAttributeError(path.Root("name"), "Cypher key already exists",
+			fmt.Sprintf("%s is already in Cypher. Import it with `terraform import <address> %s`, or choose another name.", key, key))
+		return
 	}
-	if err := r.client.WriteCypher(ctx, asked, "", ttl); err != nil {
+	if err := r.client.WriteCypher(ctx, key, "", m.TTL.ValueString()); err != nil {
 		resp.Diagnostics.AddError("MTN Cloud API error", "Unable to create the Cypher key: "+err.Error())
 		return
 	}
-	// The platform may store the key with or without the size part: use what it stored.
-	stored := ""
-	for _, k := range slices.Compact([]string{asked, short}) {
-		exists, _, err := r.client.CypherKeyExists(ctx, k)
-		if err != nil {
-			resp.Diagnostics.AddError("MTN Cloud API error", "Unable to find the new Cypher key: "+err.Error())
-			return
-		}
-		if exists {
-			stored = k
-			break
-		}
-	}
-	if stored == "" {
-		resp.Diagnostics.AddError("Cypher key not found after create",
-			fmt.Sprintf("MTN Cloud accepted %s but doesn't list it. Check Cypher in the console before applying again.", asked))
-		return
-	}
-	secret, err := r.client.ReadCypher(ctx, stored) // exists, so this reads and doesn't create
+	// Saved before the read: if the read fails, Terraform keeps the key (tainted) rather than losing it.
+	m.ID = types.StringValue(key)
+	resp.State.Raw = req.Plan.Raw
+	r.set(ctx, &resp.State, m, &resp.Diagnostics)
+	secret, err := r.client.ReadCypher(ctx, key) // just written, so this reads and doesn't create
 	if err != nil {
 		resp.Diagnostics.AddError("MTN Cloud API error", "Unable to read the new Cypher key: "+err.Error())
 		return
 	}
-	m.ID, m.Value = types.StringValue(stored), types.StringValue(secret.Value)
-	resp.State.Raw = req.Plan.Raw
+	m.Value = types.StringValue(secret.Value)
 	r.set(ctx, &resp.State, m, &resp.Diagnostics)
 }
 

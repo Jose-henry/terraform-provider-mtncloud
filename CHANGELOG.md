@@ -4,6 +4,8 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+- **Removed** the integration resources (`mtncloud_ansible_integration`, `mtncloud_ansible_tower_integration`, `mtncloud_chef_integration`, `mtncloud_docker_registry_integration`, `mtncloud_git_integration`, `mtncloud_puppet_integration`, `mtncloud_servicenow_integration`, `mtncloud_vro_integration`): integrations are set up in the console. Run `terraform state rm` on any you manage before upgrading. The integration data sources stay, for tasks that need an integration ID.
+
 - Docs: the examples now pin `~> 0.3`.
 - New data sources, singular (by `id` or name) and plural (with `name_regex`): `app(s)`, `ssl_certificate(s)`, `load_balancer(s)`, `cluster(s)`, `catalog_order(s)` (what you ordered, with status), `user(s)`, `identity_source(s)`, `form(s)`; plural only: `user_roles`, `network_subnets`, `storage_buckets`, `storage_volumes`, `domains`, `key_pairs`, `credentials`, `workflows`, `jobs`, `integrations`, `cyphers` (keys and leases, never values); singular only: `project` (with group and cloud), `router`, `security_group` (with every rule), `datastore`, and `cypher` (reads one existing key on any mount, value sensitive; never creates one).
 - New resources `mtncloud_cypher_password`, `mtncloud_cypher_uuid` and `mtncloud_cypher_key`: values MTN Cloud generates and keeps in Cypher, with an optional lease (`ttl`). The value is in state, marked sensitive. An existing key is never overwritten, and a refresh never re-creates a deleted one.

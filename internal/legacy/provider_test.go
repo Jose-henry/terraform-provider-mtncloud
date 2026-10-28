@@ -31,6 +31,9 @@ var (
 		"kubernetes_spec_template", "node_type", "preseed_script", "python_script_task",
 		"ruby_script_task", "script_template", "security_package", "terraform_app_blueprint",
 		"terraform_spec_template", "workflow_catalog_item",
+		// Integrations are set up in the console, not here (owner, 2026-10-28, D-028).
+		"ansible_integration", "ansible_tower_integration", "chef_integration", "docker_registry_integration",
+		"git_integration", "puppet_integration", "servicenow_integration", "vro_integration",
 	}
 	removedDataSources = []string{
 		"cloud_folder",

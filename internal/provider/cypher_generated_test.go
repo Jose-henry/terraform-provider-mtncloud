@@ -23,22 +23,14 @@ type cypherStore struct {
 	mu            sync.Mutex
 	keys          map[string]string
 	ttl           map[string]string
-	short         bool // store "password/15/x" as "password/x"
 	generated     int
 	createdByRead int
 }
 
-func newCypherAPI(t *testing.T, short bool) (*cypherStore, string) {
+func newCypherAPI(t *testing.T) (*cypherStore, string) {
 	t.Helper()
 	clearDefaults(t)
-	s := &cypherStore{keys: map[string]string{}, ttl: map[string]string{}, short: short}
-	stored := func(p string) string {
-		parts := strings.Split(p, "/")
-		if s.short && len(parts) == 3 && parts[0] != "uuid" {
-			return parts[0] + "/" + parts[2]
-		}
-		return p
-	}
+	s := &cypherStore{keys: map[string]string{}, ttl: map[string]string{}}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -55,7 +47,7 @@ func newCypherAPI(t *testing.T, short bool) (*cypherStore, string) {
 			reply(map[string]any{"cyphers": list, "meta": map[string]any{"total": len(list)}})
 			return
 		}
-		key := stored(strings.TrimPrefix(r.URL.Path, "/api/cypher/"))
+		key := strings.TrimPrefix(r.URL.Path, "/api/cypher/")
 		switch r.Method {
 		case http.MethodPost:
 			s.generated++
@@ -87,73 +79,66 @@ provider "mtncloud" {
 }
 
 func TestCypherPassword(t *testing.T) {
-	for name, short := range map[string]bool{"size kept in the key": false, "size dropped from the key": true} {
-		t.Run(name, func(t *testing.T) {
-			s, provider := newCypherAPI(t, short)
-			cfg := provider + `
+	s, provider := newCypherAPI(t)
+	cfg := provider + `
 resource "mtncloud_cypher_password" "db" {
   name = "db-admin"
   ttl  = "8h"
 }
 `
-			id := "password/15/db-admin"
-			if short {
-				id = "password/db-admin"
-			}
-			check := func(attr string, v knownvalue.Check) statecheck.StateCheck {
-				return statecheck.ExpectKnownValue("mtncloud_cypher_password.db", tfjsonpath.New(attr), v)
-			}
-			resource.UnitTest(t, resource.TestCase{
-				ProtoV6ProviderFactories: factories(),
-				Steps: []resource.TestStep{
-					{
-						Config: cfg,
-						ConfigStateChecks: []statecheck.StateCheck{
-							check("id", knownvalue.StringExact(id)), check("length", knownvalue.Int64Exact(15)),
-							check("value", knownvalue.StringExact("generated-x")),
-						},
-					},
-					{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
-					{Config: cfg, ResourceName: "mtncloud_cypher_password.db", ImportState: true, ImportStateVerify: true,
-						ImportStateVerifyIgnore: []string{"ttl"}},
-					{
-						// Gone (deleted, or its lease ran out): planned again, never re-created by a read.
-						PreConfig: func() {
-							s.mu.Lock()
-							clear(s.keys)
-							s.mu.Unlock()
-						},
-						Config: cfg, PlanOnly: true, ExpectNonEmptyPlan: true,
-					},
-					{
-						Config: cfg,
-						ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-							plancheck.ExpectResourceAction("mtncloud_cypher_password.db", plancheck.ResourceActionCreate),
-						}},
-					},
-					{
-						// A longer password is a new one.
-						Config: strings.Replace(cfg, `ttl  = "8h"`, "ttl = \"8h\"\n  length = 32", 1),
-						ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-							plancheck.ExpectResourceAction("mtncloud_cypher_password.db", plancheck.ResourceActionDestroyBeforeCreate),
-						}},
-					},
-				},
-				CheckDestroy: func(*terraform.State) error {
-					s.mu.Lock()
-					defer s.mu.Unlock()
-					if len(s.keys) != 0 || s.createdByRead != 0 {
-						t.Errorf("after destroy: keys %v, keys created by a read %d", s.keys, s.createdByRead)
-					}
-					return nil
-				},
-			})
-		})
+	id := "password/15/db-admin"
+	check := func(attr string, v knownvalue.Check) statecheck.StateCheck {
+		return statecheck.ExpectKnownValue("mtncloud_cypher_password.db", tfjsonpath.New(attr), v)
 	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				ConfigStateChecks: []statecheck.StateCheck{
+					check("id", knownvalue.StringExact(id)), check("length", knownvalue.Int64Exact(15)),
+					check("value", knownvalue.StringExact("generated-x")),
+				},
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{Config: cfg, ResourceName: "mtncloud_cypher_password.db", ImportState: true, ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{"ttl"}},
+			{
+				// Gone (deleted, or its lease ran out): planned again, never re-created by a read.
+				PreConfig: func() {
+					s.mu.Lock()
+					clear(s.keys)
+					s.mu.Unlock()
+				},
+				Config: cfg, PlanOnly: true, ExpectNonEmptyPlan: true,
+			},
+			{
+				Config: cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_cypher_password.db", plancheck.ResourceActionCreate),
+				}},
+			},
+			{
+				// A longer password is a new one.
+				Config: strings.Replace(cfg, `ttl  = "8h"`, "ttl = \"8h\"\n  length = 32", 1),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_cypher_password.db", plancheck.ResourceActionDestroyBeforeCreate),
+				}},
+			},
+		},
+		CheckDestroy: func(*terraform.State) error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if len(s.keys) != 0 || s.createdByRead != 0 {
+				t.Errorf("after destroy: keys %v, keys created by a read %d", s.keys, s.createdByRead)
+			}
+			return nil
+		},
+	})
 }
 
 func TestCypherKeyAndUUID(t *testing.T) {
-	s, provider := newCypherAPI(t, false)
+	s, provider := newCypherAPI(t)
 	cfg := provider + `
 resource "mtncloud_cypher_key" "app" {
   name = "app"
@@ -196,7 +181,7 @@ resource "mtncloud_cypher_uuid" "mac" {
 
 // An existing key is never overwritten: that would generate a new value under whatever uses it.
 func TestCypherPassword_ExistingKeyIsRefused(t *testing.T) {
-	s, provider := newCypherAPI(t, false)
+	s, provider := newCypherAPI(t)
 	s.keys["password/15/db-admin"] = "in-use"
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),

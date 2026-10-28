@@ -296,6 +296,12 @@ resource "mtncloud_reverse_text_task" "r" {
 				}
 				return nil
 			},
+		}, {
+			// Everything but the type changes in place, the name included.
+			Config: strings.Replace(strings.Replace(cfg, `"rev"`, `"rev-2"`, 1), `"hello"`, `"bye"`, 1),
+			ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+				plancheck.ExpectResourceAction("mtncloud_reverse_text_task.r", plancheck.ResourceActionUpdate),
+			}},
 		}},
 	})
 }

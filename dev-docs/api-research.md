@@ -448,7 +448,6 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
 `itemKey` match) before every read. Open for QA:
 - Whether the stored `itemKey` keeps the size segment (`password/15/x` or `password/x`). Create
   accepts either; once confirmed, drop the other form.
-- What lease applies when `ttl` is left out (the audit noted 32 days). The provider always sends
-  `ttl=0` when `ttl` is unset, so the key never expires on its own.
+- No `ttl`, or `ttl=0`, means no expiry (owner, 2026-10-28).
 - The lease can't be read back as the string the user wrote: after an import with `ttl` set, the
   plan shows an in-place update that only records it in state (tested).

@@ -224,3 +224,22 @@ Not built: "Create Instance" (`mtncloud_instance` does it), "Trouble Ticketing" 
 infrastructure), and a generic `mtncloud_catalog_order`. Inputs per item:
 [catalog-forms.md](catalog-forms.md). Each resource's order is confirmed with a CLI dry run first.
 
+
+## D-028 Scope after the owner's review of phase 4 (2026-10-28)
+
+- **Integrations are set up in the console.** The eight integration resources (Ansible, Ansible
+  Tower, Chef, Docker registry, Git, Puppet, ServiceNow, vRO) are removed and kept out by
+  `TestProvider_RemovedTypesStayRemoved`. The read-only lookups stay (`mtncloud_integration(s)`,
+  `git_integration`, `ansible_tower_inventory`, `ansible_tower_job_template`, `chef_server`,
+  `servicenow_workflow`, `vro_workflow`): the remaining tasks take integration IDs, and these are
+  how a configuration finds them.
+- **Catalog orders have no destroy** (like `mtncloud_project`). Destroy removes the order from
+  state only, with a warning saying where to delete what it made: managed services (the
+  "Managed ..." items) under Apps, VM items under Instances. NFS and SMB, which have their own
+  update and delete orders, get real update and delete.
+- **SSL certificate:** a resource for internal certificates only, for now; the data sources exist.
+- **Cluster and load balancer come last.** Clusters: Kubernetes and Docker cluster types only, MTN's
+  layouts only. Load balancers follow a different path; the owner will send details first.
+- **Tasks:** everything but the type updates in place, the name included (tested).
+- **Cypher:** no `ttl`, or `0`, means no expiry (owner). Keys are stored with their size
+  (`password/15/x`, `key/256/x`; platform docs via NotebookLM), so the provider uses one form.
