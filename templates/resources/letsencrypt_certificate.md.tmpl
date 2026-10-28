@@ -1,0 +1,31 @@
+---
+page_title: "mtncloud_letsencrypt_certificate Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_letsencrypt_certificate
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_letsencrypt_certificate/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_letsencrypt_certificate/import.sh" }}
+
+Write the inputs exactly as ordered: the first apply after an import records them.
+
+## Notes
+
+- Create orders the certificate for the instance and waits for the workflow. The domain must already
+  resolve to the instance's public IP.
+- The inputs can't be changed afterwards, and destroy refuses: the certificate stays on the
+  instance. Stop managing it with a `removed` block or `terraform state rm`.

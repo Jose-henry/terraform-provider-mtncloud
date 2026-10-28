@@ -1,0 +1,68 @@
+package provider
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+)
+
+// An SMB share is created, updated and deleted by orders of the same catalog item, each with
+// only the flags for what changed.
+func TestSMBShare(t *testing.T) {
+	f, s, _ := orderFakes(t)
+	cfg := func(body string) string {
+		return f.providerConfig() + "resource \"mtncloud_smb_share\" \"files\" {\n  name = \"files\"\n" + body + "}\n"
+	}
+	last := func(want string) func(*terraform.State) error {
+		return func(*terraform.State) error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			got, _ := json.Marshal(s.sent[s.next-1]["config"])
+			if string(got) != want {
+				t.Errorf("order %d\n got %s\nwant %s", s.next-1, got, want)
+			}
+			return nil
+		}
+	}
+	inPlace := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+		plancheck.ExpectResourceAction("mtncloud_smb_share.files", plancheck.ResourceActionUpdate),
+	}}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg("  client_ips = [\"10.0.0.5\"]\n  password = \"pw-1\"\n  password_version = 1\n"),
+				Check:  last(`{"clientIps":"10.0.0.5","deleteOnly":false,"quotaSize":10737418240,"smbPassword":"pw-1","updateOnly":false,"volumeName":"files"}`),
+			},
+			{Config: cfg("  client_ips = [\"10.0.0.5\"]\n  password = \"pw-1\"\n  password_version = 1\n"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				// A bigger quota: only updateQuota, and no password sent.
+				Config: cfg("  quota_gb = 20\n  client_ips = [\"10.0.0.5\"]\n  password = \"pw-1\"\n  password_version = 1\n"), ConfigPlanChecks: inPlace,
+				Check: last(`{"clientIps":"10.0.0.5","deleteOnly":false,"quotaSize":21474836480,"updateClientIps":false,"updateOnly":true,"updatePassword":false,"updateQuota":true,"volumeName":"files"}`),
+			},
+			{
+				// Every client allowed.
+				Config: cfg("  quota_gb = 20\n  password = \"pw-1\"\n  password_version = 1\n"), ConfigPlanChecks: inPlace,
+				Check: last(`{"deleteOnly":false,"quotaSize":21474836480,"updateClientIps":true,"updateOnly":true,"updatePassword":false,"updateQuota":false,"updateType":"'Allow All'","volumeName":"files"}`),
+			},
+			{
+				// A new password is noticed through password_version.
+				Config: cfg("  quota_gb = 20\n  password = \"pw-2\"\n  password_version = 2\n"), ConfigPlanChecks: inPlace,
+				Check: last(`{"deleteOnly":false,"quotaSize":21474836480,"smbPassword":"pw-2","updateClientIps":false,"updateOnly":true,"updatePassword":true,"updateQuota":false,"volumeName":"files"}`),
+			},
+		},
+		CheckDestroy: func(*terraform.State) error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			got, _ := json.Marshal(s.sent[s.next-1]["config"])
+			if want := `{"deleteOnly":true,"updateOnly":false,"volumeName":"files"}`; string(got) != want {
+				t.Errorf("destroy order\n got %s\nwant %s", got, want)
+			}
+			return nil
+		},
+	})
+}

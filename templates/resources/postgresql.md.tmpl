@@ -1,0 +1,41 @@
+---
+page_title: "mtncloud_postgresql Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_postgresql
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_postgresql/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_postgresql/import.sh" }}
+
+The order doesn't show what it was placed with, so the inputs come from your configuration: write them
+exactly as ordered. The first apply after an import records them, finds the instances by name, and orders nothing.
+
+## Notes
+
+- **An order, not a live object.** Create places the catalog order and waits for MTN's workflow to
+  finish, then finds the instances it made by `name` in the project (`instance_ids`). The inputs
+  can't be changed afterwards: the plan refuses, so nothing is ever ordered twice by accident.
+- **Destroy refuses.** Delete what the order made in the console (under Instances), then stop managing it
+  with a `removed` block (`lifecycle { destroy = false }`) or `terraform state rm`. If everything it
+  made is deleted, the next plan orders it again.
+- **Secrets are write-only** (Terraform 1.11 or newer): they are sent with the order and never stored
+  in state or plans.
+- **Names are checked when you plan**: project, plan, networks, security groups, floating IP pool,
+  environment and every choice list (versions and so on) are looked up in MTN Cloud before anything
+  is ordered, and an unknown value lists the valid ones.
+- **A failed workflow** is reported with MTN Cloud's message and nothing is kept; delete whatever it
+  left in the console before applying again.

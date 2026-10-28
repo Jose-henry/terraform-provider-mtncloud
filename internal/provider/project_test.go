@@ -27,6 +27,9 @@ type orderStore struct {
 	lastOrder map[string]any
 	result    string // the execution's final status; "" never reports one
 	postFail  int    // the order POST places the order, then answers with this status
+	// made, when set, runs once when an order's execution succeeds: what the workflow creates.
+	made func(order map[string]any)
+	sent map[int64]map[string]any // each order's item, as posted
 }
 
 func newOrderFakes(t *testing.T) (*fakeAPI, *orderStore) {
@@ -56,7 +59,16 @@ func (s *orderStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.lastOrder, s.orders = body, s.orders+1
 		id := s.next
 		s.next++
-		item := map[string]any{"id": id, "type": map[string]any{"id": 10, "name": "Create Project", "type": "workflow"},
+		name := "Create Project"
+		if items, _ := body["order"].(map[string]any)["items"].([]any); len(items) == 1 {
+			posted, _ := items[0].(map[string]any)
+			name, _ = posted["type"].(map[string]any)["name"].(string)
+			if s.sent == nil {
+				s.sent = map[int64]map[string]any{}
+			}
+			s.sent[id] = posted
+		}
+		item := map[string]any{"id": id, "type": map[string]any{"id": 10, "name": name, "type": "workflow"},
 			"status": "ORDERED", "statusMessage": nil, "execution": nil}
 		s.items[id] = item
 		if s.postFail != 0 {
@@ -76,6 +88,9 @@ func (s *orderStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		item["execution"] = map[string]any{"id": id + 10, "jobId": id + 11, "status": s.result}
 		if s.result == "error" {
 			item["statusMessage"] = "Resource pool create returned 400"
+		}
+		if s.result == "success" && s.made != nil {
+			s.made(s.sent[id])
 		}
 	}
 	reply(http.StatusOK, map[string]any{"item": item})

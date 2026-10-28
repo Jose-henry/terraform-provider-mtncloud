@@ -1,0 +1,247 @@
+package provider
+
+import (
+	"encoding/json"
+	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+)
+
+// orderFakes wires the order, instance and network fakes: a VM order's workflow creates an
+// instance named after the order in its project, as MTN's scripts do.
+func orderFakes(t *testing.T) (*fakeAPI, *orderStore, *instStore) {
+	t.Helper()
+	f, s := newOrderFakes(t)
+	insts, nets := newInstStore(), newNetStore()
+	nets.networks[9350] = map[string]any{"id": 9350, "name": "app-net", "status": "ACTIVE",
+		"zonePool": map[string]any{"id": 9201, "name": "web-prod-Acme"}}
+	f.inst, f.net = insts, nets
+	s.made = func(item map[string]any) {
+		cfg, _ := item["config"].(map[string]any)
+		name, _ := cfg["name"].(string)
+		if name == "" {
+			return
+		}
+		insts.mu.Lock()
+		defer insts.mu.Unlock()
+		insts.nextID++
+		insts.insts[insts.nextID] = map[string]any{"id": insts.nextID, "name": name, "status": "running",
+			"config": map[string]any{"resourcePoolId": cfg["resourcepool"]}}
+	}
+	return f, s, insts
+}
+
+func TestMySQLOrder(t *testing.T) {
+	f, s, insts := orderFakes(t)
+	body := `
+  name                 = "db-1"
+  group                = "MTNNG_CLOUD_AZ_1"
+  project              = "web-prod-Acme"
+  environment          = "Production"
+  labels               = ["db"]
+  plan                 = "G2S4"
+  root_volume_size     = 40
+  networks             = ["app-net"]
+  security_groups      = ["web"]
+  floating_ip_pool     = "public-network-01"
+  version              = "8.4 LTS"
+  database_name        = "shop"
+  database_user        = "shop"
+  database_password    = "s3cret-value"
+  password_expiry_days = 90
+
+  data_volume {
+    size      = 100
+    datastore = "ENCR_AT_REST"
+  }
+`
+	cfg := func(b string) string {
+		return f.providerConfig() + "resource \"mtncloud_mysql\" \"db\" {" + b + "}\n"
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg(body),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_mysql.db", tfjsonpath.New("id"), knownvalue.StringExact("9801")),
+					statecheck.ExpectKnownValue("mtncloud_mysql.db", tfjsonpath.New("status"), knownvalue.StringExact("success")),
+					statecheck.ExpectKnownValue("mtncloud_mysql.db", tfjsonpath.New("instance_ids"), knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("9701")})),
+					statecheck.ExpectKnownValue("mtncloud_mysql.db", tfjsonpath.New("database_password"), knownvalue.Null()),
+				},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					got, _ := json.Marshal(s.sent[9801]["config"])
+					want := `{"cloud":"4","environment":"production","floatingip":"pool-44","group-vpn":"9101","hostCIDRs":"0.0.0.0/0",` +
+						`"labels":"db","makeUserDbOwner":false,"mysqlVersion":"8.4","name":"db-1",` +
+						`"networks":[{"network":{"id":"network-9350"},"primaryInterface":true}],"passwordExpiryDays":90,"plan":9402,` +
+						`"resourcepool":"pool-9201","securitygroups":[{"id":9302}],` +
+						`"volumes":[{"name":"root","rootVolume":true,"size":40},{"name":"data-1","rootVolume":false,"size":100,"storageType":414}],` +
+						`"dbName":"shop","dbPassword":"s3cret-value","dbUsername":"shop"}`
+					var a, b map[string]any
+					_ = json.Unmarshal(got, &a)
+					_ = json.Unmarshal([]byte(want), &b)
+					ga, _ := json.Marshal(a)
+					gb, _ := json.Marshal(b)
+					if string(ga) != string(gb) {
+						t.Errorf("order config\n got %s\nwant %s", ga, gb)
+					}
+					return nil
+				},
+			},
+			{Config: cfg(body), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// An ordered item can't change; a secret isn't stored, so changing it shows nothing.
+			{Config: cfg(strings.Replace(body, `"G2S4"`, `"G1S1"`, 1)), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`(?s)Can't change an ordered MTN MySQL.*plan`)},
+			{Config: cfg(strings.Replace(body, "s3cret-value", "other", 1)), PlanOnly: true},
+			// Import by order ID: the configuration is adopted, nothing is ordered again.
+			{Config: cfg(body), ResourceName: "mtncloud_mysql.db", ImportState: true, ImportStateId: "9801",
+				ImportStateCheck: func(s []*terraform.InstanceState) error {
+					// The inventory has no name to find instances by: the adopting update finds them.
+					if len(s) != 1 || s[0].Attributes["instance_ids.#"] != "0" || s[0].Attributes["status"] != "success" {
+						t.Errorf("imported: %v", s)
+					}
+					return nil
+				}},
+			{ResourceName: "mtncloud_mysql.db", ImportState: true, ImportStateId: "9795", Config: cfg(body),
+				ExpectError: regexp.MustCompile(`is a "Create Project", not a "MTN MySQL"`)},
+			// Destroy refuses and says where to delete it.
+			{Config: f.providerConfig(), ExpectError: regexp.MustCompile(`(?s)can.t be deleted from Terraform.*under\s+Instances`)},
+			{
+				// Its instance deleted in the console: the order is planned again (and the test's
+				// final destroy finds nothing to do).
+				PreConfig: func() {
+					insts.mu.Lock()
+					clear(insts.insts)
+					insts.mu.Unlock()
+				},
+				Config: cfg(body), PlanOnly: true, ExpectNonEmptyPlan: true,
+			},
+			{Config: forget(f, "mtncloud_mysql.db")},
+		},
+	})
+	if s.orders != 1 {
+		t.Errorf("%d orders placed, want 1", s.orders)
+	}
+}
+
+// Names are checked against MTN Cloud at plan time, before anything is ordered.
+func TestOrder_NamesCheckedAtPlan(t *testing.T) {
+	f, s, _ := orderFakes(t)
+	cfg := func(change, to string) string {
+		body := `
+  name             = "db-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 40
+  networks         = ["app-net"]
+  version          = "8.4"
+  floating_ip_pool = "public-network-02"
+`
+		return f.providerConfig() + "resource \"mtncloud_mysql\" \"db\" {" + strings.Replace(body, change, to, 1) + "}\n"
+	}
+	steps := []resource.TestStep{}
+	for _, c := range []struct{ change, to, want string }{
+		{`"8.4"`, `"5.7"`, `(?s)no version "5.7": choose one of 8.4, 8.0`},
+		{`"app-net"`, `"nope"`, `no network named "nope"`},
+		{`"G2S4"`, `"G9S9"`, `G9S9`},
+		{`"web-prod-Acme"`, `"nope"`, `nope`},
+		{`"public-network-02"`, `"public-network-09"`, `(?s)no floating IP pool "public-network-09"`},
+	} {
+		steps = append(steps, resource.TestStep{Config: cfg(c.change, c.to), PlanOnly: true, ExpectError: regexp.MustCompile(c.want)})
+	}
+	steps = append(steps, resource.TestStep{Config: cfg("", ""), PlanOnly: true, ExpectNonEmptyPlan: true})
+	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: steps})
+	if s.orders != 0 {
+		t.Errorf("%d orders placed by plans", s.orders)
+	}
+}
+
+// Let's Encrypt runs against an instance: context "instance", the instance as the target.
+func TestLetsEncryptOrder(t *testing.T) {
+	f, s, _ := orderFakes(t)
+	cfg := f.providerConfig() + `
+resource "mtncloud_letsencrypt_certificate" "web" {
+  instance_id = "9705"
+  domain_name = "shop.example.com"
+  staging     = true
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					got, _ := json.Marshal(s.sent[9801])
+					want := `{"config":{"sslDomainName":"shop.example.com","sslStaging":true},"context":"instance",` +
+						`"targets":[{"id":"9705"}],"type":{"name":"MTN Let's Encrypt SSL"}}`
+					if string(got) != want {
+						t.Errorf("order item\n got %s\nwant %s", got, want)
+					}
+					return nil
+				},
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{Config: forget(f, "mtncloud_letsencrypt_certificate.web")},
+		},
+	})
+}
+
+// An imported order adopts its configuration on the next apply, and finds its instance by name.
+func TestOrder_ImportAdopts(t *testing.T) {
+	f, s, insts := orderFakes(t)
+	s.items[9790] = map[string]any{"id": 9790, "type": map[string]any{"id": 38, "name": "MTN MySQL", "type": "workflow"},
+		"status": "ORDERED", "execution": map[string]any{"id": 9791, "status": "success"}}
+	insts.insts[9750] = map[string]any{"id": 9750, "name": "db-old", "status": "running", "config": map[string]any{"resourcePoolId": "pool-9201"}}
+	cfg := f.providerConfig() + `
+import {
+  to = mtncloud_mysql.db
+  id = "9790"
+}
+resource "mtncloud_mysql" "db" {
+  name             = "db-old"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 40
+  networks         = ["app-net"]
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg, ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue("mtncloud_mysql.db", tfjsonpath.New("instance_ids"), knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("9750")})),
+			}},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{Config: forget(f, "mtncloud_mysql.db")},
+		},
+	})
+	if s.orders != 0 {
+		t.Errorf("%d orders placed by an import", s.orders)
+	}
+}
+
+// forget is a configuration that stops managing an order without destroying it (D-028).
+func forget(f *fakeAPI, address string) string {
+	return f.providerConfig() + `
+removed {
+  from = ` + address + `
+  lifecycle {
+    destroy = false
+  }
+}
+`
+}

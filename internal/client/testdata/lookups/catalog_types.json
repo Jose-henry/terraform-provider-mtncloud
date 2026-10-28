@@ -1,4 +1,1 @@
-{"catalogItemTypes": [
-  {"id": 22, "name": "Create Instance", "description": "Quick Deployment of Instances", "type": "workflow", "context": "appliance", "featured": true, "allowQuantity": false},
-  {"id": 13, "name": "MTN Object Storage", "description": "S3-compatible object storage", "type": "workflow", "featured": false}
-], "meta": {"offset": 0, "max": 200, "size": 2, "total": 2}}
+{"catalogItemTypes": [{"id": 22, "name": "Create Instance", "description": "Quick Deployment of Instances", "type": "workflow", "context": "appliance", "featured": true, "allowQuantity": false}, {"id": 13, "name": "MTN Object Storage", "description": "S3-compatible object storage", "type": "workflow", "featured": false}, {"id": 38, "name": "MTN MySQL", "description": "MySQL", "type": "workflow", "featured": false}, {"id": 73, "name": "MTN Let's Encrypt SSL", "description": "TLS", "type": "workflow", "featured": false}, {"id": 17, "name": "MTN SMB", "description": "SMB", "type": "workflow", "featured": false}], "meta": {"offset": 0, "max": 200, "size": 2, "total": 2}}

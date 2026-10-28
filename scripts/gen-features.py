@@ -49,6 +49,18 @@ RESOURCES = [
     ("Projects",
      "Projects (resource pools), ordered from MTN's catalog.",
      ["project"]),
+    ("Catalog: databases and web stacks",
+     "Ordered from MTN's catalog: each deploys VMs and installs the service. Inputs are fixed once ordered; delete them in the console.",
+     ["mysql", "postgresql", "mariadb", "mongodb", "lamp_stack", "lemp_stack", "wordpress", "apache_web_server", "nginx_web_server"]),
+    ("Catalog: managed services",
+     "Managed services ordered from MTN's catalog. They show under Apps in the console.",
+     ["managed_database", "managed_mq", "managed_streaming", "managed_kubernetes", "siem"]),
+    ("Catalog: network and security appliances",
+     "VPNs, firewalls and bastion hosts ordered from MTN's catalog (BYOL: bring your own license).",
+     ["vpn_service", "wireguard_vpn", "bastion_host", "fortinet_firewall", "fortiweb", "fortiadc", "fortimanager", "fortianalyzer"]),
+    ("Catalog: file shares and certificates",
+     "NFS and SMB shares (created, updated and deleted by orders) and Let's Encrypt certificates for instances.",
+     ["nfs_share", "smb_share", "letsencrypt_certificate"]),
     ("Compute",
      "Instances: virtual machines from MTN's OS images.",
      ["instance"]),
@@ -128,7 +140,6 @@ def access(kind, name):
 # (type, status, what it does). Status: Next, Planned or On hold.
 PLANNED = [
     ("Resources", [
-        ("mtncloud_catalog_order", "Planned", "Order any catalog service (Kubernetes, managed databases, VPN, firewall, NAT, BYOL appliances and more), with its inputs."),
         ("mtncloud_object_storage", "Planned", "MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource."),
         ("mtncloud_app", "Planned", "Apps from blueprints: several instances or containers deployed together."),
         ("mtncloud_ssl_certificate", "Planned", "Certificates."),

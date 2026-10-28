@@ -14,7 +14,7 @@ import (
 
 // Resources lists every resource in this package, for the provider to register.
 func Resources() []func() resource.Resource {
-	return []func() resource.Resource{newProject}
+	return append([]func() resource.Resource{newProject, newNFSShare, newSMBShare}, orderResources()...)
 }
 
 // base gives every resource its client.

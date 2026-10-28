@@ -451,3 +451,18 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
 - No `ttl`, or `ttl=0`, means no expiry (owner, 2026-10-28).
 - The lease can't be read back as the string the user wrote: after an import with `ttl` set, the
   plan shows an in-place update that only records it in state (tested).
+
+### Catalog order forms, resolved live (2026-10-28)
+- `GET /api/catalog/types/{id}` gives each item's form (`form.options`, `form.fieldGroups[].options`,
+  `optionTypes`); the provider reads it at plan time (`client.CatalogForm`), so no option type ID is
+  hard-coded.
+- A select's choices: `GET /api/options/list?optionTypeId=<field id>` works with a customer login
+  (`/api/options/list/<list id>` answers 500, `/api/library/option-type-lists` is empty). Values can
+  be quoted (`'Replace'`); the provider accepts the value or the shown name.
+- The "Service Plans" list answers empty without its project dependency, whatever the query; plans
+  are therefore listed with `/api/instances/service-plans` for the form's `config.layoutId`.
+- `catalog add-order --context instance --target <id> -d` (Let's Encrypt): the item carries
+  `"context": "instance", "targets": [{"id": "<id>"}]`, and checkboxes are sent as booleans.
+- Assumed from the scripts, to confirm on the first live order: `hostCIDRs` (textarea) one CIDR per
+  line; `labels`/`clientIps` (textArray) comma-separated; `quotaSize` in bytes; `updateType` takes the
+  quoted value.

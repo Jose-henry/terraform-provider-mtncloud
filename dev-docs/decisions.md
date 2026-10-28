@@ -233,10 +233,12 @@ infrastructure), and a generic `mtncloud_catalog_order`. Inputs per item:
   `git_integration`, `ansible_tower_inventory`, `ansible_tower_job_template`, `chef_server`,
   `servicenow_workflow`, `vro_workflow`): the remaining tasks take integration IDs, and these are
   how a configuration finds them.
-- **Catalog orders have no destroy** (like `mtncloud_project`). Destroy removes the order from
-  state only, with a warning saying where to delete what it made: managed services (the
-  "Managed ..." items) under Apps, VM items under Instances. NFS and SMB, which have their own
-  update and delete orders, get real update and delete.
+- **Catalog orders have no destroy**, exactly like `mtncloud_project`: destroy refuses with an error
+  saying where to delete what the order made (the "Managed ..." items under Apps, VM items under
+  Instances) and how to stop managing it (`removed` block or `terraform state rm`). Their inputs
+  can't change after the order (plan-time error). NFS and SMB, which have their own update and
+  delete orders, get real update and delete. MOS stays out until its key-rotation design (D-007) is
+  approved: ordering it rotates the tenant-wide key.
 - **SSL certificate:** a resource for internal certificates only, for now; the data sources exist.
 - **Cluster and load balancer come last.** Clusters: Kubernetes and Docker cluster types only, MTN's
   layouts only. Load balancers follow a different path; the owner will send details first.

@@ -59,6 +59,9 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		"/api/catalog/types":                     "catalog_types.json",
 		"/api/catalog/types/22":                  "catalog_type_22.json",
 		"/api/catalog/types/13":                  "catalog_type_13.json",
+		"/api/catalog/types/38":                  "catalog_type_38.json",
+		"/api/catalog/types/17":                  "catalog_type_17.json",
+		"/api/catalog/types/73":                  "catalog_type_73.json",
 		"/api/instance-types":                    "instance_types.json",
 		"/api/network-router-types":              "router_types.json",
 		"/api/options/environments":              "options_environments.json",
@@ -94,6 +97,10 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 			return
 		}
 		file, ok := routes[r.URL.Path]
+		if r.URL.Path == "/api/options/list" {
+			// A catalog form's select choices, by option type ID.
+			file, ok = "options_list_"+r.URL.Query().Get("optionTypeId")+".json", true
+		}
 		if !ok || r.Header.Get("Authorization") != "Bearer test-token" {
 			w.WriteHeader(http.StatusNotFound)
 			return

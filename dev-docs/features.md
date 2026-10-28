@@ -6,11 +6,11 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 62 | 84 |
-| Usable with a customer (sub-tenant) login | 62 | 79 |
+| Available today | 87 | 84 |
+| Usable with a customer (sub-tenant) login | 87 | 79 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 7 | 0 |
+| Coming next | 6 | 0 |
 
 ## Who can use what
 
@@ -122,6 +122,59 @@ Projects (resource pools), ordered from MTN's catalog.
 | Type | Customer login |
 |---|---|
 | [`mtncloud_project`](../docs/resources/project.md) | Yes, built for customers |
+
+### Catalog: databases and web stacks
+
+Ordered from MTN's catalog: each deploys VMs and installs the service. Inputs are fixed once ordered; delete them in the console.
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_apache_web_server`](../docs/resources/apache_web_server.md) | Yes (read verified) |
+| [`mtncloud_lamp_stack`](../docs/resources/lamp_stack.md) | Yes (read verified) |
+| [`mtncloud_lemp_stack`](../docs/resources/lemp_stack.md) | Yes (read verified) |
+| [`mtncloud_mariadb`](../docs/resources/mariadb.md) | Yes (read verified) |
+| [`mtncloud_mongodb`](../docs/resources/mongodb.md) | Yes (read verified) |
+| [`mtncloud_mysql`](../docs/resources/mysql.md) | Yes (read verified) |
+| [`mtncloud_nginx_web_server`](../docs/resources/nginx_web_server.md) | Yes (read verified) |
+| [`mtncloud_postgresql`](../docs/resources/postgresql.md) | Yes (read verified) |
+| [`mtncloud_wordpress`](../docs/resources/wordpress.md) | Yes (read verified) |
+
+### Catalog: managed services
+
+Managed services ordered from MTN's catalog. They show under Apps in the console.
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_managed_database`](../docs/resources/managed_database.md) | Yes (read verified) |
+| [`mtncloud_managed_kubernetes`](../docs/resources/managed_kubernetes.md) | Yes (read verified) |
+| [`mtncloud_managed_mq`](../docs/resources/managed_mq.md) | Yes (read verified) |
+| [`mtncloud_managed_streaming`](../docs/resources/managed_streaming.md) | Yes (read verified) |
+| [`mtncloud_siem`](../docs/resources/siem.md) | Yes (read verified) |
+
+### Catalog: network and security appliances
+
+VPNs, firewalls and bastion hosts ordered from MTN's catalog (BYOL: bring your own license).
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_bastion_host`](../docs/resources/bastion_host.md) | Yes (read verified) |
+| [`mtncloud_fortiadc`](../docs/resources/fortiadc.md) | Yes (read verified) |
+| [`mtncloud_fortianalyzer`](../docs/resources/fortianalyzer.md) | Yes (read verified) |
+| [`mtncloud_fortimanager`](../docs/resources/fortimanager.md) | Yes (read verified) |
+| [`mtncloud_fortinet_firewall`](../docs/resources/fortinet_firewall.md) | Yes (read verified) |
+| [`mtncloud_fortiweb`](../docs/resources/fortiweb.md) | Yes (read verified) |
+| [`mtncloud_vpn_service`](../docs/resources/vpn_service.md) | Yes (read verified) |
+| [`mtncloud_wireguard_vpn`](../docs/resources/wireguard_vpn.md) | Yes (read verified) |
+
+### Catalog: file shares and certificates
+
+NFS and SMB shares (created, updated and deleted by orders) and Let's Encrypt certificates for instances.
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_letsencrypt_certificate`](../docs/resources/letsencrypt_certificate.md) | Yes (read verified) |
+| [`mtncloud_nfs_share`](../docs/resources/nfs_share.md) | Yes (read verified) |
+| [`mtncloud_smb_share`](../docs/resources/smb_share.md) | Yes (read verified) |
 
 ### Compute
 
@@ -318,7 +371,6 @@ Designed, **not available yet**, and all meant for customers.
 
 | Type | Status | What it does |
 |---|---|---|
-| `mtncloud_catalog_order` | Planned | Order any catalog service (Kubernetes, managed databases, VPN, firewall, NAT, BYOL appliances and more), with its inputs. |
 | `mtncloud_object_storage` | Planned | MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource. |
 | `mtncloud_app` | Planned | Apps from blueprints: several instances or containers deployed together. |
 | `mtncloud_ssl_certificate` | Planned | Certificates. |

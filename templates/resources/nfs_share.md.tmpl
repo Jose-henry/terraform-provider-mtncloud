@@ -1,0 +1,31 @@
+---
+page_title: "mtncloud_nfs_share Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_nfs_share
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_nfs_share/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_nfs_share/import.sh" }}
+
+Write the share's settings exactly as they are: the first apply after an import records them and orders nothing.
+
+## Notes
+
+- Create, update and destroy are each an order of the same catalog item: changing `quota_gb` or
+  `client_ips` (or `password_version` for SMB) orders an update, and destroy orders the deletion.
+- MTN Cloud has no API that reads a share back, so changes made outside Terraform aren't seen.
+- Secrets are write-only (Terraform 1.11 or newer): never stored in state.
