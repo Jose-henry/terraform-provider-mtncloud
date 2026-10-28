@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
@@ -33,6 +34,7 @@ type routerStore struct {
 	stuck       bool           // routers never leave "provisioning"
 	slowReply   time.Duration  // creates are applied at once but answered this late
 	creates     int
+	updates     int // PUTs received
 }
 
 var extNetworks = map[int64]string{34: "public-network-01", 32: "public-network-02"} // options_external_networks.json
@@ -160,6 +162,7 @@ func (s *routerStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		reply(http.StatusOK, map[string]any{"networkRouter": view(id)})
 	case http.MethodPut:
+		s.updates++
 		in := body["networkRouter"].(map[string]any)
 		if _, ok := in["name"]; ok {
 			reply(http.StatusBadRequest, map[string]any{"success": false, "errors": map[string]any{"name": "Field name cannot be changed"}})
@@ -306,6 +309,38 @@ func TestRouter_Lifecycle(t *testing.T) {
 	if len(routers.routers) != 0 || len(nets.networks) != 0 {
 		t.Errorf("%d routers and %d networks left after destroy", len(routers.routers), len(nets.networks))
 	}
+}
+
+// A change to timeouts alone (as after an import) is recorded in state without a PUT.
+func TestRouter_TimeoutsOnlyChangeSendsNothing(t *testing.T) {
+	f, _, routers := newRouterFakes(t)
+	base := `  name = "edge"
+  networks = [mtncloud_network.app.id]
+  external_network = "public-network-02"`
+	var before int
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: routerConfig(f, base)},
+			{
+				PreConfig: func() {
+					routers.mu.Lock()
+					before = routers.updates
+					routers.mu.Unlock()
+				},
+				Config:           routerConfig(f, base+"\n  timeouts {\n    update = \"20m\"\n  }"),
+				ConfigPlanChecks: routerPlan(plancheck.ResourceActionUpdate),
+				Check: func(*terraform.State) error {
+					routers.mu.Lock()
+					defer routers.mu.Unlock()
+					if routers.updates != before {
+						return fmt.Errorf("%d PUTs for a timeouts-only change, want none", routers.updates-before)
+					}
+					return nil
+				},
+			},
+		},
+	})
 }
 
 func TestRouter_Refusals(t *testing.T) {

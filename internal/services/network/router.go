@@ -380,6 +380,12 @@ func (r *routerResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if onlyTimeoutsChanged(plan, state) {
+		// Nothing the API holds changed (for example timeouts set after an import): record it only.
+		state.Timeouts = plan.Timeouts
+		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+		return
+	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	in, ok := r.input(ctx, plan, &resp.Diagnostics)
@@ -455,4 +461,11 @@ func refreshRouter(ctx context.Context, m *routerModel, rt *client.Router, diags
 	set, d := types.SetValueFrom(ctx, types.StringType, ids)
 	diags.Append(d...)
 	m.Networks = set
+}
+
+// onlyTimeoutsChanged reports whether a plan differs from state in nothing the API stores.
+func onlyTimeoutsChanged(plan, state routerModel) bool {
+	return plan.Name.Equal(state.Name) && plan.Description.Equal(state.Description) &&
+		plan.Project.Equal(state.Project) && plan.Networks.Equal(state.Networks) &&
+		plan.ExternalNetwork.Equal(state.ExternalNetwork) && plan.Enabled.Equal(state.Enabled)
 }
