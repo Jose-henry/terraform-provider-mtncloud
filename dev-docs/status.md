@@ -1,134 +1,52 @@
 # Status: what's done, what's next
 
-Last updated 2026-10-27 (floating IP wait, compute lookups, planned list). Update this file at the end of every PR.
+Last updated 2026-10-28 (instance power control, catalog order destroy, network filter). Update this
+file whenever a slice lands. History before 2026-10-28 is in git and in `CHANGELOG.md`.
 
-## Done
+## Where things stand
 
-### Fork and rename
-- Upstream provider copied into `internal/legacy` (package `legacy`). `main.go` serves `legacy.Provider()`.
-- Module `github.com/mtn/terraform-provider-mtncloud`; types `mtncloud_*`; env vars `MTNCLOUD_API_*`;
-  docs and examples say "MTN Cloud". The external SDK is imported as `sdk`. One API wire value is
-  allow-listed (pool type code in `resource_ipv4_ip_pool.go`).
-- Identifiers that broke under the rename were fixed (`PlanPayload`, `PriceSetPayload`, `PricePayload`,
-  `globals.go`).
+- Released: **v0.4.0** (tagged by the owner). `main` is ahead with power control, order destroy and
+  the network filter (CHANGELOG "Unreleased").
+- 89 resources and 86 data sources, all usable by a customer (sub-tenant) login. Generated list:
+  `docs/guides/features.md`.
+- Live QA ran on 2026-10-28 in the dev test tenant: [qa-2026-10-28.md](qa-2026-10-28.md).
+- Work goes straight to `main` at the owner's request (no PRs for now). Every slice still runs all
+  gates and the `mtncloud-code-reviewer` agent, and every new test is mutation-checked.
 
-### Scope (D-002)
-- Removed 13 resources and 2 data sources (non-OpenStack clouds and instances, ARM/CloudFormation, vSphere data sources),
-  with their docs, templates and examples. Kept: K8s/Helm/Terraform blueprints, all integrations,
-  all appliance config.
-- After the scope cut: 112 resources and 63 data sources, all documented (70 data sources after PR #3).
+## Built (Plugin Framework, `internal/services`)
 
-### Quality gates (all passing locally)
-| Gate | Result |
-|---|---|
-| `go build`, `go vet` | ok |
-| `go test` | 6 schema tests pass (InternalValidate, `mtncloud_` prefix, removed types stay removed, no upstream name in schema, env vars, secrets Sensitive) |
-| `golangci-lint` v2 | 0 issues (legacy has a recorded debt baseline, B-002) |
-| `golangci-lint fmt` | clean |
-| tfplugindocs generate + validate | ok, deterministic, no drift |
-| `scripts/check-names.sh` | ok (mutation-tested) |
-| `scripts/validate-examples.sh` | 313 files on Terraform 1.17.0, 1.5.7 and OpenTofu 1.13.2; 22 known upstream defects tracked (B-003); mutation-tested |
-| `terraform fmt -check` on examples | clean |
-| `govulncheck` | no vulnerabilities (grpc 1.84.0, x/net 0.61.0, x/text 0.43.0, toolchain go1.26.10) |
-| `goreleaser check` | valid (`archives.formats`) |
+| Area | Types | Proven live |
+|---|---|---|
+| Projects | `mtncloud_project` (catalog order; destroy refuses, no delete order exists) | yes |
+| Networking | `mtncloud_network`, `mtncloud_router`, `mtncloud_security_group`, `mtncloud_security_group_rule` | yes |
+| Instances | `mtncloud_instance`: names not IDs, volumes, floating IP, scale, expiry, **power_state, restart_trigger** | yes; power test in progress |
+| Clusters | `mtncloud_cluster` (Kubernetes, Docker) | Docker yes; Kubernetes create only (token expired mid-build) |
+| Catalog services | 22 typed order resources (databases, stacks, web servers, managed DB/MQ/streaming/Kubernetes, SIEM, VPN, WireGuard, bastion, Fortinet appliances) and `mtncloud_letsencrypt_certificate`. **Destroy deletes what the order made** (D-029) | not yet (cost); one cheap order next |
+| Shares | `mtncloud_nfs_share`, `mtncloud_smb_share` (catalog update and delete) | blocked: web firewall 403 |
+| Certificates | `mtncloud_ssl_certificate` (write-only key) | blocked: web firewall 403 |
+| Cypher | `mtncloud_cypher_password`, `_uuid`, `_key` (+ legacy `_secret`, `_tfvars`) | yes |
+| Lookups | 86 data sources; `mtncloud_instances` filters by `network` | yes, all 86 run |
+| Provider | project, group and cloud defaults (D-027); token or password login | yes |
 
-### Repo structure (mirrors the Onesi repo)
-- `CLAUDE.md` (lean index), `.claude/rules/` (workflow, terraform-provider, testing, isolation,
-  graphify, tools), `.claude/agents/mtncloud-code-reviewer.md`, `.claude/skills/ship-check/`,
-  `.claude/hooks/graphify-update.mjs` + `settings.json` hooks.
-- `.github/workflows/`: `ci.yml` (lint, test -race, docs drift, name gate, examples on 3 CLIs,
-  goreleaser check, govulncheck; SHA-pinned actions), `acceptance.yml` (manual only),
-  `release.yml` (goreleaser + GPG). Dependabot monthly. PR template.
-- `internal/` package layout with a README contract per package (no code yet).
-- `dev-docs/` (this folder), `Makefile` (`make ci` = every PR gate), `README.md`, `CHANGELOG.md`,
-  `.gitignore` (tfvars, state, .terraform, env, graphify-out), `.gitattributes` (LF),
-  `.editorconfig`, `.graphifyignore` (Go only).
-- `examples/quickstart` rewritten (no real IDs). The local `terraform.tfvars` is git-ignored.
+Legacy (SDKv2, `internal/legacy`), kept and renamed: tasks, workflows, jobs, schedules, scale
+thresholds, credentials, key pairs, users, roles, groups, option types/lists, forms, identity sources,
+contacts, environments, wiki pages, network domains, IP pools.
 
-### Research captured
-- MTN Drive docs: project, network and router workflows, instance access ([prerequisites.md](prerequisites.md)).
-- Context7 API reference: networks, routers, security groups (+rules, locations), instances, floating
-  IPs ([api-research.md](api-research.md)).
-- CLI payloads: catalog item types (39), instance types (114, 45 public OpenStack), resource pools
-  ([mtn-cloud-domain.md](mtn-cloud-domain.md)).
-- MOS automation scripts: key creation, Cypher layout, rotation hazard ([mtn-cloud-domain.md](mtn-cloud-domain.md#mos-mtn-object-storage)).
+## Next
 
-### PR #2: features guide, cloud datastore restored, CLI research
-- `docs/guides/features.md`, generated by `scripts/gen-features.py` from the registered types (fails
-  on an uncategorised type). `cloud_datastore` restored (D-010).
-- `scripts/cli/capture.ps1`: reads, and `-d` dry runs only. Raw output stays in `.captures/`.
+The ordered list is [backlog.md B-018](backlog.md#b-018-remaining-work-after-2026-10-28-owners-list-in-order):
+live power test, live order destroy, MOS (order, then buckets), `mtncloud_app` (B-017), the web
+firewall error, QA second pass of automation and users, and the open follow-ups (B-016).
 
-### PR #3: API client and lookup data sources (build steps 1 and 2)
-- **Plugin Framework + mux** (D-005): `main.go` serves legacy (tf5 upgraded to tf6) and the
-  Framework provider together. Both provider schemas are identical (`TestMux_ProviderSchemasMatch`).
-  `url` is Optional in both halves (D-015). `secure` defaults to true (D-014). Sub-tenant login uses
-  one backslash (B-006).
-- **`internal/client`**: login (token, or password as `subdomain\username`), retries (429 any
-  method, 5xx reads only, jittered capped backoff, Retry-After), rate limit, ctx, a per-run lookup
-  cache shared by concurrent callers (failures shared too, then evicted), typed `APIError` with
-  hints, a logger that records method, path and status only. 88% coverage.
-- **Data sources** (`internal/services/lookup`): `mtncloud_projects`, `mtncloud_images`,
-  `mtncloud_plans`, `mtncloud_datastores`, `mtncloud_security_groups`, `mtncloud_external_networks`,
-  `mtncloud_catalog_items`. They use customer-safe endpoints (D-016) and sorted output.
-- **`internal/normalize`**: `ProjectShortName` / `ProjectMatches` (case-sensitive), 100% coverage.
-- **Tests**: client contract tests on scrubbed fixtures; provider unit tests run real Terraform
-  against a fake API (read → empty plan, clear errors, unknown provider config, credential
-  precedence). Every review fix was mutation-checked.
-- Types now: 112 resources, 70 data sources.
+On hold: load balancer (D-013), `internal/tenancy` master gating (D-004, master-only types removed).
 
-### Customer permissions (branch `chore/customer-permission-matrix`, not pushed yet)
-- Read-only probe of ~100 endpoints as a sub-tenant Customer Admin User:
-  [customer-permissions.md](customer-permissions.md). The cloud is discovered, never hard-coded (D-018).
-- 36 resources and 12 data sources marked master-only in their descriptions (B-007); the features
-  guide has a "Customer login" column, a master-only list and a status for every planned type.
+## Owner actions
 
-- `mtncloud_security_group` and `mtncloud_security_group_rule` (branch `feat/network-security-group`,
-  local): rules as a set, `all_rules` to see every rule, default egress kept unless
-  `remove_default_egress` (D-019). Proven with one live create/delete as a customer; unit, client
-  contract and provider lifecycle tests (plan, apply, empty plan, import, drift, disappear, replace).
+- Delete the QA project `tf-acc-proj-w1hl0` with an admin login (customers can't delete projects).
+- Take web firewall reference `2bE-LH4e-J8xB` (`POST /api/certificates`, `POST /api/catalog/orders`)
+  to MTN's network team.
 
-- `mtncloud_network` (MTN Network, same branch, local): project by name, CIDR replaces, gateway
-  required, MTN DNS defaults (D-017), optional IPv6, `subnet_id` for routers, in-use delete hint.
-  The client now treats `"success": false` in a 2xx answer as an error.
+## Private use-and-test guide
 
-- `mtncloud_router` (MTN Router, on `main`): networks by ID, gateway by external network name,
-  in-place network and gateway changes, waits for "ok" with `timeouts {}`. First async resource:
-  the client's `poll` is shared by everything that waits (instances, projects, catalog orders).
-
-- `mtncloud_instance` (on `main`, core slice): group, project, image, plan, networks, security
-  groups and datastores by name, resolved at plan time; optional name (the tenant's naming template
-  names it otherwise); data volumes and networks appended in place; plan change in place (restarts);
-  root resize and Windows under 40 GB refused at plan time; default SG always applied; waits for
-  "running" and reports "failed"/"error" with the platform's reason. Not proven live yet (B-013).
-  `floating_ip_pool` (attached after running; the apply waits for the address) on `main`.
-- `mtncloud_project` (`internal/services/catalog`, on `main`): orders "Create Project", waits for
-  the workflow's execution only (D-020, D-022). ID = catalog order item. Not proven live (B-015).
-- Floating IP wait (2026-10-27, owner: an attach that fails, fails the apply): each attach/detach
-  polls the instance's address. An attach sent but never seen is kept in private state and never
-  re-sent; a detach counts only once the address is gone. Timeouts suggest raising `timeouts`.
-- Lookup data sources for console-made objects (2026-10-27): `mtncloud_routers` (name_regex),
-  `mtncloud_instances` (name_regex, project) and `mtncloud_instance` (id or name, optional project;
-  errors on none or several). A customer login reads `/api/networks/routers`, `/api/instances`,
-  `/api/networks`, `/api/networks/domains`, `/api/environments` and `/api/key-pairs` (200, re-checked
-  2026-10-27), so the inherited network, domain, environment and key pair data sources stay
-  "read verified". Availability zones remain blocked: `/api/options/openstackAvailabilityZone` answers 500.
-- Master-only types removed (D-024, 2026-10-27): 36 resources and 12 data sources. Now 82
-  resources and 61 data sources, all usable by a customer login; the owner audits them next.
-- Phase 2a (2026-10-27): 32 new data sources (81 in all); see audit-2026-10-27.md.
-- Owner's audit (D-025, 2026-10-27): 22 resources and 12 data sources removed; 60 resources and 49
-  data sources left. Plan in [audit-2026-10-27.md](audit-2026-10-27.md): phase 2 data sources,
-  phase 3 provider defaults (group, cloud, project), phase 4 new resources. No live testing until done.
-- Fixes from the owner's tester (2026-10-27): `private_ip` on console-made instances, plans by
-  image name, and `mtncloud_network` (data source) rebuilt with project, group and cloud.
-- Guides: "Sharing Data Between ..." removed (it needed master-only Cypher policies). A private,
-  git-ignored use-and-test guide (`private/*.pdf`, rebuilt with `python private/make_guide_pdf.py .`) is generated from the examples.
-
-## Next (in order, each one a PR with tests, after the owner approves its plan)
-
-1. Prove `mtncloud_project` and `floating_ip_pool` live (B-015, B-013). Instance availability zone
-   still open (B-013).
-2. `mtncloud_catalog_order` → `mtncloud_object_storage` (MOS) → app, SSL certificate, cluster,
-   datastore, load balancer (back on the plan, D-023).
-3. `internal/tenancy` (master gating, D-004) once Q1 is answered.
-4. Migrate the legacy resources customers use most, fixing B-001 on the way.
-5. First release: registry repo name (Q5), GPG key, `v0.1.0`. Acceptance tests need a test tenant (Q6).
+`private/MTN-Cloud-Terraform-Use-and-Test-Guide.pdf` (git-ignored), rebuilt with
+`python private/make_guide_pdf.py .` from the examples, so its examples match the code.

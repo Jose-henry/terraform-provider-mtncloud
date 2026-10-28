@@ -4,6 +4,13 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+- `mtncloud_instance`: power control. `power_state` (`running`, `stopped`, `suspended`) powers the VM in place and puts back a change made in the console; left out, it only shows the state. A new `restart_trigger` value reboots the VM. A power call refused at create is a warning, so the new VM isn't tainted.
+- **Changed:** destroying a catalog-order resource now deletes what the order made, instead of refusing (D-029). Its instances are deleted with their disks and floating IPs, through their app for the managed services (database, MQ, streaming and Kubernetes), then the order's record in Catalog > Inventory. An app that also holds other instances is kept. Destroy refuses, deleting nothing, when it can't tell what the order made. `mtncloud_letsencrypt_certificate` deletes nothing and warns; `mtncloud_project` still refuses. To keep what an order made, use a `removed` block before you destroy.
+- `mtncloud_instances` filters by `network` (ID or name; a VM matches on any of its cards) and returns each instance's `networks`.
+- Docs: the examples pin `~> 0.4`. An instance with `install_agent` on (the default) stays "provisioning" until its agent reports in, so its network must be on an MTN Router with an external network.
+
+## 0.4.0 (2026-10-28)
+
 - New resource `mtncloud_cluster`: Kubernetes (default) and Docker clusters from MTN's layouts, with master and worker settings, worker count and autoscaling changed in place, and every name checked when you plan.
 - New data sources `mtncloud_registries` and `mtncloud_cluster_layouts`.
 

@@ -1,10 +1,11 @@
 # Terraform Provider for MTN Cloud
 
 Manage [MTN Cloud](https://console.cloud.mtn.ng) with Terraform: projects, MTN Networks and Routers,
-security groups, instances, catalog services, MOS object storage, automation, and tenancy.
+security groups, instances, clusters, catalog services, Cypher secrets, automation, and users.
 
-> Status: **pre-release**. The provider builds and its schema is tested; MTN-specific resources are
-> being designed (see `dev-docs/backlog.md`). Don't use it for production infrastructure yet.
+> Status: **pre-release** (0.4.x). The core resources (projects, networks, routers, security groups,
+> instances, clusters, catalog services) are built and were tested live on 2026-10-28; MOS buckets,
+> apps and load balancers are still to come (see `dev-docs/status.md`). Test before you rely on it.
 
 ## Use
 

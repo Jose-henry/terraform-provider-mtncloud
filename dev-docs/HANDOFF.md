@@ -15,7 +15,8 @@ provider and renamed throughout.
      through Context7 `/websites/apidocs_morpheusdata_reference`. Never design from memory.
    - **Plan before code.** Propose files, schema, API source and tests, then wait for the owner's
      approval before writing Go.
-   - Branch → PR → green CI → merge. Never commit to `main`.
+   - The rule file says branch → PR → merge; the owner currently has work pushed straight to `main`.
+     Ask which applies before your first commit.
    - Never run acceptance tests or any write call against MTN Cloud without explicit permission.
      Never print or commit secrets, tfvars, state, or real tenant IDs/IPs.
 3. `.claude/rules/terraform-provider.md`, `testing.md`, `isolation.md`: the engineering bar. After
@@ -23,14 +24,14 @@ provider and renamed throughout.
 4. `dev-docs/status.md`: what's done and what's next. Then `backlog.md` (open questions Q1–Q6),
    `prerequisites.md` (project name → pool ID resolution, synced default security group),
    `catalog-lookups.md` (names, not IDs), `api-research.md` (payloads P1–P10 still needed),
-   `mtn-cloud-domain.md` (catalog items, images, MOS), and `decisions.md` (D-001…D-023).
+   `mtn-cloud-domain.md` (catalog items, images, MOS), `decisions.md` (D-001…D-029), and
+   `qa-2026-10-28.md` (the live QA run).
 
-**Where things stand:** `main` has the scaffold, the features guide (PR #2) and, from PR #3, the
-Plugin Framework provider muxed with legacy, `internal/client`, ten lookup data sources
-(projects, images, plans, datastores, security groups, external networks, catalog items, routers,
-instances, instance) and the resources project, network, router, security group (+ rule) and
-instance (with floating IP). Read `dev-docs/status.md` for details. Next: a live proof of project and
-floating IP (B-015, B-013), then `mtncloud_catalog_order`.
+**Where things stand:** v0.4.0 is tagged; `main` is ahead with instance power control, catalog
+order destroy (D-029) and the `mtncloud_instances` network filter. 89 resources and 86 data sources,
+all for customer logins. Live QA ran on 2026-10-28 in the dev test tenant. The remaining work, in
+order, is `dev-docs/backlog.md` B-018 (live power and order-destroy tests, MOS, `mtncloud_app`, the
+web firewall error, a QA pass of automation and users).
 
 **Domain facts you must not get wrong:**
 - Customers type a **project name**. Its resource pool is named `<project>-<tenant account name>`.
@@ -52,11 +53,15 @@ floating IP (B-015, B-013), then `mtncloud_catalog_order`.
 - The platform CLI runs only through `scripts/cli/capture.ps1`: reads, and `-d` dry runs for
   anything that writes.
 
-**Your first task:** read the files above. Then capture, as a sub-tenant, the `-d` dry runs listed
-under "Next" in `status.md` for `mtncloud_security_group`, and propose its plan (schema with every
-attribute's Required/Optional/Computed and why, client methods, tests, docs). Wait for approval
-before writing Go. Use the `ship-check` skill before calling anything done, and the
-`mtncloud-code-reviewer` agent on every diff.
+**Your first task:** read the files above, then take the next open item in B-018. Propose its plan
+(schema with every attribute's Required/Optional/Computed and why, client methods with their Context7
+source, tests, docs) and wait for approval before writing Go. Use the `ship-check` skill before
+calling anything done, and the `mtncloud-code-reviewer` agent on every diff.
+
+- A VM with the agent on (the default) stays "provisioning" until its agent reports in: its network
+  needs an MTN Router with an external network.
+- The API token from the CLI lasts 24 minutes; long creates (Kubernetes) outlive it.
+- MTN's web firewall blocks some bodies (certificate PEMs, quoted option values) with an HTML 403.
 
 **Local tooling notes (Windows):** `-race` needs cgo, so it runs in CI. `make` may be missing, so run
 the commands in the Makefile directly. `scripts/validate-examples.sh` needs `PYTHON=python` and

@@ -214,3 +214,26 @@ Open questions before building:
 Tests: unit (set diff to add/remove calls), client contract (add/remove/sg/delete query flags),
 provider unit (create → empty plan → add an instance → remove → import), acceptance in `admin`
 with two `tf-acc-*` VMs.
+
+## B-018 Remaining work after 2026-10-28 (owner's list, in order)
+
+1. **Live power test** on a `tf-acc` VM: stop, start, suspend, resume, restart, each followed by an
+   empty plan. In progress on 2026-10-28.
+2. **Live order destroy** on one cheap VM order (for example `mtncloud_nginx_web_server`): the VM and
+   the inventory record go. Then, if the owner allows one, a managed order, to confirm the app name and
+   node names D-029 assumes (managed apps are matched by the order's name and `<name>-<n>` nodes).
+3. **MOS** (D-007, approved in the dev tenant): run the MOS order through Terraform; then design bucket
+   management over the S3-compatible API with the tenant's own Cypher keys
+   (`secret/MOS-<tenant>_<user>_*`), after checking what PowerScale's S3 supports (versioning,
+   lifecycle, bucket policies, ACLs).
+4. **App lifecycle**: `mtncloud_app` (B-017), after its two open checks.
+5. **Web firewall 403s**: MTN's web firewall answers some calls with an HTML "Access Restricted" page
+   and a reference ID (certificate PEMs; NFS/SMB option values such as `'Allow All'`). The client
+   should recognise that page and say it is the firewall, with the reference ID, instead of a bare
+   403. The owner takes reference `2bE-LH4e-J8xB` to MTN's network team.
+6. **QA second pass** (owner granted full permissions): tasks and a job run after creating a task;
+   workflows; scale thresholds; power and execute schedules; credentials and key pairs; user roles,
+   users and user groups. Left out on purpose: option types and lists, forms, identity sources.
+7. A provider test for destroying an imported order that hasn't been applied (the code refuses;
+   nothing tests it yet).
+8. The low-severity items in B-016, and B-001 (legacy bugs) as legacy resources migrate.
