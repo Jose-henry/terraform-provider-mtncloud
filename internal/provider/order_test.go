@@ -194,9 +194,10 @@ func TestOrder_Destroy(t *testing.T) {
 // for one; with nothing named after it left, destroy refuses and deletes nothing.
 func TestOrder_DestroyEdges(t *testing.T) {
 	for name, tc := range map[string]struct {
-		prep    func(s *orderStore, insts *instStore)
-		wantErr string
-		want    []string
+		prep     func(s *orderStore, insts *instStore)
+		imported bool
+		wantErr  string
+		want     []string
 	}{
 		"no execution": {
 			prep: func(s *orderStore, _ *instStore) {
@@ -207,6 +208,12 @@ func TestOrder_DestroyEdges(t *testing.T) {
 		},
 		// The saved instance was renamed, so it no longer matches the order's name: it is left alone,
 		// and with nothing else found, destroy refuses.
+		// Imported and not applied since: the order's name isn't known, so nothing is deleted.
+		"imported, not applied": {
+			prep:     func(*orderStore, *instStore) {},
+			imported: true,
+			wantErr:  "imported and not applied",
+		},
 		"saved instance renamed": {
 			prep:    func(_ *orderStore, insts *instStore) { insts.insts[9701]["name"] = "db-1-2" },
 			wantErr: "Nothing it made was found",
@@ -241,8 +248,18 @@ func TestOrder_DestroyEdges(t *testing.T) {
 				Config: f.providerConfig(),
 			}
 			steps := []resource.TestStep{{Config: cfg}, destroy}
+			if tc.imported {
+				// Forget it, import it again, and destroy before any apply adopts it.
+				steps = []resource.TestStep{
+					{Config: cfg},
+					{Config: forget(f, "mtncloud_mysql.db")},
+					{Config: cfg, ResourceName: "mtncloud_mysql.db", ImportState: true, ImportStateId: "9801",
+						ImportStatePersist: true},
+					destroy,
+				}
+			}
 			if tc.wantErr != "" {
-				steps[1].ExpectError = regexp.MustCompile(tc.wantErr)
+				steps[len(steps)-1].ExpectError = regexp.MustCompile(tc.wantErr)
 				steps = append(steps, resource.TestStep{Config: forget(f, "mtncloud_mysql.db")})
 			}
 			resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: steps})
