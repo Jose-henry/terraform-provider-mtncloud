@@ -158,3 +158,18 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
 - Does the order response carry `order.items[0].id`, as the API reference says?
 - `groupName` and `cloud` are sent as IDs (the form's `group` and `cloud` types); the workflow uses
   only the cloud ID. Confirm with the execution's output.
+
+## B-016 Follow-ups from the 2026-10-28 live QA run (dev-docs/qa-2026-10-28.md)
+- Kubernetes cluster live: finish scaling, autoscaling, in-place edits and import with a token that
+  outlives the build (a Kubernetes build took more than 24 minutes; the token lasts 24). Confirm the
+  `worker` block, worker add body and autoscaler body.
+- Document in the guide and the cluster page that a cluster apply needs a longer-lived token.
+- Error title says "Unknown project" for a bad group or cloud.
+- The insecure-connection warning is printed twice.
+- Legacy resources' 403 errors lack the permission hint the client adds.
+- Instances can't use security groups made in the same run until the cloud sync lists them
+  (70+ minutes): document it, or wait for the option at plan time.
+- Live-untested for the customer role (403): SSL certificate, standalone floating IP, library option
+  lists and types, shell script tasks and the workflows built on them, NFS/SMB orders. Need a login
+  with those permissions.
+- The QA project `tf-acc-proj-w1hl0` must be deleted by an admin login (owner).
