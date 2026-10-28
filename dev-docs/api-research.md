@@ -225,6 +225,13 @@ questions:
 | Default egress rules | Neutron adds allow-all egress for `0.0.0.0/0` and `::/0`, but MTN Cloud shows them only after its sync, which can take a long time. Synced form: `ruleType` `custom`, `sourceType` `all`, CIDR in `destination`. |
 | Delete | `DELETE` returns 200; a later `GET` returns 404 "Security Group not found". |
 
+### Seen live (QA 2026-10-28)
+- The cloud sync re-creates rules made through the API with new IDs and names set to the port,
+  restores rules deleted before the first sync, and sets a blank description to the group's name
+  (the provider keeps an unset description unset: `79f893f`).
+- Groups made through the API don't appear in `/api/options/zoneSecurityGroup` (the instance
+  wizard's list) for 70+ minutes, so a new instance can't use them yet.
+
 ### Built design (D-019)
 
 `mtncloud_security_group`
@@ -300,6 +307,10 @@ done. Fixtures: `internal/client/testdata/security_groups/` (scrubbed copies of 
 - Floating IP rules (owner, 2026-10-27): only possible when the instance's network is attached to
   a router with an external network; it can be attached after provisioning. Customers get 403
   on `/api/networks/floating-ips`, so the attach call a customer can make is still unknown.
+- **Seen live (QA 2026-10-28):** an instance's `floating_ip_pool` attaches at create (about 3m40s) and
+  removing it detaches in place. API-made instances read `environmentPrefix: null` and NIC IDs `null`.
+  A resize that resends the existing `networkInterfaces` adds a duplicate card: send them only when a
+  network is added (`0424084`).
 - MTN docs read: "VM Provisioning Workflow" (default security group at create, more groups after;
   fault domain = availability zone; Windows root at least 40 GB; agent install needs a router),
   "Reconfiguring Instances" (plan change restarts the VM; root disk can't grow; primary NIC can't
@@ -446,8 +457,9 @@ listcypherkeys). `POST /api/cypher/password/<len>/<name>`, `key/<bits>/<name>`, 
 generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing key on these mounts
 **creates** it, so the provider checks existence through `GET /api/cypher?key=<k>` (exact
 `itemKey` match) before every read. Open for QA:
-- Whether the stored `itemKey` keeps the size segment (`password/15/x` or `password/x`). Create
-  accepts either; once confirmed, drop the other form.
+- **Confirmed live (QA 2026-10-28):** the stored `itemKey` keeps the size segment
+  (`password/20/<name>`, `key/128/<name>`). `ttl "8h"` reads back as a lease of 28800000 ms; no ttl
+  reads 0. Secret and tfvars imports work by key after `ac4cf89`.
 - No `ttl`, or `ttl=0`, means no expiry (owner, 2026-10-28).
 - The lease can't be read back as the string the user wrote: after an import with `ttl` set, the
   plan shows an in-place update that only records it in state (tested).
@@ -464,8 +476,14 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
 - `catalog add-order --context instance --target <id> -d` (Let's Encrypt): the item carries
   `"context": "instance", "targets": [{"id": "<id>"}]`, and checkboxes are sent as booleans.
 - Assumed from the scripts, to confirm on the first live order: `hostCIDRs` (textarea) one CIDR per
-  line; `labels`/`clientIps` (textArray) comma-separated; `quotaSize` in bytes; `updateType` takes the
-  quoted value.
+  line; `labels`/`clientIps` (textArray) comma-separated; `quotaSize` in bytes.
+- **Confirmed live (QA 2026-10-28):** `updateType` must be sent on **every** NFS/SMB order (create,
+  update, delete) with the quoted value (`'Append'`, `'Replace'`, `'Allow All'`). Left out, the
+  platform fills in the field's default (`Append`, unquoted) and refuses it: "IP Update Type value
+  [Append] is not contained within the available options". Fixed in `c10499e`. The customer login
+  then gets 403 on the NFS order, so the rest is still unconfirmed live.
+- **Confirmed live:** the "Create Project" order completes in seconds; the pool appears and syncs
+  within minutes. A customer gets 403 on `/api/zones/{id}/resource-pools/{id}` (read and delete).
 
 ### SSL certificates (internal) (2026-10-28)
 - Types (`GET /api/certificate-types`): `internal` (upload), `internalCsr`, plus types this tenant can't use.
@@ -476,6 +494,8 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
   "domainName", "certFile", "keyFile", "wildcard"}}`. PUT takes the same fields; a read never returns
   certFile, keyFile or chainFile, so the key is write-only and the certificate/chain are kept from config.
 - Assumed until QA: a PUT without `keyFile` or `certFile` keeps what is stored, and `chainFile: ""` removes the chain (the PUT reference doesn't list chainFile).
+  **Still open:** QA 2026-10-28 got 403 on `POST /api/certificates` with the customer login, so none of this
+  could be checked live.
 
 ### Clusters (2026-10-28, customer login)
 - Cluster types: `kubernetes-cluster`, `docker-cluster`. MTN's layouts (`/api/library/cluster-layouts`, the
