@@ -48,7 +48,7 @@ func resourceCypherSecret() *schema.Resource {
 			},
 		},
 		Importer: &schema.ResourceImporter{
-			StateContext: schema.ImportStatePassthroughContext,
+			StateContext: cypherImporter("secret"),
 		},
 	}
 }
@@ -124,6 +124,9 @@ func resourceCypherSecretRead(ctx context.Context, d *schema.ResourceData, meta 
 		keyData = keyData[1:]
 		d.Set("key", strings.Join(keyData, "/"))
 		d.Set("ttl", result.LeaseDuration)
+		if v, ok := result.Data.(string); ok {
+			d.Set("value", v) // the stored value: an import adopts it, and a change made elsewhere shows
+		}
 	} else {
 		return diag.Errorf("read operation: contact not found in response data") // should not happen
 	}
