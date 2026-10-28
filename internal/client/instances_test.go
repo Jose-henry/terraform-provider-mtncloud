@@ -111,8 +111,13 @@ func TestGetInstance_Reads(t *testing.T) {
 	// Made in the console: no prefix, but still one <PREFIX>_IP variable.
 	noPrefix := strings.Replace(string(body), `"environmentPrefix": "MTN_UBUNTU_SERVER_24_04_3LTS"`, `"environmentPrefix": null`, 1)
 	f.route("GET", "/api/instances/9702", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(noPrefix)) })
-	if in, err := f.client(t).GetInstance(t.Context(), 9702); err != nil || in.PrivateIP != "10.20.1.15" || in.PublicIP != "203.0.113.20" {
-		t.Errorf("no prefix: ips %q %q, %v", in.PrivateIP, in.PublicIP, err)
+	in2, err := f.client(t).GetInstance(t.Context(), 9702)
+	if err != nil || in2.PrivateIP != "10.20.1.15" || in2.PublicIP != "203.0.113.20" {
+		t.Errorf("no prefix: ips %q %q, %v", in2.PrivateIP, in2.PublicIP, err)
+	}
+	// Live QA 2026-10-28: without a prefix the platform's variables must still be told apart.
+	if !in2.IsPlatformEnvVar("MTN_UBUNTU_SERVER_24_04_3LTS_HOST") || in2.IsPlatformEnvVar("APP_ENV") {
+		t.Error("no prefix: platform variables are told apart by their <P>_IP / <P>_HOST pair")
 	}
 	// Root and primary come first whatever order the API uses.
 	if !in.Volumes[0].Root || in.Volumes[0].Size != 40 || in.Volumes[1].DatastoreID != "2" {
@@ -123,6 +128,24 @@ func TestGetInstance_Reads(t *testing.T) {
 	}
 	if !in.IsPlatformEnvVar("MTN_UBUNTU_SERVER_24_04_3LTS_PORT_SSH") || in.IsPlatformEnvVar("APP_ENV") {
 		t.Error("platform variables are told apart by the instance's prefix")
+	}
+}
+
+func TestDerivedEnvPrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		vars map[string]string
+		want string
+	}{
+		{"platform pair", map[string]string{"UB_IP": "10.0.0.1", "UB_HOST": "c1", "UB_PORT_SSH": "22", "APP": "x"}, "UB"},
+		{"no host", map[string]string{"UB_IP": "10.0.0.1"}, ""},
+		{"two pairs is ambiguous", map[string]string{"A_IP": "1", "A_HOST": "h", "B_IP": "2", "B_HOST": "h"}, ""},
+		{"none", map[string]string{"APP": "x"}, ""},
+	}
+	for _, tt := range tests {
+		if got := derivedEnvPrefix(tt.vars); got != tt.want {
+			t.Errorf("%s: got %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }
 

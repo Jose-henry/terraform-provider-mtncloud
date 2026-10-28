@@ -207,6 +207,9 @@ func (w wireInstance) instance() *Instance {
 	for _, e := range w.Evars {
 		in.EnvVars[e.Name] = fmt.Sprint(e.Value)
 	}
+	if in.EnvPrefix == "" {
+		in.EnvPrefix = derivedEnvPrefix(in.EnvVars)
+	}
 	in.ProjectID = idFrom(w.Config.ResourcePoolID, "pool-")
 	in.NoAgent = w.Config.NoAgent != nil && *w.Config.NoAgent
 	if in.LayoutSize = idFrom(w.Config.LayoutSize, ""); in.LayoutSize == 0 {
@@ -282,6 +285,27 @@ func idFrom(v any, prefix string) int64 {
 		return n
 	}
 	return 0
+}
+
+// derivedEnvPrefix finds the prefix of the platform's own variables when the API leaves
+// environmentPrefix null (instances made in the console, and through the API, captured
+// 2026-10-28): the one P with both P_IP and P_HOST set. With none, or several, it is "".
+func derivedEnvPrefix(vars map[string]string) string {
+	found := ""
+	for k := range vars {
+		p, ok := strings.CutSuffix(k, "_IP")
+		if !ok || p == "" {
+			continue
+		}
+		if _, host := vars[p+"_HOST"]; !host {
+			continue
+		}
+		if found != "" {
+			return ""
+		}
+		found = p
+	}
+	return found
 }
 
 // IsPlatformEnvVar reports a variable the platform sets on every instance (its address, host and
