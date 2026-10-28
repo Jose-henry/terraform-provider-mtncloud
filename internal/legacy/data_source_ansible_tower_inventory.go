@@ -2,9 +2,8 @@ package legacy
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"strings"
+	"strconv"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -39,7 +38,7 @@ func dataSourceAnsibleTowerInventoryRead(ctx context.Context, d *schema.Resource
 	var diags diag.Diagnostics
 
 	name := d.Get("name").(string)
-	value := d.Get("id")
+	value := d.Get("id").(int)
 
 	// lookup by name if we do not have an value yet
 	var resp *sdk.Response
@@ -57,28 +56,15 @@ func dataSourceAnsibleTowerInventoryRead(ctx context.Context, d *schema.Resource
 	}
 	log.Printf("API RESPONSE: %s", resp)
 
-	var inventory sdk.OptionSourceOption
-	allInventories := *resp.Result.(*sdk.GetOptionSourceResult).Data
-	for i := range allInventories {
-		if value == 0 && name != "" {
-			if strings.EqualFold(allInventories[i].Name, name) {
-				inventory = allInventories[i]
-				break
-			}
-		} else if value != 0 {
-			if value == allInventories[i].Value {
-				inventory = allInventories[i]
-				break
-			}
-		} else {
-			return diag.Errorf("Ansible tower inventory cannot be read without name or value")
-		}
+	option, id, err := findOptionSourceOption(resp.Result.(*sdk.GetOptionSourceResult).Data, "Ansible Tower inventory", name, value)
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
 	// store resource data
-	d.SetId(fmt.Sprintf("%g", inventory.Value.(float64)))
-	d.Set("id", inventory.Value)
-	d.Set("name", inventory.Name)
+	d.SetId(strconv.FormatInt(id, 10))
+	d.Set("id", id)
+	d.Set("name", option.Name)
 
 	return diags
 }

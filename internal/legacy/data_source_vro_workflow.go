@@ -2,9 +2,8 @@ package legacy
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"strings"
+	"strconv"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -39,7 +38,7 @@ func dataSourceVrealizeOrchestratorWorkflowRead(ctx context.Context, d *schema.R
 	var diags diag.Diagnostics
 
 	name := d.Get("name").(string)
-	value := d.Get("value")
+	value := d.Get("value").(int)
 
 	// lookup by name if we do not have an value yet
 	var resp *sdk.Response
@@ -57,28 +56,15 @@ func dataSourceVrealizeOrchestratorWorkflowRead(ctx context.Context, d *schema.R
 	}
 	log.Printf("API RESPONSE: %s", resp)
 
-	var workflow sdk.OptionSourceOption
-	allWorkflows := *resp.Result.(*sdk.GetOptionSourceResult).Data
-	for i := range allWorkflows {
-		if value == 0 && name != "" {
-			if strings.EqualFold(allWorkflows[i].Name, name) {
-				workflow = allWorkflows[i]
-				break
-			}
-		} else if value != 0 {
-			if value == allWorkflows[i].Value {
-				workflow = allWorkflows[i]
-				break
-			}
-		} else {
-			return diag.Errorf("vRO workflow cannot be read without name or value")
-		}
+	option, id, err := findOptionSourceOption(resp.Result.(*sdk.GetOptionSourceResult).Data, "vRO workflow", name, value)
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
 	// store resource data
-	d.SetId(fmt.Sprintf("%g", workflow.Value.(float64)))
-	d.Set("value", workflow.Value)
-	d.Set("name", workflow.Name)
+	d.SetId(strconv.FormatInt(id, 10))
+	d.Set("value", id)
+	d.Set("name", option.Name)
 
 	return diags
 }

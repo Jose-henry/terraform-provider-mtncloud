@@ -2,9 +2,8 @@ package legacy
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"strings"
+	"strconv"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -39,7 +38,7 @@ func dataSourceChefServerRead(ctx context.Context, d *schema.ResourceData, meta 
 	var diags diag.Diagnostics
 
 	name := d.Get("name").(string)
-	value := d.Get("id")
+	value := d.Get("id").(int)
 
 	// lookup by name if we do not have an value yet
 	var resp *sdk.Response
@@ -57,28 +56,15 @@ func dataSourceChefServerRead(ctx context.Context, d *schema.ResourceData, meta 
 	}
 	log.Printf("API RESPONSE: %s", resp)
 
-	var server sdk.OptionSourceOption
-	chefServers := *resp.Result.(*sdk.GetOptionSourceResult).Data
-	for i := range chefServers {
-		if value == 0 && name != "" {
-			if strings.EqualFold(chefServers[i].Name, name) {
-				server = chefServers[i]
-				break
-			}
-		} else if value != 0 {
-			if value == chefServers[i].Value {
-				server = chefServers[i]
-				break
-			}
-		} else {
-			return diag.Errorf("Chef server cannot be read without name or value")
-		}
+	option, id, err := findOptionSourceOption(resp.Result.(*sdk.GetOptionSourceResult).Data, "Chef server", name, value)
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
 	// store resource data
-	d.SetId(fmt.Sprintf("%g", server.Value.(float64)))
-	d.Set("id", server.Value)
-	d.Set("name", server.Name)
+	d.SetId(strconv.FormatInt(id, 10))
+	d.Set("id", id)
+	d.Set("name", option.Name)
 
 	return diags
 }

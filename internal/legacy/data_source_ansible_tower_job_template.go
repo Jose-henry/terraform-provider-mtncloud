@@ -2,9 +2,8 @@ package legacy
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"strings"
+	"strconv"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -39,7 +38,7 @@ func dataSourceAnsibleTowerJobTemplateRead(ctx context.Context, d *schema.Resour
 	var diags diag.Diagnostics
 
 	name := d.Get("name").(string)
-	value := d.Get("id")
+	value := d.Get("id").(int)
 
 	// lookup by name if we do not have an value yet
 	var resp *sdk.Response
@@ -57,28 +56,15 @@ func dataSourceAnsibleTowerJobTemplateRead(ctx context.Context, d *schema.Resour
 	}
 	log.Printf("API RESPONSE: %s", resp)
 
-	var template sdk.OptionSourceOption
-	allTemplates := *resp.Result.(*sdk.GetOptionSourceResult).Data
-	for i := range allTemplates {
-		if value == 0 && name != "" {
-			if strings.EqualFold(allTemplates[i].Name, name) {
-				template = allTemplates[i]
-				break
-			}
-		} else if value != 0 {
-			if value == allTemplates[i].Value {
-				template = allTemplates[i]
-				break
-			}
-		} else {
-			return diag.Errorf("Ansible tower job template cannot be read without name or value")
-		}
+	option, id, err := findOptionSourceOption(resp.Result.(*sdk.GetOptionSourceResult).Data, "Ansible Tower job template", name, value)
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
 	// store resource data
-	d.SetId(fmt.Sprintf("%g", template.Value.(float64)))
-	d.Set("id", template.Value)
-	d.Set("name", template.Name)
+	d.SetId(strconv.FormatInt(id, 10))
+	d.Set("id", id)
+	d.Set("name", option.Name)
 
 	return diags
 }
