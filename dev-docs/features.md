@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 60 | 84 |
-| Usable with a customer (sub-tenant) login | 60 | 79 |
+| Available today | 70 | 84 |
+| Usable with a customer (sub-tenant) login | 70 | 79 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 7 | 0 |
@@ -83,15 +83,22 @@ Building blocks for workflows.
 
 | Type | Customer login |
 |---|---|
+| [`mtncloud_ai_task`](../docs/resources/ai_task.md) | Yes (read verified) |
 | [`mtncloud_ansible_playbook_task`](../docs/resources/ansible_playbook_task.md) | Yes (read verified) |
 | [`mtncloud_ansible_tower_task`](../docs/resources/ansible_tower_task.md) | Yes (read verified) |
 | [`mtncloud_chef_bootstrap_task`](../docs/resources/chef_bootstrap_task.md) | Yes (read verified) |
+| [`mtncloud_conditional_workflow_task`](../docs/resources/conditional_workflow_task.md) | Yes (read verified) |
+| [`mtncloud_dynamic_wallet_collection_task`](../docs/resources/dynamic_wallet_collection_task.md) | Yes (read verified) |
 | [`mtncloud_email_task`](../docs/resources/email_task.md) | Yes (read verified) |
+| [`mtncloud_http_task`](../docs/resources/http_task.md) | Yes (read verified) |
 | [`mtncloud_library_script_task`](../docs/resources/library_script_task.md) | Yes (read verified) |
 | [`mtncloud_library_template_task`](../docs/resources/library_template_task.md) | Yes (read verified) |
 | [`mtncloud_nested_workflow_task`](../docs/resources/nested_workflow_task.md) | Yes (read verified) |
+| [`mtncloud_powerscale_storage_collection_task`](../docs/resources/powerscale_storage_collection_task.md) | Yes (read verified) |
 | [`mtncloud_powershell_script_task`](../docs/resources/powershell_script_task.md) | Yes (read verified) |
+| [`mtncloud_puppet_agent_install_task`](../docs/resources/puppet_agent_install_task.md) | Yes (read verified) |
 | [`mtncloud_restart_task`](../docs/resources/restart_task.md) | Yes (read verified) |
+| [`mtncloud_reverse_text_task`](../docs/resources/reverse_text_task.md) | Yes (read verified) |
 | [`mtncloud_shell_script_task`](../docs/resources/shell_script_task.md) | Yes (read verified) |
 | [`mtncloud_vro_task`](../docs/resources/vro_task.md) | Yes (read verified) |
 | [`mtncloud_write_attributes_task`](../docs/resources/write_attributes_task.md) | Yes (read verified) |
@@ -158,8 +165,11 @@ Cypher secrets and SSH key pairs.
 
 | Type | Customer login |
 |---|---|
+| [`mtncloud_cypher_key`](../docs/resources/cypher_key.md) | Yes (read verified) |
+| [`mtncloud_cypher_password`](../docs/resources/cypher_password.md) | Yes (read verified) |
 | [`mtncloud_cypher_secret`](../docs/resources/cypher_secret.md) | Yes (read verified) |
 | [`mtncloud_cypher_tfvars`](../docs/resources/cypher_tfvars.md) | Yes (read verified) |
+| [`mtncloud_cypher_uuid`](../docs/resources/cypher_uuid.md) | Yes (read verified) |
 | [`mtncloud_key_pair`](../docs/resources/key_pair.md) | Yes (read verified) |
 
 ### Scaling

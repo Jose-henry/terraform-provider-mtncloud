@@ -386,3 +386,69 @@ Never paste tokens, secret keys or passwords. `-V` already masks the bearer toke
   name `<projectName>-<tenant>` and POSTs `/api/zones/{cloud}/resource-pools`.
 - Inventory items for projects: `GET /api/catalog/items/{id}` gives `type.name`, `status`
   ("ORDERED") and `execution` (null on the existing ones). See D-022 and B-015.
+
+## Catalog item orders (read 2026-10-28)
+
+Sources: a customer's `GET /api/catalog/types/{id}` for every item (`.captures/au-cat-<id>.txt`),
+MTN-Cloud-Service-Automation (`MYSQL Install (Provisioning)/CreateMysqlSingle-NodeInstance.sh` and
+siblings), and `catalog add-order ... -d` dry runs.
+
+- **Every item is a `workflow` type in `appliance` context**, the same order path as Create Project
+  (`POST /api/catalog/orders`, `client.OrderWorkflow`, then `WaitForExecution`). The one exception is
+  MTN Let's Encrypt SSL (73): `instance` context, so it runs against an existing instance (`target`).
+- The form values reach the workflow as `customOptions.<fieldName>` and are rendered by Groovy's
+  `toString`, so a JSON map arrives as `[key:value]`. The scripts parse that text with regexes.
+  What they accept (comments in the scripts show what the console sends):
+
+  | Field (widget) | Send | Script reads |
+  |---|---|---|
+  | `group-vpn` (group) | group ID | used raw as `"group": {"id": ...}` |
+  | `cloud` (cloud) | cloud ID | `"zoneId": ...` |
+  | `resourcepool` (resourcePool) | `"pool-<id>"` | `"resourcePoolId"` |
+  | `plan` (select) | plan ID | used raw as `"plan": {"id": ...}`: must be a bare number |
+  | `networks` (networkManager) | `[{"primaryInterface": true, "network": {"id": "network-<id>"}}]` | regex `id:(network|networkGroup|subnet)-N`; the first is primary |
+  | `securitygroups` (secGroup) | `[{"id": <id>}]` | regex `id:N` |
+  | `floatingip` (select) | `"pool-<id>"` | `"osExternalNetworkId"` |
+  | `volumes` (diskManager) | `[{"name","rootVolume","size","storageType"}]` | regexes `size:`, `name:`, `rootVolume:`, `storageType:` (default 11), datastore always `auto` |
+  | `labels` (textArray) | comma-separated string | split on `,` |
+  | `environment` | environment code | `instanceContext` |
+
+- The VM items' scripts then `POST /api/instances` **with the ordering user's own token**
+  (`morpheus.getApiAccessToken()`), named by `customOptions.name`: the customer owns the instance,
+  can read it and delete it. That is how a resource finds what its order made.
+- `catalog add-order` dry runs prefix fields with `config.` (`-O config.name=...`) and stop on the
+  first widget field the CLI can't prompt for without input (`volumes`): they confirm the body
+  shape (`{"order": {"items": [{"type", "config", "context"}]}}`), not the widget values.
+- No real VM order exists in the test tenant to compare with (inventory: Create Project and MKS
+  Managed only), so the widget shapes above rest on the scripts. **First live order of each kind
+  must be checked by hand before release.**
+
+## Task types (2026-10-28)
+
+`tasks add -d` dry runs: options whose field context is `taskOptions` go in `task.taskOptions`, those
+with context `config` (plugin task types: Reverse Text, PowerScale) in `task.config`; `credential` is
+`{"type": "local"}` or `{"id": N}`. Each type's allowed targets come from `/api/task-types`
+(`allowExecuteLocal/Remote/Resource`). Not seen live (the test tenant has none of these tasks), so
+QA must check: the `httpHeaders` format (sent as a JSON object string), `aiPrompt` (a file-content
+input, sent as text), and how checkboxes come back (`"on"` or `true`; both are read).
+
+### Task update semantics (open, check in QA)
+- Unknown whether `PUT /api/tasks/{id}` merges `taskOptions`/`config` or replaces them. The platform's
+  own update example sends every key, `null` for unused ones, so the provider now does the same: a
+  removed option (password, `ignore_ssl`, `else_workflow`) is sent as `null`. QA: remove an option
+  and confirm `GET` no longer shows it.
+- `webMethod` and `puppetNodeName` are Optional+Computed: QA confirms whether the platform echoes
+  its default (`GET`, the host name) when they are left out.
+
+## Generated Cypher keys (2026-10-28)
+Source: Context7 `/websites/apidocs_morpheusdata_reference` (addcypherkey, getcypherkey,
+listcypherkeys). `POST /api/cypher/password/<len>/<name>`, `key/<bits>/<name>`, `uuid/<name>`
+generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing key on these mounts
+**creates** it, so the provider checks existence through `GET /api/cypher?key=<k>` (exact
+`itemKey` match) before every read. Open for QA:
+- Whether the stored `itemKey` keeps the size segment (`password/15/x` or `password/x`). Create
+  accepts either; once confirmed, drop the other form.
+- What lease applies when `ttl` is left out (the audit noted 32 days). The provider always sends
+  `ttl=0` when `ttl` is unset, so the key never expires on its own.
+- The lease can't be read back as the string the user wrote: after an import with `ttl` set, the
+  plan shows an in-place update that only records it in state (tested).

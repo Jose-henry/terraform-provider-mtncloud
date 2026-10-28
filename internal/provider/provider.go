@@ -16,10 +16,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
+	"github.com/mtn/terraform-provider-mtncloud/internal/services/automation"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/catalog"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/compute"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/lookup"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/network"
+	"github.com/mtn/terraform-provider-mtncloud/internal/services/secrets"
 )
 
 var _ provider.Provider = (*mtncloudProvider)(nil)
@@ -184,7 +186,7 @@ func stringOrEnv(v types.String, env string) string {
 }
 
 func (p *mtncloudProvider) Resources(context.Context) []func() resource.Resource {
-	return slices.Concat(network.Resources(), compute.Resources(), catalog.Resources())
+	return slices.Concat(network.Resources(), compute.Resources(), catalog.Resources(), automation.Resources(), secrets.Resources())
 }
 
 func (p *mtncloudProvider) DataSources(context.Context) []func() datasource.DataSource {

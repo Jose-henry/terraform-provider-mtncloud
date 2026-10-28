@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 )
@@ -30,7 +31,8 @@ func cypherPath(key string) string {
 
 // CypherKeyExists reports whether the key is in the store, without reading or creating it.
 func (c *Client) CypherKeyExists(ctx context.Context, key string) (bool, Record, error) {
-	all, err := c.ListRecords(ctx, "/api/cypher", "cyphers", nil)
+	// "key" narrows the list on the server; the match below stays exact.
+	all, err := c.ListRecords(ctx, "/api/cypher", "cyphers", url.Values{"key": {key}})
 	if err != nil {
 		return false, nil, err
 	}
@@ -77,4 +79,22 @@ func decodeCypher(data json.RawMessage, lease int64) (*CypherSecret, error) {
 	}
 	out.Value = string(data)
 	return out, nil
+}
+
+// WriteCypher creates or updates a key. password/, uuid/ and key/ keys generate their own value, so
+// value is empty for them. ttl is the lease ("0" or empty for none, seconds, or "15m", "8h", "7d").
+func (c *Client) WriteCypher(ctx context.Context, key, value, ttl string) error {
+	q := url.Values{}
+	if ttl != "" {
+		q.Set("ttl", ttl)
+	}
+	if value != "" {
+		q.Set("value", value)
+	}
+	return c.do(ctx, http.MethodPost, cypherPath(key), q, nil, nil)
+}
+
+// DeleteCypher removes a key; one already gone is not an error.
+func (c *Client) DeleteCypher(ctx context.Context, key string) error {
+	return ignoreNotFound(c.do(ctx, http.MethodDelete, cypherPath(key), nil, nil, nil))
 }

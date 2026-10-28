@@ -179,6 +179,13 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 	idempotent := method == http.MethodGet || method == http.MethodHead
 	u := *c.base
 	u.Path = strings.TrimRight(u.Path, "/") + path
+	if strings.Contains(path, "%") {
+		// Already escaped by the caller (cypherPath): send it as it is, not escaped a second time.
+		if p, err := url.PathUnescape(path); err == nil {
+			u.Path = strings.TrimRight(c.base.Path, "/") + p
+			u.RawPath = strings.TrimRight(c.base.EscapedPath(), "/") + path
+		}
+	}
 	u.RawQuery = query.Encode()
 
 	for attempt := 1; ; attempt++ {
