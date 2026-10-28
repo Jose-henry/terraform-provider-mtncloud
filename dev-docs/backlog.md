@@ -220,8 +220,7 @@ with two `tf-acc-*` VMs.
 1. **Live power test** (2026-10-28, VM with a router): stop, start and restart pass, each followed by
    an empty plan. Suspend: the platform accepts the call but the VM stays running; the provider now
    fails it after 2 minutes. Retest suspend once on another image, or document it as unsupported.
-2. **Live order destroy** on one cheap VM order (for example `mtncloud_nginx_web_server`): the VM and
-   the inventory record go. Then, if the owner allows one, a managed order, to confirm the app name and
+2. **Live order destroy**: done for `mtncloud_nginx_web_server` (VM and inventory record deleted). Then, if the owner allows one, a managed order, to confirm the app name and
    node names D-029 assumes (managed apps are matched by the order's name and `<name>-<n>` nodes).
 3. **MOS** (D-007, approved in the dev tenant): run the MOS order through Terraform; then design bucket
    management over the S3-compatible API with the tenant's own Cypher keys

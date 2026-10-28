@@ -21,7 +21,7 @@ file whenever a slice lands. History before 2026-10-28 is in git and in `CHANGEL
 | Networking | `mtncloud_network`, `mtncloud_router`, `mtncloud_security_group`, `mtncloud_security_group_rule` | yes |
 | Instances | `mtncloud_instance`: names not IDs, volumes, floating IP, scale, expiry, **power_state, restart_trigger** | yes: stop, start, restart live; suspend not supported on the test image |
 | Clusters | `mtncloud_cluster` (Kubernetes, Docker) | Docker yes; Kubernetes create only (token expired mid-build) |
-| Catalog services | 22 typed order resources (databases, stacks, web servers, managed DB/MQ/streaming/Kubernetes, SIEM, VPN, WireGuard, bastion, Fortinet appliances) and `mtncloud_letsencrypt_certificate`. **Destroy deletes what the order made** (D-029) | plan bug fixed (B-019); nginx order live test running |
+| Catalog services | 22 typed order resources (databases, stacks, web servers, managed DB/MQ/streaming/Kubernetes, SIEM, VPN, WireGuard, bastion, Fortinet appliances) and `mtncloud_letsencrypt_certificate`. **Destroy deletes what the order made** (D-029) | nginx: order, empty plan and destroy pass live (VM and record deleted); the others share the same code |
 | Shares | `mtncloud_nfs_share`, `mtncloud_smb_share` (catalog update and delete) | blocked: web firewall 403 |
 | Certificates | `mtncloud_ssl_certificate` (write-only key) | blocked: web firewall 403 |
 | Cypher | `mtncloud_cypher_password`, `_uuid`, `_key` (+ legacy `_secret`, `_tfvars`) | yes |
