@@ -32,6 +32,7 @@ type fakeAPI struct {
 	router http.Handler // /api/networks/routers, a stateful fake (router_test.go), when set
 	inst   http.Handler // /api/instances, a stateful fake (instance_test.go), when set
 	order  http.Handler // /api/catalog/orders and /items, a stateful fake (project_test.go), when set
+	clu    http.Handler // /api/clusters, a stateful fake (cluster_test.go), when set
 }
 
 // clearDefaults keeps the developer's MTNCLOUD_PROJECT, _GROUP and _CLOUD out of a test.
@@ -46,33 +47,42 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	t.Helper()
 	clearDefaults(t)
 	routes := map[string]string{
-		"/api/whoami":                            "whoami_subtenant.json",
-		"/api/options/groups":                    "options_groups.json",
-		"/api/options/clouds":                    "options_clouds.json",
-		"/api/options/zonePools":                 "options_zone_pools.json",
-		"/api/options/zoneSecurityGroup":         "options_security_groups.json",
-		"/api/options/openstackExternalNetworks": "options_external_networks.json",
-		"/api/options/datastores":                "options_datastores.json",
-		"/api/options/creatableNetworkTypes":     "options_network_types.json",
-		"/api/options/networkServer":             "options_network_servers.json",
-		"/api/instances/service-plans":           "service_plans.json",
-		"/api/catalog/types":                     "catalog_types.json",
-		"/api/catalog/types/22":                  "catalog_type_22.json",
-		"/api/catalog/types/13":                  "catalog_type_13.json",
-		"/api/catalog/types/38":                  "catalog_type_38.json",
-		"/api/catalog/types/17":                  "catalog_type_17.json",
-		"/api/catalog/types/73":                  "catalog_type_73.json",
-		"/api/instance-types":                    "instance_types.json",
-		"/api/network-router-types":              "router_types.json",
-		"/api/options/environments":              "options_environments.json",
-		"/api/networks/domains":                  "network_domains.json",
+		"/api/whoami":                                       "whoami_subtenant.json",
+		"/api/options/groups":                               "options_groups.json",
+		"/api/options/clouds":                               "options_clouds.json",
+		"/api/options/zonePools":                            "options_zone_pools.json",
+		"/api/options/zoneSecurityGroup":                    "options_security_groups.json",
+		"/api/options/openstackExternalNetworks":            "options_external_networks.json",
+		"/api/options/datastores":                           "options_datastores.json",
+		"/api/options/creatableNetworkTypes":                "options_network_types.json",
+		"/api/options/networkServer":                        "options_network_servers.json",
+		"/api/instances/service-plans":                      "service_plans.json",
+		"/api/catalog/types":                                "catalog_types.json",
+		"/api/catalog/types/22":                             "catalog_type_22.json",
+		"/api/catalog/types/13":                             "catalog_type_13.json",
+		"/api/catalog/types/38":                             "catalog_type_38.json",
+		"/api/catalog/types/17":                             "catalog_type_17.json",
+		"/api/catalog/types/73":                             "catalog_type_73.json",
+		"/api/instance-types":                               "instance_types.json",
+		"/api/network-router-types":                         "router_types.json",
+		"/api/options/environments":                         "options_environments.json",
+		"/api/networks/domains":                             "network_domains.json",
+		"/api/library/cluster-layouts":                      "cluster_layouts.json",
+		"/api/options/servicePlans":                         "options_service_plans.json",
+		"/api/options/dockerHubRegistries":                  "options_registries.json",
+		"/api/options/taskSets":                             "options_task_sets.json",
+		"/api/options/openStack/openstackFloatingIpOptions": "options_cluster_floating_ips.json",
 	}
 	f := &fakeAPI{calls: map[string]int{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.calls[r.URL.Path]++
-		sg, net, router, inst, order := f.sg, f.net, f.router, f.inst, f.order
+		sg, net, router, inst, order, clu := f.sg, f.net, f.router, f.inst, f.order, f.clu
 		f.mu.Unlock()
+		if clu != nil && strings.HasPrefix(r.URL.Path, "/api/clusters") && r.Header.Get("Authorization") == "Bearer test-token" {
+			clu.ServeHTTP(w, r)
+			return
+		}
 		if order != nil && (r.URL.Path == "/api/catalog/orders" || strings.HasPrefix(r.URL.Path, "/api/catalog/items/")) &&
 			r.Header.Get("Authorization") == "Bearer test-token" {
 			order.ServeHTTP(w, r)

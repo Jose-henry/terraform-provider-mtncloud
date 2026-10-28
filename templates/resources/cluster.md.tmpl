@@ -1,0 +1,43 @@
+---
+page_title: "mtncloud_cluster Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_cluster
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_cluster/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_cluster/import.sh" }}
+
+MTN Cloud doesn't report what the nodes were built with (plans, disks, networks, versions), so after an
+import those come from your configuration. The first apply after an import records them, and only
+changes what can change in place (name, description, labels, worker count, autoscaling).
+
+## Notes
+
+- **Layouts.** Only MTN's layouts can be built: `MTN Kubernetes Single-Master` (1 master), `MTN Kubernetes HA (3)`,
+  `MTN Kubernetes HA (5)` and `MTN Docker Cluster`. `mtncloud_cluster_layouts` lists them.
+- **Masters and workers.** `master` is required: a plan, a root disk, at least one data disk and at least one
+  network. Workers use the `worker` block where it is set and the master's settings otherwise.
+- **In place:** `name`, `description`, `labels`, `worker_count` (workers are added with the worker settings, and
+  removed newest first), the `worker` settings (used for workers added later) and `autoscaling`. Everything else
+  builds a new cluster.
+- **Autoscaling.** With `autoscaling`, the autoscaler moves the worker count between `min_nodes` and `max_nodes`;
+  `worker_count` is then only the starting count, and the current workers are in `worker_ids`.
+- **Names are checked when you plan:** layout, project, plans, networks, security groups, datastores, floating IP
+  pool, domain, registry, workflow and Kubernetes version. An unknown name lists the valid ones.
+- **Timeouts.** Create waits up to 90 minutes, updates and destroy up to 45 (see `timeouts`). If the cluster isn't
+  ready when the wait ends, it is kept with a warning and never built twice.
+- **Destroy** deletes the cluster with its nodes.

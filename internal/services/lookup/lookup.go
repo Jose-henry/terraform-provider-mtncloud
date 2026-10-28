@@ -33,6 +33,8 @@ func DataSources() []func() datasource.DataSource {
 		newDatastores,
 		newSecurityGroups,
 		newExternalNetworks,
+		newRegistries,
+		newClusterLayouts,
 		newCatalogItems,
 		newRouters,
 		newInstances,

@@ -6,11 +6,11 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 88 | 84 |
-| Usable with a customer (sub-tenant) login | 88 | 79 |
+| Available today | 89 | 86 |
+| Usable with a customer (sub-tenant) login | 89 | 81 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 5 | 0 |
+| Coming next | 4 | 0 |
 
 ## Who can use what
 
@@ -178,10 +178,11 @@ NFS and SMB shares (created, updated and deleted by orders) and Let's Encrypt ce
 
 ### Compute
 
-Instances: virtual machines from MTN's OS images.
+Instances (virtual machines from MTN's OS images), and Kubernetes and Docker clusters from MTN's layouts.
 
 | Type | Customer login |
 |---|---|
+| [`mtncloud_cluster`](../docs/resources/cluster.md) | Yes (read verified) |
 | [`mtncloud_instance`](../docs/resources/instance.md) | Yes, built for customers |
 
 ### Networking
@@ -226,6 +227,7 @@ Autoscaling thresholds.
 | Type | Customer login |
 |---|---|
 | [`mtncloud_catalog_items`](../docs/data-sources/catalog_items.md) | Yes, built for customers |
+| [`mtncloud_cluster_layouts`](../docs/data-sources/cluster_layouts.md) | Yes (read verified) |
 | [`mtncloud_datastore`](../docs/data-sources/datastore.md) | Yes (read verified) |
 | [`mtncloud_datastores`](../docs/data-sources/datastores.md) | Yes, built for customers |
 | [`mtncloud_external_networks`](../docs/data-sources/external_networks.md) | Yes, built for customers |
@@ -233,6 +235,7 @@ Autoscaling thresholds.
 | [`mtncloud_plans`](../docs/data-sources/plans.md) | Yes, built for customers |
 | [`mtncloud_project`](../docs/data-sources/project.md) | Yes, built for customers |
 | [`mtncloud_projects`](../docs/data-sources/projects.md) | Yes, built for customers |
+| [`mtncloud_registries`](../docs/data-sources/registries.md) | Yes (read verified) |
 | [`mtncloud_security_group`](../docs/data-sources/security_group.md) | Yes, built for customers |
 | [`mtncloud_security_groups`](../docs/data-sources/security_groups.md) | Yes, built for customers |
 
@@ -374,7 +377,6 @@ Designed, **not available yet**, and all meant for customers.
 |---|---|---|
 | `mtncloud_object_storage` | Planned | MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource. |
 | `mtncloud_app` | Planned | Apps from blueprints: several instances or containers deployed together. |
-| `mtncloud_cluster` | Planned | Clusters: Kubernetes and other cluster types, with their worker nodes. |
 | `mtncloud_datastore` | Planned | Datastores: the storage that volumes are created on. |
 | `mtncloud_load_balancer` | Planned | Load balancers: listeners, pools and members. |
 

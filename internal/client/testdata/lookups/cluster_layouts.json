@@ -1,0 +1,186 @@
+{
+ "layouts": [
+  {
+   "id": 315,
+   "name": "MTN Kubernetes Single-Master",
+   "groupType": {
+    "code": "kubernetes-cluster"
+   },
+   "provisionType": {
+    "id": 33,
+    "name": "Cloud",
+    "code": "openstack"
+   },
+   "optionTypes": [
+    {
+     "id": 3228,
+     "fieldName": "k8s_version",
+     "type": "select",
+     "defaultValue": "1.35.3",
+     "fieldContext": "config.customOptions"
+    },
+    {
+     "id": 3229,
+     "fieldName": "podCidr",
+     "type": "text",
+     "defaultValue": "10.244.0.0/16",
+     "fieldContext": "config.customOptions"
+    },
+    {
+     "id": 3230,
+     "fieldName": "serviceCidr",
+     "type": "text",
+     "defaultValue": "10.96.0.0/12",
+     "fieldContext": "config.customOptions"
+    }
+   ],
+   "computeServers": [
+    {
+     "nodeType": "master",
+     "nodeCount": 1
+    },
+    {
+     "nodeType": "worker",
+     "nodeCount": 3
+    }
+   ]
+  },
+  {
+   "id": 313,
+   "name": "MTN Kubernetes HA (3)",
+   "groupType": {
+    "code": "kubernetes-cluster"
+   },
+   "provisionType": {
+    "id": 33,
+    "name": "Cloud",
+    "code": "openstack"
+   },
+   "optionTypes": [
+    {
+     "id": 3228,
+     "fieldName": "k8s_version",
+     "type": "select",
+     "defaultValue": "1.35.3",
+     "fieldContext": "config.customOptions"
+    },
+    {
+     "id": 3229,
+     "fieldName": "podCidr",
+     "type": "text",
+     "defaultValue": "10.244.0.0/16",
+     "fieldContext": "config.customOptions"
+    },
+    {
+     "id": 3230,
+     "fieldName": "serviceCidr",
+     "type": "text",
+     "defaultValue": "10.96.0.0/12",
+     "fieldContext": "config.customOptions"
+    }
+   ],
+   "computeServers": [
+    {
+     "nodeType": "master",
+     "nodeCount": 1
+    },
+    {
+     "nodeType": "master",
+     "nodeCount": 1
+    },
+    {
+     "nodeType": "worker",
+     "nodeCount": 3
+    },
+    {
+     "nodeType": "master",
+     "nodeCount": 1
+    }
+   ]
+  },
+  {
+   "id": 311,
+   "name": "MTN Docker Cluster",
+   "groupType": {
+    "code": "docker-cluster"
+   },
+   "provisionType": {
+    "id": 33,
+    "name": "Cloud",
+    "code": "openstack"
+   },
+   "optionTypes": [],
+   "computeServers": [
+    {
+     "nodeType": "worker",
+     "nodeCount": 1
+    }
+   ]
+  },
+  {
+   "id": 329,
+   "name": "HKS Kubernetes 1.35 Cluster on Ubuntu 24.04",
+   "groupType": {
+    "code": "kubernetes-cluster"
+   },
+   "provisionType": {
+    "id": 33,
+    "name": "Cloud",
+    "code": "openstack"
+   },
+   "optionTypes": [
+    {
+     "id": 3228,
+     "fieldName": "k8s_version",
+     "type": "select",
+     "defaultValue": "1.35.3",
+     "fieldContext": "config.customOptions"
+    },
+    {
+     "id": 3229,
+     "fieldName": "podCidr",
+     "type": "text",
+     "defaultValue": "10.244.0.0/16",
+     "fieldContext": "config.customOptions"
+    },
+    {
+     "id": 3230,
+     "fieldName": "serviceCidr",
+     "type": "text",
+     "defaultValue": "10.96.0.0/12",
+     "fieldContext": "config.customOptions"
+    }
+   ],
+   "computeServers": [
+    {
+     "nodeType": "master",
+     "nodeCount": 1
+    },
+    {
+     "nodeType": "worker",
+     "nodeCount": 3
+    }
+   ]
+  },
+  {
+   "id": 210,
+   "name": "MTN-K8S One Master on Ubuntu 22.04",
+   "groupType": {
+    "code": "gke-cluster"
+   },
+   "provisionType": {
+    "id": 33,
+    "name": "Cloud",
+    "code": "openstack"
+   },
+   "optionTypes": [],
+   "computeServers": []
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "max": 25,
+  "size": 5,
+  "total": 5
+ }
+}

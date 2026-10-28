@@ -167,3 +167,43 @@ func newExternalNetworks() datasource.DataSource {
 		},
 	}}
 }
+
+func newRegistries() datasource.DataSource {
+	return &optionListDataSource{spec: optionListSpec{
+		typeName: "registries", listAttr: "registries", what: "registries",
+		description: "Lists the container registries a Kubernetes cluster can pull images from (the console's \"Cluster Repo Account\"). " +
+			"Use a name as `mtncloud_cluster`'s `registry`. The public Docker Hub is always listed, and is the default.",
+		idDesc:   "Registry ID; 0 for the public Docker Hub.",
+		nameDesc: "Registry name.",
+		list: func(ctx context.Context, c *client.Client, _ int64) ([]client.Option, error) {
+			place, err := c.Placement(ctx)
+			if err != nil {
+				return nil, err
+			}
+			regs, err := c.Registries(ctx, place)
+			out := make([]client.Option, 0, len(regs))
+			for _, r := range regs {
+				out = append(out, client.Option{ID: r.ID, Name: r.Name})
+			}
+			return out, err
+		},
+	}}
+}
+
+func newClusterLayouts() datasource.DataSource {
+	return &optionListDataSource{spec: optionListSpec{
+		typeName: "cluster_layouts", listAttr: "cluster_layouts", what: "cluster layouts",
+		description: "Lists MTN's cluster layouts: `MTN Kubernetes Single-Master`, `MTN Kubernetes HA (3)`, `MTN Kubernetes HA (5)` " +
+			"and `MTN Docker Cluster`. Use a name as `mtncloud_cluster`'s `layout`.",
+		idDesc:   "Layout ID.",
+		nameDesc: "Layout name.",
+		list: func(ctx context.Context, c *client.Client, _ int64) ([]client.Option, error) {
+			layouts, err := c.ClusterLayouts(ctx)
+			out := make([]client.Option, 0, len(layouts))
+			for _, l := range layouts {
+				out = append(out, client.Option{ID: l.ID, Name: l.Name})
+			}
+			return out, err
+		},
+	}}
+}

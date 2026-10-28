@@ -62,8 +62,8 @@ RESOURCES = [
      "NFS and SMB shares (created, updated and deleted by orders) and Let's Encrypt certificates for instances.",
      ["nfs_share", "smb_share", "letsencrypt_certificate"]),
     ("Compute",
-     "Instances: virtual machines from MTN's OS images.",
-     ["instance"]),
+     "Instances (virtual machines from MTN's OS images), and Kubernetes and Docker clusters from MTN's layouts.",
+     ["instance", "cluster"]),
     ("Networking",
      "MTN Networks and MTN Routers, security groups (instance firewalls) and their rules, IP pools "
      "(static IP ranges for a network) and DNS domains (instance hostnames and domain join).",
@@ -79,7 +79,7 @@ RESOURCES = [
 DATA_SOURCES = [
     ("Pick by name: what can I deploy?",
      ["projects", "project", "images", "plans", "datastores", "datastore", "security_groups",
-      "security_group", "external_networks",
+      "security_group", "external_networks", "registries", "cluster_layouts",
       "catalog_items"]),
     ("Tenancy, users and access",
      ["user", "users", "user_role", "user_roles", "user_group", "user_groups", "identity_source",
@@ -142,7 +142,6 @@ PLANNED = [
     ("Resources", [
         ("mtncloud_object_storage", "Planned", "MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource."),
         ("mtncloud_app", "Planned", "Apps from blueprints: several instances or containers deployed together."),
-        ("mtncloud_cluster", "Planned", "Clusters: Kubernetes and other cluster types, with their worker nodes."),
         ("mtncloud_datastore", "Planned", "Datastores: the storage that volumes are created on."),
         ("mtncloud_load_balancer", "Planned", "Load balancers: listeners, pools and members."),
     ]),

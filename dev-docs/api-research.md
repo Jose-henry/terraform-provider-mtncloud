@@ -476,3 +476,24 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
   "domainName", "certFile", "keyFile", "wildcard"}}`. PUT takes the same fields; a read never returns
   certFile, keyFile or chainFile, so the key is write-only and the certificate/chain are kept from config.
 - Assumed until QA: a PUT without `keyFile` or `certFile` keeps what is stored, and `chainFile: ""` removes the chain (the PUT reference doesn't list chainFile).
+
+### Clusters (2026-10-28, customer login)
+- Cluster types: `kubernetes-cluster`, `docker-cluster`. MTN's layouts (`/api/library/cluster-layouts`, the
+  cloud's provision type, name starting `MTN `): Kubernetes Single-Master (1 master + 3 workers), HA (3),
+  HA (5); Docker Cluster (1 host). Kubernetes layouts take `k8s_version` (a select; values like
+  `1.35.3-1.1`), `podCidr` and `serviceCidr`, all in `config.customOptions`.
+- `clusters add` can't run for a customer: it reads `/api/zones/{id}` (403). The body is built from the
+  CLI source (`clusters.rb#add`) and the platform's own MKS resource: `{"cluster": {name, type, group{id},
+  cloud{id}, layout{id}, description, labels, taskSetId, server{name, hostname, networkDomain, labels,
+  plan{id}, volumes, networkInterfaces, securityGroups, nodeCount, visibility, config{resourcePoolId,
+  nodeCount, customOptions, podCidr, serviceCidr, defaultRepoAccount, createUser, osExternalNetworkId}},
+  worker{...}}}`. To confirm on the first live build (QA): the `worker` block, `networkDomain` as `{id}`,
+  `securityGroups` as `[{id}]`.
+- Plans: `/api/options/servicePlans?zoneId&siteId&provisionTypeId&layoutId&resourcePoolId`. Customers can't
+  read `/api/servers/service-plans`; without resourcePoolId the list repeats every price set (about 11,000 rows).
+- Registries: `/api/options/dockerHubRegistries` (the public Docker Hub has an empty value). Workflows:
+  `/api/options/taskSets?phase=postProvision`. Floating IP pools: the floating IP options source with
+  `zoneId` and `resourcePoolId` (values `pool-<id>`, plus single addresses `ip-<id>`).
+- Workers: `GET /api/clusters/{id}/workers`, `POST /api/clusters/{id}/servers` (add), `DELETE .../servers/{id}`.
+  Autoscaler: `POST /api/clusters/{id}/configure-autoscaler` with
+  `{cluster: {autoScalerEnabled, autoScalerGroups: [{minNodes, maxNodes}]}}`.

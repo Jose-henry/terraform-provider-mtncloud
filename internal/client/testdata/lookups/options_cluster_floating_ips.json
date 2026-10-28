@@ -1,0 +1,21 @@
+{
+ "success": true,
+ "data": [
+  {
+   "name": "Pools",
+   "value": ""
+  },
+  {
+   "name": "public-network-01",
+   "value": "pool-44"
+  },
+  {
+   "name": "Available Ips",
+   "value": ""
+  },
+  {
+   "name": "198.51.100.4",
+   "value": "ip-1"
+  }
+ ]
+}
