@@ -529,8 +529,12 @@ func (c *Client) ResizeInstance(ctx context.Context, id int64, r ResizeInput) er
 	body := map[string]any{
 		"instance":              map[string]any{"id": id, "plan": map[string]any{"id": r.PlanID}},
 		"volumes":               volumesBody(r.Volumes),
-		"networkInterfaces":     nics,
 		"deleteOriginalVolumes": false,
+	}
+	// Only when a card is added: the platform adds every card sent without an ID (live QA
+	// 2026-10-28), and the CLI's own resize sends none.
+	if len(nics) > 0 {
+		body["networkInterfaces"] = nics
 	}
 	return c.do(ctx, http.MethodPut, "/api/instances/"+itoa(id)+"/resize", nil, body, nil)
 }
@@ -577,6 +581,25 @@ func (c *Client) WaitForInstance(ctx context.Context, id int64) (*Instance, erro
 				return false, err
 			}
 			return instanceSettled(in.Status), nil
+		})
+}
+
+// WaitForResize polls until a reconfigured instance has settled with the plan and at least the
+// volumes and network cards asked for. Straight after the call the instance still reads as it
+// was ("running", old plan), so a plain WaitForInstance returns too early (live QA 2026-10-28).
+func (c *Client) WaitForResize(ctx context.Context, id, planID int64, volumes, interfaces int) (*Instance, error) {
+	return poll(ctx, c, func(ctx context.Context) (*Instance, error) { return c.GetInstance(ctx, id) },
+		func(in *Instance, err error) (bool, error) {
+			switch {
+			case IsNotFound(err):
+				return false, nil
+			case err != nil:
+				return false, err
+			}
+			if InstanceFailed(in.Status) {
+				return true, nil
+			}
+			return instanceSettled(in.Status) && in.PlanID == planID && len(in.Volumes) >= volumes && len(in.Interfaces) >= interfaces, nil
 		})
 }
 

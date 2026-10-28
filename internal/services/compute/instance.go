@@ -967,6 +967,7 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 			return
 		}
 	}
+	resized := false
 	if current.PlanID != in.PlanID || len(in.NetworkIDs) > len(current.Interfaces) || len(in.Volumes) > len(current.Volumes) {
 		resize := client.ResizeInput{PlanID: in.PlanID}
 		// Existing volumes and cards go with their IDs, new ones (at the end) without.
@@ -977,19 +978,33 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 			}
 			resize.Volumes = append(resize.Volumes, v)
 		}
-		for i, n := range in.NetworkIDs {
-			nic := client.Interface{NetworkID: n}
-			if i < len(current.Interfaces) {
-				nic = current.Interfaces[i]
+		// Cards go only when one is added: every card sent without an ID is added again.
+		if len(in.NetworkIDs) > len(current.Interfaces) {
+			for i, n := range in.NetworkIDs {
+				nic := client.Interface{NetworkID: n}
+				if i < len(current.Interfaces) {
+					if nic = current.Interfaces[i]; nic.ID == "" {
+						resp.Diagnostics.AddAttributeError(path.Root("networks"), "Unable to add a network in place",
+							"MTN Cloud doesn't report this instance's network card IDs, so adding a network would add its existing cards again. "+
+								"Add the network to the instance in the console, then run terraform apply, or replace the instance.")
+						return
+					}
+				}
+				resize.Interfaces = append(resize.Interfaces, nic)
 			}
-			resize.Interfaces = append(resize.Interfaces, nic)
 		}
 		if err := r.client.ResizeInstance(ctx, id, resize); err != nil {
 			resp.Diagnostics.AddError("Unable to reconfigure instance", err.Error())
 			return
 		}
+		resized = true
 	}
-	inst, err := r.client.WaitForInstance(ctx, id)
+	var inst *client.Instance
+	if resized {
+		inst, err = r.client.WaitForResize(ctx, id, in.PlanID, len(in.Volumes), len(in.NetworkIDs))
+	} else {
+		inst, err = r.client.WaitForInstance(ctx, id)
+	}
 	if !sameName(plan.FloatingIPPool, state.FloatingIPPool) {
 		if err != nil {
 			plan.FloatingIPPool = state.FloatingIPPool // not changed: the next apply tries again

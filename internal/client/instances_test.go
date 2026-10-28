@@ -219,6 +219,43 @@ func TestResizeInstance_KeepsExistingAndAddsNew(t *testing.T) {
 	}
 }
 
+// A plan or disk change sends no cards: each card sent without an ID is added (live QA 2026-10-28).
+func TestResizeInstance_NoCardsWithoutANewNetwork(t *testing.T) {
+	f := newFakeAPI(t)
+	var body map[string]any
+	f.route("PUT", "/api/instances/9701/resize", captureBody(t, &body, http.StatusOK, []byte(`{"success":true}`)))
+	err := f.client(t).ResizeInstance(t.Context(), 9701, ResizeInput{PlanID: 9403, Volumes: []VolumeSpec{{ID: 9810, Root: true, Size: 40}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := body["networkInterfaces"]; ok {
+		t.Errorf("networkInterfaces sent: %v", body["networkInterfaces"])
+	}
+}
+
+// Straight after a resize the instance still reads as it was ("running", old plan): the wait goes
+// on until the new plan shows.
+func TestWaitForResize(t *testing.T) {
+	f := newFakeAPI(t)
+	body := string(instanceFixture(t, "get.json"))
+	old := strings.Replace(body, `"id": 9402`, `"id": 9401`, 1)
+	var reads atomic.Int32
+	f.route("GET", "/api/instances/9701", func(w http.ResponseWriter, _ *http.Request) {
+		if reads.Add(1) < 3 {
+			_, _ = w.Write([]byte(old))
+			return
+		}
+		_, _ = w.Write([]byte(body))
+	})
+	in, err := f.client(t, fastPoll).WaitForResize(t.Context(), 9701, 9402, 2, 1)
+	if err != nil || in.PlanID != 9402 {
+		t.Fatalf("got %+v, %v", in, err)
+	}
+	if n := reads.Load(); n < 3 {
+		t.Errorf("returned after %d reads, before the new plan showed", n)
+	}
+}
+
 func TestSetInstanceSecurityGroups_SortedIDs(t *testing.T) {
 	f := newFakeAPI(t)
 	var body map[string]any

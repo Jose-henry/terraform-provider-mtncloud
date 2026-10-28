@@ -145,7 +145,8 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		in["volumes"] = vols
 		nics := in["interfaces"].([]any)
-		for _, n := range body["networkInterfaces"].([]any) {
+		sent, _ := body["networkInterfaces"].([]any)
+		for _, n := range sent {
 			if _, ok := n.(map[string]any)["id"]; !ok {
 				nics = append(nics, s.nic(id, len(nics), n.(map[string]any)))
 			}
