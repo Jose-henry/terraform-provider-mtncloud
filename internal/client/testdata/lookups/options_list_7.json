@@ -1,0 +1,8 @@
+{
+  "success": true,
+  "data": [
+    { "name": "G1S2", "value": 6053 },
+    { "name": "G2S4", "value": 13107 },
+    { "name": "G4S16", "value": 9091 }
+  ]
+}

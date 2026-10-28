@@ -220,7 +220,9 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
 - **Power.** Set `power_state` to `running`, `stopped` or `suspended` to power the VM on, off or into
   suspend in place; a VM changed in the console is put back by the next apply. Left out, power isn't
   managed, and `power_state` shows the VM's state. A plan change starts a stopped VM, then it is put
-  back in the `power_state` you set. To reboot, change `restart_trigger` to any new value.
+  back in the `power_state` you set. To reboot, change `restart_trigger` to any new value. A power
+  change the VM doesn't start within 2 minutes fails the apply (MTN Cloud accepts a suspend some VMs
+  don't support); use `stopped` for those.
 - **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`, `scale`,
   `floating_ip_pool`, `power_state`, `restart_trigger`,
   `plan`, and volumes added at the end of `data_volume`.
@@ -247,7 +249,9 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
   fails, or the address doesn't show before the timeout, that apply fails. At create, Terraform then
   marks the instance tainted, so the next apply replaces it; run `terraform untaint` to keep the VM
   and try the attach again. It needs the instance's network to be on an `mtncloud_router` with an
-  `external_network`; reference the router (for example in `depends_on`) so it exists first.
+  `external_network`; reference the router (for example in `depends_on`) so it exists first. The plan
+  checks this: a router on another external network is an error naming the pool to use, and no router
+  at all is a warning (the router may come in the same apply).
   Changing the pool releases the old address and attaches a new one, waiting for each. An address
   released in the console is attached again by the next apply. A floating IP attached in the console,
   with no `floating_ip_pool` set, shows in `public_ip` and is left alone; setting `floating_ip_pool`

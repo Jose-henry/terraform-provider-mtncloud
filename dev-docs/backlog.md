@@ -217,8 +217,9 @@ with two `tf-acc-*` VMs.
 
 ## B-018 Remaining work after 2026-10-28 (owner's list, in order)
 
-1. **Live power test** on a `tf-acc` VM: stop, start, suspend, resume, restart, each followed by an
-   empty plan. In progress on 2026-10-28.
+1. **Live power test** (2026-10-28, VM with a router): stop, start and restart pass, each followed by
+   an empty plan. Suspend: the platform accepts the call but the VM stays running; the provider now
+   fails it after 2 minutes. Retest suspend once on another image, or document it as unsupported.
 2. **Live order destroy** on one cheap VM order (for example `mtncloud_nginx_web_server`): the VM and
    the inventory record go. Then, if the owner allows one, a managed order, to confirm the app name and
    node names D-029 assumes (managed apps are matched by the order's name and `<name>-<n>` nodes).
@@ -234,6 +235,38 @@ with two `tf-acc-*` VMs.
 6. **QA second pass** (owner granted full permissions): tasks and a job run after creating a task;
    workflows; scale thresholds; power and execute schedules; credentials and key pairs; user roles,
    users and user groups. Left out on purpose: option types and lists, forms, identity sources.
-7. A provider test for destroying an imported order that hasn't been applied (the code refuses;
-   nothing tests it yet).
+   Data sources: a full filter sweep, each filter argument alone on live data (for example
+   `mtncloud_instances` by `image`, `plan`, `tags`, `labels`, `network`), compared with a CLI read
+   of the same list. The first run covered every data source unfiltered, 37 filtered reads and 53
+   lookups by name, not every filter.
+7. Done: a provider test for destroying an imported order that hasn't been applied.
 8. The low-severity items in B-016, and B-001 (legacy bugs) as legacy resources migrate.
+
+## B-019 Catalog VM orders send the wrong plan ID (found live 2026-10-28, fixed same day)
+
+`mtncloud_nginx_web_server` (plan `G1S2`, then `G2S4`) was refused by `POST /api/catalog/orders`:
+"plan: PLAN value [1969] is not contained within the available options [13103, 6053, 8754, ...]".
+Nothing was created. `kPlan` resolves through `/api/instances/service-plans` (the instance wizard's
+list), but the order form's `plan` field (option type 2499 on item 41) takes its values from the
+option list "Service Plans" (18, `dependsOnCode: resourcepool`), whose IDs differ. A customer can't
+read list 18 (`/api/library/option-type-lists/18` → not found), and `/api/options/list?optionTypeId=2499`
+answers an empty list without the form's context. Every VM catalog order is affected.
+Tried live (refused, nothing created): the plan as an object `{id: 1969}` → the same 400 (the
+options are bare numbers); the full object with `code` (as `CreateNginxInstance.sh`'s sample shows)
+→ an HTML 403, the web firewall. `/api/options/servicePlans?zoneId=&siteId=&resourcePoolId=` lists
+260 plans with G2S4 = 1969 and none of the form's 30 IDs. Group, cloud and project are sent like the
+script's sample (`"73"`, `"4"`, `"pool-5"`).
+Fixed: the owner captured the console's call (`/options/list?optionTypeListId=18&catalogItemTypeId=41&
+resourcepool=pool-5&config.customOptions.resourcepool=pool-5&cloud=4&group-vpn=37...`), which lists
+the plans by name with the form's own IDs (G2S4 = 13107). `/api/options/list?optionTypeId=<field>` with
+the same context answers the same 30 plans. `kPlan` now resolves through it (`FormChoiceIn`) when the
+form's plan field is a select, and falls back to the wizard's list otherwise. Mutation-checked.
+
+## B-020 Floating IP pool check follow-ups (review, 2026-10-28)
+- A router whose external network changes in the same apply as a new instance or order with that pool
+  fails the plan (the check reads routers as they are). Workaround in the message: change the router
+  in its own apply. Revisit if it bites.
+- Orders: the "not checked against a router" warning can show at plan, at the apply re-plan and at
+  create; only the first pool attribute is checked (managed Kubernetes `worker_floating_ip_pool` isn't).
+- Tests: no provider unit test drives `checkPoolRouter` or the order check, and none covers a power
+  grace spent on failed reads. Add them with the next instance or order change.

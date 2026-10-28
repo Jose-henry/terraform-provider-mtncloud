@@ -2,13 +2,13 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Instances (OpenStack VMs): POST/GET/PUT/DELETE /api/instances[/{id}], plus /resize and
@@ -622,10 +622,6 @@ func PowerOf(status string) string {
 	return ""
 }
 
-// restartGrace bounds the wait for a restarted instance to leave "running": one that reboots too
-// fast to be seen doing it is taken as restarted.
-const restartGrace = 2 * time.Minute
-
 // WaitForInstanceStatus polls until the instance's power state (PowerOf) is power, or it has failed.
 func (c *Client) WaitForInstanceStatus(ctx context.Context, id int64, power string) (*Instance, error) {
 	return poll(ctx, c, func(ctx context.Context) (*Instance, error) { return c.GetInstance(ctx, id) },
@@ -637,11 +633,39 @@ func (c *Client) WaitForInstanceStatus(ctx context.Context, id int64, power stri
 		})
 }
 
-// WaitForRestart waits for a restarted instance to leave "running" (for up to restartGrace), then
+// ErrPowerIgnored is returned when a power call was accepted but the instance hasn't changed state
+// within Config.PowerGrace: MTN Cloud answers success to a suspend some VMs don't support.
+var ErrPowerIgnored = errors.New("MTN Cloud accepted the call, but the instance hasn't changed state")
+
+// WaitForPowerChange waits for an instance to leave power state from (for up to Config.PowerGrace, else
+// ErrPowerIgnored), then to reach to.
+func (c *Client) WaitForPowerChange(ctx context.Context, id int64, from, to string) (*Instance, error) {
+	leave, cancel := context.WithTimeout(ctx, c.cfg.PowerGrace)
+	in, err := poll(leave, c, func(ctx context.Context) (*Instance, error) { return c.GetInstance(ctx, id) },
+		func(in *Instance, err error) (bool, error) {
+			if err != nil {
+				return false, err
+			}
+			return PowerOf(in.Status) != from, nil
+		})
+	cancel()
+	if err != nil {
+		// Ignored only when the instance was read and still shows the old state: a grace spent on
+		// failed reads is the API's problem, not the VM's.
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil && in != nil && PowerOf(in.Status) == from {
+			return in, ErrPowerIgnored
+		}
+		return in, err
+	}
+	return c.WaitForInstanceStatus(ctx, id, to)
+}
+
+// WaitForRestart waits for a restarted instance to leave "running" (for up to Config.PowerGrace; one that reboots
+// too fast to be seen doing it is taken as restarted), then
 // to run again. Straight after the call it still reads "running", so waiting for that alone would
 // end before the reboot starts.
 func (c *Client) WaitForRestart(ctx context.Context, id int64) (*Instance, error) {
-	leave, cancel := context.WithTimeout(ctx, restartGrace)
+	leave, cancel := context.WithTimeout(ctx, c.cfg.PowerGrace)
 	_, err := poll(leave, c, func(ctx context.Context) (*Instance, error) { return c.GetInstance(ctx, id) },
 		func(in *Instance, err error) (bool, error) {
 			if err != nil {

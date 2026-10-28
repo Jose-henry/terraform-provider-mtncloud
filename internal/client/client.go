@@ -54,6 +54,9 @@ type Config struct {
 	// Waiting for asynchronous work (routers, instances, catalog orders): the first wait and the cap.
 	PollMin time.Duration // default 500ms
 	PollMax time.Duration // default 15s
+	// PowerGrace is how long a power call has to change the instance's state, and a restart to
+	// start, before the call counts as ignored. Default 2 minutes.
+	PowerGrace time.Duration
 }
 
 // Defaults are the provider-wide group, cloud and project, by name. Empty means not set.

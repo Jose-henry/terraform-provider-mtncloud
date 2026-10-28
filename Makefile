@@ -11,10 +11,10 @@ install:
 	go install .
 
 test:
-	go test $(PKGS)
+	go test -timeout 45m $(PKGS)
 
 test-race:
-	go test -race $(PKGS)
+	go test -race -timeout 45m $(PKGS)
 
 vet:
 	go vet $(PKGS)

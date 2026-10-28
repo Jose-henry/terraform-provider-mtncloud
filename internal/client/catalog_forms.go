@@ -110,7 +110,18 @@ func asInt64(v any) (int64, bool) {
 
 // FormOptions lists the choices of a select field (name shown, value sent).
 func (c *Client) FormOptions(ctx context.Context, optionTypeID int64) ([]NamedValue, error) {
+	return c.FormOptionsIn(ctx, optionTypeID, nil)
+}
+
+// FormOptionsIn lists a select field's choices for a form filled with the given values. Lists that
+// depend on other fields (the plans on the project) answer empty without them. The console sends
+// the form's values with the item's ID (captured 2026-10-28: plans on item 41 need
+// catalogItemTypeId, cloud, the group and resourcepool).
+func (c *Client) FormOptionsIn(ctx context.Context, optionTypeID int64, form url.Values) ([]NamedValue, error) {
 	q := url.Values{"optionTypeId": {itoa(optionTypeID)}}
+	for k, v := range form {
+		q[k] = v
+	}
 	return cached(ctx, &c.cache, "form-options?"+q.Encode(), func(ctx context.Context) ([]NamedValue, error) {
 		var resp struct {
 			Data []struct {
@@ -132,7 +143,12 @@ func (c *Client) FormOptions(ctx context.Context, optionTypeID int64) ([]NamedVa
 // FormChoice finds a select field's choice by its value or its shown name (case ignored). The
 // error lists what the field offers.
 func (c *Client) FormChoice(ctx context.Context, f FormField, what, want string) (NamedValue, error) {
-	opts, err := c.FormOptions(ctx, f.ID)
+	return c.FormChoiceIn(ctx, f, nil, what, want)
+}
+
+// FormChoiceIn is FormChoice for a field whose choices depend on the form's other values.
+func (c *Client) FormChoiceIn(ctx context.Context, f FormField, form url.Values, what, want string) (NamedValue, error) {
+	opts, err := c.FormOptionsIn(ctx, f.ID, form)
 	if err != nil {
 		return NamedValue{}, err
 	}

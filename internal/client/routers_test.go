@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -239,5 +240,34 @@ func TestSend_RateLimitPastDeadlineIsTheDeadline(t *testing.T) {
 	_, err := c.options(ctx, "groups", url.Values{"x": {"1"}})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("want context.DeadlineExceeded, got %v", err)
+	}
+}
+
+// A floating IP pool fits only the external network of a router holding the instance's network.
+func TestPoolRouterProblem(t *testing.T) {
+	f := newFakeAPI(t)
+	f.route("GET", "/api/networks/routers", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"networkRouters":[
+ {"id":1,"name":"r-pub","externalNetwork":{"id":50,"name":"public-network-01"},
+  "interfaces":[{"network":{"id":50}},{"network":{"id":675}}]},
+ {"id":2,"name":"r-none","interfaces":[{"network":{"id":676}}]}],
+ "meta":{"total":2,"size":2,"offset":0}}`))
+	})
+	c := f.client(t)
+	for _, tc := range []struct {
+		net     int64
+		pool    string
+		want    string
+		wantErr bool
+	}{
+		{675, "PUBLIC-NETWORK-01", "", false},
+		{675, "public-network-02", "r-pub (external network public-network-01)", true},
+		{676, "public-network-01", "isn't on an MTN Router", false}, // a router without a gateway
+		{677, "public-network-01", "isn't on an MTN Router", false},
+	} {
+		msg, isErr := c.PoolRouterProblem(t.Context(), tc.net, tc.pool)
+		if isErr != tc.wantErr || (tc.want == "") != (msg == "") || !strings.Contains(msg, tc.want) {
+			t.Errorf("network %d, pool %s: %q (error %v)", tc.net, tc.pool, msg, isErr)
+		}
 	}
 }

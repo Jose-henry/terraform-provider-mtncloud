@@ -45,4 +45,7 @@ func pollDefaults(cfg *Config) {
 	if cfg.PollMax <= 0 {
 		cfg.PollMax = 15 * time.Second
 	}
+	if cfg.PowerGrace <= 0 {
+		cfg.PowerGrace = 2 * time.Minute
+	}
 }

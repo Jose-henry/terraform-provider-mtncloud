@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -257,6 +258,8 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 		diags.Append(p.GetAttribute(ctx, path.Root(a), &v)...)
 		return v
 	}
+	var primary int64         // the first network's ID
+	var pool, poolAttr string // the floating IP pool, by name
 	fail := func(a string, err error) {
 		diags.AddAttributeError(path.Root(a), "Invalid "+strings.ReplaceAll(strings.TrimSuffix(a, "_"), "_", " "), err.Error())
 	}
@@ -376,10 +379,39 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 					continue
 				}
 				out[f.key] = c.Value
+				if pool == "" {
+					pool, poolAttr = c.Name, f.attr // the external network's name, even when the value ("pool-<id>") was written
+				}
 			}
 		case kPlan:
 			v := str(p, f.attr)
 			if v == "" || place == nil || projectID == 0 {
+				continue
+			}
+			// A plan list on the form (option list "Service Plans") holds its own IDs, which differ
+			// from the instance wizard's: G2S4 is 13107 there, 1969 here (B-019). Ask the form, with
+			// its project, cloud and group, as the console does.
+			if ff, ok := form.Fields[f.key]; ok && ff.Type == "select" {
+				fv := url.Values{"catalogItemTypeId": {strconv.FormatInt(form.ItemID, 10)}}
+				for k, x := range out {
+					if s, isStr := x.(string); isStr && (k == "cloud" || k == "resourcepool" || strings.HasPrefix(k, "group")) {
+						fv.Set(k, s)
+					}
+				}
+				if pool, ok := out["resourcepool"].(string); ok {
+					fv.Set("config.customOptions.resourcepool", pool)
+				}
+				c, err := r.client.FormChoiceIn(ctx, ff, fv, "plan", v)
+				if err != nil {
+					fail(f.attr, err)
+					continue
+				}
+				n, err := strconv.ParseInt(c.Value, 10, 64)
+				if err != nil {
+					fail(f.attr, fmt.Errorf("plan %q has the value %q, not an ID", v, c.Value))
+					continue
+				}
+				out[f.key] = n
 				continue
 			}
 			pl, err := r.client.PlanByName(ctx, place, projectID, form.LayoutID(f.key, "plan", "resourcepool", "networks"), v)
@@ -398,6 +430,9 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 				if err != nil {
 					fail(f.attr, err)
 					continue
+				}
+				if i == 0 && primary == 0 {
+					primary = n.ID
 				}
 				nets = append(nets, map[string]any{"primaryInterface": i == 0, "network": map[string]any{"id": "network-" + strconv.FormatInt(n.ID, 10)}})
 			}
@@ -450,6 +485,17 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 				vols = append(vols, vol)
 			}
 			out[f.key] = vols
+		}
+	}
+	// The floating IP is attached through the primary network's router, so check the pool now
+	// rather than after the order has built its VMs.
+	if pool != "" && primary != 0 {
+		switch msg, isErr := r.client.PoolRouterProblem(ctx, primary, pool); {
+		case msg == "":
+		case isErr:
+			diags.AddAttributeError(path.Root(poolAttr), "Floating IP pool doesn't match the router", msg)
+		default:
+			diags.AddAttributeWarning(path.Root(poolAttr), "Floating IP pool not checked against a router", msg)
 		}
 	}
 	return out

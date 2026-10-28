@@ -399,6 +399,10 @@ func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 		return
 	}
 	r.checkNames(ctx, plan, p, project.ID, image, &resp.Diagnostics)
+	// Only for a new attach: an address already attached isn't checked again (one router list per change).
+	if !resp.Diagnostics.HasError() && known(plan.FloatingIPPool) && (!hasState || !sameName(plan.FloatingIPPool, state.FloatingIPPool)) {
+		r.checkPoolRouter(ctx, plan, &resp.Diagnostics)
+	}
 	// On create only: an existing (or imported) instance already has its root volume.
 	var root types.Int64
 	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("root_volume_size"), &root)...)
@@ -589,6 +593,32 @@ func (r *instanceResource) checkNames(ctx context.Context, m instanceModel, p *c
 		}
 		diags.AddAttributeError(path.Root("floating_ip_pool"), "Unknown floating IP pool",
 			fmt.Sprintf("no floating IP pool named %q. Available pools: %s. %s", m.FloatingIPPool.ValueString(), strings.Join(names, ", "), client.SyncHint))
+	}
+}
+
+// checkPoolRouter checks, before anything is created, that a floating IP can be attached from the
+// pool: the primary network must be on an MTN Router whose external network is that pool. A router
+// on another external network is an error. No router is only a warning, as the router may be made
+// in the same apply; a network not known yet (made in the same apply) isn't checked.
+func (r *instanceResource) checkPoolRouter(ctx context.Context, m instanceModel, diags *diag.Diagnostics) {
+	if m.Networks.IsUnknown() || m.Networks.IsNull() || len(m.Networks.Elements()) == 0 {
+		return
+	}
+	first, ok := m.Networks.Elements()[0].(types.String)
+	if !ok || !known(first) {
+		return
+	}
+	netID, err := strconv.ParseInt(first.ValueString(), 10, 64)
+	if err != nil {
+		return // reported by the network check
+	}
+	msg, isErr := r.client.PoolRouterProblem(ctx, netID, m.FloatingIPPool.ValueString())
+	switch {
+	case msg == "":
+	case isErr:
+		diags.AddAttributeError(path.Root("floating_ip_pool"), "Floating IP pool doesn't match the router", msg)
+	default:
+		diags.AddAttributeWarning(path.Root("floating_ip_pool"), "Floating IP pool not checked against a router", msg)
 	}
 }
 
@@ -888,7 +918,22 @@ func (r *instanceResource) power(ctx context.Context, m *instanceModel, inst *cl
 	if action == client.PowerRestart {
 		return r.client.WaitForRestart(ctx, inst.ID)
 	}
-	return r.client.WaitForInstanceStatus(ctx, inst.ID, want)
+	got, err := r.client.WaitForPowerChange(ctx, inst.ID, have, want)
+	if got == nil {
+		got = inst
+	}
+	if errors.Is(err, client.ErrPowerIgnored) {
+		report := diags.AddAttributeError
+		if create {
+			report = diags.AddAttributeWarning
+		}
+		report(path.Root("power_state"), "Instance didn't "+action,
+			fmt.Sprintf("MTN Cloud accepted the %s, but instance %d is still %q after the grace period (2 minutes); this VM may not support "+
+				"it (suspend isn't available on every VM). Use \"stopped\" instead, or check it in the console.", action, inst.ID, have))
+		m.PowerState = types.StringNull() // read back from the VM by refresh
+		return got, nil
+	}
+	return got, err
 }
 
 // settle records the instance after a create or update wait and reports a failure or a timeout.

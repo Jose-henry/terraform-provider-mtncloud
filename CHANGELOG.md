@@ -6,6 +6,10 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 - `mtncloud_instance`: power control. `power_state` (`running`, `stopped`, `suspended`) powers the VM in place and puts back a change made in the console; left out, it only shows the state. A new `restart_trigger` value reboots the VM. A power call refused at create is a warning, so the new VM isn't tainted.
 - **Changed:** destroying a catalog-order resource now deletes what the order made, instead of refusing (D-029). Its instances are deleted with their disks and floating IPs, through their app for the managed services (database, MQ, streaming and Kubernetes), then the order's record in Catalog > Inventory. An app that also holds other instances is kept. Destroy refuses, deleting nothing, when it can't tell what the order made. `mtncloud_letsencrypt_certificate` deletes nothing and warns; `mtncloud_project` still refuses. To keep what an order made, use a `removed` block before you destroy.
+- Fixed: catalog services that build VMs were refused with "PLAN value [...] is not contained within the available options". The plan is now looked up in the order form's own plan list, by name, as the console does.
+- Fixed: `mtncloud_credential` showed a change on every plan (the API's password hash was written into state), and an imported credential was replaced (its `type` wasn't read).
+- `mtncloud_instance` and the catalog services check `floating_ip_pool` when you plan: a pool that isn't the external network of the router holding the (primary) network is an error naming the right one; no router is a warning.
+- `mtncloud_instance`: a power change MTN Cloud accepts but doesn't start within 2 minutes (suspend, on some VMs) fails with a clear message instead of waiting out the timeout.
 - `mtncloud_instances` filters by `network` (ID or name; a VM matches on any of its cards) and returns each instance's `networks`.
 - Docs: the examples pin `~> 0.4`. An instance with `install_agent` on (the default) stays "provisioning" until its agent reports in, so its network must be on an MTN Router with an external network.
 

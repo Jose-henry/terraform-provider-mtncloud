@@ -130,6 +130,11 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		if r.URL.Path == "/api/options/list" {
 			// A catalog form's select choices, by option type ID.
 			file, ok = "options_list_"+r.URL.Query().Get("optionTypeId")+".json", true
+			// Like MTN Cloud, the form's plan list (7) is empty without the form's project and item.
+			if q := r.URL.Query(); q.Get("optionTypeId") == "7" && (q.Get("resourcepool") == "" || q.Get("catalogItemTypeId") == "") {
+				_, _ = w.Write([]byte(`{"success":true,"data":[]}`))
+				return
+			}
 		}
 		if !ok || r.Header.Get("Authorization") != "Bearer test-token" {
 			w.WriteHeader(http.StatusNotFound)

@@ -327,6 +327,22 @@ func TestWaitForRestart(t *testing.T) {
 	}
 }
 
+// A power call MTN Cloud accepts but never acts on (suspend on some VMs) ends after the grace, not
+// the whole timeout; one that starts changing is waited for.
+func TestWaitForPowerChange(t *testing.T) {
+	grace := func(c *Config) { fastPoll(c); c.PowerGrace = 50 * time.Millisecond }
+	f := newFakeAPI(t)
+	instanceSeq(t, f, "running")
+	if _, err := f.client(t, grace).WaitForPowerChange(t.Context(), 9701, "running", "suspended"); !errors.Is(err, ErrPowerIgnored) {
+		t.Errorf("ignored: err %v, want ErrPowerIgnored", err)
+	}
+	f = newFakeAPI(t)
+	instanceSeq(t, f, "running", "suspending", "suspended")
+	if in, err := f.client(t, grace).WaitForPowerChange(t.Context(), 9701, "running", "suspended"); err != nil || in.Status != "suspended" {
+		t.Errorf("changed: %v, err %v", in, err)
+	}
+}
+
 func TestPowerInstance(t *testing.T) {
 	for action, query := range map[string]string{PowerStop: "server=true", PowerStart: "server=true", PowerRestart: "server=true", PowerSuspend: ""} {
 		f := newFakeAPI(t)

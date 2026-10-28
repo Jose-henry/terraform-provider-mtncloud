@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -235,4 +236,44 @@ func (c *Client) WaitForRouterGone(ctx context.Context, id int64) error {
 			return false, err
 		})
 	return err
+}
+
+// PoolRouter tells whether a floating IP from pool (an external network, by name) can reach a VM on
+// network netID: ok when a router holds the network with that external network as its gateway.
+// Otherwise others lists the routers that hold it with another gateway, as "<router> (external
+// network <name>)"; none at all means the network has no router with a gateway.
+func (c *Client) PoolRouter(ctx context.Context, netID int64, pool string) (ok bool, others []string, err error) {
+	routers, err := c.ListRouters(ctx)
+	if err != nil {
+		return false, nil, err
+	}
+	for _, rt := range routers {
+		if rt.ExternalNetworkID == 0 || !slices.Contains(rt.NetworkIDs, netID) {
+			continue
+		}
+		if strings.EqualFold(rt.ExternalNetworkName, pool) {
+			return true, nil, nil
+		}
+		others = append(others, fmt.Sprintf("%s (external network %s)", rt.Name, rt.ExternalNetworkName))
+	}
+	return false, others, nil
+}
+
+// PoolRouterProblem is PoolRouter's answer as a message for the user, with whether it is an error
+// (a router on another external network) or only a warning (no router: one may be made in the same
+// apply). An empty message means the pool fits.
+func (c *Client) PoolRouterProblem(ctx context.Context, netID int64, pool string) (msg string, isErr bool) {
+	ok, others, err := c.PoolRouter(ctx, netID, pool)
+	switch {
+	case err != nil:
+		return "The floating IP pool couldn't be checked against the network's router: " + err.Error() + ".", false
+	case ok:
+		return "", false
+	case len(others) > 0:
+		return fmt.Sprintf("Network %d is on router %s, so a floating IP can only come from that external network. Set "+
+			"floating_ip_pool to it, or change the router's external_network first (in its own apply).", netID, strings.Join(others, ", ")), true
+	}
+	return fmt.Sprintf("Network %d isn't on an MTN Router with external network %q, so the floating IP can't be attached "+
+		"and the apply will fail once the VM is running. Unless this apply creates that router, add one "+
+		"(mtncloud_router with external_network = %q and this network) and reference it in depends_on.", netID, pool, pool), false
 }

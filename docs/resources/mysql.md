@@ -122,6 +122,7 @@ exactly as ordered. The first apply after an import records them, finds the inst
   in state or plans.
 - **Names are checked when you plan**: project, plan, networks, security groups, floating IP pool,
   environment and every choice list (versions and so on) are looked up in MTN Cloud before anything
-  is ordered, and an unknown value lists the valid ones.
+  is ordered, and an unknown value lists the valid ones. A floating IP pool must also be the external
+  network of the router that holds the first network: another pool is an error, and no router a warning.
 - **A failed workflow** is reported with MTN Cloud's message and nothing is kept; delete whatever it
   left in the console before applying again.
