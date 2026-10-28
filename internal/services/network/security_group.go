@@ -516,7 +516,10 @@ func refresh(ctx context.Context, m *securityGroupModel, g *client.SecurityGroup
 	var diags diag.Diagnostics
 	m.ID = types.StringValue(strconv.FormatInt(g.ID, 10))
 	m.Name = types.StringValue(g.Name)
-	if g.Description != "" || !m.Description.IsNull() {
+	// The cloud's sync fills a blank description with the group's name: with none configured, that
+	// is still none, or every plan after the sync would clear it.
+	syncedBlank := m.Description.IsNull() && g.Description == g.Name
+	if (g.Description != "" && !syncedBlank) || !m.Description.IsNull() {
 		m.Description = types.StringValue(g.Description)
 	}
 	m.ExternalID = types.StringValue(g.ExternalID)
