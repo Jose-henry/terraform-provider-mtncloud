@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Instances (OpenStack VMs): POST/GET/PUT/DELETE /api/instances[/{id}], plus /resize and
@@ -588,6 +589,71 @@ func (c *Client) SetInstanceSecurityGroups(ctx context.Context, id int64, groupI
 // DeleteInstance deletes an instance. One that is already gone counts as deleted.
 func (c *Client) DeleteInstance(ctx context.Context, id int64) error {
 	return ignoreNotFound(c.do(ctx, http.MethodDelete, "/api/instances/"+itoa(id), nil, nil, nil))
+}
+
+// Power actions, sent with PowerInstance.
+const (
+	PowerStart   = "start"
+	PowerStop    = "stop"
+	PowerSuspend = "suspend"
+	PowerRestart = "restart"
+)
+
+// PowerInstance starts, stops, suspends or restarts an instance's server (PUT
+// /api/instances/{id}/<action>). Start, stop and restart act on the server, not only the service
+// (server=true); start also resumes a suspended server.
+func (c *Client) PowerInstance(ctx context.Context, id int64, action string) error {
+	var q url.Values
+	if action != PowerSuspend {
+		q = url.Values{"server": {"true"}}
+	}
+	return c.do(ctx, http.MethodPut, "/api/instances/"+itoa(id)+"/"+action, q, nil, nil)
+}
+
+// PowerOf is the power state an instance status shows: "running", "stopped" or "suspended", or ""
+// while it is changing. "warning" (up, with a failing check) is running.
+func PowerOf(status string) string {
+	switch s := strings.ToLower(status); s {
+	case "running", "stopped", "suspended":
+		return s
+	case "warning":
+		return "running"
+	}
+	return ""
+}
+
+// restartGrace bounds the wait for a restarted instance to leave "running": one that reboots too
+// fast to be seen doing it is taken as restarted.
+const restartGrace = 2 * time.Minute
+
+// WaitForInstanceStatus polls until the instance's power state (PowerOf) is power, or it has failed.
+func (c *Client) WaitForInstanceStatus(ctx context.Context, id int64, power string) (*Instance, error) {
+	return poll(ctx, c, func(ctx context.Context) (*Instance, error) { return c.GetInstance(ctx, id) },
+		func(in *Instance, err error) (bool, error) {
+			if err != nil {
+				return false, err
+			}
+			return PowerOf(in.Status) == power || InstanceFailed(in.Status), nil
+		})
+}
+
+// WaitForRestart waits for a restarted instance to leave "running" (for up to restartGrace), then
+// to run again. Straight after the call it still reads "running", so waiting for that alone would
+// end before the reboot starts.
+func (c *Client) WaitForRestart(ctx context.Context, id int64) (*Instance, error) {
+	leave, cancel := context.WithTimeout(ctx, restartGrace)
+	_, err := poll(leave, c, func(ctx context.Context) (*Instance, error) { return c.GetInstance(ctx, id) },
+		func(in *Instance, err error) (bool, error) {
+			if err != nil {
+				return false, err
+			}
+			return PowerOf(in.Status) != "running", nil
+		})
+	cancel()
+	if err != nil && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return c.WaitForInstanceStatus(ctx, id, "running")
 }
 
 // WaitForInstance polls an instance until its status settles (running, or failed / error) and

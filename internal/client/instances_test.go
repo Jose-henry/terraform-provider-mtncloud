@@ -316,6 +316,31 @@ func TestWaitForInstance(t *testing.T) {
 	}
 }
 
+// A restart is waited out: the instance still reads "running" at first, so the wait must see it
+// leave "running" before it returns. A reboot that fails is then reported, not hidden.
+func TestWaitForRestart(t *testing.T) {
+	f := newFakeAPI(t)
+	instanceSeq(t, f, "running", "running", "restarting", "failed")
+	in, err := f.client(t, fastPoll).WaitForRestart(t.Context(), 9701)
+	if err != nil || in.Status != "failed" {
+		t.Fatalf("status %v, err %v", in, err)
+	}
+}
+
+func TestPowerInstance(t *testing.T) {
+	for action, query := range map[string]string{PowerStop: "server=true", PowerStart: "server=true", PowerRestart: "server=true", PowerSuspend: ""} {
+		f := newFakeAPI(t)
+		var got string
+		f.route("PUT", "/api/instances/9701/"+action, func(w http.ResponseWriter, r *http.Request) {
+			got = r.URL.RawQuery
+			_, _ = w.Write([]byte(`{"success":true}`))
+		})
+		if err := f.client(t).PowerInstance(t.Context(), 9701, action); err != nil || got != query {
+			t.Errorf("%s: query %q, err %v; want %q", action, got, err, query)
+		}
+	}
+}
+
 func TestWaitForInstance_TimeoutKeepsLastStatus(t *testing.T) {
 	f := newFakeAPI(t)
 	instanceSeq(t, f, "provisioning")

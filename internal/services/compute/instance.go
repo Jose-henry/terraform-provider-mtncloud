@@ -84,6 +84,8 @@ type instanceModel struct {
 	ShutdownDays   types.Int64    `tfsdk:"shutdown_days"`
 	ExpireDate     types.String   `tfsdk:"expire_date"`
 	ShutdownDate   types.String   `tfsdk:"shutdown_date"`
+	PowerState     types.String   `tfsdk:"power_state"`
+	RestartTrigger types.String   `tfsdk:"restart_trigger"`
 	Status         types.String   `tfsdk:"status"`
 	PrivateIP      types.String   `tfsdk:"private_ip"`
 	PublicIP       types.String   `tfsdk:"public_ip"`
@@ -233,7 +235,8 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			"install_agent": schema.BoolAttribute{
 				Optional: true, Computed: true, Default: booldefault.StaticBool(true),
 				Description: "Install the MTN Cloud agent, for monitoring, logs and automation. Defaults to `true`. The agent " +
-					"needs the network to be on an MTN Router. Changing it replaces the instance.",
+					"needs the primary network to be on an MTN Router with an external network, so it can reach MTN Cloud: " +
+					"without one, the VM stays \"provisioning\" (finalizing) until the create timeout. Changing it replaces the instance.",
 				PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
 			},
 			"create_user": schema.BoolAttribute{
@@ -295,6 +298,22 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Description: "When the instance will be deleted, if it expires (from `expire_days` or a policy)."},
 			"shutdown_date": schema.StringAttribute{Computed: true, PlanModifiers: keep,
 				Description: "When the VM will be stopped, if a shutdown is set."},
+			"power_state": schema.StringAttribute{
+				// Optional+Computed: left out, the VM's power is not managed and this shows what it is.
+				Optional: true, Computed: true,
+				Description: "`running`, `stopped` or `suspended`. Set it to power the VM on, off, or suspend it, in place: " +
+					"stopping shuts the server down and keeps its disks and addresses. When set, a VM started or stopped in " +
+					"the console is put back by the next apply. Left out, the VM's power isn't managed and this shows its " +
+					"state. A plan change or added volume restarts the VM, then it is put back in this state.",
+				Validators:    []validator.String{stringvalidator.OneOf(powerStates...)},
+				PlanModifiers: keep,
+			},
+			"restart_trigger": schema.StringAttribute{
+				Optional: true,
+				Description: "Any value; changing it to a new value restarts the VM (server reboot) in place on the next " +
+					"apply, for example `restart_trigger = timestamp()` or a version string. Nothing happens at create, " +
+					"when it is removed, or while `power_state` is `stopped` or `suspended`.",
+			},
 			"status":     schema.StringAttribute{Computed: true, Description: "Status, for example `running`.", PlanModifiers: keep},
 			"private_ip": schema.StringAttribute{Computed: true, Description: "Private IP address on the primary network.", PlanModifiers: keep},
 			"public_ip":  schema.StringAttribute{Computed: true, Description: "Floating (public) IP address, when the instance has one.", PlanModifiers: keep},
@@ -486,6 +505,12 @@ func (r *instanceResource) planComputed(ctx context.Context, req resource.Modify
 	}
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("status"), types.StringUnknown())...)
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("public_ip"), types.StringUnknown())...)
+	// Unmanaged power can change with the update (a reconfigure starts a stopped VM).
+	var power types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("power_state"), &power)...)
+	if power.IsNull() {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("power_state"), types.StringUnknown())...)
+	}
 }
 
 // checkLifecycle refuses a change to the create-only days of an instance that is kept (a replaced
@@ -798,6 +823,19 @@ func (r *instanceResource) Create(ctx context.Context, req resource.CreateReques
 			inst = got
 		}
 	}
+	plannedPower, powerFailed := plan.PowerState, false
+	if err == nil && !client.InstanceFailed(inst.Status) && !fipFailed {
+		// The VM is up: a power change that doesn't finish is a warning, so it isn't replaced.
+		got, perr := r.power(ctx, &plan, inst, false, true, &resp.Diagnostics)
+		if perr != nil {
+			resp.Diagnostics.AddAttributeWarning(path.Root("power_state"), "Power state not reached yet",
+				fmt.Sprintf("Instance %d was created, but hasn't reached %s: %s. The next apply checks again.", id, plan.PowerState.ValueString(), perr))
+		}
+		if got != nil {
+			inst = got
+		}
+		powerFailed = perr != nil || plan.PowerState.IsNull() != plannedPower.IsNull()
+	}
 	r.settle(ctx, &plan, inst, err, "create", &resp.Diagnostics)
 	if scaleFailed {
 		plan.Scale = planned // as planned, so the apply is consistent; the next refresh shows it unset
@@ -805,7 +843,52 @@ func (r *instanceResource) Create(ctx context.Context, req resource.CreateReques
 	if fipFailed {
 		plan.FloatingIPPool = types.StringNull() // not attached
 	}
+	if powerFailed {
+		plan.PowerState = plannedPower // as planned, so the apply is consistent; the next refresh shows it
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// powerStates are the values of power_state, each the instance status it ends in.
+var powerStates = []string{"running", "stopped", "suspended"}
+
+// powerActions turns a wanted power_state into the call that reaches it.
+var powerActions = map[string]string{"running": client.PowerStart, "stopped": client.PowerStop, "suspended": client.PowerSuspend}
+
+// power puts the VM in m's power_state (unknown or null: left as it is), restarting it instead when
+// restart is set and it is to run. A VM whose power is changing (client.PowerOf is "") is left
+// alone. A refused call is reported on power_state, and m then records the VM's power as it is, so
+// the next plan tries again. At create it is a warning, not an error: an error would taint, and so
+// replace, the new VM. The wait's own error goes back to the caller.
+func (r *instanceResource) power(ctx context.Context, m *instanceModel, inst *client.Instance, restart, create bool, diags *diag.Diagnostics) (*client.Instance, error) {
+	have := client.PowerOf(inst.Status)
+	want := have
+	if known(m.PowerState) {
+		want = m.PowerState.ValueString()
+	}
+	action := powerActions[want]
+	switch {
+	case have == "":
+		return inst, nil
+	case restart && want == "running" && have == "running":
+		action = client.PowerRestart
+	case have == want:
+		return inst, nil
+	}
+	if err := r.client.PowerInstance(ctx, inst.ID, action); err != nil {
+		report := diags.AddAttributeError
+		if create {
+			report = diags.AddAttributeWarning
+		}
+		report(path.Root("power_state"), "Unable to "+action+" the instance",
+			fmt.Sprintf("Instance %d is %q: %s. The next apply tries again.", inst.ID, inst.Status, err))
+		m.PowerState = types.StringNull() // read back from the VM by refresh
+		return inst, nil
+	}
+	if action == client.PowerRestart {
+		return r.client.WaitForRestart(ctx, inst.ID)
+	}
+	return r.client.WaitForInstanceStatus(ctx, inst.ID, want)
 }
 
 // settle records the instance after a create or update wait and reports a failure or a timeout.
@@ -839,7 +922,7 @@ func (r *instanceResource) settle(ctx context.Context, m *instanceModel, inst *c
 
 // unknownToNull clears computed values that were never read, so state can be saved.
 func unknownToNull(ctx context.Context, m *instanceModel) {
-	for _, s := range []*types.String{&m.Name, &m.Hostname, &m.Domain, &m.FloatingIPPool, &m.Status, &m.PrivateIP, &m.PublicIP, &m.ExpireDate, &m.ShutdownDate} {
+	for _, s := range []*types.String{&m.Name, &m.Hostname, &m.Domain, &m.FloatingIPPool, &m.PowerState, &m.Status, &m.PrivateIP, &m.PublicIP, &m.ExpireDate, &m.ShutdownDate} {
 		if s.IsUnknown() {
 			*s = types.StringNull()
 		}
@@ -1000,6 +1083,10 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 			resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipUnconfirmedKey, nil)...)
 		}
 	}
+	if err == nil && !client.InstanceFailed(inst.Status) {
+		restart := !plan.RestartTrigger.IsNull() && !plan.RestartTrigger.Equal(state.RestartTrigger)
+		inst, err = r.power(ctx, &plan, inst, restart, false, &resp.Diagnostics)
+	}
 	r.settle(ctx, &plan, inst, err, "update", &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -1050,6 +1137,9 @@ func (r *instanceResource) refresh(ctx context.Context, m *instanceModel, in *cl
 		m.Description = types.StringValue(in.Description)
 	}
 	m.Status = types.StringValue(in.Status)
+	if p := client.PowerOf(in.Status); p != "" {
+		m.PowerState = types.StringValue(p)
+	}
 	m.PrivateIP = optional(in.PrivateIP)
 	m.PublicIP = optional(in.PublicIP)
 	m.InstallAgent = types.BoolValue(!in.NoAgent)

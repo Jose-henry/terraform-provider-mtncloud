@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
@@ -40,6 +42,8 @@ type instStore struct {
 	creates      int
 	lastCreate   map[string]any
 	resizes      []map[string]any
+	powers       []string // power actions, in order
+	powerErr     bool     // power actions answer 400
 }
 
 func newInstStore() *instStore {
@@ -70,6 +74,9 @@ func (s *instStore) view(id int64) map[string]any {
 	}
 	return out
 }
+
+// powerStatus is the status each power action leaves an instance in.
+var powerStatus = map[string]string{"start": "running", "stop": "stopped", "suspend": "suspended", "restart": "running"}
 
 func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var body map[string]any
@@ -108,6 +115,17 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case len(parts) == 2 && r.Method == http.MethodPut && powerStatus[parts[1]] != "":
+		if s.powerErr {
+			reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "Instance is busy"})
+			return
+		}
+		s.powers = append(s.powers, parts[1])
+		in["status"] = powerStatus[parts[1]]
+		if parts[1] == "restart" {
+			s.pending[id] = true // seen rebooting once, as the platform shows it
+		}
+		reply(http.StatusOK, map[string]any{"success": true})
 	case len(parts) == 2 && parts[1] == "threshold" && r.Method == http.MethodGet:
 		th := s.thresholds[id]
 		if th == nil { // as captured for an instance never scaled
@@ -666,6 +684,145 @@ func TestInstance_ScaleAndLifecycle(t *testing.T) {
     max_count = 2
   }`), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)(max_count\s+must\s+be\s+at\s+least\s+min_count.*Watch\s+at\s+least\s+one|Watch\s+at\s+least\s+one.*max_count\s+must\s+be\s+at\s+least\s+min_count)`)},
 			{Config: f.providerConfig()},
+		},
+	})
+}
+
+// power_state powers the VM on, off or into suspend in place; restart_trigger reboots it.
+func TestInstance_Power(t *testing.T) {
+	f, s := newInstFakes(t)
+	cfg := func(plan, extra string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "`+plan+`"
+  networks = ["9301"]
+`+extra)
+	}
+	powers := func(want ...string) func(*terraform.State) error {
+		return func(*terraform.State) error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if !slices.Equal(s.powers, want) {
+				return fmt.Errorf("power actions %v, want %v", s.powers, want)
+			}
+			return nil
+		}
+	}
+	outOfBand := func(status string) func() {
+		return func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			for _, in := range s.insts {
+				in["status"] = status
+			}
+		}
+	}
+	state := func(want string) resource.TestCheckFunc {
+		return resource.TestCheckResourceAttr("mtncloud_instance.app", "power_state", want)
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("G1S1", `  power_state = "stopped"`), Check: resource.ComposeTestCheckFunc(powers("stop"), state("stopped"),
+				resource.TestCheckResourceAttr("mtncloud_instance.app", "status", "stopped"))},
+			{Config: cfg("G1S1", `  power_state = "running"`), Check: resource.ComposeTestCheckFunc(powers("stop", "start"), state("running"))},
+			{Config: cfg("G1S1", `  power_state = "running"
+  restart_trigger = "v1"`), Check: powers("stop", "start", "restart")},
+			{
+				// Suspended: a new trigger doesn't restart it.
+				Config: cfg("G1S1", `  power_state = "suspended"
+  restart_trigger = "v2"`), Check: resource.ComposeTestCheckFunc(powers("stop", "start", "restart", "suspend"), state("suspended")),
+			},
+			{Config: cfg("G1S1", `  power_state = "running"
+  restart_trigger = "v2"`), Check: powers("stop", "start", "restart", "suspend", "start")},
+			{
+				// Stopped in the console: the next apply starts it again.
+				PreConfig: outOfBand("stopped"),
+				Config: cfg("G1S1", `  power_state = "running"
+  restart_trigger = "v2"`),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
+				Check:            powers("stop", "start", "restart", "suspend", "start", "start"),
+			},
+			{
+				// Unmanaged: a VM stopped in the console is left stopped, with no diff.
+				PreConfig:        outOfBand("stopped"),
+				Config:           cfg("G1S1", `  restart_trigger = "v2"`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				Check:            resource.ComposeTestCheckFunc(powers("stop", "start", "restart", "suspend", "start", "start"), state("stopped")),
+			},
+			{
+				// Unmanaged through a resize, which starts the VM: power_state follows, and no call is made.
+				Config: cfg("G2S4", `  restart_trigger = "v2"`),
+				Check:  resource.ComposeTestCheckFunc(powers("stop", "start", "restart", "suspend", "start", "start"), state("running")),
+			},
+			{
+				PreConfig: func() { s.mu.Lock(); s.powerErr = true; s.mu.Unlock() },
+				Config: cfg("G2S4", `  power_state = "stopped"
+  restart_trigger = "v2"`),
+				ExpectError: regexp.MustCompile(`(?s)Unable to stop the instance.*Instance is busy`),
+			},
+		},
+	})
+}
+
+// A refused power call at create keeps the new VM; a "warning" VM counts as running.
+func TestInstance_PowerEdges(t *testing.T) {
+	f, s := newInstFakes(t)
+	cfg := func(extra string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+`+extra)
+	}
+	powers := func(want ...string) func(*terraform.State) error {
+		return func(*terraform.State) error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if !slices.Equal(s.powers, want) {
+				return fmt.Errorf("power actions %v, want %v", s.powers, want)
+			}
+			return nil
+		}
+	}
+	warning := func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, in := range s.insts {
+			in["status"] = "warning"
+		}
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				// The stop is refused: a warning, and the VM is kept (not tainted). State holds the planned
+				// value, so the apply is consistent; the refresh reads it running, and the plan stops it.
+				PreConfig:          func() { s.mu.Lock(); s.powerErr = true; s.mu.Unlock() },
+				Config:             cfg(`  power_state = "stopped"`),
+				Check:              resource.ComposeTestCheckFunc(powers(), resource.TestCheckResourceAttr("mtncloud_instance.app", "power_state", "stopped")),
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				// The next apply stops it in place.
+				PreConfig:        func() { s.mu.Lock(); s.powerErr = false; s.mu.Unlock() },
+				Config:           cfg(`  power_state = "stopped"`),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
+				Check:            powers("stop"),
+			},
+			{Config: cfg(`  power_state = "running"`), Check: powers("stop", "start")},
+			{
+				// Up with a failing check: running, so no diff and no start.
+				PreConfig:        warning,
+				Config:           cfg(`  power_state = "running"`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				Check:            powers("stop", "start"),
+			},
+			{
+				// And a new trigger restarts it.
+				PreConfig: warning,
+				Config: cfg(`  power_state = "running"
+  restart_trigger = "a"`),
+				Check: powers("stop", "start", "restart"),
+			},
 		},
 	})
 }

@@ -41,6 +41,11 @@ resource "mtncloud_instance" "web" {
     cpu       = { min = 30, max = 75 }
   }
 
+  # Power the VM on or off in place ("running", "stopped" or "suspended").
+  power_state = "running"
+  # Change this to any new value to reboot the VM on the next apply.
+  restart_trigger = "2026-10-28"
+
   environment = "Production"
   labels      = ["web"]
   tags = {

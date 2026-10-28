@@ -45,10 +45,17 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
 - **Waits until running.** A new instance is "provisioning" for a few minutes; create and update
   wait until MTN Cloud reports it running (default timeout 30 minutes, see `timeouts`). An instance
   that ends "failed" or "error" (then or later) is reported with MTN Cloud's reason, kept in state,
-  and replaced by the next apply.
-- **Restarts the VM:** changing `plan`. `status` and `public_ip` are read again after any update.
+  and replaced by the next apply. With `install_agent` on (the default), the VM is only "running"
+  once its agent reports in, so its primary network must be on an MTN Router with an external network:
+  on an isolated network it stays "provisioning" until the timeout. Expect 10 to 30 minutes.
+- **Restarts the VM:** changing `plan`, or a new `restart_trigger`. `status` and `public_ip` are
+  read again after any update.
+- **Power.** Set `power_state` to `running`, `stopped` or `suspended` to power the VM on, off or into
+  suspend in place; a VM changed in the console is put back by the next apply. Left out, power isn't
+  managed, and `power_state` shows the VM's state. A plan change starts a stopped VM, then it is put
+  back in the `power_state` you set. To reboot, change `restart_trigger` to any new value.
 - **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`, `scale`,
-  `floating_ip_pool`,
+  `floating_ip_pool`, `power_state`, `restart_trigger`,
   `plan`, and volumes added at the end of `data_volume`.
 - **Replaces the instance:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`,
   `env_vars`, `install_agent`, `create_user`, `scale_factor`, any change to `networks`, and

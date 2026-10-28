@@ -55,6 +55,11 @@ resource "mtncloud_instance" "web" {
     cpu       = { min = 30, max = 75 }
   }
 
+  # Power the VM on or off in place ("running", "stopped" or "suspended").
+  power_state = "running"
+  # Change this to any new value to reboot the VM on the next apply.
+  restart_trigger = "2026-10-28"
+
   environment = "Production"
   labels      = ["web"]
   tags = {
@@ -101,10 +106,12 @@ resource "mtncloud_instance" "worker" {
 - `floating_ip_pool` (String) Give the instance a floating (public) IP from this pool, for example `public-network-02` (the `mtncloud_external_networks` data source lists the names). It is attached once the VM is running, and works only when the instance's network is on an MTN Router with an external network. Changed in place: the old address is released and a new one attached. Apply waits until the instance shows the address (in `public_ip`), and fails if it doesn't.
 - `group` (String) Group the instance is provisioned into, by name, for example `MTNNG_CLOUD_AZ_1`. Defaults to the provider's `group`. Changing it, or that default when you rely on it, replaces the instance.
 - `hostname` (String) Hostname set inside the VM. Left out, MTN Cloud derives it from the name or your hostname template. Changing it replaces the instance.
-- `install_agent` (Boolean) Install the MTN Cloud agent, for monitoring, logs and automation. Defaults to `true`. The agent needs the network to be on an MTN Router. Changing it replaces the instance.
+- `install_agent` (Boolean) Install the MTN Cloud agent, for monitoring, logs and automation. Defaults to `true`. The agent needs the primary network to be on an MTN Router with an external network, so it can reach MTN Cloud: without one, the VM stays "provisioning" (finalizing) until the create timeout. Changing it replaces the instance.
 - `labels` (Set of String) Labels (keywords). Changed in place.
 - `name` (String) Name of the instance. Leave it out to use your tenant's naming template (for example `<initials>-<account>-MTN-CLOUD-<type>-<n>`); the generated name is then shown here. Renaming is done in place.
+- `power_state` (String) `running`, `stopped` or `suspended`. Set it to power the VM on, off, or suspend it, in place: stopping shuts the server down and keeps its disks and addresses. When set, a VM started or stopped in the console is put back by the next apply. Left out, the VM's power isn't managed and this shows its state. A plan change or added volume restarts the VM, then it is put back in this state.
 - `project` (String) Project the instance runs in, by name (for example `web-prod`; the full name with the tenant suffix also works). Defaults to the provider's `project`. Changing it to another project, or that default when you rely on it, replaces the instance.
+- `restart_trigger` (String) Any value; changing it to a new value restarts the VM (server reboot) in place on the next apply, for example `restart_trigger = timestamp()` or a version string. Nothing happens at create, when it is removed, or while `power_state` is `stopped` or `suspended`.
 - `root_volume_size` (Number) Root volume size in GB. Left out, the plan's size applies (10 GB). MTN Cloud can't resize a root volume: add a `data_volume` instead. Windows images need at least 40 GB.
 - `scale` (Attributes) Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and removes one below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. Changed in place; removing it turns scaling off. (see [below for nested schema](#nestedatt--scale))
 - `scale_factor` (Number) Number of VMs in the instance. Defaults to 1. For several separate instances use `count` or `for_each`. Changing it replaces the instance.
@@ -205,10 +212,17 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
 - **Waits until running.** A new instance is "provisioning" for a few minutes; create and update
   wait until MTN Cloud reports it running (default timeout 30 minutes, see `timeouts`). An instance
   that ends "failed" or "error" (then or later) is reported with MTN Cloud's reason, kept in state,
-  and replaced by the next apply.
-- **Restarts the VM:** changing `plan`. `status` and `public_ip` are read again after any update.
+  and replaced by the next apply. With `install_agent` on (the default), the VM is only "running"
+  once its agent reports in, so its primary network must be on an MTN Router with an external network:
+  on an isolated network it stays "provisioning" until the timeout. Expect 10 to 30 minutes.
+- **Restarts the VM:** changing `plan`, or a new `restart_trigger`. `status` and `public_ip` are
+  read again after any update.
+- **Power.** Set `power_state` to `running`, `stopped` or `suspended` to power the VM on, off or into
+  suspend in place; a VM changed in the console is put back by the next apply. Left out, power isn't
+  managed, and `power_state` shows the VM's state. A plan change starts a stopped VM, then it is put
+  back in the `power_state` you set. To reboot, change `restart_trigger` to any new value.
 - **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`, `scale`,
-  `floating_ip_pool`,
+  `floating_ip_pool`, `power_state`, `restart_trigger`,
   `plan`, and volumes added at the end of `data_volume`.
 - **Replaces the instance:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`,
   `env_vars`, `install_agent`, `create_user`, `scale_factor`, any change to `networks`, and
