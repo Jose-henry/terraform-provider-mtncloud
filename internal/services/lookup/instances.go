@@ -4,11 +4,15 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
+	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 	"github.com/mtn/terraform-provider-mtncloud/internal/normalize"
 )
 
@@ -22,6 +26,7 @@ type instancesModel struct {
 	Status    types.String            `tfsdk:"status"`
 	Image     types.String            `tfsdk:"image"`
 	Plan      types.String            `tfsdk:"plan"`
+	Network   types.String            `tfsdk:"network"`
 	Labels    []types.String          `tfsdk:"labels"`
 	Tags      map[string]types.String `tfsdk:"tags"`
 	Instances []instanceModel         `tfsdk:"instances"`
@@ -38,6 +43,7 @@ type instanceModel struct {
 	Plan      types.String   `tfsdk:"plan"`
 	PrivateIP types.String   `tfsdk:"private_ip"`
 	PublicIP  types.String   `tfsdk:"public_ip"`
+	Networks  []types.Int64  `tfsdk:"networks"`
 	Labels    []types.String `tfsdk:"labels"`
 	Tags      types.Map      `tfsdk:"tags"`
 }
@@ -60,6 +66,12 @@ func (d *instancesDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 			"status": schema.StringAttribute{Optional: true, Description: "Only return instances with this status, for example `running` (case ignored)."},
 			"image":  schema.StringAttribute{Optional: true, Description: "Only return instances of this image, by name or code (case ignored)."},
 			"plan":   schema.StringAttribute{Optional: true, Description: "Only return instances of this plan, for example `G2S4` (case ignored)."},
+			"network": schema.StringAttribute{
+				Optional: true,
+				Description: "Only return instances with a network card on this network, by ID or name (a number is tried as " +
+					"an ID first). Every card counts, not only the primary one. With `project` set, the name is looked up in " +
+					"that project, and only that project's instances are returned; to search every project, give the network's ID.",
+			},
 			"labels": schema.ListAttribute{
 				Optional: true, ElementType: types.StringType,
 				Description: "Only return instances that have every one of these labels (case ignored).",
@@ -82,8 +94,13 @@ func (d *instancesDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 					"plan":       schema.StringAttribute{Computed: true, Description: "Plan (size) name, for example `G2S4`."},
 					"private_ip": schema.StringAttribute{Computed: true, Description: "Private address, or empty."},
 					"public_ip":  schema.StringAttribute{Computed: true, Description: "Floating (public) address, or empty."},
-					"labels":     schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Labels."},
-					"tags":       schema.MapAttribute{Computed: true, ElementType: types.StringType, Description: "Tags."},
+					"networks": schema.ListAttribute{
+						Computed: true, ElementType: types.Int64Type,
+						Description: "IDs of the networks the instance's cards are on, in the order MTN Cloud lists the cards " +
+							"(the primary card first, when MTN Cloud marks one).",
+					},
+					"labels": schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Labels."},
+					"tags":   schema.MapAttribute{Computed: true, ElementType: types.StringType, Description: "Tags."},
 				}},
 			},
 		},
@@ -115,6 +132,10 @@ func (d *instancesDataSource) Read(ctx context.Context, req datasource.ReadReque
 		}
 		projectID = p.ID
 	}
+	networkID := d.networkID(ctx, m, projectID, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	projects, err := d.client.Projects(ctx)
 	if err != nil {
 		apiError(&resp.Diagnostics, "projects", err)
@@ -133,7 +154,7 @@ func (d *instancesDataSource) Read(ctx context.Context, req datasource.ReadReque
 	for _, in := range instances {
 		if !match(in.Name) || (projectID != 0 && in.ProjectID != projectID) || !textMatches(in.Status, m.Status) ||
 			!imageMatches(in.ImageName, in.ImageCode, m.Image) || !textMatches(in.PlanName, m.Plan) ||
-			!labelsMatch(in.Labels, m.Labels) || !tagsMatch(in.Tags, m.Tags) {
+			!labelsMatch(in.Labels, m.Labels) || !tagsMatch(in.Tags, m.Tags) || !onNetwork(in.Interfaces, networkID) {
 			continue
 		}
 		tags, d2 := types.MapValueFrom(ctx, types.StringType, nonNil(in.Tags))
@@ -142,17 +163,55 @@ func (d *instancesDataSource) Read(ctx context.Context, req datasource.ReadReque
 		for i, l := range in.Labels {
 			labels[i] = types.StringValue(l)
 		}
+		networks := make([]types.Int64, len(in.Interfaces))
+		for i, nic := range in.Interfaces {
+			networks[i] = types.Int64Value(nic.NetworkID)
+		}
 		m.Instances = append(m.Instances, instanceModel{
 			ID: types.Int64Value(in.ID), Name: types.StringValue(in.Name), Status: types.StringValue(in.Status),
 			Project: types.StringValue(names[in.ProjectID]), Group: types.StringValue(in.GroupName), Cloud: types.StringValue(in.CloudName), Image: types.StringValue(in.ImageName),
 			Plan: types.StringValue(in.PlanName), PrivateIP: types.StringValue(in.PrivateIP),
-			PublicIP: types.StringValue(in.PublicIP), Labels: labels, Tags: tags,
+			PublicIP: types.StringValue(in.PublicIP), Networks: networks, Labels: labels, Tags: tags,
 		})
 	}
 	slices.SortFunc(m.Instances, func(a, b instanceModel) int {
 		return cmp.Or(cmp.Compare(a.Name.ValueString(), b.Name.ValueString()), cmp.Compare(a.ID.ValueInt64(), b.ID.ValueInt64()))
 	})
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+}
+
+// networkID resolves the network filter to an ID: 0 when it isn't set. A number is tried as an ID
+// first, then as a name, so a network named "2024" can still be picked; a name must match exactly
+// one network (in projectID, when set). A wrong ID is an error, like a wrong name, never an empty list.
+func (d *instancesDataSource) networkID(ctx context.Context, m instancesModel, projectID int64, diags *diag.Diagnostics) int64 {
+	if m.Network.IsNull() {
+		return 0
+	}
+	name := m.Network.ValueString()
+	if id, err := strconv.ParseInt(name, 10, 64); err == nil && id > 0 {
+		n, err := d.client.GetNetwork(ctx, id)
+		switch {
+		case err == nil:
+			return n.ID
+		case !client.IsNotFound(err):
+			apiError(diags, "networks", err)
+			return 0
+		}
+	}
+	all, err := d.client.FindNetworksNamed(ctx, name)
+	if err != nil {
+		apiError(diags, "networks", err)
+		return 0
+	}
+	if n := oneNetwork(all, path.Root("network"), name, m.Project, projectID, diags); n != nil {
+		return n.ID
+	}
+	return 0
+}
+
+// onNetwork reports whether any of the cards is on network id; every instance passes when id is 0.
+func onNetwork(nics []client.Interface, id int64) bool {
+	return id == 0 || slices.ContainsFunc(nics, func(n client.Interface) bool { return n.NetworkID == id })
 }
 
 // imageMatches reports whether an instance's image passes the image filter, given by name or code.

@@ -101,6 +101,74 @@ data "mtncloud_instances" "` + name + `" {
 	})
 }
 
+// The network filter matches any of an instance's cards, not only the primary one.
+func TestInstances_DataSourceByNetwork(t *testing.T) {
+	f, _ := newInstFakes(t)
+	nets := newNetStore()
+	for id, n := range map[int64][2]any{9301: {"app-net", int64(9201)}, 9303: {"db-net", int64(9201)}, 9305: {"app-net", int64(9202)}} {
+		nets.networks[id] = map[string]any{"id": id, "name": n[0], "status": "ok",
+			"zonePool": map[string]any{"id": n[1], "name": nets.projects[n[1].(int64)]}}
+	}
+	f.net = nets
+	cfg := instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301", "9303"]
+`)
+	list := func(name, filters string) string {
+		return `
+data "mtncloud_instances" "` + name + `" {
+` + filters + `
+}
+`
+	}
+	size := func(name string, n int) statecheck.StateCheck {
+		return statecheck.ExpectKnownValue("data.mtncloud_instances."+name, tfjsonpath.New("instances"), knownvalue.ListSizeExact(n))
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg},
+			{
+				Config: cfg + list("second", `  network = "db-net"`) + list("by_id", `  network = "9303"`) +
+					list("in_project", `  project = "web-prod"
+  network = "app-net"`) + list("elsewhere", `  network = "9305"`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					size("second", 1), size("by_id", 1), size("in_project", 1), size("elsewhere", 0),
+					statecheck.ExpectKnownValue("data.mtncloud_instances.second", tfjsonpath.New("instances").AtSliceIndex(0).AtMapKey("networks"),
+						knownvalue.ListExact([]knownvalue.Check{knownvalue.Int64Exact(9301), knownvalue.Int64Exact(9303)})),
+				},
+			},
+			{
+				Config:      cfg + list("shared", `  network = "app-net"`),
+				ExpectError: regexp.MustCompile(`(?s)Several networks match.*2 networks are named "app-net"`),
+			},
+			{
+				Config:      cfg + list("missing", `  network = "no-net"`),
+				ExpectError: regexp.MustCompile(`(?s)No such network.*No network is named "no-net"`),
+			},
+			{
+				// A wrong ID is an error like a wrong name, not an empty list; "0" never turns the filter off.
+				Config:      cfg + list("typo", `  network = "9330"`),
+				ExpectError: regexp.MustCompile(`(?s)No such network.*No network is named "9330"`),
+			},
+			{
+				Config:      cfg + list("zero", `  network = "0"`),
+				ExpectError: regexp.MustCompile(`(?s)No such network.*No network is named "0"`),
+			},
+			{
+				// A network named with digits only is still found by name when no network has that ID.
+				PreConfig: func() {
+					nets.mu.Lock()
+					defer nets.mu.Unlock()
+					nets.networks[9303]["name"] = "2024"
+				},
+				Config:            cfg + list("digits", `  network = "2024"`),
+				ConfigStateChecks: []statecheck.StateCheck{size("digits", 1)},
+			},
+		},
+	})
+}
+
 func TestInstance_DataSource(t *testing.T) {
 	f, s := newInstFakes(t)
 	cfg := instConfig(f, `  name = "app-1"

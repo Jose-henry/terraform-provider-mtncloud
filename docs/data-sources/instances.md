@@ -22,6 +22,12 @@ data "mtncloud_instances" "apps" {
   name_regex = "^app-"
 }
 
+# Every instance with a card on the "app-net" network, primary or not.
+data "mtncloud_instances" "on_app_net" {
+  project = "web-prod"
+  network = "app-net"
+}
+
 output "web_private_ips" {
   value = { for i in data.mtncloud_instances.web.instances : i.name => i.private_ip }
 }
@@ -35,6 +41,7 @@ output "web_private_ips" {
 - `image` (String) Only return instances of this image, by name or code (case ignored).
 - `labels` (List of String) Only return instances that have every one of these labels (case ignored).
 - `name_regex` (String) Only return instances whose name matches this regular expression (RE2 syntax), for example `^web-`.
+- `network` (String) Only return instances with a network card on this network, by ID or name (a number is tried as an ID first). Every card counts, not only the primary one. With `project` set, the name is looked up in that project, and only that project's instances are returned; to search every project, give the network's ID.
 - `plan` (String) Only return instances of this plan, for example `G2S4` (case ignored).
 - `project` (String) Only return instances in this project, by name (for example `web-prod`). The full platform name, with the tenant suffix, also works.
 - `status` (String) Only return instances with this status, for example `running` (case ignored).
@@ -55,6 +62,7 @@ Read-Only:
 - `image` (String) Image name, for example `MTN Ubuntu Server 24.04.3LTS`.
 - `labels` (List of String) Labels.
 - `name` (String) Instance name.
+- `networks` (List of Number) IDs of the networks the instance's cards are on, in the order MTN Cloud lists the cards (the primary card first, when MTN Cloud marks one).
 - `plan` (String) Plan (size) name, for example `G2S4`.
 - `private_ip` (String) Private address, or empty.
 - `project` (String) Project name, without the tenant suffix.

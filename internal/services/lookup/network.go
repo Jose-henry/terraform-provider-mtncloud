@@ -123,7 +123,7 @@ func (d *networkDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		var all []*client.Network
 		all, err = d.client.FindNetworksNamed(ctx, m.Name.ValueString())
 		if err == nil {
-			n = d.one(all, m.Name.ValueString(), m.Project, projectID, &resp.Diagnostics)
+			n = oneNetwork(all, path.Root("name"), m.Name.ValueString(), m.Project, projectID, &resp.Diagnostics)
 			if n == nil {
 				return
 			}
@@ -150,8 +150,9 @@ func (d *networkDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }
 
-// one picks the single network in projectID (any project when 0), or reports why there isn't one.
-func (d *networkDataSource) one(all []*client.Network, name string, project types.String, projectID int64, diags interface {
+// oneNetwork picks the single network in projectID (any project when 0), or reports on attr why
+// there isn't one.
+func oneNetwork(all []*client.Network, attr path.Path, name string, project types.String, projectID int64, diags interface {
 	AddAttributeError(path.Path, string, string)
 }) *client.Network {
 	var found []*client.Network
@@ -168,17 +169,17 @@ func (d *networkDataSource) one(all []*client.Network, name string, project type
 		if projectID != 0 {
 			where = " in project " + project.ValueString()
 		}
-		diags.AddAttributeError(path.Root("name"), "No such network", fmt.Sprintf("No network is named %q%s. Names are matched exactly.", name, where))
+		diags.AddAttributeError(attr, "No such network", fmt.Sprintf("No network is named %q%s. Names are matched exactly.", name, where))
 	default:
 		ids := make([]string, len(found))
 		for i, n := range found {
 			ids[i] = fmt.Sprint(n.ID)
 		}
-		fix := "Add project, or look one up by id."
+		fix := "Add project, or use the network's ID."
 		if projectID != 0 {
-			fix = "Look one up by id."
+			fix = "Use the network's ID."
 		}
-		diags.AddAttributeError(path.Root("name"), "Several networks match",
+		diags.AddAttributeError(attr, "Several networks match",
 			fmt.Sprintf("%d networks are named %q (IDs %s). %s", len(found), name, strings.Join(ids, ", "), fix))
 	}
 	return nil
