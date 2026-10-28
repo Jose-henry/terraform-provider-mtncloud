@@ -50,7 +50,7 @@ func mountSpecs() []mountSpec {
 
 // Resources lists every resource in this package, for the provider to register.
 func Resources() []func() resource.Resource {
-	out := make([]func() resource.Resource, 0, len(mountSpecs()))
+	out := []func() resource.Resource{newCertificate}
 	for _, s := range mountSpecs() {
 		out = append(out, func() resource.Resource { return &generated{spec: s} })
 	}
@@ -63,9 +63,12 @@ var (
 )
 
 // generated is a Cypher key whose value MTN Cloud generates.
+// base is what every resource here shares: the configured client.
+type base struct{ client *client.Client }
+
 type generated struct {
-	client *client.Client
-	spec   mountSpec
+	base
+	spec mountSpec
 }
 
 // model is read and written attribute by attribute: the size attribute exists on some mounts only.
@@ -128,7 +131,7 @@ func (r *generated) Schema(_ context.Context, _ resource.SchemaRequest, resp *re
 	}
 }
 
-func (r *generated) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *base) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -140,7 +143,7 @@ func (r *generated) Configure(_ context.Context, req resource.ConfigureRequest, 
 	r.client = c
 }
 
-func (r *generated) ready(diags *diag.Diagnostics) bool {
+func (r *base) ready(diags *diag.Diagnostics) bool {
 	if r.client == nil {
 		diags.AddError("MTN Cloud provider is not configured yet",
 			"The provider block uses values that are only known after apply. Use values known at plan time, or apply the resources they come from first.")

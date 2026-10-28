@@ -69,8 +69,8 @@ RESOURCES = [
      "(static IP ranges for a network) and DNS domains (instance hostnames and domain join).",
      ["network", "router", "security_group", "security_group_rule", "ipv4_ip_pool", "network_domain"]),
     ("Secrets and keys",
-     "Cypher secrets and SSH key pairs.",
-     ["cypher_key", "cypher_password", "cypher_secret", "cypher_tfvars", "cypher_uuid", "key_pair"]),
+     "Cypher secrets, SSH key pairs and SSL certificates you upload.",
+     ["cypher_key", "cypher_password", "cypher_secret", "cypher_tfvars", "cypher_uuid", "key_pair", "ssl_certificate"]),
     ("Scaling",
      "Autoscaling thresholds.",
      ["scale_threshold"]),
@@ -142,7 +142,6 @@ PLANNED = [
     ("Resources", [
         ("mtncloud_object_storage", "Planned", "MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource."),
         ("mtncloud_app", "Planned", "Apps from blueprints: several instances or containers deployed together."),
-        ("mtncloud_ssl_certificate", "Planned", "Certificates."),
         ("mtncloud_cluster", "Planned", "Clusters: Kubernetes and other cluster types, with their worker nodes."),
         ("mtncloud_datastore", "Planned", "Datastores: the storage that volumes are created on."),
         ("mtncloud_load_balancer", "Planned", "Load balancers: listeners, pools and members."),

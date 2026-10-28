@@ -1,0 +1,33 @@
+---
+page_title: "mtncloud_ssl_certificate Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_ssl_certificate
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_ssl_certificate/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_ssl_certificate/import.sh" }}
+
+MTN Cloud doesn't return the certificate, chain or key, so they come from your configuration. The first
+apply after an import records them and sends nothing.
+
+## Notes
+
+- Only certificates you upload can be managed. Certificate requests and generated certificates can be
+  read with the `mtncloud_ssl_certificate` data source.
+- The private key is write-only (Terraform 1.11 or newer): it is never stored in state or plans. It is
+  sent on create, and again whenever `private_key_version` changes.
+- Names aren't unique in MTN Cloud, so create refuses a name that already exists and asks you to import it.

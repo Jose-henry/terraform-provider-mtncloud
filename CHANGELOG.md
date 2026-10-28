@@ -4,6 +4,8 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+- New resource `mtncloud_ssl_certificate`: upload a certificate, chain and private key. The key is write-only and is sent again when `private_key_version` changes.
+
 - New resources for MTN's catalog, one per item (D-026): `mtncloud_mysql`, `mtncloud_postgresql`, `mtncloud_mariadb`, `mtncloud_mongodb`, `mtncloud_lamp_stack`, `mtncloud_lemp_stack`, `mtncloud_wordpress`, `mtncloud_apache_web_server`, `mtncloud_nginx_web_server`, `mtncloud_managed_database`, `mtncloud_managed_mq`, `mtncloud_managed_streaming`, `mtncloud_managed_kubernetes`, `mtncloud_siem`, `mtncloud_vpn_service`, `mtncloud_wireguard_vpn`, `mtncloud_bastion_host`, `mtncloud_fortinet_firewall`, `mtncloud_fortiweb`, `mtncloud_fortiadc`, `mtncloud_fortimanager`, `mtncloud_fortianalyzer` and `mtncloud_letsencrypt_certificate`. Every name (project, plan, networks, security groups, floating IP pool, versions and other choices) is checked when you plan. Orders can't be changed or destroyed from Terraform, like projects (D-028); secrets are write-only (Terraform 1.11 or newer).
 - New resources `mtncloud_nfs_share` and `mtncloud_smb_share`: created, updated (quota, clients, SMB password) and deleted through their catalog orders.
 

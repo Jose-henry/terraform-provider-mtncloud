@@ -466,3 +466,13 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
 - Assumed from the scripts, to confirm on the first live order: `hostCIDRs` (textarea) one CIDR per
   line; `labels`/`clientIps` (textArray) comma-separated; `quotaSize` in bytes; `updateType` takes the
   quoted value.
+
+### SSL certificates (internal) (2026-10-28)
+- Types (`GET /api/certificate-types`): `internal` (upload), `internalCsr`, plus types this tenant can't use.
+  Only `internal` is a resource; the rest stay readable through the data source.
+- `internal` fields (`/api/certificate-types/1/option-types`): name, description, domainName,
+  keyFile (required), certFile (required), chainFile.
+- `certificates add -t internal -N -d` body: `{"certificate": {"type": "internal", "name", "description",
+  "domainName", "certFile", "keyFile", "wildcard"}}`. PUT takes the same fields; a read never returns
+  certFile, keyFile or chainFile, so the key is write-only and the certificate/chain are kept from config.
+- Assumed until QA: a PUT without `keyFile` keeps the stored key.
