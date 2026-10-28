@@ -107,6 +107,20 @@ func TestNFSShare(t *testing.T) {
 				},
 			},
 			{Config: cfg("20"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				// The order form can't be read: the destroy still orders the deletion.
+				PreConfig: func() { f.deny("/api/catalog/types/18") },
+				Config:    f.providerConfig(),
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					got, _ := json.Marshal(s.sent[s.next-1]["config"])
+					if want := `{"deleteOnly":true,"updateOnly":false,"updateType":"'Append'","volumeName":"data"}`; string(got) != want {
+						t.Errorf("delete order\n got %s\nwant %s", got, want)
+					}
+					return nil
+				},
+			},
 		},
 	})
 }

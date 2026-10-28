@@ -4,40 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 )
-
-func strList(vals ...string) types.List {
-	elems := make([]attr.Value, len(vals))
-	for i, v := range vals {
-		elems[i] = types.StringValue(v)
-	}
-	return types.ListValueMust(types.StringType, elems)
-}
-
-func TestAppendOnly(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		plan, state types.List
-		want        bool
-	}{
-		{"same", strList("1", "2"), strList("1", "2"), true},
-		{"appended", strList("1", "2", "3"), strList("1", "2"), true},
-		{"first changed", strList("3", "2"), strList("1", "2"), false},
-		{"removed", strList("1"), strList("1", "2"), false},
-		{"reordered", strList("2", "1"), strList("1", "2"), false},
-		{"unknown", types.ListUnknown(types.StringType), strList("1"), false},
-		{"unknown element", types.ListValueMust(types.StringType, []attr.Value{types.StringUnknown()}), strList("1"), false},
-		{"from empty state", strList("1"), types.ListNull(types.StringType), true},
-	} {
-		if got := appendOnly(tc.plan, tc.state); got != tc.want {
-			t.Errorf("%s: appendOnly = %v, want %v", tc.name, got, tc.want)
-		}
-	}
-}
 
 func TestSameName(t *testing.T) {
 	for _, tc := range []struct {

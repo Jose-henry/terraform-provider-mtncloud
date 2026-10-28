@@ -49,10 +49,10 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
 - **Restarts the VM:** changing `plan`. `status` and `public_ip` are read again after any update.
 - **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`, `scale`,
   `floating_ip_pool`,
-  `plan`, networks added at the end of `networks`, and volumes added at the end of `data_volume`.
+  `plan`, and volumes added at the end of `data_volume`.
 - **Replaces the instance:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`,
-  `env_vars`, `install_agent`, `create_user`, `scale_factor`, the primary (first) network, and
-  removing, reordering or changing existing networks or data volumes.
+  `env_vars`, `install_agent`, `create_user`, `scale_factor`, any change to `networks`, and
+  removing, reordering or changing existing data volumes.
 - **Set at create only:** `expire_days` and `shutdown_days`. Changing them later is refused at plan
   time; extend or cancel an expiry in the console. `expire_date` and `shutdown_date` show the dates,
   including ones a policy sets.

@@ -178,8 +178,8 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			"networks": schema.ListAttribute{
 				Required: true, ElementType: types.StringType,
 				Description: "IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`. The first is the " +
-					"primary network: changing it replaces the instance. Networks added at the end are attached in place (the " +
-					"guest OS must configure the new card); removing or reordering networks replaces the instance.",
+					"primary network. Any change replaces the instance: MTN Cloud doesn't report an instance's network card IDs, " +
+					"so a network can't be added to a running instance safely.",
 				Validators: []validator.List{
 					listvalidator.SizeAtLeast(1),
 					listvalidator.UniqueValues(),
@@ -446,7 +446,9 @@ func (r *instanceResource) planChanges(ctx context.Context, plan, state instance
 			fmt.Sprintf("MTN Cloud can't change the root volume (%d GB) of an existing instance. Add a data_volume instead, "+
 				"or replace the instance with `terraform apply -replace=<address>`.", state.RootVolumeSize.ValueInt64()))
 	}
-	if !appendOnly(plan.Networks, state.Networks) {
+	// Any change: MTN Cloud reports an instance's cards without IDs, and a resize that lists a card
+	// without its ID adds it again, so a network can't be added in place (seen live, 2026-10-28).
+	if !plan.Networks.Equal(state.Networks) {
 		resp.RequiresReplace.Append(path.Root("networks"))
 	}
 	if !r.volumesAppendOnly(ctx, plan, state, &resp.Diagnostics) {
@@ -563,24 +565,6 @@ func (r *instanceResource) checkNames(ctx context.Context, m instanceModel, p *c
 		diags.AddAttributeError(path.Root("floating_ip_pool"), "Unknown floating IP pool",
 			fmt.Sprintf("no floating IP pool named %q. Available pools: %s. %s", m.FloatingIPPool.ValueString(), strings.Join(names, ", "), client.SyncHint))
 	}
-}
-
-// appendOnly reports whether the planned list keeps every element of the state list in place,
-// only adding to the end. Unknown values are treated as a change.
-func appendOnly(plan, state types.List) bool {
-	if plan.IsUnknown() {
-		return false
-	}
-	p, s := plan.Elements(), state.Elements()
-	if len(p) < len(s) {
-		return false
-	}
-	for i := range s {
-		if !p[i].Equal(s[i]) {
-			return false
-		}
-	}
-	return true
 }
 
 // volumesAppendOnly reports whether existing data volumes are unchanged (new ones may follow). An
@@ -968,7 +952,7 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 		}
 	}
 	resized := false
-	if current.PlanID != in.PlanID || len(in.NetworkIDs) > len(current.Interfaces) || len(in.Volumes) > len(current.Volumes) {
+	if current.PlanID != in.PlanID || len(in.Volumes) > len(current.Volumes) {
 		resize := client.ResizeInput{PlanID: in.PlanID}
 		// Existing volumes and cards go with their IDs, new ones (at the end) without.
 		for i, v := range in.Volumes {
@@ -978,21 +962,7 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 			}
 			resize.Volumes = append(resize.Volumes, v)
 		}
-		// Cards go only when one is added: every card sent without an ID is added again.
-		if len(in.NetworkIDs) > len(current.Interfaces) {
-			for i, n := range in.NetworkIDs {
-				nic := client.Interface{NetworkID: n}
-				if i < len(current.Interfaces) {
-					if nic = current.Interfaces[i]; nic.ID == "" {
-						resp.Diagnostics.AddAttributeError(path.Root("networks"), "Unable to add a network in place",
-							"MTN Cloud doesn't report this instance's network card IDs, so adding a network would add its existing cards again. "+
-								"Add the network to the instance in the console, then run terraform apply, or replace the instance.")
-						return
-					}
-				}
-				resize.Interfaces = append(resize.Interfaces, nic)
-			}
-		}
+		// No cards are sent: a card sent without its ID is added again, and networks never change in place.
 		if err := r.client.ResizeInstance(ctx, id, resize); err != nil {
 			resp.Diagnostics.AddError("Unable to reconfigure instance", err.Error())
 			return
@@ -1001,7 +971,7 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 	var inst *client.Instance
 	if resized {
-		inst, err = r.client.WaitForResize(ctx, id, in.PlanID, len(in.Volumes), len(in.NetworkIDs))
+		inst, err = r.client.WaitForResize(ctx, id, in.PlanID, len(in.Volumes), 0)
 	} else {
 		inst, err = r.client.WaitForInstance(ctx, id)
 	}

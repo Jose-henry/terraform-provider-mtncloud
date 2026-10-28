@@ -173,3 +173,13 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
   lists and types, shell script tasks and the workflows built on them, NFS/SMB orders. Need a login
   with those permissions.
 - The QA project `tf-acc-proj-w1hl0` must be deleted by an admin login (owner).
+- From the review of the QA fixes (2026-10-28), low severity:
+  - Instance resize: if the platform accepts the resize but never applies it, the apply waits out the
+    update timeout and fails with a generic timeout. Report the plan and status the instance was
+    left at instead (rule 12).
+  - Option-source data sources skip options whose value isn't a number, so a skipped option is
+    reported as "not available to this login". Say that its value was unreadable.
+  - Cypher tfvars import: confirm live that GET returns `data` as a string for the tfvars mount.
+    If it returns an object, `value` stays unset after import and the plan replaces the entry.
+  - Adding a network to a running instance now replaces it: MTN Cloud reports card IDs as null, so a
+    resize can't keep the existing cards. Revisit if a later platform version reports card IDs.

@@ -316,7 +316,7 @@ func TestPlacement(t *testing.T) {
 func TestDefaultsFor_SoleGroup(t *testing.T) {
 	one := newFakeAPI(t)
 	one.route("GET", "/api/options/groups", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"data":[{"name":"MTNNG_CLOUD_AZ_1","value":73}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"name":"MTNNG_CLOUD_AZ_1","value":9101}]}`))
 	})
 	if g := one.client(t).DefaultsFor(t.Context()).Group; g != "MTNNG_CLOUD_AZ_1" {
 		t.Errorf("sole group: got %q", g)

@@ -208,7 +208,7 @@ func (w wireInstance) instance() *Instance {
 		in.EnvVars[e.Name] = fmt.Sprint(e.Value)
 	}
 	if in.EnvPrefix == "" {
-		in.EnvPrefix = derivedEnvPrefix(in.EnvVars)
+		in.EnvPrefix = derivedEnvPrefix(in.EnvVars, in.ImageName)
 	}
 	in.ProjectID = idFrom(w.Config.ResourcePoolID, "pool-")
 	in.NoAgent = w.Config.NoAgent != nil && *w.Config.NoAgent
@@ -240,8 +240,8 @@ func (w wireInstance) instance() *Instance {
 	}
 	// The instance doesn't carry its addresses and customers can't read /api/servers (403), but
 	// the platform always sets <PREFIX>_IP to the private address (captured 2026-10-27).
-	if w.EnvironmentPrefix != "" {
-		in.PrivateIP = in.EnvVars[w.EnvironmentPrefix+"_IP"]
+	if in.EnvPrefix != "" {
+		in.PrivateIP = in.EnvVars[in.EnvPrefix+"_IP"]
 	} else {
 		// Instances made in the console can have no prefix (captured 2026-10-27): use the one
 		// <PREFIX>_IP variable there is, for example APACHE_WEB_SERVER_UBUNTU22_IP.
@@ -289,8 +289,16 @@ func idFrom(v any, prefix string) int64 {
 
 // derivedEnvPrefix finds the prefix of the platform's own variables when the API leaves
 // environmentPrefix null (instances made in the console, and through the API, captured
-// 2026-10-28): the one P with both P_IP and P_HOST set. With none, or several, it is "".
-func derivedEnvPrefix(vars map[string]string) string {
+// 2026-10-28). The platform names them after the image ("MTN Ubuntu Server 24.04.3LTS" gives
+// MTN_UBUNTU_SERVER_24_04_3LTS_IP), so that name is tried first: a user's own <P>_IP and <P>_HOST
+// can't be taken for it. Otherwise it is the one P with both P_IP and P_HOST set; with none, or
+// several, it is "".
+func derivedEnvPrefix(vars map[string]string, image string) string {
+	if p := envName(image); p != "" {
+		if _, ok := vars[p+"_IP"]; ok {
+			return p
+		}
+	}
 	found := ""
 	for k := range vars {
 		p, ok := strings.CutSuffix(k, "_IP")
@@ -306,6 +314,20 @@ func derivedEnvPrefix(vars map[string]string) string {
 		found = p
 	}
 	return found
+}
+
+// envName is a name as the platform writes it in variable names: upper case, with every other
+// character than a letter or digit as "_".
+func envName(s string) string {
+	return strings.Trim(strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return r - 'a' + 'A'
+		case r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			return r
+		}
+		return '_'
+	}, s), "_")
 }
 
 // IsPlatformEnvVar reports a variable the platform sets on every instance (its address, host and

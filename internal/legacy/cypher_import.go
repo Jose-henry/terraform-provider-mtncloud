@@ -11,7 +11,8 @@ import (
 )
 
 // cypherImporter imports a Cypher entry of one mount ("secret", "tfvars") by the numeric ID the
-// console shows or by its key, with or without the mount ("app/db" or "secret/app/db"). Read finds
+// console shows or by its key, with or without the mount ("app/db" or "secret/app/db"). An ID of
+// digits only is an entry ID: a key made only of digits is imported with its mount ("secret/2024"). Read finds
 // the entry by key, so the key is what import must set.
 func cypherImporter(mount string) schema.StateContextFunc {
 	return func(_ context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
@@ -57,5 +58,5 @@ func cypherImportKey(mount, importID string, list []sdk.Cypher) (string, error) 
 		}
 		return strings.TrimPrefix(c.ItemKey, prefix), nil
 	}
-	return "", fmt.Errorf("no Cypher entry with ID %d is visible to this login", n)
+	return "", fmt.Errorf("no Cypher entry with ID %d is visible to this login. For a key made only of digits, import %s%d", n, prefix, n)
 }

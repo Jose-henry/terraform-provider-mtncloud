@@ -40,5 +40,9 @@ resource "mtncloud_cypher_secret" "tf_example_cypher_secret" {
 Import is supported using the following syntax:
 
 ```shell
+# By the entry's ID (shown in the console), or by its key, with or without the mount.
 terraform import mtncloud_cypher_secret.tf_example_cypher_secret 1
+terraform import mtncloud_cypher_secret.tf_example_cypher_secret secret/app/db
+# A key made only of digits needs its mount, or it is read as an ID.
+terraform import mtncloud_cypher_secret.tf_example_cypher_secret secret/2024
 ```

@@ -335,10 +335,10 @@ func TestInstance_Lifecycle(t *testing.T) {
 				ImportStateVerifyIgnore: []string{"timeouts"}, Config: instConfig(f, base),
 			},
 			{
-				// In place: rename, new plan (restart), tags, groups, an added disk and network.
+				// In place: rename, new plan (restart), tags, groups and an added disk.
 				Config: instConfig(f, `  name     = "app-1"
   plan     = "G2S4"
-  networks = ["9301", "9303"]
+  networks = ["9301"]
   environment = "Dev"
   labels   = ["web", "blue"]
   tags     = { team = "payments", tier = "1" }
@@ -375,7 +375,7 @@ resource "mtncloud_instance" "app" {
   image    = "MTN-U24.04LTS"
   name     = "app-1"
   plan     = "g2s4"
-  networks = ["9301", "9303"]
+  networks = ["9301"]
   environment = "dev"
   labels   = ["blue", "web"]
   tags     = { team = "payments", tier = "1" }
@@ -391,6 +391,13 @@ resource "mtncloud_instance" "app" {
 }
 `,
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{
+				// A network added to a running instance replaces it: MTN Cloud doesn't report card IDs.
+				Config: instConfig(f, `  name = "app-1"
+  plan = "G2S4"
+  networks = ["9301", "9303"]`),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionDestroyBeforeCreate),
 			},
 			{
 				// A new primary network can't be set in place.

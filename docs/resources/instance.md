@@ -85,7 +85,7 @@ resource "mtncloud_instance" "worker" {
 ### Required
 
 - `image` (String) Operating system image, by name (`MTN Ubuntu Server 24.04.3LTS`) or code (`MTN-U24.04LTS`); the `mtncloud_images` data source lists them. Changing it replaces the instance.
-- `networks` (List of String) IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`. The first is the primary network: changing it replaces the instance. Networks added at the end are attached in place (the guest OS must configure the new card); removing or reordering networks replaces the instance.
+- `networks` (List of String) IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`. The first is the primary network. Any change replaces the instance: MTN Cloud doesn't report an instance's network card IDs, so a network can't be added to a running instance safely.
 - `plan` (String) Size of the VM, for example `G2S4` (the `mtncloud_plans` data source lists a project's sizes). **Changing it restarts the VM**, in place.
 
 ### Optional
@@ -209,10 +209,10 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
 - **Restarts the VM:** changing `plan`. `status` and `public_ip` are read again after any update.
 - **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`, `scale`,
   `floating_ip_pool`,
-  `plan`, networks added at the end of `networks`, and volumes added at the end of `data_volume`.
+  `plan`, and volumes added at the end of `data_volume`.
 - **Replaces the instance:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`,
-  `env_vars`, `install_agent`, `create_user`, `scale_factor`, the primary (first) network, and
-  removing, reordering or changing existing networks or data volumes.
+  `env_vars`, `install_agent`, `create_user`, `scale_factor`, any change to `networks`, and
+  removing, reordering or changing existing data volumes.
 - **Set at create only:** `expire_days` and `shutdown_days`. Changing them later is refused at plan
   time; extend or cancel an expiry in the console. `expire_date` and `shutdown_date` show the dates,
   including ones a policy sets.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -132,18 +133,26 @@ func TestGetInstance_Reads(t *testing.T) {
 }
 
 func TestDerivedEnvPrefix(t *testing.T) {
+	img := "MTN Ubuntu Server 24.04.3LTS"
+	platform := map[string]string{"MTN_UBUNTU_SERVER_24_04_3LTS_IP": "10.0.0.1", "MTN_UBUNTU_SERVER_24_04_3LTS_HOST": "c1"}
+	withUser := maps.Clone(platform)
+	withUser["DB_IP"], withUser["DB_HOST"] = "10.0.0.9", "db"
 	tests := []struct {
-		name string
-		vars map[string]string
-		want string
+		name  string
+		vars  map[string]string
+		image string
+		want  string
 	}{
-		{"platform pair", map[string]string{"UB_IP": "10.0.0.1", "UB_HOST": "c1", "UB_PORT_SSH": "22", "APP": "x"}, "UB"},
-		{"no host", map[string]string{"UB_IP": "10.0.0.1"}, ""},
-		{"two pairs is ambiguous", map[string]string{"A_IP": "1", "A_HOST": "h", "B_IP": "2", "B_HOST": "h"}, ""},
-		{"none", map[string]string{"APP": "x"}, ""},
+		{"named after the image", platform, img, "MTN_UBUNTU_SERVER_24_04_3LTS"},
+		{"a user's own pair beside the platform's", withUser, img, "MTN_UBUNTU_SERVER_24_04_3LTS"},
+		{"a user's pair before the platform's is set", map[string]string{"DB_IP": "10.0.0.9", "DB_HOST": "db"}, img, "DB"},
+		{"image renamed: the one pair", map[string]string{"UB_IP": "10.0.0.1", "UB_HOST": "c1", "UB_PORT_SSH": "22", "APP": "x"}, img, "UB"},
+		{"no host", map[string]string{"UB_IP": "10.0.0.1"}, "", ""},
+		{"two pairs is ambiguous", map[string]string{"A_IP": "1", "A_HOST": "h", "B_IP": "2", "B_HOST": "h"}, "", ""},
+		{"none", map[string]string{"APP": "x"}, img, ""},
 	}
 	for _, tt := range tests {
-		if got := derivedEnvPrefix(tt.vars); got != tt.want {
+		if got := derivedEnvPrefix(tt.vars, tt.image); got != tt.want {
 			t.Errorf("%s: got %q, want %q", tt.name, got, tt.want)
 		}
 	}

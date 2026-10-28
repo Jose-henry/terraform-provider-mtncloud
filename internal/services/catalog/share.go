@@ -278,8 +278,12 @@ func (r *shareResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cfg := map[string]any{"volumeName": m.Name.ValueString(), "deleteOnly": true, "updateOnly": false}
-	if !r.withUpdateType(ctx, cfg, "Append", "delete the share", &resp.Diagnostics) {
-		return
+	// A destroy never fails on the form: unreadable, it sends the choice as the list spells it.
+	var formDiags diag.Diagnostics
+	if !r.withUpdateType(ctx, cfg, "Append", "delete the share", &formDiags) {
+		cfg["updateType"] = "'Append'"
+		resp.Diagnostics.AddWarning("Order form not read", "The share is deleted with the client update type 'Append': "+
+			formDiags.Errors()[0].Detail())
 	}
 	r.order(ctx, cfg, "delete the share", &resp.Diagnostics, nil)
 }

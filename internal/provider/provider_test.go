@@ -28,11 +28,22 @@ type fakeAPI struct {
 	mu     sync.Mutex
 	calls  map[string]int
 	sg     http.Handler
-	net    http.Handler // /api/networks, a stateful fake (network_test.go), when set
-	router http.Handler // /api/networks/routers, a stateful fake (router_test.go), when set
-	inst   http.Handler // /api/instances, a stateful fake (instance_test.go), when set
-	order  http.Handler // /api/catalog/orders and /items, a stateful fake (project_test.go), when set
-	clu    http.Handler // /api/clusters, a stateful fake (cluster_test.go), when set
+	net    http.Handler    // /api/networks, a stateful fake (network_test.go), when set
+	router http.Handler    // /api/networks/routers, a stateful fake (router_test.go), when set
+	inst   http.Handler    // /api/instances, a stateful fake (instance_test.go), when set
+	order  http.Handler    // /api/catalog/orders and /items, a stateful fake (project_test.go), when set
+	clu    http.Handler    // /api/clusters, a stateful fake (cluster_test.go), when set
+	denied map[string]bool // paths answered with 403 (not retried), set by a test step
+}
+
+// deny makes the fake refuse path from now on.
+func (f *fakeAPI) deny(path string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.denied == nil {
+		f.denied = map[string]bool{}
+	}
+	f.denied[path] = true
 }
 
 // clearDefaults keeps the developer's MTNCLOUD_PROJECT, _GROUP and _CLOUD out of a test.
@@ -105,6 +116,13 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		}
 		if sg != nil && strings.HasPrefix(r.URL.Path, "/api/security-groups") && r.Header.Get("Authorization") == "Bearer test-token" {
 			sg.ServeHTTP(w, r)
+			return
+		}
+		f.mu.Lock()
+		denied := f.denied[r.URL.Path]
+		f.mu.Unlock()
+		if denied {
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		file, ok := routes[r.URL.Path]
