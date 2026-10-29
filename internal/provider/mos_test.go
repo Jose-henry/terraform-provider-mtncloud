@@ -32,6 +32,8 @@ type mosFake struct {
 	records  map[int64]map[string]any     // console storage bucket records
 	archives map[string]int64             // archive name -> storage bucket record ID
 	archMeta map[string]map[string]any    // archive name -> its other fields (archive_test.go)
+	afiles   map[int64]*fakeArchiveFile   // archive file ID -> the file (archive_file_test.go)
+	alinks   map[int64][]*fakeArchiveLink // archive file ID -> its links
 	acls     map[string]string            // "<bucket>/<key>" (key empty for the bucket) -> canned ACL
 	settings map[string]string            // "<bucket>?cors" and so on -> the XML last put
 	meta     map[string]map[string]string // "<bucket>/<key>" -> user metadata
@@ -44,6 +46,7 @@ type mosFake struct {
 func newMOSFake(t *testing.T, f *fakeAPI) *mosFake {
 	t.Helper()
 	m := &mosFake{buckets: map[string]map[string]string{}, records: map[int64]map[string]any{}, archives: map[string]int64{}, archMeta: map[string]map[string]any{},
+		afiles: map[int64]*fakeArchiveFile{}, alinks: map[int64][]*fakeArchiveLink{},
 		acls: map[string]string{}, settings: map[string]string{}, meta: map[string]map[string]string{},
 		locked: map[string]bool{}, retained: map[string][2]string{}, next: 700}
 	m.s3 = httptest.NewTLSServer(http.HandlerFunc(m.serveS3))

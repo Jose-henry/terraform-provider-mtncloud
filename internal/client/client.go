@@ -160,11 +160,16 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 			return fmt.Errorf("encoding %s %s request: %w", method, path, err)
 		}
 	}
+	return c.doPayload(ctx, method, path, query, payload, "application/json", out)
+}
+
+// doPayload is do with a body that is already encoded, of the given content type (a file upload).
+func (c *Client) doPayload(ctx context.Context, method, path string, query url.Values, payload []byte, contentType string, out any) error {
 	token, err := c.accessToken(ctx)
 	if err != nil {
 		return err
 	}
-	resp, err := c.send(ctx, method, path, query, payload, "application/json", token)
+	resp, err := c.send(ctx, method, path, query, payload, contentType, token)
 	if err != nil {
 		var apiErr *APIError
 		// A token can expire mid-run. With a password we can log in again, once.
@@ -172,7 +177,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 			if token, err = c.relogin(ctx, token); err != nil {
 				return err
 			}
-			resp, err = c.send(ctx, method, path, query, payload, "application/json", token)
+			resp, err = c.send(ctx, method, path, query, payload, contentType, token)
 		}
 		if err != nil {
 			return err

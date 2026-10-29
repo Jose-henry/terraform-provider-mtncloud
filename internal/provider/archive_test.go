@@ -35,6 +35,9 @@ func (m *mosFake) archive(name string) map[string]any {
 	for k, v := range a {
 		out[k] = v
 	}
+	if n := m.archiveFileCount(name); n > 0 {
+		out["fileCount"] = out["fileCount"].(int) + n
+	}
 	return out
 }
 
@@ -49,6 +52,10 @@ func (m *mosFake) archiveByID(id int64) string {
 
 // serveArchives is /api/archives/buckets, with m.mu held.
 func (m *mosFake) serveArchives(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.URL.Path, "/files") {
+		m.serveArchiveFiles(w, r) // archive_file_test.go
+		return
+	}
 	var body struct {
 		ArchiveBucket map[string]any `json:"archiveBucket"`
 	}
@@ -103,6 +110,7 @@ func (m *mosFake) serveArchives(w http.ResponseWriter, r *http.Request) {
 		meta := m.archMeta[name]
 		if n, _ := in["name"].(string); n != "" && n != name {
 			m.archives[n], m.archMeta[n] = m.archives[name], meta
+			m.renameArchiveFiles(name, n)
 			delete(m.archives, name)
 			delete(m.archMeta, name)
 		}
@@ -116,6 +124,7 @@ func (m *mosFake) serveArchives(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodDelete:
 		delete(m.archives, name) // with its files, as the real one does
 		delete(m.archMeta, name)
+		m.renameArchiveFiles(name, "")
 		_, _ = w.Write([]byte(`{"success":true}`))
 	}
 }

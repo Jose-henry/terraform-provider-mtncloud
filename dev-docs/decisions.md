@@ -390,4 +390,13 @@ files and download links follow (slice 2). Live probe on the dev tenant: dev-doc
   a lost answer it adopts the archive with that name on that bucket (rule 11).
 - Deleting an archive deletes its files, also in MOS (live). Destroy refuses while `fileCount > 0`
   unless `force_destroy`, as `mtncloud_mos_bucket` does for objects.
-
+- Slice 2 (2026-10-29): `mtncloud_archive_file`, `mtncloud_archive_file_link`, `mtncloud_archive_files`.
+  The API has no checksum, so the file keeps the SHA-256 of what Terraform uploaded and compares the
+  config's content with it at plan time; Read only sees a different size (then `content_sha256` is
+  emptied and the next apply uploads again). Uploading to the same path keeps the file's ID (live),
+  so a content change is an in-place update and links survive it. Create refuses a path that already
+  holds a file, since the upload would overwrite it. Links can't be changed, so every argument
+  replaces them; `expire_seconds` is Required so that a never-expiring public link is a choice. The
+  create answer holds only the secret, so the link is found by it. An expired link is removed from
+  state, and the next apply makes a new one. `archive` or `archive_id` (owner: "archive id support
+  wont be bad too"), resolved at plan time like `mos_bucket`.

@@ -26,7 +26,7 @@ import (
 func Resources() []func() resource.Resource {
 	return []func() resource.Resource{
 		newBucket, newBucketACL, newBucketCORS, newBucketLifecycle, newBucketLogging, newBucketObjectLock,
-		newObject, newObjectACL, newArchive,
+		newObject, newObjectACL, newArchive, newArchiveFile, newArchiveLink,
 	}
 }
 
@@ -35,7 +35,7 @@ func DataSources() []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		newCredentials, newBuckets, newBucketData,
 		newBucketACLData, newBucketCORSData, newBucketLifecycleData, newBucketLoggingData, newBucketObjectLockData,
-		newObjects, newObjectData, newObjectACLData, newArchiveData, newArchivesData,
+		newObjects, newObjectData, newObjectACLData, newArchiveData, newArchivesData, newArchiveFilesData,
 	}
 }
 

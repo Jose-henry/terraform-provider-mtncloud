@@ -111,23 +111,29 @@ func (r *objectResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 
 // body is the object's content from whichever attribute holds it.
 func (m *objectModel) body() ([]byte, error) {
+	return contentOf(m.Content, m.ContentBase64, m.Source, "an object")
+}
+
+// contentOf is a file's content from whichever of content, content_base64 and source holds it.
+// what names the thing in the size error ("an object").
+func contentOf(content, contentBase64, source types.String, what string) ([]byte, error) {
 	switch {
-	case !m.Content.IsNull():
-		return []byte(m.Content.ValueString()), nil
-	case !m.ContentBase64.IsNull():
-		b, err := base64.StdEncoding.DecodeString(m.ContentBase64.ValueString())
+	case !content.IsNull():
+		return []byte(content.ValueString()), nil
+	case !contentBase64.IsNull():
+		b, err := base64.StdEncoding.DecodeString(contentBase64.ValueString())
 		if err != nil {
 			return nil, fmt.Errorf("content_base64 isn't valid base64: %w", err)
 		}
 		return b, nil
 	}
-	name := m.Source.ValueString()
+	name := source.ValueString()
 	st, err := os.Stat(name)
 	if err != nil {
 		return nil, fmt.Errorf("source: %w", err)
 	}
 	if st.Size() > maxUpload {
-		return nil, fmt.Errorf("source %s is %d MiB; an object here may be at most 512 MiB", name, st.Size()>>20)
+		return nil, fmt.Errorf("source %s is %d MiB; %s here may be at most 512 MiB", name, st.Size()>>20, what)
 	}
 	return os.ReadFile(name) //nolint:gosec // a file the configuration names, as the user means
 }

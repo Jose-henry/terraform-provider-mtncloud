@@ -653,3 +653,17 @@ Through the CLI on a QA MOS bucket (`mtncloud_mos_bucket`, console record from t
   MOS bucket held no objects. Confirmed in the provider's QA: an uploaded file sits in the MOS bucket
   at `<filePath>docs/hello.txt`, and is gone from the bucket after the archive is deleted.
 
+### Archive files and links (live probe, 2026-10-29, `tf-acc-files-*`, deleted)
+- Uploading the same path again overwrites the file and **keeps its ID** (same ID before and after).
+- `GET /api/archives/files/{id}` answers `{archiveFile: {id, name, filePath ("docs/note.txt", no
+  leading slash), archiveBucket {id, name, isPublic}, createdBy, isDirectory, status ("Active"),
+  rawSize, contentType ("binary/octet-stream" for an octet-stream upload), downloadCount,
+  dateCreated, lastUpdated}, isOwner}`.
+- `POST /api/archives/files/{id}/links?expireSeconds=60` answers `{success, secretAccessKey}` only (no
+  link ID). Without `expireSeconds` the link never expires (`expirationDate: null`); the CLI's
+  `add-file-link` defaults to 1200 s and leaves the parameter out for 0.
+- `GET /api/archives/files/{id}/links` answers `{archiveFileLinks: [{id, secretAccessKey,
+  archiveFile {id, name, filePath}, createdBy, dateCreated, lastUpdated, lastAccessDate,
+  expirationDate, downloadCount}], archiveFileLinkCount, meta}`.- The public download URL is `<console>/public-archives/link?s=<secret>`, **not** the documented
+  `/api/public-archives/link` (that one answers 401 "Full authentication is required"). Checked live:
+  the link downloaded the exact bytes Terraform uploaded, without a token.
