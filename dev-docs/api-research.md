@@ -521,7 +521,7 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
   Autoscaler: `POST /api/clusters/{id}/configure-autoscaler` with
   `{cluster: {autoScalerEnabled, autoScalerGroups: [{minNodes, maxNodes}]}}`.
 
-## MOS (OneFS S3) live capability probe (2026-10-29, Akatsuki dev tenant)
+## MOS (OneFS S3) live capability probe (2026-10-29, dev tenant)
 
 Owner approved the probe. Keys were read from Cypher (`secret/MOS-<tenant>_<user>_{access_key,secret_key,public_endpoint_url,private_endpoint_url}`)
 into memory only. Every bucket was `tf-acc-mos-probe-*`, deleted afterwards, and 20 listings confirmed none were left.
@@ -590,6 +590,21 @@ Path Style**. CLI dry run (`storage-buckets add ... -O createBucket=on -O config
 Provider design that follows: create in MOS, settle, register with `createBucket: false`; on destroy
 refuse when an archive uses the record (name it), empty the bucket only with `force_destroy`, delete it
 in MOS, then delete the console record. The tenant has the archive API but no archives yet.
+
+### MOS live QA (2026-10-29, dev tenant, `tf-acc-mos-*`, all destroyed)
+- **Settings writes to one bucket overwrite each other.** CORS and lifecycle put at the same moment kept
+  only one (15 s later); one after the other kept both. MOS stores a bucket's settings together. The
+  first apply (ACL, CORS, lifecycle and logging in parallel) lost three of four and timed out settling.
+  Fix: the client takes a per-bucket lock for settings writes, and writes a setting again (up to 3
+  times) when it hasn't appeared 30 s after the write (`MOSLostAfter`).
+- With that: every resource and data source applied, then `No changes.`; a `source` edit uploaded again
+  and kept the object's `public-read` ACL; import by name (bucket, CORS, object) then apply changed only
+  Terraform-only values (`force_destroy`, `content`) without uploading again; destroy removed buckets
+  and console records (checked with `storage-buckets list`).
+- `checksum_algorithm = "SHA256"` works, although the cluster lists checksum support as off.
+- `object_lock_enabled = true` fails: `InvalidRequest`, shown as "object lock isn't enabled on MTN Object
+  Storage yet". The failed create left no bucket behind.
+- Bucket create, then register: 8 s. Settings: up to 14 s each.
 
 ## Load balancer task (live reads, 2026-10-29, owner-approved)
 - **Q1 (how the task is found):** `/api/tasks` ignores a `code` filter; the full list (3 tasks) has id 450,

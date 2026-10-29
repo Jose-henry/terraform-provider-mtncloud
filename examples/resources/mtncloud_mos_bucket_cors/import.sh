@@ -1,0 +1,1 @@
+terraform import mtncloud_mos_bucket_cors.site acme-website

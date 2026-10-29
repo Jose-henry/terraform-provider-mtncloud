@@ -3,7 +3,7 @@
 Owner's direction, 2026-10-29: the provider builds everything that works on our OneFS 9.15 today and
 everything OneFS supports that only needs a setting or a license. Customer docs never mention the rest.
 This page records the rest, for MTN's own planning. Evidence: the live probe and `isi` output in
-[api-research.md](api-research.md#mos-onefs-s3-live-capability-probe-2026-10-29-akatsuki-dev-tenant);
+[api-research.md](api-research.md#mos-onefs-s3-live-capability-probe-2026-10-29-dev-tenant);
 the management summary is the Claude doc "MOS object storage: what our PowerScale can do".
 
 ## Built in the provider, but only works once MTN enables it

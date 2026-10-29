@@ -275,3 +275,13 @@ form's plan field is a select, and falls back to the wizard's list otherwise. Mu
 Data sources only read, so that is safe today. When the load balancer resources land, every write
 must drop the cached entries for its network (add a delete-by-prefix to `lookupCache`), or a data
 source that `depends_on` the resource reads the load balancer as it was before the change.
+
+## B-022 MOS follow-ups (from the 2026-10-29 review)
+- Settings and object resources use a fixed 5 min bound; add `timeouts {}` like `mtncloud_mos_bucket`.
+- Replacing an object (`-replace`, or a key change) uploads it as private while `mtncloud_mos_object_acl`
+  still holds the old value; the next apply sets it again. Carry the ACL on create when the object exists.
+- Metadata name case and retention changes are checked at apply time; move them to plan time.
+- A bucket name another tenant owns probably answers 403 on HeadBucket, which reads as "access denied".
+  Check live and map it to "the name is taken".
+- Re-test object lock and retention live once MTN enables object lock on the cluster.
+

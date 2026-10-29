@@ -71,6 +71,11 @@ RESOURCES = [
      "MTN Networks and MTN Routers, security groups (instance firewalls) and their rules, IP pools "
      "(static IP ranges for a network) and DNS domains (instance hostnames and domain join).",
      ["network", "router", "security_group", "security_group_rule", "ipv4_ip_pool", "network_domain"]),
+    ("MOS (MTN Object Storage)",
+     "S3-compatible buckets, listed in the console, with their access, CORS, lifecycle, access logging and "
+     "object lock settings, and the objects in them (with retention).",
+     ["mos_bucket", "mos_bucket_acl", "mos_bucket_cors", "mos_bucket_lifecycle", "mos_bucket_logging",
+      "mos_bucket_object_lock", "mos_object", "mos_object_acl"]),
     ("Secrets and keys",
      "Cypher secrets, SSH key pairs and SSL certificates you upload.",
      ["cypher_key", "cypher_password", "cypher_secret", "cypher_tfvars", "cypher_uuid", "key_pair", "ssl_certificate"]),
@@ -103,6 +108,9 @@ DATA_SOURCES = [
     ("Images",
      ["image", "virtual_image",
       "virtual_images"]),
+    ("MOS (MTN Object Storage)",
+     ["mos_credentials", "mos_buckets", "mos_bucket", "mos_bucket_acl", "mos_bucket_cors", "mos_bucket_lifecycle",
+      "mos_bucket_logging", "mos_bucket_object_lock", "mos_objects", "mos_object", "mos_object_acl"]),
     ("Storage",
      ["storage_bucket", "storage_buckets", "storage_volume", "storage_volumes", "storage_volume_type"]),
     ("Catalog, forms and inputs",
@@ -150,7 +158,6 @@ def access(kind, name):
 # (type, status, what it does). Status: Next, Planned or On hold.
 PLANNED = [
     ("Resources", [
-        ("mtncloud_object_storage", "Planned", "MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource."),
         ("mtncloud_app", "Planned", "Apps from blueprints: several instances or containers deployed together."),
         ("mtncloud_datastore", "Planned", "Datastores: the storage that volumes are created on."),
         ("mtncloud_load_balancer", "Next", "Load balancers, with listeners, pools, members and health monitors (the data sources are done)."),

@@ -6,11 +6,11 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 90 | 94 |
-| Usable with a customer (sub-tenant) login | 90 | 89 |
+| Available today | 98 | 105 |
+| Usable with a customer (sub-tenant) login | 98 | 100 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 4 | 0 |
+| Coming next | 3 | 0 |
 
 ## Who can use what
 
@@ -205,6 +205,21 @@ MTN Networks and MTN Routers, security groups (instance firewalls) and their rul
 | [`mtncloud_security_group`](../docs/resources/security_group.md) | Yes, built for customers |
 | [`mtncloud_security_group_rule`](../docs/resources/security_group_rule.md) | Yes, built for customers |
 
+### MOS (MTN Object Storage)
+
+S3-compatible buckets, listed in the console, with their access, CORS, lifecycle, access logging and object lock settings, and the objects in them (with retention).
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_mos_bucket`](../docs/resources/mos_bucket.md) | Yes (read verified) |
+| [`mtncloud_mos_bucket_acl`](../docs/resources/mos_bucket_acl.md) | Yes (read verified) |
+| [`mtncloud_mos_bucket_cors`](../docs/resources/mos_bucket_cors.md) | Yes (read verified) |
+| [`mtncloud_mos_bucket_lifecycle`](../docs/resources/mos_bucket_lifecycle.md) | Yes (read verified) |
+| [`mtncloud_mos_bucket_logging`](../docs/resources/mos_bucket_logging.md) | Yes (read verified) |
+| [`mtncloud_mos_bucket_object_lock`](../docs/resources/mos_bucket_object_lock.md) | Yes (read verified) |
+| [`mtncloud_mos_object`](../docs/resources/mos_object.md) | Yes (read verified) |
+| [`mtncloud_mos_object_acl`](../docs/resources/mos_object_acl.md) | Yes (read verified) |
+
 ### Secrets and keys
 
 Cypher secrets, SSH key pairs and SSL certificates you upload.
@@ -325,6 +340,22 @@ Old names kept for now; each page says what replaces it and how to move without 
 | [`mtncloud_virtual_image`](../docs/data-sources/virtual_image.md) | Yes (read verified) |
 | [`mtncloud_virtual_images`](../docs/data-sources/virtual_images.md) | Yes (read verified) |
 
+### MOS (MTN Object Storage)
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_mos_bucket`](../docs/data-sources/mos_bucket.md) | Yes (read verified) |
+| [`mtncloud_mos_bucket_acl`](../docs/data-sources/mos_bucket_acl.md) | Yes (read verified) |
+| [`mtncloud_mos_bucket_cors`](../docs/data-sources/mos_bucket_cors.md) | Yes (read verified) |
+| [`mtncloud_mos_bucket_lifecycle`](../docs/data-sources/mos_bucket_lifecycle.md) | Yes (read verified) |
+| [`mtncloud_mos_bucket_logging`](../docs/data-sources/mos_bucket_logging.md) | Yes (read verified) |
+| [`mtncloud_mos_bucket_object_lock`](../docs/data-sources/mos_bucket_object_lock.md) | Yes (read verified) |
+| [`mtncloud_mos_buckets`](../docs/data-sources/mos_buckets.md) | Yes (read verified) |
+| [`mtncloud_mos_credentials`](../docs/data-sources/mos_credentials.md) | Yes (read verified) |
+| [`mtncloud_mos_object`](../docs/data-sources/mos_object.md) | Yes (read verified) |
+| [`mtncloud_mos_object_acl`](../docs/data-sources/mos_object_acl.md) | Yes (read verified) |
+| [`mtncloud_mos_objects`](../docs/data-sources/mos_objects.md) | Yes (read verified) |
+
 ### Storage
 
 | Type | Customer login |
@@ -403,7 +434,6 @@ Designed, **not available yet**, and all meant for customers.
 
 | Type | Status | What it does |
 |---|---|---|
-| `mtncloud_object_storage` | Planned | MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource. |
 | `mtncloud_app` | Planned | Apps from blueprints: several instances or containers deployed together. |
 | `mtncloud_datastore` | Planned | Datastores: the storage that volumes are created on. |
 | `mtncloud_load_balancer` | Next | Load balancers, with listeners, pools, members and health monitors (the data sources are done). |

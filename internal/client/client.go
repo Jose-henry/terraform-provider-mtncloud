@@ -60,6 +60,9 @@ type Config struct {
 	// LBAttempt bounds one run of the load balancer task, from execute to the job's end. Data
 	// sources have no timeouts {}, so without it a stalled console job would hang a plan.
 	LBAttempt time.Duration
+	// MOSLostAfter is how long a written MOS setting may stay invisible before it counts as lost
+	// and is written again: settling takes a few seconds, a lost write never settles.
+	MOSLostAfter time.Duration
 }
 
 // Defaults are the provider-wide group, cloud and project, by name. Empty means not set.
@@ -79,6 +82,9 @@ type Client struct {
 	token  string
 
 	cache lookupCache
+
+	// mosLocks holds one lock per MOS bucket: settings writes to a bucket must not overlap (mosLock).
+	mosLocks sync.Map // bucket name -> chan struct{}
 }
 
 // Defaults returns the provider-wide group, cloud and project.

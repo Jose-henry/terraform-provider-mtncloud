@@ -304,3 +304,34 @@ dev-docs/api-research.md).
 - The old `mtncloud_load_balancer(s)` record lookups read `/api/load-balancers`, which is empty on MTN
   Cloud (checked 2026-10-29); the new data sources replace them under the same names (breaking, noted
   in the CHANGELOG). The resources follow in the next slice.
+
+## D-032 MOS is managed through its S3-compatible API, and buckets are also console records (owner, 2026-10-29)
+Builds on D-007 (adopt the tenant's MOS keys, never order new ones). Customers get typed resources for
+what MOS supports, not one `mtncloud_object_storage` resource: `mtncloud_mos_bucket`, its settings
+(`_acl`, `_cors`, `_lifecycle`, `_logging`, `_object_lock`), `mtncloud_mos_object` and `_object_acl`,
+with a data source for every one of them, plus `mtncloud_mos_buckets`, `_objects` and `_credentials`.
+Sources: MTN's MOS docs and `RevalidateMOS.sh` (console record shape), the OneFS 9.15 S3 probe, and live
+tests on 2026-10-29 (dev-docs/api-research.md, dev-docs/mos-capabilities.md).
+- Keys come from Cypher (`secret/MOS-<tenant>_<user>_*`, `<tenant>` built as MTN's workflow builds it),
+  or from `MTNCLOUD_MOS_ACCESS_KEY` / `_SECRET_KEY` / `_ENDPOINT`. Environment variables, not provider
+  arguments, because both halves of the muxed provider must declare the same provider schema.
+- Buckets show in the console (owner: "go with 1"). The console's own create (`createBucket: true`)
+  fails on a node that hasn't seen the new bucket yet and leaves it orphaned, so the provider creates
+  the bucket in MOS, waits until six reads in a row see it, then registers it with `createBucket:
+  false`. A registration failure deletes the new, empty bucket again.
+- Deleting a console record silently deletes every archive on it and never deletes the bucket in MOS
+  (both seen live). So destroy refuses while an archive uses the bucket, empties it only with
+  `force_destroy`, deletes it in MOS, then deletes the record.
+- An existing bucket is never adopted on create: import it.
+- Every MOS write is confirmed by reading until six reads in a row agree (`settle`), because the
+  cluster takes a few seconds to show a change on every node.
+- Object lock, retention and checksums are built and documented as normal features (owner: "dont say
+  they are coming soon"). Until MTN enables them on the cluster, using them fails with a message that
+  says so. What needs hardware or a redesign, and what only AWS has, is listed for the owner in
+  dev-docs/mos-capabilities.md, not in customer docs.
+- Uploading an object resets its ACL on S3, so a re-upload sends the object's current canned ACL with it.
+- Settings writes to one bucket take turns (a per-bucket lock in the client): MOS stores a bucket's
+  settings together, and two at once lost one live. A write that never appears is written again.
+- Console records are matched on `bucketName` after one list call, not with `phrase`, whose fields
+  aren't documented.
+

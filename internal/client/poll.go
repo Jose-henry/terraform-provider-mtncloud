@@ -51,4 +51,7 @@ func pollDefaults(cfg *Config) {
 	if cfg.LBAttempt <= 0 {
 		cfg.LBAttempt = 3 * time.Minute
 	}
+	if cfg.MOSLostAfter <= 0 {
+		cfg.MOSLostAfter = 30 * time.Second
+	}
 }

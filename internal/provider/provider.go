@@ -24,6 +24,7 @@ import (
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/lookup"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/network"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/secrets"
+	"github.com/mtn/terraform-provider-mtncloud/internal/services/storage"
 )
 
 var _ provider.Provider = (*mtncloudProvider)(nil)
@@ -188,9 +189,9 @@ func stringOrEnv(v types.String, env string) string {
 }
 
 func (p *mtncloudProvider) Resources(context.Context) []func() resource.Resource {
-	return slices.Concat(network.Resources(), compute.Resources(), catalog.Resources(), automation.Resources(), secrets.Resources(), cluster.Resources())
+	return slices.Concat(network.Resources(), compute.Resources(), catalog.Resources(), automation.Resources(), secrets.Resources(), cluster.Resources(), storage.Resources())
 }
 
 func (p *mtncloudProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return slices.Concat(lookup.DataSources(), network.DataSources(), loadbalancer.DataSources())
+	return slices.Concat(lookup.DataSources(), network.DataSources(), loadbalancer.DataSources(), storage.DataSources())
 }
