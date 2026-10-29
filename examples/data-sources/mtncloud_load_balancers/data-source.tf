@@ -1,5 +1,13 @@
-data "mtncloud_load_balancers" "all" {}
+data "mtncloud_network" "app" {
+  name = "app-net"
+}
 
-output "load_balancers" {
-  value = { for x in data.mtncloud_load_balancers.all.load_balancers : x.id => { name = x.name, external_ip = x.external_ip } }
+# Every load balancer on the network; add name or status to narrow it.
+data "mtncloud_load_balancers" "app" {
+  network_id = data.mtncloud_network.app.id
+  status     = "ACTIVE"
+}
+
+output "load_balancer_addresses" {
+  value = { for lb in data.mtncloud_load_balancers.app.load_balancers : lb.name => coalesce(lb.floating_ip, lb.vip_address) }
 }

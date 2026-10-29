@@ -39,24 +39,6 @@ var recordSpecs = []recordSpec{
 		},
 	},
 	{
-		one: "load_balancer", many: "load_balancers", noun: "load balancer", nouns: "load balancers",
-		path: "/api/load-balancers", key: "loadBalancers",
-		about: "A load balancer spreads traffic across instances.",
-		fields: []field{
-			{"description", "description", text, "Description, or empty."},
-			{"type", "type.name", text, "Load balancer type."},
-			{"cloud", "cloud.name", text, "Cloud the load balancer is in."},
-			{"visibility", "visibility", text, "`private` or `public`."},
-			{"enabled", "enabled", flag, "Whether the load balancer is enabled."},
-			{"host", "host", text, "Host name or address, or empty."},
-			{"port", "port", number, "Port, or 0."},
-			{"ip", "ip", text, "Address, or empty."},
-			{"internal_ip", "internalIp", text, "Internal IP, or empty."},
-			{"external_ip", "externalIp", text, "External (public) IP, or empty."},
-			{"ssl_enabled", "sslEnabled", flag, "Whether SSL is enabled."},
-		},
-	},
-	{
 		one: "cluster", many: "clusters", noun: "cluster", nouns: "clusters", path: "/api/clusters", key: "clusters",
 		about: "A cluster is a managed group of hosts, for example a Kubernetes cluster.",
 		fields: []field{

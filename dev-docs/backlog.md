@@ -269,3 +269,9 @@ form's plan field is a select, and falls back to the wizard's list otherwise. Mu
   create; only the first pool attribute is checked (managed Kubernetes `worker_floating_ip_pool` isn't).
 - Tests: no provider unit test drives `checkPoolRouter` or the order check, and none covers a power
   grace spent on failed reads. Add them with the next instance or order change.
+
+## B-021 Load balancer resources must refresh the per-run snapshot (2026-10-29, from review)
+`LoadBalancerSnapshot` caches one `read` per network and selector for the life of a provider instance.
+Data sources only read, so that is safe today. When the load balancer resources land, every write
+must drop the cached entries for its network (add a delete-by-prefix to `lookupCache`), or a data
+source that `depends_on` the resource reads the load balancer as it was before the change.

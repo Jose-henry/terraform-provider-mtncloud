@@ -33,6 +33,7 @@ type fakeAPI struct {
 	inst   http.Handler    // /api/instances, a stateful fake (instance_test.go), when set
 	order  http.Handler    // /api/catalog/orders and /items, a stateful fake (project_test.go), when set
 	clu    http.Handler    // /api/clusters, a stateful fake (cluster_test.go), when set
+	lb     http.Handler    // /api/tasks and /api/job-executions, the load balancer task (loadbalancer_test.go), when set
 	denied map[string]bool // paths answered with 403 (not retried), set by a test step
 }
 
@@ -89,8 +90,13 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.calls[r.URL.Path]++
-		sg, net, router, inst, order, clu := f.sg, f.net, f.router, f.inst, f.order, f.clu
+		sg, net, router, inst, order, clu, lb := f.sg, f.net, f.router, f.inst, f.order, f.clu, f.lb
 		f.mu.Unlock()
+		if lb != nil && (strings.HasPrefix(r.URL.Path, "/api/tasks") || strings.HasPrefix(r.URL.Path, "/api/job-executions/")) &&
+			r.Header.Get("Authorization") == "Bearer test-token" {
+			lb.ServeHTTP(w, r)
+			return
+		}
 		if clu != nil && strings.HasPrefix(r.URL.Path, "/api/clusters") && r.Header.Get("Authorization") == "Bearer test-token" {
 			clu.ServeHTTP(w, r)
 			return

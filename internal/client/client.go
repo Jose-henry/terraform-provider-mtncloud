@@ -57,6 +57,9 @@ type Config struct {
 	// PowerGrace is how long a power call has to change the instance's state, and a restart to
 	// start, before the call counts as ignored. Default 2 minutes.
 	PowerGrace time.Duration
+	// LBAttempt bounds one run of the load balancer task, from execute to the job's end. Data
+	// sources have no timeouts {}, so without it a stalled console job would hang a plan.
+	LBAttempt time.Duration
 }
 
 // Defaults are the provider-wide group, cloud and project, by name. Empty means not set.

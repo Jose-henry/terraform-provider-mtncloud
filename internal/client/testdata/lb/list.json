@@ -1,0 +1,146 @@
+{
+ "jobExecution": {
+  "id": 31568,
+  "name": "tf-lb-list-2624ffa6",
+  "process": {
+   "id": 31463,
+   "accountId": 202,
+   "uniqueId": "00000000-0000-4000-8000-000000000004",
+   "processType": {
+    "code": "localWorkflow",
+    "name": "Local Workflow"
+   },
+   "displayName": "Local",
+   "description": "tf-lb-list-2624ffa6",
+   "subType": null,
+   "subId": null,
+   "zoneId": null,
+   "integrationId": null,
+   "appId": null,
+   "instanceId": null,
+   "containerId": null,
+   "serverId": null,
+   "containerName": null,
+   "status": "complete",
+   "reason": null,
+   "percent": 100.0,
+   "statusEta": 0,
+   "message": null,
+   "output": null,
+   "error": null,
+   "startDate": "2026-10-29T07:30:54.000Z",
+   "endDate": "2026-10-29T07:31:00.000Z",
+   "duration": 6382,
+   "resultType": null,
+   "resultId": null,
+   "dateCreated": "2026-10-29T07:30:54.000Z",
+   "lastUpdated": "2026-10-29T07:31:01.000Z",
+   "updatedBy": {
+    "username": "tf-user",
+    "displayName": "Test User"
+   },
+   "events": [
+    {
+     "id": 71168,
+     "processId": 31463,
+     "accountId": 202,
+     "uniqueId": "00000000-0000-4000-8000-000000000005",
+     "processType": {
+      "code": "executeTask",
+      "name": "execute task"
+     },
+     "description": "LoadBalancer Operations",
+     "refType": "jobTemplate",
+     "refId": 30660,
+     "subType": null,
+     "subId": null,
+     "zoneId": null,
+     "integrationId": null,
+     "instanceId": null,
+     "containerId": null,
+     "serverId": null,
+     "containerName": null,
+     "displayName": "Local",
+     "status": "complete",
+     "reason": null,
+     "percent": 100.0,
+     "statusEta": 180000,
+     "message": "",
+     "output": "{\"success\": true, \"action\": \"list\", \"caller\": {\"userId\": 101, \"username\": \"tf-user\", \"accountId\": 202}, \"permissionSource\": \"task-access\", \"networkAccess\": \"owner\", \"result\": {\"success\": true, \"loadbalancers\": [{\"id\": \"00000000-0000-4000-8000-000000000006\", \"name\": \"My Load Balancer\", \"vip_address\": \"10.20.0.1\", \"vip_subnet_id\": \"00000000-0000-4000-8000-000000000007\", \"vip_network_id\": \"00000000-0000-4000-8000-000000000008\", \"vip_floating\": \"203.0.113.2\", \"vip_floating_known\": true, \"vip_display\": \"10.20.0.1/203.0.113.2\", \"provisioning_status\": \"ACTIVE\", \"operating_status\": \"ONLINE\", \"description\": \"My Load Balancer\", \"provider\": \"amphora\", \"created_at\": \"2026-09-21T08:29:00\", \"membersCount\": 3, \"membersKnown\": true, \"networkId\": \"114\", \"networkName\": \"app-net\"}, {\"id\": \"00000000-0000-4000-8000-000000000009\", \"name\": \"test\", \"vip_address\": \"10.20.0.3\", \"vip_subnet_id\": \"00000000-0000-4000-8000-000000000007\", \"vip_network_id\": \"00000000-0000-4000-8000-000000000008\", \"vip_floating\": null, \"vip_floating_known\": true, \"vip_display\": \"10.20.0.3\", \"provisioning_status\": \"ACTIVE\", \"operating_status\": \"ONLINE\", \"description\": null, \"provider\": \"amphora\", \"created_at\": \"2026-10-20T23:05:07\", \"membersCount\": 0, \"membersKnown\": true, \"networkId\": \"114\", \"networkName\": \"app-net\"}], \"total\": 2, \"fresh\": false, \"source\": \"store\", \"stale\": true, \"ageMs\": 4206687, \"canManage\": true}}",
+     "error": "",
+     "startDate": "2026-10-29T07:30:55.000Z",
+     "endDate": "2026-10-29T07:31:00.000Z",
+     "duration": 5309,
+     "dateCreated": "2026-10-29T07:30:55.000Z",
+     "lastUpdated": "2026-10-29T07:31:00.000Z",
+     "updatedBy": {
+      "username": "tf-user",
+      "displayName": "Test User"
+     },
+     "retryable": true,
+     "cancelable": true,
+     "jobName": "executeTaskInWorkflow"
+    },
+    {
+     "id": 71169,
+     "processId": 31463,
+     "accountId": 202,
+     "uniqueId": "00000000-0000-4000-8000-000000000010",
+     "processType": {
+      "code": "jobComplete",
+      "name": "Complete"
+     },
+     "description": "Complete Job Execution",
+     "refType": "jobTemplate",
+     "refId": 30660,
+     "subType": null,
+     "subId": null,
+     "zoneId": null,
+     "integrationId": null,
+     "instanceId": null,
+     "containerId": null,
+     "serverId": null,
+     "containerName": null,
+     "displayName": "Local",
+     "status": "complete",
+     "reason": null,
+     "percent": 100.0,
+     "statusEta": 180000,
+     "message": null,
+     "output": null,
+     "error": null,
+     "startDate": "2026-10-29T07:31:00.000Z",
+     "endDate": "2026-10-29T07:31:00.000Z",
+     "duration": 28,
+     "dateCreated": "2026-10-29T07:30:55.000Z",
+     "lastUpdated": "2026-10-29T07:31:00.000Z",
+     "updatedBy": {
+      "username": "tf-user",
+      "displayName": "Test User"
+     },
+     "retryable": null,
+     "cancelable": null,
+     "jobName": "completeJob"
+    }
+   ]
+  },
+  "job": {
+   "id": 30660,
+   "name": "tf-lb-list-2624ffa6",
+   "description": null,
+   "type": {
+    "id": 2,
+    "code": "console.task",
+    "name": "Task Job"
+   }
+  },
+  "description": null,
+  "dateCreated": "2026-10-29T07:30:54.000Z",
+  "startDate": "2026-10-29T07:30:54.000Z",
+  "endDate": "2026-10-29T07:31:00.000Z",
+  "duration": 6364,
+  "resultData": null,
+  "status": "success",
+  "statusMessage": null
+ }
+}

@@ -285,3 +285,22 @@ other six are Trouble Ticketing, Create Project, MOS, SMB, NFS and Let's Encrypt
 - Not yet verified live: the managed services' app names and node names (no managed order has been
   placed in the test tenant).
 
+## D-031 Load balancers go through one console task (owner, 2026-10-29)
+Supersedes the API part of D-013 and D-023. MTN's load balancers are run by a console plugin, reached
+by executing the public task with code `lboperate.terraform` (type `octaviaLbOperations`; id 450 in
+production, but the client finds it by code, once per run) with the customer's own token:
+`POST /api/tasks/{id}/execute` with `job.customOptions` (`action` plus string inputs) and `targetType:
+appliance`, then `GET /api/job-executions/{id}` until it ends; the answer is the `executeTask` event's
+`output` envelope (`success`, `action`, `error`, `retryable`, `result`). The plugin enforces tenancy,
+so the provider never sends an account or user. Source: the plugin's
+`docs/TERRAFORM-AGENT-GUIDE.md` and live reads on 2026-10-29 (`whoami`, `list`, `read`, `fip-options`;
+dev-docs/api-research.md).
+- The client retries, up to 4 times with growing waits, only runs that did nothing: the console's
+  input timeout (`action` null), a job that ended without output, or `retryable: true`. Refusals are
+  never retried. "not available to your tenant" (a network the tenant neither owns nor shares) is
+  never treated as gone; "not found on this network" is not "deleted".
+- A `read` takes 3 to 26 s, so data sources read each load balancer once per run
+  (`LoadBalancerSnapshot`) and every listener, pool, member and monitor data source picks from it.
+- The old `mtncloud_load_balancer(s)` record lookups read `/api/load-balancers`, which is empty on MTN
+  Cloud (checked 2026-10-29); the new data sources replace them under the same names (breaking, noted
+  in the CHANGELOG). The resources follow in the next slice.

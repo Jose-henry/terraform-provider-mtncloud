@@ -67,7 +67,7 @@ everything that ships. The cloud software's name (OpenStack) is also kept out of
 | Catalog order | `/api/catalog/orders` | Project, VPN, firewall, NAT, MOS, managed DB/MQ/K8s, BYOL appliances... |
 | MOS | catalog item 13 (`s32311`) + `/api/storage-buckets` (type `s3`) + Cypher | Ordering keys **rotates the tenant-wide key**. Adopt existing keys, never re-order silently (D-007). |
 | Cypher | `/api/cypher` | Secrets store; MOS keys live here. |
-| Load balancer | Octavia, API unknown | On hold (D-013). |
+| Load balancer | Console task `lboperate.terraform` (D-031) | One task run per call; a read takes seconds, so read once per run. Data sources done. |
 
 ## Scope
 

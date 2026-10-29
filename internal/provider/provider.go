@@ -20,6 +20,7 @@ import (
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/catalog"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/cluster"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/compute"
+	"github.com/mtn/terraform-provider-mtncloud/internal/services/loadbalancer"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/lookup"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/network"
 	"github.com/mtn/terraform-provider-mtncloud/internal/services/secrets"
@@ -191,5 +192,5 @@ func (p *mtncloudProvider) Resources(context.Context) []func() resource.Resource
 }
 
 func (p *mtncloudProvider) DataSources(context.Context) []func() datasource.DataSource {
-	return slices.Concat(lookup.DataSources(), network.DataSources())
+	return slices.Concat(lookup.DataSources(), network.DataSources(), loadbalancer.DataSources())
 }

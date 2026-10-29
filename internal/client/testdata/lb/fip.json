@@ -1,0 +1,146 @@
+{
+ "jobExecution": {
+  "id": 31570,
+  "name": "tf-lb-fip-options-252ad748",
+  "process": {
+   "id": 31465,
+   "accountId": 202,
+   "uniqueId": "00000000-0000-4000-8000-000000000025",
+   "processType": {
+    "code": "localWorkflow",
+    "name": "Local Workflow"
+   },
+   "displayName": "Local",
+   "description": "tf-lb-fip-options-252ad748",
+   "subType": null,
+   "subId": null,
+   "zoneId": null,
+   "integrationId": null,
+   "appId": null,
+   "instanceId": null,
+   "containerId": null,
+   "serverId": null,
+   "containerName": null,
+   "status": "complete",
+   "reason": null,
+   "percent": 100.0,
+   "statusEta": 0,
+   "message": null,
+   "output": null,
+   "error": null,
+   "startDate": "2026-10-29T07:31:36.000Z",
+   "endDate": "2026-10-29T07:31:43.000Z",
+   "duration": 6989,
+   "resultType": null,
+   "resultId": null,
+   "dateCreated": "2026-10-29T07:31:36.000Z",
+   "lastUpdated": "2026-10-29T07:31:43.000Z",
+   "updatedBy": {
+    "username": "tf-user",
+    "displayName": "Test User"
+   },
+   "events": [
+    {
+     "id": 71172,
+     "processId": 31465,
+     "accountId": 202,
+     "uniqueId": "00000000-0000-4000-8000-000000000026",
+     "processType": {
+      "code": "executeTask",
+      "name": "execute task"
+     },
+     "description": "LoadBalancer Operations",
+     "refType": "jobTemplate",
+     "refId": 30662,
+     "subType": null,
+     "subId": null,
+     "zoneId": null,
+     "integrationId": null,
+     "instanceId": null,
+     "containerId": null,
+     "serverId": null,
+     "containerName": null,
+     "displayName": "Local",
+     "status": "complete",
+     "reason": null,
+     "percent": 100.0,
+     "statusEta": 180000,
+     "message": "",
+     "output": "{\"success\": true, \"action\": \"fip-options\", \"caller\": {\"userId\": 101, \"username\": \"tf-user\", \"accountId\": 202}, \"permissionSource\": \"task-access\", \"networkAccess\": \"owner\", \"result\": {\"floatingIpPools\": [{\"name\": \"public-network-03\", \"value\": \"pool:00000000-0000-4000-8000-000000000027\", \"externalId\": \"00000000-0000-4000-8000-000000000027\", \"id\": \"41\"}, {\"name\": \"public-network-04\", \"value\": \"pool:00000000-0000-4000-8000-000000000028\", \"externalId\": \"00000000-0000-4000-8000-000000000028\", \"id\": \"42\"}, {\"name\": \"public-network-02\", \"value\": \"pool:00000000-0000-4000-8000-000000000029\", \"externalId\": \"00000000-0000-4000-8000-000000000029\", \"id\": \"43\"}, {\"name\": \"public-network-01\", \"value\": \"pool:00000000-0000-4000-8000-000000000030\", \"externalId\": \"00000000-0000-4000-8000-000000000030\", \"id\": \"44\"}, {\"name\": \"private-network-01\", \"value\": \"pool:00000000-0000-4000-8000-000000000031\", \"externalId\": \"00000000-0000-4000-8000-000000000031\", \"id\": \"475\"}, {\"name\": \"private-network-02-dc\", \"value\": \"pool:00000000-0000-4000-8000-000000000032\", \"externalId\": \"00000000-0000-4000-8000-000000000032\", \"id\": \"877\"}, {\"name\": \"private-cloud-1-dcnet1\", \"value\": \"pool:00000000-0000-4000-8000-000000000033\", \"externalId\": \"00000000-0000-4000-8000-000000000033\", \"id\": \"1202\"}, {\"name\": \"public-network-05\", \"value\": \"pool:00000000-0000-4000-8000-000000000034\", \"externalId\": \"00000000-0000-4000-8000-000000000034\", \"id\": \"1214\"}], \"availableFloatingIps\": [{\"name\": \"203.0.113.8\", \"value\": \"fip:00000000-0000-4000-8000-000000000035\", \"id\": \"00000000-0000-4000-8000-000000000035\", \"address\": \"203.0.113.8\"}, {\"name\": \"203.0.113.9\", \"value\": \"fip:00000000-0000-4000-8000-000000000036\", \"id\": \"00000000-0000-4000-8000-000000000036\", \"address\": \"203.0.113.9\"}, {\"name\": \"203.0.113.10\", \"value\": \"fip:00000000-0000-4000-8000-000000000037\", \"id\": \"00000000-0000-4000-8000-000000000037\", \"address\": \"203.0.113.10\"}]}}",
+     "error": "",
+     "startDate": "2026-10-29T07:31:37.000Z",
+     "endDate": "2026-10-29T07:31:43.000Z",
+     "duration": 5946,
+     "dateCreated": "2026-10-29T07:31:36.000Z",
+     "lastUpdated": "2026-10-29T07:31:43.000Z",
+     "updatedBy": {
+      "username": "tf-user",
+      "displayName": "Test User"
+     },
+     "retryable": true,
+     "cancelable": true,
+     "jobName": "executeTaskInWorkflow"
+    },
+    {
+     "id": 71173,
+     "processId": 31465,
+     "accountId": 202,
+     "uniqueId": "00000000-0000-4000-8000-000000000038",
+     "processType": {
+      "code": "jobComplete",
+      "name": "Complete"
+     },
+     "description": "Complete Job Execution",
+     "refType": "jobTemplate",
+     "refId": 30662,
+     "subType": null,
+     "subId": null,
+     "zoneId": null,
+     "integrationId": null,
+     "instanceId": null,
+     "containerId": null,
+     "serverId": null,
+     "containerName": null,
+     "displayName": "Local",
+     "status": "complete",
+     "reason": null,
+     "percent": 100.0,
+     "statusEta": 180000,
+     "message": null,
+     "output": null,
+     "error": null,
+     "startDate": "2026-10-29T07:31:43.000Z",
+     "endDate": "2026-10-29T07:31:43.000Z",
+     "duration": 14,
+     "dateCreated": "2026-10-29T07:31:37.000Z",
+     "lastUpdated": "2026-10-29T07:31:43.000Z",
+     "updatedBy": {
+      "username": "tf-user",
+      "displayName": "Test User"
+     },
+     "retryable": null,
+     "cancelable": null,
+     "jobName": "completeJob"
+    }
+   ]
+  },
+  "job": {
+   "id": 30662,
+   "name": "tf-lb-fip-options-252ad748",
+   "description": null,
+   "type": {
+    "id": 2,
+    "code": "console.task",
+    "name": "Task Job"
+   }
+  },
+  "description": null,
+  "dateCreated": "2026-10-29T07:31:36.000Z",
+  "startDate": "2026-10-29T07:31:36.000Z",
+  "endDate": "2026-10-29T07:31:43.000Z",
+  "duration": 6978,
+  "resultData": null,
+  "status": "success",
+  "statusMessage": null
+ }
+}

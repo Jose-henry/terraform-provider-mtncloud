@@ -19,7 +19,7 @@ import (
 // recordFixtures maps each list endpoint of the table-driven lookups to its synthetic fixture
 // (testdata/lookups/records): three objects, IDs 101-103, named alpha, beta and beta.
 var recordFixtures = map[string]string{
-	"/api/apps": "apps", "/api/certificates": "certificates", "/api/load-balancers": "loadBalancers",
+	"/api/apps": "apps", "/api/certificates": "certificates",
 	"/api/clusters": "clusters", "/api/catalog/items": "items", "/api/users": "users",
 	"/api/user-sources": "userSources", "/api/roles": "roles", "/api/subnets": "subnets",
 	"/api/storage-buckets": "storageBuckets", "/api/storage-volumes": "storageVolumes",
@@ -68,7 +68,7 @@ provider "mtncloud" {
 `
 	// type name of the list (and its list attribute) -> a text field checked on the first item.
 	many := map[string]string{
-		"apps": "group", "ssl_certificates": "domain_name", "load_balancers": "cloud", "clusters": "cloud",
+		"apps": "group", "ssl_certificates": "domain_name", "clusters": "cloud",
 		"catalog_orders": "catalog_item", "users": "email", "identity_sources": "default_role", "user_roles": "role_type",
 		"network_subnets": "network", "storage_buckets": "bucket_name", "storage_volumes": "datastore", "domains": "fqdn",
 		"key_pairs": "fingerprint", "credentials": "type", "workflows": "type", "jobs": "type", "integrations": "type",
@@ -76,7 +76,7 @@ provider "mtncloud" {
 	}
 	// type name of the single lookup -> its name attribute.
 	one := map[string]string{
-		"app": "name", "ssl_certificate": "name", "load_balancer": "name", "cluster": "name", "catalog_order": "name",
+		"app": "name", "ssl_certificate": "name", "cluster": "name", "catalog_order": "name",
 		"user": "username", "identity_source": "name", "datastore": "name", "form": "name",
 	}
 	nameOf := map[string]string{"users": "username", "user_roles": "name", "cyphers": "key"}

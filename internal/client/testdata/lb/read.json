@@ -1,0 +1,146 @@
+{
+ "jobExecution": {
+  "id": 31569,
+  "name": "tf-lb-read-bb19007c",
+  "process": {
+   "id": 31464,
+   "accountId": 202,
+   "uniqueId": "00000000-0000-4000-8000-000000000011",
+   "processType": {
+    "code": "localWorkflow",
+    "name": "Local Workflow"
+   },
+   "displayName": "Local",
+   "description": "tf-lb-read-bb19007c",
+   "subType": null,
+   "subId": null,
+   "zoneId": null,
+   "integrationId": null,
+   "appId": null,
+   "instanceId": null,
+   "containerId": null,
+   "serverId": null,
+   "containerName": null,
+   "status": "complete",
+   "reason": null,
+   "percent": 100.0,
+   "statusEta": 0,
+   "message": null,
+   "output": null,
+   "error": null,
+   "startDate": "2026-10-29T07:31:11.000Z",
+   "endDate": "2026-10-29T07:31:35.000Z",
+   "duration": 24374,
+   "resultType": null,
+   "resultId": null,
+   "dateCreated": "2026-10-29T07:31:11.000Z",
+   "lastUpdated": "2026-10-29T07:31:35.000Z",
+   "updatedBy": {
+    "username": "tf-user",
+    "displayName": "Test User"
+   },
+   "events": [
+    {
+     "id": 71170,
+     "processId": 31464,
+     "accountId": 202,
+     "uniqueId": "00000000-0000-4000-8000-000000000012",
+     "processType": {
+      "code": "executeTask",
+      "name": "execute task"
+     },
+     "description": "LoadBalancer Operations",
+     "refType": "jobTemplate",
+     "refId": 30661,
+     "subType": null,
+     "subId": null,
+     "zoneId": null,
+     "integrationId": null,
+     "instanceId": null,
+     "containerId": null,
+     "serverId": null,
+     "containerName": null,
+     "displayName": "Local",
+     "status": "complete",
+     "reason": null,
+     "percent": 100.0,
+     "statusEta": 180000,
+     "message": "",
+     "output": "{\"success\": true, \"action\": \"read\", \"caller\": {\"userId\": 101, \"username\": \"tf-user\", \"accountId\": 202}, \"permissionSource\": \"task-access\", \"networkAccess\": \"owner\", \"result\": {\"success\": true, \"loadbalancer\": {\"id\": \"00000000-0000-4000-8000-000000000006\", \"name\": \"My Load Balancer\", \"description\": \"My Load Balancer\", \"provisioning_status\": \"ACTIVE\", \"operating_status\": \"ONLINE\", \"admin_state_up\": true, \"project_id\": \"00000000000040008000000000000013\", \"created_at\": \"2026-09-21T08:29:00\", \"updated_at\": \"2026-10-19T16:03:04\", \"vip_address\": \"10.20.0.1\", \"vip_port_id\": \"00000000-0000-4000-8000-000000000014\", \"vip_subnet_id\": \"00000000-0000-4000-8000-000000000007\", \"vip_network_id\": \"00000000-0000-4000-8000-000000000008\", \"additional_vips\": [], \"listeners\": [{\"id\": \"00000000-0000-4000-8000-000000000015\", \"name\": \"HTTP-Listener\", \"description\": \"\", \"provisioning_status\": \"ACTIVE\", \"operating_status\": \"ONLINE\", \"admin_state_up\": true, \"protocol\": \"HTTP\", \"protocol_port\": 80, \"connection_limit\": -1, \"default_tls_container_ref\": null, \"sni_container_refs\": [], \"project_id\": \"00000000000040008000000000000013\", \"default_pool_id\": \"00000000-0000-4000-8000-000000000016\", \"l7policies\": [], \"insert_headers\": {}, \"created_at\": \"2026-09-21T08:29:01\", \"updated_at\": \"2026-10-07T23:54:05\", \"loadbalancers\": [{\"id\": \"00000000-0000-4000-8000-000000000006\"}], \"timeout_client_data\": 50000, \"timeout_member_connect\": 5000, \"timeout_member_data\": 50000, \"timeout_tcp_inspect\": 0, \"tags\": [], \"client_ca_tls_container_ref\": null, \"client_authentication\": \"NONE\", \"client_crl_container_ref\": null, \"allowed_cidrs\": null, \"tls_ciphers\": null, \"tls_versions\": null, \"alpn_protocols\": null, \"hsts_max_age\": null, \"hsts_include_subdomains\": false, \"hsts_preload\": false, \"tenant_id\": \"00000000000040008000000000000013\", \"l7policies_expanded\": []}, {\"id\": \"00000000-0000-4000-8000-000000000017\", \"name\": \"TERMINATED_HTTPS1\", \"description\": \"\", \"provisioning_status\": \"ACTIVE\", \"operating_status\": \"ONLINE\", \"admin_state_up\": true, \"protocol\": \"TERMINATED_HTTPS\", \"protocol_port\": 443, \"connection_limit\": -1, \"default_tls_container_ref\": \"https://keystore.example.internal:9312/v1/secrets/00000000-0000-4000-8000-000000000018\", \"sni_container_refs\": [], \"project_id\": \"00000000000040008000000000000013\", \"default_pool_id\": \"00000000-0000-4000-8000-000000000016\", \"l7policies\": [{\"id\": \"00000000-0000-4000-8000-000000000019\"}], \"insert_headers\": {\"X-Forwarded-For\": \"true\"}, \"created_at\": \"2026-09-22T15:30:49\", \"updated_at\": \"2026-10-19T16:03:04\", \"loadbalancers\": [{\"id\": \"00000000-0000-4000-8000-000000000006\"}], \"timeout_client_data\": 50000, \"timeout_member_connect\": 5000, \"timeout_member_data\": 50000, \"timeout_tcp_inspect\": 0, \"tags\": [], \"client_ca_tls_container_ref\": null, \"client_authentication\": \"NONE\", \"client_crl_container_ref\": null, \"allowed_cidrs\": null, \"tls_ciphers\": \"TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256\", \"tls_versions\": [\"TLSv1.2\", \"TLSv1.3\"], \"alpn_protocols\": [\"h2\", \"http/1.1\", \"http/1.0\"], \"hsts_max_age\": null, \"hsts_include_subdomains\": false, \"hsts_preload\": false, \"tenant_id\": \"00000000000040008000000000000013\", \"l7policies_expanded\": [{\"id\": \"00000000-0000-4000-8000-000000000019\", \"name\": \"Force HTTP to HTTPS (Global Redirect)\", \"description\": \"\", \"provisioning_status\": \"ACTIVE\", \"operating_status\": \"ONLINE\", \"admin_state_up\": true, \"project_id\": \"00000000000040008000000000000013\", \"action\": \"REDIRECT_TO_URL\", \"listener_id\": \"00000000-0000-4000-8000-000000000017\", \"redirect_pool_id\": null, \"redirect_url\": \"https://lb.example.com\", \"redirect_prefix\": null, \"position\": 1, \"rules\": [], \"created_at\": \"2026-09-22T15:42:45\", \"updated_at\": \"2026-09-22T19:19:32\", \"tags\": [], \"redirect_http_code\": 301, \"tenant_id\": \"00000000000040008000000000000013\", \"rules_expanded\": []}]}], \"pools\": [{\"id\": \"00000000-0000-4000-8000-000000000016\", \"name\": \"HTTP-Pool\", \"description\": \"HTTP-Pool\", \"provisioning_status\": \"ACTIVE\", \"operating_status\": \"ONLINE\", \"admin_state_up\": true, \"protocol\": \"HTTP\", \"lb_algorithm\": \"ROUND_ROBIN\", \"session_persistence\": null, \"project_id\": \"00000000000040008000000000000013\", \"loadbalancers\": [{\"id\": \"00000000-0000-4000-8000-000000000006\"}], \"listeners\": [{\"id\": \"00000000-0000-4000-8000-000000000017\"}, {\"id\": \"00000000-0000-4000-8000-000000000015\"}], \"created_at\": \"2026-09-21T08:29:01\", \"updated_at\": \"2026-10-07T23:54:09\", \"healthmonitor_id\": \"00000000-0000-4000-8000-000000000020\", \"members\": [{\"id\": \"00000000-0000-4000-8000-000000000021\", \"name\": \"pn-202-app-NGINXWS-6\", \"operating_status\": \"ONLINE\", \"provisioning_status\": \"ACTIVE\", \"admin_state_up\": true, \"address\": \"10.20.0.4\", \"protocol_port\": 80, \"weight\": 1, \"backup\": false, \"subnet_id\": null, \"project_id\": \"00000000000040008000000000000013\", \"created_at\": \"2026-09-21T08:29:01\", \"updated_at\": \"2026-09-23T12:58:34\", \"monitor_address\": null, \"monitor_port\": null, \"tags\": [\"console:group:4215\", \"console:gw:1\", \"console:instance\"], \"tenant_id\": \"00000000000040008000000000000013\", \"orphaned\": false}, {\"id\": \"00000000-0000-4000-8000-000000000022\", \"name\": \"pn-202-app-APACHEWS-8\", \"operating_status\": \"ONLINE\", \"provisioning_status\": \"ACTIVE\", \"admin_state_up\": true, \"address\": \"10.20.0.5\", \"protocol_port\": 80, \"weight\": 1, \"backup\": false, \"subnet_id\": null, \"project_id\": \"00000000000040008000000000000013\", \"created_at\": \"2026-09-21T08:29:01\", \"updated_at\": \"2026-09-23T12:58:34\", \"monitor_address\": null, \"monitor_port\": null, \"tags\": [\"console:group:4214\", \"console:gw:1\", \"console:instance\"], \"tenant_id\": \"00000000000040008000000000000013\", \"orphaned\": false}, {\"id\": \"00000000-0000-4000-8000-000000000023\", \"name\": \"pn-202-app-NGINXWS-6 ? 2 nodes\", \"operating_status\": \"ONLINE\", \"provisioning_status\": \"ACTIVE\", \"admin_state_up\": true, \"address\": \"10.20.0.6\", \"protocol_port\": 80, \"weight\": 1, \"backup\": false, \"subnet_id\": null, \"project_id\": \"00000000000040008000000000000013\", \"created_at\": \"2026-09-23T12:08:20\", \"updated_at\": \"2026-09-23T12:58:34\", \"monitor_address\": null, \"monitor_port\": null, \"tags\": [\"console:group:4215\", \"console:gw:1\", \"console:instance\"], \"tenant_id\": \"00000000000040008000000000000013\", \"orphaned\": false}], \"tags\": [], \"tls_container_ref\": null, \"ca_tls_container_ref\": null, \"crl_container_ref\": null, \"tls_enabled\": false, \"tls_ciphers\": null, \"tls_versions\": null, \"alpn_protocols\": null, \"tenant_id\": \"00000000000040008000000000000013\", \"healthmonitor\": {\"id\": \"00000000-0000-4000-8000-000000000020\", \"name\": \"HTTP-HealthMonitor\", \"type\": \"HTTP\", \"delay\": 6, \"timeout\": 5, \"max_retries\": 3, \"max_retries_down\": 3, \"http_method\": \"GET\", \"url_path\": \"/\", \"expected_codes\": \"200\", \"admin_state_up\": true, \"project_id\": \"00000000000040008000000000000013\", \"pools\": [{\"id\": \"00000000-0000-4000-8000-000000000016\"}], \"provisioning_status\": \"ACTIVE\", \"operating_status\": \"ONLINE\", \"created_at\": \"2026-09-21T08:29:01\", \"updated_at\": \"2026-09-24T07:41:35\", \"tags\": [], \"http_version\": null, \"domain_name\": null, \"tenant_id\": \"00000000000040008000000000000013\"}}], \"provider\": \"amphora\", \"flavor_id\": null, \"vip_qos_policy_id\": null, \"tags\": [], \"availability_zone\": null, \"vip_vnic_type\": \"normal\", \"tenant_id\": \"00000000000040008000000000000013\", \"health_problems\": [], \"vip_subnet_display\": \"My2ndNetwork subnet (10.20.0.7/24)\"}, \"canManage\": true}}",
+     "error": "",
+     "startDate": "2026-10-29T07:31:12.000Z",
+     "endDate": "2026-10-29T07:31:35.000Z",
+     "duration": 23314,
+     "dateCreated": "2026-10-29T07:31:12.000Z",
+     "lastUpdated": "2026-10-29T07:31:35.000Z",
+     "updatedBy": {
+      "username": "tf-user",
+      "displayName": "Test User"
+     },
+     "retryable": true,
+     "cancelable": true,
+     "jobName": "executeTaskInWorkflow"
+    },
+    {
+     "id": 71171,
+     "processId": 31464,
+     "accountId": 202,
+     "uniqueId": "00000000-0000-4000-8000-000000000024",
+     "processType": {
+      "code": "jobComplete",
+      "name": "Complete"
+     },
+     "description": "Complete Job Execution",
+     "refType": "jobTemplate",
+     "refId": 30661,
+     "subType": null,
+     "subId": null,
+     "zoneId": null,
+     "integrationId": null,
+     "instanceId": null,
+     "containerId": null,
+     "serverId": null,
+     "containerName": null,
+     "displayName": "Local",
+     "status": "complete",
+     "reason": null,
+     "percent": 100.0,
+     "statusEta": 180000,
+     "message": null,
+     "output": null,
+     "error": null,
+     "startDate": "2026-10-29T07:31:35.000Z",
+     "endDate": "2026-10-29T07:31:35.000Z",
+     "duration": 20,
+     "dateCreated": "2026-10-29T07:31:12.000Z",
+     "lastUpdated": "2026-10-29T07:31:35.000Z",
+     "updatedBy": {
+      "username": "tf-user",
+      "displayName": "Test User"
+     },
+     "retryable": null,
+     "cancelable": null,
+     "jobName": "completeJob"
+    }
+   ]
+  },
+  "job": {
+   "id": 30661,
+   "name": "tf-lb-read-bb19007c",
+   "description": null,
+   "type": {
+    "id": 2,
+    "code": "console.task",
+    "name": "Task Job"
+   }
+  },
+  "description": null,
+  "dateCreated": "2026-10-29T07:31:10.000Z",
+  "startDate": "2026-10-29T07:31:10.000Z",
+  "endDate": "2026-10-29T07:31:35.000Z",
+  "duration": 25359,
+  "resultData": null,
+  "status": "success",
+  "statusMessage": null
+ }
+}

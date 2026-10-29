@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 90 | 86 |
-| Usable with a customer (sub-tenant) login | 90 | 81 |
+| Available today | 90 | 94 |
+| Usable with a customer (sub-tenant) login | 90 | 89 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 4 | 0 |
@@ -281,8 +281,6 @@ Old names kept for now; each page says what replaces it and how to move without 
 | [`mtncloud_domain`](../docs/data-sources/domain.md) | Yes (read verified) |
 | [`mtncloud_domains`](../docs/data-sources/domains.md) | Yes (read verified) |
 | [`mtncloud_floating_ips`](../docs/data-sources/floating_ips.md) | Yes (read verified) |
-| [`mtncloud_load_balancer`](../docs/data-sources/load_balancer.md) | Yes (read verified) |
-| [`mtncloud_load_balancers`](../docs/data-sources/load_balancers.md) | Yes (read verified) |
 | [`mtncloud_network`](../docs/data-sources/network.md) | Yes (read verified) |
 | [`mtncloud_network_group`](../docs/data-sources/network_group.md) | Yes (read verified) |
 | [`mtncloud_network_subnet`](../docs/data-sources/network_subnet.md) | Yes (read verified) |
@@ -292,6 +290,21 @@ Old names kept for now; each page says what replaces it and how to move without 
 | [`mtncloud_routers`](../docs/data-sources/routers.md) | Yes, built for customers |
 | [`mtncloud_ssl_certificate`](../docs/data-sources/ssl_certificate.md) | Yes (read verified) |
 | [`mtncloud_ssl_certificates`](../docs/data-sources/ssl_certificates.md) | Yes (read verified) |
+
+### Load balancers
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_load_balancer`](../docs/data-sources/load_balancer.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_floating_ip_pools`](../docs/data-sources/load_balancer_floating_ip_pools.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_health_monitor`](../docs/data-sources/load_balancer_health_monitor.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_health_monitors`](../docs/data-sources/load_balancer_health_monitors.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_listener`](../docs/data-sources/load_balancer_listener.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_listeners`](../docs/data-sources/load_balancer_listeners.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_members`](../docs/data-sources/load_balancer_members.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_pool`](../docs/data-sources/load_balancer_pool.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_pools`](../docs/data-sources/load_balancer_pools.md) | Yes (read verified) |
+| [`mtncloud_load_balancers`](../docs/data-sources/load_balancers.md) | Yes (read verified) |
 
 ### Compute
 
@@ -393,7 +406,7 @@ Designed, **not available yet**, and all meant for customers.
 | `mtncloud_object_storage` | Planned | MOS (MTN Object Storage): S3-compatible keys plus optional buckets, in one resource. |
 | `mtncloud_app` | Planned | Apps from blueprints: several instances or containers deployed together. |
 | `mtncloud_datastore` | Planned | Datastores: the storage that volumes are created on. |
-| `mtncloud_load_balancer` | Planned | Load balancers: listeners, pools and members. |
+| `mtncloud_load_balancer` | Next | Load balancers, with listeners, pools, members and health monitors (the data sources are done). |
 
 ### Data sources
 

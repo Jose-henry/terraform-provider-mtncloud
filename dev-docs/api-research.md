@@ -560,3 +560,46 @@ retried (rule 13).
 Lifecycle and CORS working, and object lock implemented, mean OneFS is 9.12 or later, probably 9.14 (lifecycle).
 The admin API path `platform/14` fits that. Confirm with `isi version` (owner to run). Encryption at rest is
 only cluster DARE (self-encrypting drives); confirm with `isi encryption status`.
+
+### Cluster facts from the owner's `isi` output (2026-10-29)
+OneFS 9.15.0.0 (B_9_15_0_0_001), 6 nodes. Licensed: ONEFS, HDFS, SMARTCONNECT_ADVANCED, SMARTDEDUPE,
+SMARTQUOTAS, SNAPSHOTIQ. Unlicensed: CLOUDPOOLS, HARDENING, SMARTLOCK, SMARTPOOLS, SYNCIQ. S3: HTTPS
+only, port 9021; zone System, root `/ifs/data/s3`, Object ACL Policy `replace`, Object Lock Support
+**No**, Checksum Support **No**, syslog access logging off. No WORM domains, compliance clock not set.
+SED key manager OFFLINE on all nodes, KMIP not supported. SnapshotIQ on with no snapshots; no S3 bucket
+quotas; protocol auditing on with no syslog/CEE target. What this means per feature:
+[mos-capabilities.md](mos-capabilities.md).
+
+### Console bucket records (live, 2026-10-29, dev tenant, tf-acc-* only, all cleaned up)
+MTN's customer flow (`S3 Folder (Operational)/SendS3_EmailCypher.html`): Infrastructure → Storage →
+Buckets → Add → "MTN Object Storage", keys and endpoint from Cypher, tick **Create Bucket** and **Use
+Path Style**. CLI dry run (`storage-buckets add ... -O createBucket=on -O config.pathStyleAccess=on -d`):
+
+    {"storageBucket": {"name": "...", "providerType": "s3", "bucketName": "...", "createBucket": true,
+      "copyToStore": true, "defaultBackupTarget": false, "defaultDeploymentTarget": false,
+      "defaultVirtualImageTarget": false,
+      "config": {"accessKey": "...", "secretKey": "...", "endpoint": "...", "pathStyleAccess": true}}}
+
+| Test | Result |
+|---|---|
+| Console create with `createBucket: true` | **HTTP 400** "Error Validating Storage Provider: The specified bucket does not exist (NoSuchBucket)" — yet the bucket **was** created in MOS (12/12 heads afterwards). The console validates on a node that hasn't seen it yet. Orphan in MOS, no console record. Platform bug; customers in the UI can hit it too. |
+| Create in MOS first, wait for 8 heads in a row (~4.5 s), then console create with `createBucket: false` | HTTP 200; record shows in the console (`config` keys accessKey, endpoint, pathStyleAccess, secretKey, secretKeyHash). |
+| Archive (`POST /api/archives/buckets`, `storageProvider.id` = the record) then `DELETE /api/storage-buckets/{id}?removeResources=true` | HTTP 200. **The archive is deleted with it, silently** (archive GET 404 afterwards). |
+| Console delete, with or without `removeResources=true` | Console record gone (404); **the bucket stays in MOS** in both cases. |
+
+Provider design that follows: create in MOS, settle, register with `createBucket: false`; on destroy
+refuse when an archive uses the record (name it), empty the bucket only with `force_destroy`, delete it
+in MOS, then delete the console record. The tenant has the archive API but no archives yet.
+
+## Load balancer task (live reads, 2026-10-29, owner-approved)
+- **Q1 (how the task is found):** `/api/tasks` ignores a `code` filter; the full list (3 tasks) has id 450,
+  name "LoadBalancer Operations", code `lboperate.terraform`, type `octaviaLbOperations`, public.
+- **Q4 (real payloads):** network 114, all `success`: `whoami` 2.5 s (`networks`); `list` 7.7 s (2 load
+  balancers; row keys `id name description provisioning_status operating_status vip_address
+  vip_display vip_floating vip_floating_known vip_network_id vip_subnet_id membersCount membersKnown
+  networkId networkName created_at provider`; `canManage`, `total`, `fresh`, `stale`, `ageMs`,
+  `source`); `read` 25.7 s (`loadbalancer` with `listeners[]`, `pools[]` each with `members[]` and
+  `healthmonitor`, `vip_subnet_display`, `canManage`); `fip-options` 8.2 s (`floatingIpPools[]` with
+  `name`, `externalId`; `availableFloatingIps[]` with `id`, `address`). Envelope keys: `success action
+  caller networkAccess permissionSource result`. Scrubbed fixtures: `internal/client/testdata/lb/`.
+- The console's own `/api/load-balancers` inventory is empty for this tenant.

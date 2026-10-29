@@ -48,4 +48,7 @@ func pollDefaults(cfg *Config) {
 	if cfg.PowerGrace <= 0 {
 		cfg.PowerGrace = 2 * time.Minute
 	}
+	if cfg.LBAttempt <= 0 {
+		cfg.LBAttempt = 3 * time.Minute
+	}
 }
