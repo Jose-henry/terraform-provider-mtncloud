@@ -348,5 +348,7 @@ Not built yet, to pick up after Kubernetes and clusters:
 
 ## B-027 Catalog order floating IP pools in other projects (2026-10-30)
 Pool IDs are per project (api-research, floating IPs): `public-network-02` is `pool-43` in `admin`
-and `pool-2002` in the QA project. Orders send the form's fixed value (`admin`'s IDs). Owner approved
-one test order in the QA project to see which address the VM gets.
+and `pool-2002` in the QA project. Orders send the form's fixed value (`admin`'s IDs). Owner,
+2026-10-30: this works in every project (MTN's workflow handles it); no change and no catalog QA.
+Also confirmed: networks are created before anything is provisioned on them, so an order naming a
+network that doesn't exist yet fails at plan time, by design.
