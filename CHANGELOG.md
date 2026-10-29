@@ -2,7 +2,7 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
-## Unreleased
+## 0.7.0 (2026-10-30)
 
 - New: `name_prefix` on `mtncloud_mos_bucket`. Bucket names are shared by every MTN Cloud tenant, so a name may already be taken; `name_prefix` makes a free one (the prefix and 8 random characters) when the bucket is created and keeps it. Set `name` or `name_prefix`. A bucket imported by name whose name starts with the prefix isn't replaced.
 - Changed: a bucket name another tenant uses now says so ("the name is taken by another tenant"), instead of "access denied". An archive name another tenant uses names that tenant, or says another tenant has it.
