@@ -2,6 +2,8 @@ package client
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,15 +17,19 @@ import (
 // (dev-docs/api-research.md) that differ from the guide:
 //   - create answers with the load balancer still PENDING_CREATE, and delete with
 //     {deleting: true}: the client waits for ACTIVE, or for gone, itself;
-//   - a piece create answers steps[] ({kind, name, applied, created, id}), not piece: the new
-//     piece's ID is the step of its kind.
+//   - a piece create answers steps[] ({kind, name, applied, created, id}); since the plugin's
+//     commit f577a90 it also answers piece (the piece itself) on every create and update, except
+//     when its save was still running at the end of its wait (pending with no piece).
+//
+// Every piece create carries a requestId: the plugin tags the piece mtncloud-req-<requestId>, and a
+// retry of that create finds it instead of making a second one (existing: true).
 //
 // Every piece write re-reads the load balancer in the plugin and saves it, and the plugin refuses a
 // second save while one runs, so writes to one load balancer take turns here (lbLock). Each write
 // drops the cached reads of its network (B-021).
 
 // LBListenerSpec is a listener to create, or the fields to change. A nil field is left as it is;
-// DefaultPoolID or TLSContainerRef set to "" clears it.
+// DefaultPoolID or TLSContainerRef set to "" clears it, and Description "" empties it.
 type LBListenerSpec struct {
 	Name, Description      *string
 	Protocol               string // create only
@@ -39,10 +45,14 @@ type LBListenerSpec struct {
 	MemberDataTimeout      *int64
 	TCPInspectTimeout      *int64
 	allowedCIDRsMeansClear bool
+	sniMeansClear          bool
 }
 
 // ClearAllowedCIDRs makes an update send an empty list, which allows every source again.
 func (s *LBListenerSpec) ClearAllowedCIDRs() { s.allowedCIDRsMeansClear = true }
+
+// ClearSNI makes an update send an empty list, which removes every SNI certificate.
+func (s *LBListenerSpec) ClearSNI() { s.sniMeansClear = true }
 
 func (s LBListenerSpec) body() map[string]any {
 	b := map[string]any{}
@@ -60,8 +70,8 @@ func (s LBListenerSpec) body() map[string]any {
 		b["adminStateUp"] = *s.Enabled
 	}
 	putClearable(b, "defaultTlsContainerRef", s.TLSContainerRef)
-	if s.SNIContainerRefs != nil {
-		b["sniContainerRefs"] = s.SNIContainerRefs
+	if s.SNIContainerRefs != nil || s.sniMeansClear {
+		b["sniContainerRefs"] = nonNil(s.SNIContainerRefs)
 	}
 	putInt(b, "timeoutClientData", s.ClientDataTimeout)
 	putInt(b, "timeoutMemberConnect", s.MemberConnectTimeout)
@@ -132,17 +142,20 @@ func (s LBMonitorSpec) body() map[string]any {
 }
 
 // LBMemberSpec is an external member (a server outside the console, by address), or the fields
-// to change. Address and Port can't change.
+// to change. Address and Port can't change. ClearMonitorAddress and ClearMonitorPort remove the
+// health-check override (an update sends null).
 type LBMemberSpec struct {
-	Name           *string
-	Address        string // create only
-	Port           int64  // create only
-	SubnetID       string // create only
-	Weight         *int64
-	Backup         *bool
-	MonitorAddress *string
-	MonitorPort    *int64
-	Enabled        *bool
+	Name                *string
+	Address             string // create only
+	Port                int64  // create only
+	SubnetID            string // create only
+	Weight              *int64
+	Backup              *bool
+	MonitorAddress      *string
+	MonitorPort         *int64
+	Enabled             *bool
+	ClearMonitorAddress bool
+	ClearMonitorPort    bool
 }
 
 func (s LBMemberSpec) body() map[string]any {
@@ -160,6 +173,12 @@ func (s LBMemberSpec) body() map[string]any {
 	}
 	putStr(b, "monitorAddress", s.MonitorAddress)
 	putInt(b, "monitorPort", s.MonitorPort)
+	if s.ClearMonitorAddress {
+		b["monitorAddress"] = nil
+	}
+	if s.ClearMonitorPort {
+		b["monitorPort"] = nil
+	}
 	if s.Enabled != nil {
 		b["adminStateUp"] = *s.Enabled
 	}
@@ -299,20 +318,82 @@ func (c *Client) newPieceID(ctx context.Context, networkID int64, lbID, kind str
 	return id, nil
 }
 
-// pieceCreate runs a piece create and returns the new piece's ID. When the write fails after the
-// plugin made the piece (the load balancer went to ERROR, or time ran out while waiting), the ID is
-// still looked up and returned with the error, so the resource keeps it in state instead of
-// leaving it behind for the next create to trip over.
-func (c *Client) pieceCreate(ctx context.Context, networkID int64, lbID, action, kind string, in map[string]any, find func(*LoadBalancer) string) (string, error) {
+// newRequestID is a fresh requestId for one piece create: 1 to 64 of A-Za-z0-9_- (guide 9.6).
+func newRequestID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return "tf" + hex.EncodeToString(b)
+}
+
+// requestTag is the tag the plugin puts on a piece made with requestID.
+func requestTag(requestID string) string { return "mtncloud-req-" + requestID }
+
+func hasTag(tags []string, tag string) bool {
+	for _, t := range tags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
+}
+
+// pieceCreate runs a piece create and returns the new piece's ID. The create carries a new
+// requestId, so the plugin can tell a retry of it from a second create. find(lb, tag) looks the
+// piece up on the load balancer, by its request tag first, when the answer doesn't name it. When
+// the write fails after the plugin made the piece (the load balancer went to ERROR, or time ran
+// out while waiting), the ID is still looked up and returned with the error, so the resource keeps
+// it in state instead of leaving it behind for the next create to trip over.
+func (c *Client) pieceCreate(ctx context.Context, networkID int64, lbID, action, kind string, in map[string]any, find func(*LoadBalancer, string) string) (string, error) {
+	req := newRequestID()
+	in["requestId"] = req
 	ans, err := c.lbWrite(ctx, networkID, lbID, action, in)
 	if ans == nil {
+		// No answer at all (every attempt ran out of time, or a retry was refused while the first
+		// save still ran): the piece may exist anyway. Only its request tag can prove it is ours.
+		if err != nil && !errors.Is(err, context.Canceled) {
+			return c.taggedPieceID(ctx, networkID, lbID, requestTag(req)), err
+		}
 		return "", err
 	}
-	id, idErr := c.newPieceID(ctx, networkID, lbID, kind, ans, find)
+	var byTag func(*LoadBalancer) string
+	if find != nil {
+		byTag = func(lb *LoadBalancer) string { return find(lb, requestTag(req)) }
+	}
+	id, idErr := c.newPieceID(ctx, networkID, lbID, kind, ans, byTag)
 	if err != nil {
 		return id, err
 	}
 	return id, idErr
+}
+
+// taggedPieceID looks for the piece carrying a request tag, on a context of its own: the caller's
+// may have just run out. "" when it isn't there, or the load balancer can't be read.
+func (c *Client) taggedPieceID(ctx context.Context, networkID int64, lbID, tag string) string {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer cancel()
+	lb, _, err := c.GetLoadBalancer(ctx, networkID, lbID, "")
+	if err != nil {
+		return ""
+	}
+	for _, l := range lb.Listeners {
+		if hasTag(l.Tags, tag) {
+			return l.ID
+		}
+	}
+	for _, p := range lb.Pools {
+		if hasTag(p.Tags, tag) {
+			return p.ID
+		}
+		if h := p.HealthMonitor; h != nil && hasTag(h.Tags, tag) {
+			return h.ID
+		}
+		for _, m := range p.Members {
+			if hasTag(m.Tags, tag) {
+				return m.ID
+			}
+		}
+	}
+	return ""
 }
 
 func poolOf(lb *LoadBalancer, poolID string) *LBPool {
@@ -469,7 +550,7 @@ func isPieceGone(err error) bool {
 	m := strings.ToLower(e.Msg)
 	// The plugin's words for a piece that isn't there (LbTopology). "not found" alone is not one:
 	// "Cloud with ID 5 not found" is a different problem.
-	for _, gone := range []string{"is not on this load balancer", "is not in pool", "has no health monitor"} {
+	for _, gone := range []string{"is not on this load balancer", "is not in pool", "has no health monitor", "is not on listener", "has no members of instance"} {
 		if strings.Contains(m, gone) {
 			return true
 		}
@@ -478,9 +559,9 @@ func isPieceGone(err error) bool {
 }
 
 func (c *Client) CreateLBListener(ctx context.Context, networkID int64, lbID string, s LBListenerSpec) (string, error) {
-	return c.pieceCreate(ctx, networkID, lbID, "listener-create", "listener", map[string]any{"spec": s.body()}, func(lb *LoadBalancer) string {
+	return c.pieceCreate(ctx, networkID, lbID, "listener-create", "listener", map[string]any{"spec": s.body()}, func(lb *LoadBalancer, tag string) string {
 		for _, l := range lb.Listeners { // protocol and port are unique on a load balancer
-			if l.Port == s.Port && strings.EqualFold(l.Protocol, s.Protocol) {
+			if hasTag(l.Tags, tag) || (l.Port == s.Port && strings.EqualFold(l.Protocol, s.Protocol)) {
 				return l.ID
 			}
 		}
@@ -498,8 +579,15 @@ func (c *Client) DeleteLBListener(ctx context.Context, networkID int64, lbID, id
 }
 
 func (c *Client) CreateLBPool(ctx context.Context, networkID int64, lbID string, s LBPoolSpec) (string, error) {
-	// A pool has nothing unique to find it by, so its ID comes from its step only.
-	return c.pieceCreate(ctx, networkID, lbID, "pool-create", "pool", map[string]any{"spec": s.body()}, nil)
+	// A pool has nothing unique but its request tag.
+	return c.pieceCreate(ctx, networkID, lbID, "pool-create", "pool", map[string]any{"spec": s.body()}, func(lb *LoadBalancer, tag string) string {
+		for _, p := range lb.Pools {
+			if hasTag(p.Tags, tag) {
+				return p.ID
+			}
+		}
+		return ""
+	})
 }
 
 func (c *Client) UpdateLBPool(ctx context.Context, networkID int64, lbID, id string, s LBPoolSpec) error {
@@ -512,7 +600,7 @@ func (c *Client) DeleteLBPool(ctx context.Context, networkID int64, lbID, id str
 }
 
 func (c *Client) CreateLBMonitor(ctx context.Context, networkID int64, lbID, poolID string, s LBMonitorSpec) (string, error) {
-	return c.pieceCreate(ctx, networkID, lbID, "monitor-create", "health monitor", map[string]any{"poolId": poolID, "spec": s.body()}, func(lb *LoadBalancer) string {
+	return c.pieceCreate(ctx, networkID, lbID, "monitor-create", "health monitor", map[string]any{"poolId": poolID, "spec": s.body()}, func(lb *LoadBalancer, _ string) string {
 		if p := poolOf(lb, poolID); p != nil && p.HealthMonitor != nil { // a pool has at most one
 			return p.HealthMonitor.ID
 		}
@@ -530,10 +618,10 @@ func (c *Client) DeleteLBMonitor(ctx context.Context, networkID int64, lbID, poo
 }
 
 func (c *Client) AddLBMember(ctx context.Context, networkID int64, lbID, poolID string, s LBMemberSpec) (string, error) {
-	return c.pieceCreate(ctx, networkID, lbID, "member-add", "member", map[string]any{"poolId": poolID, "spec": s.body()}, func(lb *LoadBalancer) string {
+	return c.pieceCreate(ctx, networkID, lbID, "member-add", "member", map[string]any{"poolId": poolID, "spec": s.body()}, func(lb *LoadBalancer, tag string) string {
 		if p := poolOf(lb, poolID); p != nil {
 			for _, m := range p.Members { // address and port are unique in a pool
-				if m.Address == s.Address && m.Port == s.Port {
+				if hasTag(m.Tags, tag) || (m.Address == s.Address && m.Port == s.Port) {
 					return m.ID
 				}
 			}

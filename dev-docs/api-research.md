@@ -634,6 +634,23 @@ in MOS, then delete the console record. The tenant has the archive API but no ar
 - `loadbalancer-update` (added 2026-10-29, guide 9.6): spec keys `name`, `description`, `tags`,
   `adminStateUp` only; null leaves a field, `""`/`[]` clears; any other key is refused by name.
 
+### Plugin answer to the provider's requests (f577a90, console-tested by the plugin side, 2026-10-29)
+- Piece creates (`listener-create`, `pool-create`, `member-add`, `monitor-create`, `l7policy-create`)
+  take an optional `requestId`, 1 to 64 of `A-Za-z0-9_-`. The piece is tagged `mtncloud-req-<id>`; a
+  repeat answers `existing: true` with the piece and changes nothing. One ID per create attempt.
+- Every create and update answers with top-level `piece` (a monitor's is the monitor, a member's the
+  member), also with `pending: true`. It is missing only when `pending` is true and the save
+  outlasted the plugin's 180 s wait.
+- Clearing: `sniContainerRefs: []` removes the SNI refs; `description: ""` clears; `member-update`
+  with `monitorAddress: null` / `monitorPort: null` removes the override. `defaultTlsContainerRef:
+  null` on a TERMINATED_HTTPS listener is refused ("must keep a certificate").
+- A listener takes `description` on create and update.
+- "Already gone" messages include "L7 policy <id> is not on listener <listenerId>." and "Pool
+  <poolId> has no members of instance <id>."
+- L7: `l7policy-create` makes the policy, then its rules one by one. A refused rule rolls the new
+  policy back (a step with `rolledBack: true`, answer `success: false`); a retry with the same
+  `requestId` builds it whole, so a policy is never returned as existing with missing rules.
+
 ## Archives (live probe, 2026-10-29, dev tenant, `tf-acc-arch-*`, all deleted)
 Through the CLI on a QA MOS bucket (`mtncloud_mos_bucket`, console record from the provider):
 - `archives add -d` builds `{"archiveBucket": {name, description, storageProvider: {id}, accounts: [],

@@ -16,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -72,24 +71,12 @@ var (
 	listenerKind = "listener"
 )
 
-// removedReplaces is said of an Optional argument the plugin can't clear once set (it reads null as
-// "leave it"), so taking it out of the configuration replaces the piece instead.
+// removedReplaces is said of an Optional argument the cloud can't clear once set (a listener's
+// certificate: guide 9.6), so taking it out of the configuration replaces the piece instead.
 const removedReplaces = "Taking it out of the configuration replaces the resource: the cloud can't clear it."
 
 func replaceIfRemovedStr() []planmodifier.String {
 	return []planmodifier.String{stringplanmodifier.RequiresReplaceIf(func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-		resp.RequiresReplace = !req.StateValue.IsNull() && req.PlanValue.IsNull()
-	}, removedReplaces, removedReplaces)}
-}
-
-func replaceIfRemovedInt() []planmodifier.Int64 {
-	return []planmodifier.Int64{int64planmodifier.RequiresReplaceIf(func(_ context.Context, req planmodifier.Int64Request, resp *int64planmodifier.RequiresReplaceIfFuncResponse) {
-		resp.RequiresReplace = !req.StateValue.IsNull() && req.PlanValue.IsNull()
-	}, removedReplaces, removedReplaces)}
-}
-
-func replaceIfRemovedSet() []planmodifier.Set {
-	return []planmodifier.Set{setplanmodifier.RequiresReplaceIf(func(_ context.Context, req planmodifier.SetRequest, resp *setplanmodifier.RequiresReplaceIfFuncResponse) {
 		resp.RequiresReplace = !req.StateValue.IsNull() && req.PlanValue.IsNull()
 	}, removedReplaces, removedReplaces)}
 }

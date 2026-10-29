@@ -277,13 +277,16 @@ func TestLBCustomerText(t *testing.T) {
 }
 
 func TestRunLB_WriteTimeoutIsNotRetried(t *testing.T) {
-	for _, action := range []string{"pool-create", "member-add", "delete"} {
+	for _, action := range []string{"pool-update", "member-remove", "listener-update", "loadbalancer-update", "delete"} {
 		if lbTransient(action, lbTimedOut, nil) || lbTransient(action, "error", nil) {
 			t.Errorf("%s: a write that may have acted counted as nothing ran", action)
 		}
 	}
-	if !lbTransient("create", lbTimedOut, nil) {
-		t.Error("a timed-out load balancer create wasn't retried: its requestId makes that safe")
+	// Creates carry a requestId: a retry finds what the first try made (guide 9.6).
+	for _, action := range []string{"create", "listener-create", "pool-create", "member-add", "monitor-create", "l7policy-create"} {
+		if !lbTransient(action, lbTimedOut, nil) || !lbTransient(action, "error", nil) {
+			t.Errorf("a timed-out %s wasn't retried: its requestId makes that safe", action)
+		}
 	}
 	if !lbTransient("read", lbTimedOut, nil) {
 		t.Error("a timed-out read wasn't retried")

@@ -360,14 +360,18 @@ sections 9.2 to 9.6 and a live write probe on network 114 (dev-docs/api-research
   plugin at the provider's request, 2026-10-29). A load balancer is created enabled; `enabled =
   false` is applied straight after the create. The VIP subnet and address can't change in the cloud:
   they replace it.
-- What the plugin can't clear once set (a listener's certificate references, a member's
-  health-check address and port) replaces the piece when it is taken out of the configuration. A
-  listener has no description: the plugin has none. Optional+Computed settings with a cloud
-  default keep their last value when removed, and say so.
-- A new piece's ID is looked up on the load balancer when the answer doesn't name it (a monitor by
-  its pool, a member by address and port, a listener by protocol and port), also when the write
-  failed after the piece was made, so it is kept in state rather than left behind. Writes that may
-  have acted are not retried, except `create`, whose requestId makes it safe (B-023).
+- Taking a listener's description or SNI references, or a member's health-check address or port,
+  out of the configuration clears it in place (`""`, `[]`, null; plugin f577a90, guide 9.6). A
+  TERMINATED_HTTPS listener must keep a certificate, so one without `tls_certificate_ref` is a
+  plan-time error; removing the certificate from another listener replaces it. Optional+Computed
+  settings with a cloud default keep their last value when removed, and say so.
+- Piece creates send a `requestId` too (`tf` + 32 hex characters, one per create, the same on its
+  retries); the plugin tags the piece `mtncloud-req-<id>` and answers a repeat with `existing: true`
+  and the piece. So creates that time out or end with no output are retried; updates and deletes
+  are not. Every create and update answers with `piece`; when it doesn't (a save that outlasted the
+  plugin's 180 s wait), the piece is looked up on the load balancer by its tag first (then a monitor
+  by its pool, a member by address and port, a listener by protocol and port), also when the write
+  failed after the piece was made, so it is kept in state rather than left behind.
 - The plugin answers a write with `pending: true` while its save job still runs, so an ACTIVE read
   straight after may be the load balancer as it was. Then the wait takes ACTIVE only after a
   PENDING_* read, or after 2 minutes without one.

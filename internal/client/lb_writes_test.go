@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -106,6 +107,8 @@ func TestIsPieceGone(t *testing.T) {
 		"Listener l-9 is not on this load balancer.": true,
 		"Member m-9 is not in pool pool-1.":          true,
 		"Pool pool-1 has no health monitor.":         true,
+		"L7 policy p-3 is not on listener l-1.":      true,
+		"Pool pool-1 has no members of instance 42.": true,
 		"Cloud with ID 5 not found":                  false,
 		"Another save is in progress.":               false,
 	} {
@@ -241,6 +244,82 @@ func TestCreateLBMonitor_TakesTheIDFromTheTopLevelPiece(t *testing.T) {
 	}
 	if f.runs.Load() != 2 {
 		t.Errorf("%d runs: with the piece in the answer there is nothing to look up", f.runs.Load())
+	}
+}
+
+// Every piece create sends a requestId, and a retry of that create sends the same one, so the
+// plugin answers with the piece the first try made (existing: true) instead of making another.
+func TestCreateLBPool_RetrySendsTheSameRequestID(t *testing.T) {
+	f := newLBFake(t, "", // the first run ended without an answer: it may have made the pool
+		lbAnswerTop("pool-create", map[string]any{"success": true, "steps": []any{}},
+			map[string]any{"existing": true, "piece": map[string]any{"id": "pool-7"}}),
+		lbReadAs("ACTIVE"))
+	id, err := f.client(t, fastPoll).CreateLBPool(t.Context(), 114, "lb-1", LBPoolSpec{Protocol: "HTTP", Algorithm: "ROUND_ROBIN"})
+	if err != nil || id != "pool-7" {
+		t.Fatalf("id %q, err %v", id, err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	first, _ := f.opts[0]["requestId"].(string)
+	if first == "" || len(first) > 64 || strings.Trim(first, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != "" {
+		t.Errorf("requestId %q: want 1 to 64 of A-Za-z0-9_-", first)
+	}
+	if f.opts[1]["requestId"] != first {
+		t.Errorf("the retry sent requestId %v, the first try %q", f.opts[1]["requestId"], first)
+	}
+	if again := newRequestID(); again == first {
+		t.Error("two creates got the same requestId")
+	}
+}
+
+// echoTag answers job execution n with a read whose pool carries the request tag the first run sent:
+// the pool the plugin made, found only by its tag.
+func echoTag(t *testing.T, f *lbFake, n int64) {
+	f.route("GET", "/api/job-executions/"+itoa(31000+n), func(w http.ResponseWriter, _ *http.Request) {
+		f.mu.Lock()
+		req, _ := f.opts[0]["requestId"].(string)
+		f.mu.Unlock()
+		pool := map[string]any{"id": "pool-9", "tags": []any{"mtncloud-req-" + req}}
+		other := map[string]any{"id": "pool-1", "tags": []any{"mtncloud-req-someone-else"}}
+		_, _ = w.Write(lbJob(t, lbAnswer("read", map[string]any{"success": true, "canManage": true,
+			"loadbalancer": map[string]any{"id": "lb-1", "provisioning_status": "ACTIVE", "pools": []any{other, pool}}})))
+	})
+}
+
+// The answer names no pool: it is found on the load balancer by its request tag alone.
+func TestCreateLBPool_FoundByItsRequestTag(t *testing.T) {
+	f := newLBFake(t, lbAnswer("pool-create", map[string]any{"success": true, "steps": []any{}}), lbReadAs("ACTIVE"))
+	echoTag(t, f, 3)
+	id, err := f.client(t, fastPoll).CreateLBPool(t.Context(), 114, "lb-1", LBPoolSpec{Protocol: "HTTP", Algorithm: "ROUND_ROBIN"})
+	if err != nil || id != "pool-9" {
+		t.Fatalf("id %q, err %v", id, err)
+	}
+}
+
+// Every run ended with no answer: the pool may still have been made, and is kept by its tag.
+func TestCreateLBPool_NoAnswerStillFindsThePool(t *testing.T) {
+	refused := lbRefusal("pool-create", "Another save of this load balancer is in progress. Try again in a moment.")
+	f := newLBFake(t, "", refused)
+	echoTag(t, f, 3)
+	id, err := f.client(t, fastPoll).CreateLBPool(t.Context(), 114, "lb-1", LBPoolSpec{Protocol: "HTTP", Algorithm: "ROUND_ROBIN"})
+	if err == nil || id != "pool-9" {
+		t.Fatalf("id %q, err %v: want pool-9 with the error", id, err)
+	}
+}
+
+// Taken out of the configuration: SNI references are sent as [], member health-check overrides as null.
+func TestLBSpecBodies_Clearing(t *testing.T) {
+	l := LBListenerSpec{}
+	l.ClearSNI()
+	if b, _ := json.Marshal(l.body()); string(b) != `{"sniContainerRefs":[]}` {
+		t.Errorf("listener body %s", b)
+	}
+	m := LBMemberSpec{ClearMonitorAddress: true, ClearMonitorPort: true}
+	if b, _ := json.Marshal(m.body()); string(b) != `{"monitorAddress":null,"monitorPort":null}` {
+		t.Errorf("member body %s", b)
+	}
+	if b, _ := json.Marshal(LBMemberSpec{}.body()); string(b) != `{}` {
+		t.Errorf("an empty member change sends %s, want nothing", b)
 	}
 }
 

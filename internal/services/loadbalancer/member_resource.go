@@ -71,10 +71,10 @@ func (r *memberResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 				Description: "Its share of the traffic against the pool's other members, 0 to 256; 0 sends it none. Defaults to `1`."},
 			"backup": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false),
 				Description: "Only send traffic here when every other member is down. Defaults to `false`."},
-			"monitor_address": schema.StringAttribute{Optional: true, PlanModifiers: replaceIfRemovedStr(), Validators: []validator.String{validators.IPv4Address()},
-				Description: "Health-check this address instead of `address`. " + removedReplaces},
-			"monitor_port": schema.Int64Attribute{Optional: true, PlanModifiers: replaceIfRemovedInt(), Validators: portValid,
-				Description: "Health-check this port instead of `port`. " + removedReplaces},
+			"monitor_address": schema.StringAttribute{Optional: true, Validators: []validator.String{validators.IPv4Address()},
+				Description: "Health-check this address instead of `address`. Taking it out of the configuration goes back to `address`."},
+			"monitor_port": schema.Int64Attribute{Optional: true, Validators: portValid,
+				Description: "Health-check this port instead of `port`. Taking it out of the configuration goes back to `port`."},
 			"enabled": enabledAttr(memberKind),
 		},
 		Blocks: map[string]schema.Block{
@@ -83,10 +83,15 @@ func (r *memberResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 	}
 }
 
-func (r *memberResource) spec(m *memberRes, create bool) client.LBMemberSpec {
+// spec is the member to add (was nil), or the change from was.
+func (r *memberResource) spec(m, was *memberRes) client.LBMemberSpec {
 	s := client.LBMemberSpec{Name: strOf(m.Name), Weight: intOf(m.Weight), Backup: boolOf(m.Backup),
 		MonitorAddress: strOf(m.MonitorAddress), MonitorPort: intOf(m.MonitorPort), Enabled: boolOf(m.Enabled)}
-	if create {
+	if was != nil { // taken out of the configuration: back to the member's own address and port
+		s.ClearMonitorAddress = m.MonitorAddress.IsNull() && !was.MonitorAddress.IsNull()
+		s.ClearMonitorPort = m.MonitorPort.IsNull() && !was.MonitorPort.IsNull()
+	}
+	if was == nil {
 		s.Address, s.Port = m.Address.ValueString(), m.Port.ValueInt64()
 		if !m.SubnetID.IsUnknown() {
 			s.SubnetID = m.SubnetID.ValueString()
@@ -137,7 +142,7 @@ func (r *memberResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	id, err := r.client.AddLBMember(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(), r.spec(&plan, true))
+	id, err := r.client.AddLBMember(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(), r.spec(&plan, nil))
 	if id != "" {
 		plan.ID = types.StringValue(id)
 		r.refresh(ctx, &plan, &resp.State, &resp.Diagnostics)
@@ -181,7 +186,7 @@ func (r *memberResource) Update(ctx context.Context, req resource.UpdateRequest,
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	plan.ID = state.ID
-	if err := r.client.UpdateLBMember(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(), plan.ID.ValueString(), r.spec(&plan, false)); err != nil {
+	if err := r.client.UpdateLBMember(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(), plan.ID.ValueString(), r.spec(&plan, &state)); err != nil {
 		resp.Diagnostics.AddError("Unable to change the member", err.Error())
 		return
 	}

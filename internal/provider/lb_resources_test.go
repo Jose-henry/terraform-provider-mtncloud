@@ -3,6 +3,7 @@ package provider
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"strings"
@@ -26,11 +27,12 @@ type lbPlugin struct {
 	lbs     map[string]map[string]any
 	pending map[string]bool
 	jobs    map[int64][]byte
-	runs    map[string]int // action -> runs
+	runs    map[string]int            // action -> runs
+	sent    map[string]map[string]any // action -> the last spec it was sent
 }
 
 func newLBPlugin() *lbPlugin {
-	return &lbPlugin{lbs: map[string]map[string]any{}, pending: map[string]bool{}, jobs: map[int64][]byte{}, runs: map[string]int{}}
+	return &lbPlugin{lbs: map[string]map[string]any{}, pending: map[string]bool{}, jobs: map[int64][]byte{}, runs: map[string]int{}, sent: map[string]map[string]any{}}
 }
 
 func (p *lbPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -96,8 +98,7 @@ func apply(piece, spec map[string]any, names map[string]string) {
 }
 
 var (
-	// No description: the plugin has none for a listener (LbTopology.normalizeListener).
-	listenerNames = map[string]string{"name": "name", "protocol": "protocol", "port": "protocol_port",
+	listenerNames = map[string]string{"name": "name", "description": "description", "protocol": "protocol", "port": "protocol_port",
 		"defaultPoolId": "default_pool_id", "connectionLimit": "connection_limit", "allowedCidrs": "allowed_cidrs", "adminStateUp": "admin_state_up",
 		"defaultTlsContainerRef": "default_tls_container_ref", "sniContainerRefs": "sni_container_refs", "timeoutClientData": "timeout_client_data",
 		"timeoutMemberConnect": "timeout_member_connect", "timeoutMemberData": "timeout_member_data", "timeoutTcpInspect": "timeout_tcp_inspect"}
@@ -117,13 +118,17 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 	refuse := func(f string, a ...any) map[string]any {
 		return map[string]any{"success": false, "action": action, "error": fmt.Sprintf(f, a...)}
 	}
-	step := func(kind, id string) map[string]any {
-		return ok(map[string]any{"success": true, "steps": []any{map[string]any{"kind": kind, "name": "", "applied": true, "created": true, "id": id}}})
+	// made answers a piece create as the plugin does since f577a90: its step, and the piece itself.
+	made := func(kind string, piece map[string]any) map[string]any {
+		out := ok(map[string]any{"success": true, "steps": []any{map[string]any{"kind": kind, "name": "", "applied": true, "created": true, "id": piece["id"]}}})
+		out["piece"] = piece
+		return out
 	}
 	if o["networkId"] != "114" {
 		return refuse("Network %v is not available to your tenant.", o["networkId"])
 	}
 	spec, _ := o["spec"].(map[string]any)
+	p.sent[action] = maps.Clone(spec)
 	if action == "create" {
 		req := "mtncloud-req-" + fmt.Sprint(o["requestId"])
 		for _, lb := range p.lbs {
@@ -169,6 +174,20 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 	}
 	p.pending[lbID] = true
 	pools := list(lb, "pools")
+	var tag string
+	switch action {
+	case "listener-create", "pool-create", "member-add", "monitor-create":
+		req, _ := o["requestId"].(string)
+		if !requestIDForm.MatchString(req) {
+			return refuse("requestId must be 1 to 64 of A-Za-z0-9_-, not %q.", req)
+		}
+		tag = "mtncloud-req-" + req
+		if x := taggedPiece(lb, tag); x != nil { // a retry: nothing changes
+			out := ok(map[string]any{"success": true, "steps": []any{}})
+			out["existing"], out["piece"] = true, x
+			return out
+		}
+	}
 	pool, _ := find(pools, fmt.Sprint(o["poolId"]))
 	needPool := func() map[string]any {
 		if pool == nil {
@@ -208,8 +227,9 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		l := map[string]any{"id": p.id("l"), "name": "", "description": "", "connection_limit": -1, "allowed_cidrs": []any{}, "admin_state_up": true,
 			"default_pool_id": nil, "timeout_client_data": 50000, "timeout_member_connect": 5000, "timeout_member_data": 50000, "timeout_tcp_inspect": 0}
 		apply(l, spec, listenerNames)
+		l["tags"] = []any{tag}
 		lb["listeners"] = append(list(lb, "listeners"), l)
-		return step("listener", l["id"].(string))
+		return made("listener", l)
 	case "listener-update", "listener-delete":
 		l, i := find(list(lb, "listeners"), fmt.Sprint(o["listenerId"]))
 		if l == nil {
@@ -221,14 +241,18 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		}
 		delete(spec, "protocol")
 		delete(spec, "port")
+		if v, has := spec["defaultTlsContainerRef"]; has && v == nil && l["protocol"] == "TERMINATED_HTTPS" {
+			return refuse("Listener %v terminates TLS, so it must keep a certificate. Point it at another certificate, or replace the listener.", o["listenerId"])
+		}
 		apply(l, spec, listenerNames)
 		return ok(map[string]any{"success": true, "steps": []any{}})
 	case "pool-create":
 		pl := map[string]any{"id": p.id("pool"), "name": "", "description": "", "tls_enabled": false, "admin_state_up": true, "members": []any{}, "healthmonitor": nil}
 		apply(pl, spec, poolNames)
 		setPersistence(pl, spec)
+		pl["tags"] = []any{tag}
 		lb["pools"] = append(pools, pl)
-		return step("pool", pl["id"].(string))
+		return made("pool", pl)
 	case "pool-update":
 		if e := needPool(); e != nil {
 			return e
@@ -250,7 +274,8 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		}
 		h, _ := pool["healthmonitor"].(map[string]any)
 		if action == "monitor-create" {
-			h = map[string]any{"id": p.id("hm"), "name": "", "max_retries_down": 3, "http_method": "", "url_path": "", "expected_codes": "", "admin_state_up": true}
+			h = map[string]any{"id": p.id("hm"), "name": "", "max_retries_down": 3, "http_method": "", "url_path": "", "expected_codes": "", "admin_state_up": true,
+				"tags": []any{tag}}
 			if spec["type"] == "HTTP" {
 				h["http_method"], h["url_path"], h["expected_codes"] = "GET", "/", "200"
 			}
@@ -261,8 +286,7 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		apply(h, spec, monitorNames)
 		pool["healthmonitor"] = h
 		if action == "monitor-create" {
-			// As the plugin reports it: the step names no ID (OctaviaLoadBalancerService).
-			return ok(map[string]any{"success": true, "steps": []any{map[string]any{"kind": "health monitor", "name": "", "applied": true, "created": true}}})
+			return made("health monitor", h) // a monitor's piece is the monitor (guide 9.6)
 		}
 		return ok(map[string]any{"success": true, "steps": []any{}})
 	case "monitor-delete":
@@ -278,10 +302,13 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		if e := needPool(); e != nil {
 			return e
 		}
-		m := map[string]any{"id": p.id("m"), "name": "", "subnet_id": lb["vip_subnet_id"], "weight": 1, "backup": false, "admin_state_up": true, "monitor_address": nil, "monitor_port": nil}
+		m := map[string]any{"id": p.id("m"), "name": "", "subnet_id": lb["vip_subnet_id"], "weight": 1, "backup": false, "admin_state_up": true, "monitor_address": nil, "monitor_port": nil,
+			"tags": []any{tag}}
 		apply(m, spec, memberNames)
 		pool["members"] = append(list(pool, "members"), m)
-		return ok(map[string]any{"success": true, "steps": []any{map[string]any{"kind": "members", "name": "", "applied": true, "count": len(list(pool, "members"))}}})
+		out := ok(map[string]any{"success": true, "steps": []any{map[string]any{"kind": "members", "name": "", "applied": true, "count": len(list(pool, "members"))}}})
+		out["piece"] = m
+		return out
 	case "member-update", "member-remove":
 		if e := needPool(); e != nil {
 			return e
@@ -298,6 +325,40 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		return ok(map[string]any{"success": true, "steps": []any{}})
 	}
 	return refuse("fake: unknown action %s", action)
+}
+
+var requestIDForm = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// taggedPiece is the piece a create with this request tag made, if any.
+func taggedPiece(lb map[string]any, tag string) map[string]any {
+	has := func(x map[string]any) bool {
+		for _, t := range list(x, "tags") {
+			if t == tag {
+				return true
+			}
+		}
+		return false
+	}
+	for _, l := range list(lb, "listeners") {
+		if has(l.(map[string]any)) {
+			return l.(map[string]any)
+		}
+	}
+	for _, x := range list(lb, "pools") {
+		pl := x.(map[string]any)
+		if has(pl) {
+			return pl
+		}
+		if h, _ := pl["healthmonitor"].(map[string]any); h != nil && has(h) {
+			return h
+		}
+		for _, m := range list(pl, "members") {
+			if has(m.(map[string]any)) {
+				return m.(map[string]any)
+			}
+		}
+	}
+	return nil
 }
 
 func setPersistence(pool, spec map[string]any) {
@@ -537,11 +598,12 @@ resource "mtncloud_load_balancer" "web" {
 	})
 }
 
-// The cloud can't clear a listener's certificate or a member's health-check address once set, so
-// taking one out of the configuration replaces the piece instead of silently keeping it.
-func TestLoadBalancerResources_UnclearableReplace(t *testing.T) {
+// Taking a listener's description and SNI certificates, or a member's health-check address and
+// port, out of the configuration clears them in place (guide 9.6): nothing is replaced.
+func TestLoadBalancerResources_ClearInPlace(t *testing.T) {
 	f := newFakeAPI(t)
-	f.lb = newLBPlugin()
+	plugin := newLBPlugin()
+	f.lb = plugin
 	cfg := func(tls, mon string) string {
 		return f.providerConfig() + `
 resource "mtncloud_load_balancer" "web" {
@@ -571,19 +633,58 @@ resource "mtncloud_load_balancer_listener" "https" {
 }
 `
 	}
-	set := cfg(`tls_certificate_ref = "ref-1"`, `monitor_address = "10.0.0.6"`)
+	tls := `tls_certificate_ref = "ref-1"`
+	set := cfg(tls+"\n  description = \"secure\"\n  sni_certificate_refs = [\"ref-2\"]", "monitor_address = \"10.0.0.6\"\n  monitor_port = 9000")
+	listener, member := "mtncloud_load_balancer_listener.https", "mtncloud_load_balancer_member.a"
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
-			{Config: set},
+			{Config: set, ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue(listener, tfjsonpath.New("description"), knownvalue.StringExact("secure")),
+			}},
+			{Config: set, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 			{
-				Config: cfg("", ""),
+				Config: cfg(tls, ""),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_load_balancer_listener.https", plancheck.ResourceActionDestroyBeforeCreate),
-					plancheck.ExpectResourceAction("mtncloud_load_balancer_member.a", plancheck.ResourceActionDestroyBeforeCreate),
+					plancheck.ExpectResourceAction(listener, plancheck.ResourceActionUpdate),
+					plancheck.ExpectResourceAction(member, plancheck.ResourceActionUpdate),
 				}},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(listener, tfjsonpath.New("description"), knownvalue.StringExact("")),
+					statecheck.ExpectKnownValue(listener, tfjsonpath.New("sni_certificate_refs"), knownvalue.Null()),
+					statecheck.ExpectKnownValue(member, tfjsonpath.New("monitor_address"), knownvalue.Null()),
+					statecheck.ExpectKnownValue(member, tfjsonpath.New("monitor_port"), knownvalue.Null()),
+				},
+				Check: func(*terraform.State) error {
+					plugin.mu.Lock()
+					defer plugin.mu.Unlock()
+					for _, lb := range plugin.lbs {
+						for _, l := range list(lb, "listeners") {
+							if refs := list(l.(map[string]any), "sni_container_refs"); len(refs) != 0 {
+								return fmt.Errorf("SNI refs %v left in the cloud", refs)
+							}
+						}
+						m := list(list(lb, "pools")[0].(map[string]any), "members")[0].(map[string]any)
+						if m["monitor_address"] != nil || m["monitor_port"] != nil {
+							return fmt.Errorf("monitor override %v:%v left in the cloud", m["monitor_address"], m["monitor_port"])
+						}
+						// "" on the wire, not a missing key: the create default is "" too.
+						if d, has := plugin.sent["listener-update"]["description"]; !has || d != "" {
+							return fmt.Errorf("listener-update sent description %v (present %v), want \"\"", d, has)
+						}
+						if plugin.runs["listener-create"] != 1 || plugin.runs["member-add"] != 1 {
+							return fmt.Errorf("%d listener creates, %d member adds: something was replaced", plugin.runs["listener-create"], plugin.runs["member-add"])
+						}
+					}
+					return nil
+				},
 			},
-			{Config: cfg("", ""), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				// A TERMINATED_HTTPS listener must keep a certificate: refused at plan time.
+				Config: cfg("", ""), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)Missing certificate`),
+			},
+			// Last, so the closing destroy runs on a valid configuration.
+			{Config: cfg(tls, ""), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 		},
 	})
 }

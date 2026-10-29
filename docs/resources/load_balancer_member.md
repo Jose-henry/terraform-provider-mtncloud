@@ -52,8 +52,8 @@ resource "mtncloud_load_balancer_member" "web" {
 
 - `backup` (Boolean) Only send traffic here when every other member is down. Defaults to `false`.
 - `enabled` (Boolean) Whether the member takes traffic (administrative state). Defaults to `true`.
-- `monitor_address` (String) Health-check this address instead of `address`. Taking it out of the configuration replaces the resource: the cloud can't clear it.
-- `monitor_port` (Number) Health-check this port instead of `port`. Taking it out of the configuration replaces the resource: the cloud can't clear it.
+- `monitor_address` (String) Health-check this address instead of `address`. Taking it out of the configuration goes back to `address`.
+- `monitor_port` (Number) Health-check this port instead of `port`. Taking it out of the configuration goes back to `port`.
 - `name` (String) The member's name.
 - `subnet_id` (String) The cloud ID of the subnet the address is on, if not the load balancer's own. It must be your tenant's. Changing it replaces the member.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))

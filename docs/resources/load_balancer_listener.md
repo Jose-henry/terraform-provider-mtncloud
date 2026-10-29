@@ -53,14 +53,15 @@ resource "mtncloud_load_balancer_listener" "http" {
 - `client_data_timeout` (Number) How long a client may be idle, in milliseconds. The cloud's default applies when it isn't set on create. Taken out of the configuration, it keeps its last value.
 - `connection_limit` (Number) The most connections at once; `-1` (the default) is no limit. Taken out of the configuration, it keeps its last value.
 - `default_pool_id` (String) The pool that gets this listener's traffic, for example `mtncloud_load_balancer_pool.web.id`. Leave it unset for none.
+- `description` (String) A description.
 - `enabled` (Boolean) Whether the listener takes traffic (administrative state). Defaults to `true`.
 - `member_connect_timeout` (Number) How long to wait for a member to accept a connection, in milliseconds. The cloud's default applies when it isn't set on create. Taken out of the configuration, it keeps its last value.
 - `member_data_timeout` (Number) How long a member may be idle, in milliseconds. The cloud's default applies when it isn't set on create. Taken out of the configuration, it keeps its last value.
 - `name` (String) The listener's name.
-- `sni_certificate_refs` (Set of String) More certificate references, picked by the host name the client asks for (SNI). Taking it out of the configuration replaces the resource: the cloud can't clear it.
+- `sni_certificate_refs` (Set of String) More certificate references, picked by the host name the client asks for (SNI). Taking it out of the configuration removes them.
 - `tcp_inspect_timeout` (Number) How long to wait for more data to decide where a TCP connection goes, in milliseconds. The cloud's default applies when it isn't set on create. Taken out of the configuration, it keeps its last value.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `tls_certificate_ref` (String) For `TERMINATED_HTTPS`: the reference of a certificate uploaded in the console (the listener form shows it). Certificates and their private keys are never sent through Terraform. Taking it out of the configuration replaces the resource: the cloud can't clear it.
+- `tls_certificate_ref` (String) For `TERMINATED_HTTPS`: the reference of a certificate uploaded in the console (the listener form shows it). Certificates and their private keys are never sent through Terraform. Required for `TERMINATED_HTTPS`, which must always keep a certificate: point it at another one to change it. Taking it out of the configuration replaces the resource: the cloud can't clear it.
 
 ### Read-Only
 

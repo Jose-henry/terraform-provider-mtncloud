@@ -100,35 +100,37 @@ type LBPersistence struct {
 
 // LBMember is one backend address and port in a pool.
 type LBMember struct {
-	ID                 string `json:"id"`
-	Name               string `json:"name"`
-	ProvisioningStatus string `json:"provisioning_status"`
-	OperatingStatus    string `json:"operating_status"`
-	AdminStateUp       bool   `json:"admin_state_up"`
-	Address            string `json:"address"`
-	Port               int64  `json:"protocol_port"`
-	Weight             int64  `json:"weight"`
-	Backup             bool   `json:"backup"`
-	SubnetID           string `json:"subnet_id"`
-	MonitorAddress     string `json:"monitor_address"`
-	MonitorPort        int64  `json:"monitor_port"`
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	ProvisioningStatus string   `json:"provisioning_status"`
+	OperatingStatus    string   `json:"operating_status"`
+	AdminStateUp       bool     `json:"admin_state_up"`
+	Address            string   `json:"address"`
+	Port               int64    `json:"protocol_port"`
+	Weight             int64    `json:"weight"`
+	Backup             bool     `json:"backup"`
+	SubnetID           string   `json:"subnet_id"`
+	MonitorAddress     string   `json:"monitor_address"`
+	MonitorPort        int64    `json:"monitor_port"`
+	Tags               []string `json:"tags"`
 }
 
 // LBHealthMonitor checks a pool's members.
 type LBHealthMonitor struct {
-	ID                 string `json:"id"`
-	Name               string `json:"name"`
-	Type               string `json:"type"`
-	Delay              int64  `json:"delay"`
-	Timeout            int64  `json:"timeout"`
-	MaxRetries         int64  `json:"max_retries"`
-	MaxRetriesDown     int64  `json:"max_retries_down"`
-	HTTPMethod         string `json:"http_method"`
-	URLPath            string `json:"url_path"`
-	ExpectedCodes      string `json:"expected_codes"`
-	AdminStateUp       bool   `json:"admin_state_up"`
-	ProvisioningStatus string `json:"provisioning_status"`
-	OperatingStatus    string `json:"operating_status"`
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	Type               string   `json:"type"`
+	Delay              int64    `json:"delay"`
+	Timeout            int64    `json:"timeout"`
+	MaxRetries         int64    `json:"max_retries"`
+	MaxRetriesDown     int64    `json:"max_retries_down"`
+	HTTPMethod         string   `json:"http_method"`
+	URLPath            string   `json:"url_path"`
+	ExpectedCodes      string   `json:"expected_codes"`
+	AdminStateUp       bool     `json:"admin_state_up"`
+	ProvisioningStatus string   `json:"provisioning_status"`
+	OperatingStatus    string   `json:"operating_status"`
+	Tags               []string `json:"tags"`
 }
 
 // LBFloatingIPOptions lists the pools a project may take a public address from, and the addresses

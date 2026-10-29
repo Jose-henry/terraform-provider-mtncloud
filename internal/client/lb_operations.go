@@ -127,10 +127,10 @@ func lbRead(action string) bool {
 // the plugin said so itself. Writes say so at the top level; reads inside result (lookupFailed,
 // retryable), as the guide's error table lists. A run that ran out of time, or ended with no
 // output, may still have acted, so it is retried only when repeating it is safe: a read, or a
-// load balancer create, whose requestId makes the plugin answer with the one already made.
+// create, whose requestId makes the plugin answer with the one already made (existing: true).
 func lbTransient(action, status string, env *lbEnvelope) bool {
 	if env == nil {
-		return (status == "error" || status == lbTimedOut) && (lbRead(action) || action == "create")
+		return (status == "error" || status == lbTimedOut) && (lbRead(action) || lbCreate(action))
 	}
 	if env.Success {
 		return false
@@ -144,6 +144,16 @@ func lbTransient(action, status string, env *lbEnvelope) bool {
 	}
 	_ = json.Unmarshal(env.Result, &inner)
 	return env.Retryable || inner.Retryable || inner.LookupFailed
+}
+
+// lbCreate reports an action that carries a requestId: the load balancer create and the piece
+// creates (guide 9.6).
+func lbCreate(action string) bool {
+	switch action {
+	case "create", "listener-create", "pool-create", "member-add", "monitor-create", "l7policy-create":
+		return true
+	}
+	return false
 }
 
 // lbTimedOut is the status runLBOnce reports when one attempt ran out of time (LBAttempt for a

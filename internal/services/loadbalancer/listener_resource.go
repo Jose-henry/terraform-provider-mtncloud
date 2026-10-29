@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -18,7 +19,10 @@ import (
 	"github.com/mtn/terraform-provider-mtncloud/internal/validators"
 )
 
-var _ resource.ResourceWithImportState = (*listenerResource)(nil)
+var (
+	_ resource.ResourceWithImportState    = (*listenerResource)(nil)
+	_ resource.ResourceWithValidateConfig = (*listenerResource)(nil)
+)
 
 func newListenerResource() resource.Resource { return &listenerResource{} }
 
@@ -29,6 +33,7 @@ type listenerRes struct {
 	NetworkID            types.Int64    `tfsdk:"network_id"`
 	LoadBalancerID       types.String   `tfsdk:"load_balancer_id"`
 	Name                 types.String   `tfsdk:"name"`
+	Description          types.String   `tfsdk:"description"`
 	Protocol             types.String   `tfsdk:"protocol"`
 	Port                 types.Int64    `tfsdk:"port"`
 	DefaultPoolID        types.String   `tfsdk:"default_pool_id"`
@@ -66,6 +71,7 @@ func (r *listenerResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			"network_id":       networkAttr(),
 			"load_balancer_id": lbIDAttr(),
 			"name":             nameAttr(listenerKind),
+			"description":      descriptionAttr(),
 			"protocol": schema.StringAttribute{Required: true, PlanModifiers: replaceStr,
 				Validators:  []validator.String{stringvalidator.OneOf(listenerProtocols...)},
 				Description: "`HTTP`, `HTTPS` (passed through, still encrypted), `TERMINATED_HTTPS` (decrypted here with `tls_certificate_ref`), `TCP`, `UDP` or `SCTP`. Changing it replaces the listener."},
@@ -82,11 +88,13 @@ func (r *listenerResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Description: "Only these source ranges may connect, for example `[\"203.0.113.0/24\"]`. Unset: anyone."},
 			"enabled": enabledAttr(listenerKind),
 			"tls_certificate_ref": schema.StringAttribute{Optional: true, PlanModifiers: replaceIfRemovedStr(),
+				Validators: []validator.String{stringvalidator.LengthAtLeast(1)},
 				Description: "For `TERMINATED_HTTPS`: the reference of a certificate uploaded in the console (the listener form shows it). " +
-					"Certificates and their private keys are never sent through Terraform. " + removedReplaces},
-			"sni_certificate_refs": schema.SetAttribute{Optional: true, ElementType: types.StringType, PlanModifiers: replaceIfRemovedSet(),
+					"Certificates and their private keys are never sent through Terraform. Required for `TERMINATED_HTTPS`, which " +
+					"must always keep a certificate: point it at another one to change it. " + removedReplaces},
+			"sni_certificate_refs": schema.SetAttribute{Optional: true, ElementType: types.StringType,
 				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
-				Description: "More certificate references, picked by the host name the client asks for (SNI). " + removedReplaces},
+				Description: "More certificate references, picked by the host name the client asks for (SNI). Taking it out of the configuration removes them."},
 			"client_data_timeout":    msTimeout("How long a client may be idle"),
 			"member_connect_timeout": msTimeout("How long to wait for a member to accept a connection"),
 			"member_data_timeout":    msTimeout("How long a member may be idle"),
@@ -98,9 +106,23 @@ func (r *listenerResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 	}
 }
 
+// ValidateConfig refuses a TERMINATED_HTTPS listener without a certificate: the cloud requires one.
+func (r *listenerResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var m listenerRes
+	resp.Diagnostics.Append(req.Config.Get(ctx, &m)...)
+	if m.Protocol.IsUnknown() || m.TLSCertificateRef.IsUnknown() {
+		return
+	}
+	if m.Protocol.ValueString() == "TERMINATED_HTTPS" && m.TLSCertificateRef.ValueString() == "" {
+		resp.Diagnostics.AddAttributeError(path.Root("tls_certificate_ref"), "Missing certificate",
+			"A TERMINATED_HTTPS listener decrypts traffic, so it needs tls_certificate_ref: a certificate uploaded in the console. "+
+				"To change the certificate, point it at another one.")
+	}
+}
+
 func (r *listenerResource) spec(ctx context.Context, m, was *listenerRes) client.LBListenerSpec {
 	s := client.LBListenerSpec{
-		Name:          strOf(m.Name),
+		Name: strOf(m.Name), Description: strOf(m.Description),
 		DefaultPoolID: clearOf(m.DefaultPoolID), ConnectionLimit: intOf(m.ConnectionLimit),
 		AllowedCIDRs: strsOf(ctx, m.AllowedCIDRs), Enabled: boolOf(m.Enabled),
 		TLSContainerRef: strOf(m.TLSCertificateRef), SNIContainerRefs: strsOf(ctx, m.SNICertificateRefs),
@@ -118,6 +140,9 @@ func (r *listenerResource) spec(ctx context.Context, m, was *listenerRes) client
 	if m.AllowedCIDRs.IsNull() && !was.AllowedCIDRs.IsNull() {
 		s.ClearAllowedCIDRs()
 	}
+	if m.SNICertificateRefs.IsNull() && !was.SNICertificateRefs.IsNull() {
+		s.ClearSNI()
+	}
 	return s
 }
 
@@ -127,7 +152,7 @@ func (r *listenerResource) fill(m *listenerRes, lb *client.LoadBalancer) (gone b
 		if l.ID != m.ID.ValueString() {
 			continue
 		}
-		m.Name = types.StringValue(l.Name)
+		m.Name, m.Description = types.StringValue(l.Name), types.StringValue(l.Description)
 		m.Protocol, m.Port = types.StringValue(l.Protocol), types.Int64Value(l.Port)
 		m.DefaultPoolID = optStr(l.DefaultPoolID)
 		m.ConnectionLimit = types.Int64Value(l.ConnectionLimit)

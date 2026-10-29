@@ -286,16 +286,20 @@ source that `depends_on` the resource reads the load balancer as it was before t
 - Re-test object lock and retention live once MTN enables object lock on the cluster.
 
 ## B-023 Load balancer follow-ups (from the 2026-10-29 review)
-- Piece creates have no request ID, so a write that timed out (8 min) or ended with no output is not
-  retried, and the next apply can't tell the piece was made. A monitor, member or listener create
-  then fails on "already has ..."; a pool is made twice. Ask the plugin for a `requestId` on piece
-  creates (as on `create`), or look the piece up before creating (rule 11).
+- Done 2026-10-29 (plugin f577a90, guide 9.6): piece creates send a `requestId`; the plugin tags the
+  piece `mtncloud-req-<id>` and a retry answers `existing: true` with it. Piece creates that time out
+  or end with no output are retried with the same ID, and the lookups match the tag first.
 - Done 2026-10-29: the plugin's top-level `pending` and `piece` are carried through (`runLBEnv`).
   After a pending answer, ACTIVE counts only once a PENDING_* read was seen, or after
   `LBPendingGrace` (2 min); a piece's ID comes from `piece` first.
-- Plugin side: a listener has no `description`, and `defaultTlsContainerRef: null`,
-  `sniContainerRefs: []` and a member's `monitorAddress: null` are read as "leave it". The provider
-  replaces the piece when one of those is removed; a plugin fix would let it update in place.
+- Done 2026-10-29 (plugin f577a90): a listener's description, SNI refs (`[]`) and a member's
+  `monitorAddress`/`monitorPort` (null) clear in place. A TERMINATED_HTTPS listener must keep its
+  certificate (the plugin refuses null), so the provider refuses one without it at plan time.
+- Still to build: `mtncloud_load_balancer_l7_policy` with its rules (`l7policy-create` with a
+  `requestId`; the plugin creates the policy, then each rule, and rolls the new policy back when a
+  rule is refused: a step with `rolledBack: true`, `success: false`; a retry with the same ID builds
+  it whole), its data source(s) (the read model has no L7 policies yet), `mtncloud_load_balancer_floating_ip`,
+  members by instance, and a single-member data source.
 
 ## B-024 Archive follow-ups (from the 2026-10-29 review)
 - Client contract test for `internal/client/archives.go` with scrubbed fixtures in `testdata/archives/`
