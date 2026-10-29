@@ -307,6 +307,27 @@ func TestCreateLBPool_NoAnswerStillFindsThePool(t *testing.T) {
 	}
 }
 
+// No answer for an L7 policy create: the policy is found under its listener by the request tag, so a
+// second create can't stack a copy at the same position.
+func TestCreateLBL7Policy_NoAnswerStillFindsThePolicy(t *testing.T) {
+	refused := lbRefusal("l7policy-create", "Another save of this load balancer is in progress. Try again in a moment.")
+	f := newLBFake(t, "", refused)
+	f.route("GET", "/api/job-executions/"+itoa(31003), func(w http.ResponseWriter, _ *http.Request) {
+		f.mu.Lock()
+		req, _ := f.opts[0]["requestId"].(string)
+		f.mu.Unlock()
+		pol := map[string]any{"id": "l7-9", "tags": []any{"mtncloud-req-" + req}}
+		other := map[string]any{"id": "l7-1", "tags": []any{"mtncloud-req-someone-else"}}
+		l := map[string]any{"id": "lis-1", "l7policies_expanded": []any{other, pol}}
+		_, _ = w.Write(lbJob(t, lbAnswer("read", map[string]any{"success": true, "canManage": true,
+			"loadbalancer": map[string]any{"id": "lb-1", "provisioning_status": "ACTIVE", "listeners": []any{l}}})))
+	})
+	id, err := f.client(t, fastPoll).CreateLBL7Policy(t.Context(), 114, "lb-1", "lis-1", LBL7PolicySpec{Action: "REJECT", Position: 1})
+	if err == nil || id != "l7-9" {
+		t.Fatalf("id %q, err %v: want l7-9 with the error", id, err)
+	}
+}
+
 // Taken out of the configuration: SNI references are sent as [], member health-check overrides as null.
 func TestLBSpecBodies_Clearing(t *testing.T) {
 	l := LBListenerSpec{}

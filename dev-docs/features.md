@@ -6,11 +6,11 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 106 | 108 |
-| Usable with a customer (sub-tenant) login | 106 | 103 |
+| Available today | 109 | 111 |
+| Usable with a customer (sub-tenant) login | 109 | 106 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 4 | 0 |
+| Coming next | 2 | 0 |
 
 ## Who can use what
 
@@ -212,7 +212,10 @@ Load balancers on an MTN Network, and their listeners, pools, members and health
 | Type | Customer login |
 |---|---|
 | [`mtncloud_load_balancer`](../docs/resources/load_balancer.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_floating_ip`](../docs/resources/load_balancer_floating_ip.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_health_monitor`](../docs/resources/load_balancer_health_monitor.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_instance_member`](../docs/resources/load_balancer_instance_member.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_l7_policy`](../docs/resources/load_balancer_l7_policy.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_listener`](../docs/resources/load_balancer_listener.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_member`](../docs/resources/load_balancer_member.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_pool`](../docs/resources/load_balancer_pool.md) | Yes (read verified) |
@@ -336,8 +339,11 @@ Old names kept for now; each page says what replaces it and how to move without 
 | [`mtncloud_load_balancer_floating_ip_pools`](../docs/data-sources/load_balancer_floating_ip_pools.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_health_monitor`](../docs/data-sources/load_balancer_health_monitor.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_health_monitors`](../docs/data-sources/load_balancer_health_monitors.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_l7_policies`](../docs/data-sources/load_balancer_l7_policies.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_l7_policy`](../docs/data-sources/load_balancer_l7_policy.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_listener`](../docs/data-sources/load_balancer_listener.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_listeners`](../docs/data-sources/load_balancer_listeners.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_member`](../docs/data-sources/load_balancer_member.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_members`](../docs/data-sources/load_balancer_members.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_pool`](../docs/data-sources/load_balancer_pool.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_pools`](../docs/data-sources/load_balancer_pools.md) | Yes (read verified) |
@@ -466,8 +472,6 @@ Designed, **not available yet**, and all meant for customers.
 |---|---|---|
 | `mtncloud_app` | Planned | Apps from blueprints: several instances or containers deployed together. |
 | `mtncloud_datastore` | Planned | Datastores: the storage that volumes are created on. |
-| `mtncloud_load_balancer_l7_policy` | Next | Load balancer rules that route or redirect HTTP requests by host, path, header or cookie. |
-| `mtncloud_load_balancer_floating_ip` | Next | A public address on a load balancer, from a floating IP pool by name. |
 
 ### Data sources
 

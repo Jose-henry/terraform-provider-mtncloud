@@ -71,7 +71,7 @@ resource "mtncloud_mongodb" "this" {
 - `replica_set` (Boolean) Start a replica set.
 - `replica_set_name` (String) Replica set name. Defaults to `rs0`.
 - `require_ssl` (Boolean) Require TLS for connections.
-- `security_groups` (Set of String) Security groups in the project, by name.
+- `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `user_role` (String) The user's role, for example `Read & Write`. Defaults to `Read & Write`.
 - `version` (String) MongoDB version, as the form lists it. Defaults to `8.2`.

@@ -42,7 +42,7 @@ resource "mtncloud_fortinet_firewall" "this" {
 - `labels` (Set of String) Labels on the instance.
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
 - `root_volume_size` (Number) Root disk size in GB.
-- `security_groups` (Set of String) Security groups in the project, by name.
+- `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only

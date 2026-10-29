@@ -64,7 +64,7 @@ resource "mtncloud_wordpress" "this" {
 - `php_memory_limit` (String) PHP memory limit, for example `256M`. Defaults to `512M (Recommended)`.
 - `php_version` (String) PHP version. Defaults to `8.3 (Recommended)`.
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
-- `security_groups` (Set of String) Security groups in the project, by name.
+- `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `user_owns_database` (Boolean) Make the user the database's owner. Defaults to true.
 - `web_server_port` (Number) Port the web server listens on.

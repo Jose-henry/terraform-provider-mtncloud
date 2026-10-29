@@ -94,6 +94,9 @@ type Client struct {
 	// locks holds one lock per key (keyLock): settings writes to one MOS bucket, and changes to one
 	// load balancer, must not overlap.
 	locks sync.Map // key -> chan struct{}
+
+	// l7Gates holds the L7 policy creates under way, per listener, so they run in position order (l7Turn).
+	l7Gates sync.Map // listener ID -> *l7Gate
 }
 
 // Defaults returns the provider-wide group, cloud and project.

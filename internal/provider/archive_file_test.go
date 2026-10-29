@@ -124,7 +124,8 @@ func (m *mosFake) serveArchiveFiles(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"archiveFileLinks": rows, "archiveFileLinkCount": len(rows)})
 		case len(parts) == 2 && r.Method == http.MethodPost:
 			m.next++
-			now := time.Date(2026, 10, 29, 12, 5, 20, 0, time.UTC)
+			// The real clock: a fixed date makes a 1-hour link expire once that hour has passed.
+			now := time.Now().UTC().Truncate(time.Second)
 			l := &fakeArchiveLink{id: m.next, secret: fmt.Sprintf("5ec7e7%010d", m.next), created: now.Format(time.RFC3339)}
 			if s := r.URL.Query().Get("expireSeconds"); s != "" {
 				n, _ := strconv.Atoi(s)
@@ -274,7 +275,7 @@ data "mtncloud_archive_files" "docs" {
 					statecheck.ExpectKnownValue(never, tfjsonpath.New("expires_at"), str("")),
 					statecheck.ExpectKnownValue(never, tfjsonpath.New("download_url"),
 						knownvalue.StringRegexp(regexp.MustCompile(`[^i]/public-archives/link\?s=5ec7e7[0-9]+$`))),
-					statecheck.ExpectKnownValue(hour, tfjsonpath.New("expires_at"), str("2026-10-29T13:05:20Z")),
+					statecheck.ExpectKnownValue(hour, tfjsonpath.New("expires_at"), knownvalue.StringRegexp(regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$`))),
 					statecheck.ExpectKnownValue("data.mtncloud_archive_files.docs", tfjsonpath.New("files"), knownvalue.ListExact([]knownvalue.Check{
 						knownvalue.ObjectPartial(map[string]knownvalue.Check{"path": str("docs/deep"), "is_directory": knownvalue.Bool(true)}),
 						knownvalue.ObjectPartial(map[string]knownvalue.Check{"path": str("docs/note.txt"), "size_bytes": knownvalue.Int64Exact(9)}),

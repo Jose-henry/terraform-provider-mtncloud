@@ -37,7 +37,7 @@ resource "mtncloud_self_managed_kubernetes" "k8s" {
 - `master_networks` (List of String) Networks of the master nodes, by name; the first is primary.
 - `master_plan` (String) Plan (size) of the master nodes, by name.
 - `master_root_volume_size` (Number) Root disk size in GB.
-- `master_security_groups` (Set of String) Security groups of the master nodes, by name.
+- `master_security_groups` (Set of String) Security groups of the master nodes, by name, in addition to the project's default group, which is always applied.
 - `name` (String) Cluster name. Its VMs are named after it.
 
 ### Optional
@@ -61,7 +61,7 @@ resource "mtncloud_self_managed_kubernetes" "k8s" {
 - `worker_networks` (List of String) Networks of the worker nodes, by name; the first is primary.
 - `worker_plan` (String) Plan (size) of the worker nodes, by name.
 - `worker_root_volume_size` (Number) Root disk size in GB.
-- `worker_security_groups` (Set of String) Security groups of the worker nodes, by name.
+- `worker_security_groups` (Set of String) Security groups of the worker nodes, by name, in addition to the project's default group, which is always applied.
 
 ### Read-Only
 

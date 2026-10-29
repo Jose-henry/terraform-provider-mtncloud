@@ -6,6 +6,8 @@ import (
 	"maps"
 	"net/http"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,13 +24,14 @@ import (
 // plugin did on 2026-10-29: create answers PENDING_CREATE, piece writes answer steps[], delete
 // answers {deleting: true}, and the load balancer reads PENDING_UPDATE once after each write.
 type lbPlugin struct {
-	mu      sync.Mutex
-	n       int
-	lbs     map[string]map[string]any
-	pending map[string]bool
-	jobs    map[int64][]byte
-	runs    map[string]int            // action -> runs
-	sent    map[string]map[string]any // action -> the last spec it was sent
+	mu       sync.Mutex
+	n        int
+	lbs      map[string]map[string]any
+	pending  map[string]bool
+	jobs     map[int64][]byte
+	runs     map[string]int            // action -> runs
+	sent     map[string]map[string]any // action -> the last spec it was sent
+	released []string                  // fip-detach's release, per detach
 }
 
 func newLBPlugin() *lbPlugin {
@@ -153,6 +156,24 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		p.pending[lb["id"].(string)] = true
 		return ok(map[string]any{"success": true, "loadbalancer": answer})
 	}
+	switch action {
+	case "list":
+		rows := []any{}
+		for _, x := range p.lbs {
+			fip, _ := x["fip"].(map[string]any)
+			addr := any(nil)
+			if fip != nil {
+				addr = fip["floating_ip_address"]
+			}
+			rows = append(rows, map[string]any{"id": x["id"], "name": x["name"], "provisioning_status": "ACTIVE", "operating_status": "ONLINE",
+				"vip_floating": addr, "vip_floating_known": true})
+		}
+		return ok(map[string]any{"success": true, "loadbalancers": rows, "total": len(rows), "canManage": true})
+	case "fip-options":
+		return ok(map[string]any{"success": true,
+			"floatingIpPools":      []any{map[string]any{"name": "public-network-02", "externalId": "ext-02"}},
+			"availableFloatingIps": []any{map[string]any{"id": "fip-held", "address": "196.0.0.9"}}})
+	}
 	lbID, _ := o["lbId"].(string)
 	lb := p.lbs[lbID]
 	if lb == nil {
@@ -176,7 +197,7 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 	pools := list(lb, "pools")
 	var tag string
 	switch action {
-	case "listener-create", "pool-create", "member-add", "monitor-create":
+	case "listener-create", "pool-create", "member-add", "monitor-create", "l7policy-create":
 		req, _ := o["requestId"].(string)
 		if !requestIDForm.MatchString(req) {
 			return refuse("requestId must be 1 to 64 of A-Za-z0-9_-, not %q.", req)
@@ -302,6 +323,22 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		if e := needPool(); e != nil {
 			return e
 		}
+		if inst, has := spec["instanceId"]; has { // an instance: its two nodes on this network, as one group
+			if fmt.Sprint(inst) != "301" {
+				return refuse("Instance %v is not one this load balancer can use.", inst)
+			}
+			group := "morpheus:group:301" // mtncloud:allow-upstream-name (the plugin's tag on the wire)
+			ms := []any{}
+			for _, a := range []string{"10.0.0.31", "10.0.0.32"} {
+				m := map[string]any{"id": p.id("m"), "name": "", "address": a, "protocol_port": spec["port"], "subnet_id": lb["vip_subnet_id"],
+					"weight": spec["weight"], "backup": spec["backup"], "admin_state_up": true, "tags": []any{tag, group}}
+				pool["members"] = append(list(pool, "members"), m)
+				ms = append(ms, m)
+			}
+			out := ok(map[string]any{"success": true, "steps": []any{map[string]any{"kind": "members", "applied": true, "count": len(ms)}}})
+			out["piece"] = map[string]any{"members": ms}
+			return out
+		}
 		m := map[string]any{"id": p.id("m"), "name": "", "subnet_id": lb["vip_subnet_id"], "weight": 1, "backup": false, "admin_state_up": true, "monitor_address": nil, "monitor_port": nil,
 			"tags": []any{tag}}
 		apply(m, spec, memberNames)
@@ -313,6 +350,21 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		if e := needPool(); e != nil {
 			return e
 		}
+		if inst, has := o["instanceId"]; has && action == "member-remove" {
+			group, kept, n := "morpheus:group:"+fmt.Sprint(inst), []any{}, 0 // mtncloud:allow-upstream-name (the plugin's tag on the wire)
+			for _, x := range list(pool, "members") {
+				if slices.Contains(list(x.(map[string]any), "tags"), any(group)) {
+					n++
+					continue
+				}
+				kept = append(kept, x)
+			}
+			if n == 0 {
+				return refuse("Pool %v has no members of instance %v.", o["poolId"], inst)
+			}
+			pool["members"] = kept
+			return ok(map[string]any{"success": true, "steps": []any{}})
+		}
 		m, i := find(list(pool, "members"), fmt.Sprint(o["memberId"]))
 		if m == nil {
 			return refuse("Member %v is not in pool %v.", o["memberId"], o["poolId"])
@@ -323,8 +375,115 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 			apply(m, spec, memberNames)
 		}
 		return ok(map[string]any{"success": true, "steps": []any{}})
+	case "l7policy-create", "l7policy-update", "l7policy-delete":
+		l, _ := find(list(lb, "listeners"), fmt.Sprint(o["listenerId"]))
+		if l == nil {
+			return refuse("Listener %v is not on this load balancer.", o["listenerId"])
+		}
+		if l["protocol"] != "HTTP" && l["protocol"] != "TERMINATED_HTTPS" {
+			return refuse("Listener %v is %v; L7 policies need an HTTP or TERMINATED_HTTPS listener.", o["listenerId"], l["protocol"])
+		}
+		pols := list(l, "l7policies_expanded")
+		// As the plugin: a position another policy holds now is refused, on create and update.
+		taken := func(self any) bool {
+			for _, x := range pols {
+				if q := x.(map[string]any); q["id"] != self && fmt.Sprint(q["position"]) == fmt.Sprint(spec["position"]) {
+					return true
+				}
+			}
+			return false
+		}
+		if action != "l7policy-delete" && taken(o["l7policyId"]) {
+			return refuse("L7 policy '%v / %v': position %v is used by another policy on this listener", l["name"], spec["name"], spec["position"])
+		}
+		if action == "l7policy-create" {
+			pol := map[string]any{"id": p.id("l7"), "tags": []any{tag}, "provisioning_status": "ACTIVE", "operating_status": "ONLINE"}
+			if msg := setPolicy(pol, spec); msg != "" {
+				return map[string]any{"success": false, "action": action, "error": msg,
+					"result": map[string]any{"steps": []any{map[string]any{"kind": "L7 policy", "rolledBack": true}}}}
+			}
+			l["l7policies_expanded"] = placePolicy(pols, pol)
+			return made("L7 policy", pol)
+		}
+		pol, i := find(pols, fmt.Sprint(o["l7policyId"]))
+		if pol == nil {
+			return refuse("L7 policy %v is not on listener %v.", o["l7policyId"], o["listenerId"])
+		}
+		if action == "l7policy-delete" {
+			l["l7policies_expanded"] = placePolicy(append(pols[:i], pols[i+1:]...), nil)
+			return ok(map[string]any{"success": true, "steps": []any{}})
+		}
+		if msg := setPolicy(pol, spec); msg != "" {
+			return refuse("%s", msg)
+		}
+		l["l7policies_expanded"] = placePolicy(append(pols[:i:i], pols[i+1:]...), pol)
+		out := ok(map[string]any{"success": true, "steps": []any{}})
+		out["piece"] = pol
+		return out
+	case "fip-attach":
+		if fip, _ := lb["fip"].(map[string]any); fip != nil {
+			if o["floatingIpId"] == nil || o["floatingIpId"] == fip["id"] {
+				return ok(map[string]any{"success": true, "existing": true, "floatingip": fip})
+			}
+			return refuse("Load balancer %s already has floating IP %v. Detach it first.", lbID, fip["floating_ip_address"])
+		}
+		fip := map[string]any{"id": "fip-held", "floating_ip_address": "196.0.0.9", "floating_network_id": "ext-02"}
+		if o["floatingIpId"] == nil {
+			if o["floatingIpPoolId"] != "ext-02" {
+				return refuse("External network %v is not reachable from subnet sub-82.", o["floatingIpPoolId"])
+			}
+			fip = map[string]any{"id": p.id("fip"), "floating_ip_address": "196.0.0.10", "floating_network_id": "ext-02"}
+		}
+		lb["fip"] = fip
+		return ok(map[string]any{"success": true, "floatingip": fip})
+	case "fip-detach":
+		if o["release"] != true && o["release"] != false {
+			return refuse("release must be true or false.")
+		}
+		p.released = append(p.released, fmt.Sprint(o["release"]))
+		delete(lb, "fip")
+		return ok(map[string]any{"success": true})
 	}
 	return refuse("fake: unknown action %s", action)
+}
+
+// placePolicy puts pol (nil for none) at its asked position, or last when that is past the end,
+// and numbers the listener's policies 1, 2, 3 again, as the cloud does.
+func placePolicy(pols []any, pol map[string]any) []any {
+	out := slices.Clone(pols)
+	if pol != nil {
+		at, _ := strconv.Atoi(fmt.Sprint(pol["position"]))
+		at = min(max(at-1, 0), len(out))
+		out = slices.Insert(out, at, any(pol))
+	}
+	for i, x := range out {
+		x.(map[string]any)["position"] = i + 1
+	}
+	return out
+}
+
+// setPolicy applies an L7 policy spec as the plugin would, or says why it refuses it: the whole
+// policy is sent, and rules replace every rule.
+func setPolicy(pol, spec map[string]any) string {
+	rules := []any{}
+	for _, x := range list(spec, "rules") {
+		r := x.(map[string]any)
+		if r["value"] == "refuse-me" {
+			return "L7 rule rejected: value refuse-me is not allowed"
+		}
+		rules = append(rules, map[string]any{"id": "r-" + fmt.Sprint(r["value"]), "type": r["type"], "compare_type": r["compareType"],
+			"key": r["key"], "value": r["value"], "invert": r["invert"], "admin_state_up": true})
+	}
+	pol["name"], pol["description"], pol["action"], pol["position"] = spec["name"], spec["description"], spec["action"], spec["position"]
+	pol["admin_state_up"], pol["rules_expanded"] = spec["adminStateUp"], rules
+	pol["redirect_pool_id"], pol["redirect_url"], pol["redirect_prefix"], pol["redirect_http_code"] = spec["redirectPoolId"], spec["redirectUrl"], spec["redirectPrefix"], nil
+	if a := spec["action"]; a == "REDIRECT_TO_URL" || a == "REDIRECT_PREFIX" {
+		pol["redirect_http_code"] = 302 // the cloud's default
+		if c, has := spec["redirectHttpCode"]; has {
+			pol["redirect_http_code"] = c
+		}
+	}
+	return ""
 }
 
 var requestIDForm = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
@@ -342,6 +501,11 @@ func taggedPiece(lb map[string]any, tag string) map[string]any {
 	for _, l := range list(lb, "listeners") {
 		if has(l.(map[string]any)) {
 			return l.(map[string]any)
+		}
+		for _, pol := range list(l.(map[string]any), "l7policies_expanded") {
+			if has(pol.(map[string]any)) {
+				return pol.(map[string]any)
+			}
 		}
 	}
 	for _, x := range list(lb, "pools") {

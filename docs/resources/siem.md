@@ -43,7 +43,7 @@ resource "mtncloud_siem" "this" {
 - `networks` (List of String) MTN Networks in the project, by name. The first is the primary interface.
 - `plan` (String) Plan (size), by name, for example `G2S4`.
 - `root_volume_size` (Number) Root disk size in GB.
-- `security_groups` (Set of String) Security groups in the project, by name.
+- `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `version` (String) SIEM version, as the form lists it.
 
 ### Optional

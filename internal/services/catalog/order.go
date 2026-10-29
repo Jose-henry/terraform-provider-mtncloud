@@ -476,16 +476,16 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 				out[f.key] = nets
 			}
 		case kSecGroups:
-			var sgs []any
-			for _, name := range strs(f.attr) {
-				sg, err := r.client.SecurityGroupByName(ctx, place, projectID, name)
-				if err != nil {
-					fail(f.attr, err)
-					continue
-				}
-				sgs = append(sgs, map[string]any{"id": sg.ID})
+			ids, err := r.client.SecurityGroupIDs(ctx, place, projectID, strs(f.attr))
+			if err != nil {
+				fail(f.attr, err)
+				continue
 			}
-			if len(sgs) > 0 {
+			if len(ids) > 0 {
+				sgs := make([]any, len(ids))
+				for i, id := range ids {
+					sgs[i] = map[string]any{"id": id}
+				}
 				out[f.key] = sgs
 			}
 		case kVolumes:

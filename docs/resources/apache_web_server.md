@@ -43,7 +43,7 @@ resource "mtncloud_apache_web_server" "this" {
 - `labels` (Set of String) Labels on the instance.
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
 - `scale_factor` (Number) Number of VMs. Defaults to 1.
-- `security_groups` (Set of String) Security groups in the project, by name.
+- `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `web_server_port` (Number) Port the web server listens on.
 

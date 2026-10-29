@@ -157,7 +157,8 @@ func nodeAttrs(master bool) map[string]schema.Attribute {
 			Description: "MTN Networks of the project, by name; the first is the primary interface." + inherit,
 			Validators:  []validator.List{listvalidator.SizeAtLeast(1)}},
 		"security_groups": schema.ListAttribute{Optional: true, ElementType: types.StringType,
-			Description: "Security groups, by name. Left out, the project's default security group." + inherit},
+			Description: "Security groups, by name, in addition to the project's default group, which is always applied. " +
+				"Listing the default too changes nothing." + inherit},
 		"floating_ip_pool": schema.StringAttribute{Optional: true,
 			Description: "Floating IP pool (public network) to give each node a public IP from, for example `public-network-01`." + inherit},
 	}
@@ -649,16 +650,13 @@ func (r *clusterResource) nodeConfig(ctx context.Context, b *built, layout clien
 		nets = append(nets, map[string]any{"primaryInterface": i == 0, "network": map[string]any{"id": "network-" + strconv.FormatInt(nw.ID, 10)}})
 	}
 	out["networkInterfaces"] = nets
-	sgs := []any{}
-	for _, name := range n.SecurityGroups {
-		sg, err := r.client.SecurityGroupByName(ctx, b.place, b.projectID, name)
-		if err != nil {
-			fail("security_groups", err)
-			continue
+	if ids, err := r.client.SecurityGroupIDs(ctx, b.place, b.projectID, n.SecurityGroups); err != nil {
+		fail("security_groups", err)
+	} else if len(ids) > 0 {
+		sgs := make([]any, len(ids))
+		for i, id := range ids {
+			sgs[i] = map[string]any{"id": id}
 		}
-		sgs = append(sgs, map[string]any{"id": sg.ID})
-	}
-	if len(sgs) > 0 {
 		out["securityGroups"] = sgs
 	}
 	if v := n.FloatingIPPool.ValueString(); v != "" {

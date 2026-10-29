@@ -26,7 +26,8 @@ func DataSources() []func() datasource.DataSource {
 		newLoadBalancers, newLoadBalancer,
 		newListeners, newListener,
 		newPools, newPool,
-		newMembers,
+		newMembers, newMember,
+		newL7Policies, newL7Policy,
 		newHealthMonitors, newHealthMonitor,
 		newFloatingIPPools,
 	}

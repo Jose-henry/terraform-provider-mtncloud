@@ -295,11 +295,11 @@ source that `depends_on` the resource reads the load balancer as it was before t
 - Done 2026-10-29 (plugin f577a90): a listener's description, SNI refs (`[]`) and a member's
   `monitorAddress`/`monitorPort` (null) clear in place. A TERMINATED_HTTPS listener must keep its
   certificate (the plugin refuses null), so the provider refuses one without it at plan time.
-- Still to build: `mtncloud_load_balancer_l7_policy` with its rules (`l7policy-create` with a
-  `requestId`; the plugin creates the policy, then each rule, and rolls the new policy back when a
-  rule is refused: a step with `rolledBack: true`, `success: false`; a retry with the same ID builds
-  it whole), its data source(s) (the read model has no L7 policies yet), `mtncloud_load_balancer_floating_ip`,
-  members by instance, and a single-member data source.
+- Done 2026-10-29: `mtncloud_load_balancer_l7_policy` (+ `_l7_policies`, `_l7_policy` data sources),
+  `mtncloud_load_balancer_instance_member`, `mtncloud_load_balancer_floating_ip`, and the
+  `mtncloud_load_balancer_member` data source (D-033).
+- Not exposed yet: cluster-group members (`clusterGroup`) and pinning one node of an instance
+  (`pinAddress`).
 
 ## B-024 Archive follow-ups (from the 2026-10-29 review)
 - Client contract test for `internal/client/archives.go` with scrubbed fixtures in `testdata/archives/`
@@ -311,3 +311,12 @@ source that `depends_on` the resource reads the load balancer as it was before t
 - Owner check before "import it": compare the found archive's owner with the caller's tenant, once
   `internal/tenancy` exposes the tenant name. The error already names the owner.
 - Slice 2: `mtncloud_archive_file`, `mtncloud_archive_file_link`, `mtncloud_archive_files`.
+
+## B-025 L7 policy positions: plugin limit (live QA t92, 2026-10-29)
+- The plugin refuses a position another policy on the listener holds now, on create and update, and the
+  cloud closes gaps. So a new policy can only go last, and policies can't be reordered in place
+  (D-033). The provider runs one apply's creates in position order and explains the refusal.
+- Ask the plugin owner for insert-and-shift on create and update (the cloud API's own behaviour):
+  validate a position against 1..count+1 instead of against the positions held now. Then reordering
+  and inserting work, and the provider's create ordering can stay as a harmless extra.
+- `_disappears` steps for the L7 policy and the instance member are still missing.

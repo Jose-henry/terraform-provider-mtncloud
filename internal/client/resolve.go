@@ -176,6 +176,32 @@ func (c *Client) DefaultSecurityGroup(ctx context.Context, p *Placement, project
 	return Option{}, false, nil
 }
 
+// SecurityGroupIDs is what a new server gets: the project's default group first, which MTN's
+// provisioning workflow always applies, then the named groups, each ID once. Naming the default too
+// is allowed and changes nothing.
+func (c *Client) SecurityGroupIDs(ctx context.Context, p *Placement, projectID int64, names []string) ([]int64, error) {
+	var ids []int64
+	if projectID != 0 { // 0: the project is not known yet (a plan-time name check)
+		def, ok, err := c.DefaultSecurityGroup(ctx, p, projectID)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			ids = append(ids, def.ID)
+		}
+	}
+	for _, name := range names {
+		g, err := c.SecurityGroupByName(ctx, p, projectID, name)
+		if err != nil {
+			return nil, err
+		}
+		if !slices.Contains(ids, g.ID) {
+			ids = append(ids, g.ID)
+		}
+	}
+	return ids, nil
+}
+
 // IsDefaultSecurityGroup reports the name of a project's synced default group.
 func IsDefaultSecurityGroup(name string) bool {
 	n := strings.ToLower(name)

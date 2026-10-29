@@ -115,7 +115,7 @@ resource "mtncloud_instance" "worker" {
 - `root_volume_size` (Number) Root volume size in GB. Left out, the plan's size applies (10 GB). MTN Cloud can't resize a root volume: add a `data_volume` instead. Windows images need at least 40 GB.
 - `scale` (Attributes) Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and removes one below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. Changed in place; removing it turns scaling off. (see [below for nested schema](#nestedatt--scale))
 - `scale_factor` (Number) Number of VMs in the instance. Defaults to 1. For several separate instances use `count` or `for_each`. Changing it replaces the instance.
-- `security_groups` (Set of String) Security groups to apply, by name, in addition to the project's default group, which is always applied. Changed in place. Each group needs the project as a location.
+- `security_groups` (Set of String) Security groups to apply, by name, in addition to the project's default group, which is always applied; listing the default too changes nothing. Changed in place. Each group needs the project as a location.
 - `shutdown_days` (Number) Stop the VM this many days after it is created. Set at create only, like `expire_days`.
 - `tags` (Map of String) Metadata tags, name to value. Changed in place.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))

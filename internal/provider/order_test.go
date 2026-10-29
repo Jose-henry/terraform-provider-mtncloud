@@ -84,7 +84,7 @@ func TestMySQLOrder(t *testing.T) {
 					want := `{"cloud":"4","environment":"production","floatingip":"pool-44","group-vpn":"9101","hostCIDRs":"0.0.0.0/0",` +
 						`"labels":"db","makeUserDbOwner":false,"mysqlVersion":"8.4","name":"db-1",` +
 						`"networks":[{"network":{"id":"network-9350"},"primaryInterface":true}],"passwordExpiryDays":90,"plan":13107,` +
-						`"resourcepool":"pool-9201","securitygroups":[{"id":9302}],` +
+						`"resourcepool":"pool-9201","securitygroups":[{"id":9301},{"id":9302}],` +
 						`"volumes":[{"name":"root","rootVolume":true,"size":40},{"name":"data-1","rootVolume":false,"size":100,"storageType":414}],` +
 						`"dbName":"shop","dbPassword":"s3cret-value","dbUsername":"shop"}`
 					var a, b map[string]any

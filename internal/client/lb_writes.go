@@ -379,6 +379,11 @@ func (c *Client) taggedPieceID(ctx context.Context, networkID int64, lbID, tag s
 		if hasTag(l.Tags, tag) {
 			return l.ID
 		}
+		for _, pol := range l.L7Policies {
+			if hasTag(pol.Tags, tag) {
+				return pol.ID
+			}
+		}
 	}
 	for _, p := range lb.Pools {
 		if hasTag(p.Tags, tag) {

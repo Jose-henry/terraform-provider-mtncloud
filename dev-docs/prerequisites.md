@@ -92,7 +92,7 @@ OpenStack project. The cloud's **sync** then brings its objects into the platfor
 | Synced object | Why the provider cares |
 |---|---|
 | The resource pool itself | Appears only after sync. `mtncloud_project` Create polls until the pool exists and is `available`. |
-| The project's **default security group** (OpenStack creates `default` per project) | Instances must get a security group at create. If the user names none, we attach `default`, resolved **inside this project** (several projects each have one named `default`). |
+| The project's **default security group** (OpenStack creates `default` per project) | Servers must get a security group at create. Instances, cluster masters and workers, and catalog orders with security groups always get `default` (client `SecurityGroupIDs`), with the user's groups added and each sent once, resolved **inside this project** (several projects each have one named `default`). |
 | Networks / IP pools / floating IP pools visible to the project | Lookups for MTN Network and floating IPs must filter by project, not just by name. |
 
 Rules that follow:

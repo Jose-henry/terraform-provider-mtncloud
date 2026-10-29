@@ -58,7 +58,7 @@ resource "mtncloud_managed_mq" "this" {
 - `node_count` (Number) Number of nodes. Defaults to `1`.
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
 - `rabbitmq_version` (String) RabbitMQ version, when `engine` is `rabbit`.
-- `security_groups` (Set of String) Security groups in the project, by name.
+- `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only

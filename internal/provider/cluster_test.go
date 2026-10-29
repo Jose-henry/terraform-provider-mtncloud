@@ -205,7 +205,7 @@ resource "mtncloud_cluster" "k8s" {
 						"taskSetId": `61`, "labels": `["apps"]`,
 						"worker": `{"config":{"osExternalNetworkId":"pool-44","resourcePoolId":9201},` +
 							`"networkInterfaces":[{"network":{"id":"network-9350"},"primaryInterface":true}],"plan":{"id":9402},` +
-							`"securityGroups":[{"id":9302}],"volumes":[{"name":"root","rootVolume":true,"size":40},` +
+							`"securityGroups":[{"id":9301},{"id":9302}],"volumes":[{"name":"root","rootVolume":true,"size":40},` +
 							`{"name":"data-1","rootVolume":false,"size":50,"storageType":414}]}`,
 					} {
 						if got := jsonOf(c[k]); got != want {

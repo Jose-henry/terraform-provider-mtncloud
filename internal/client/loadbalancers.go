@@ -72,6 +72,10 @@ type LBListener struct {
 	MemberDataTimeout  int64    `json:"timeout_member_data"`
 	TCPInspectTimeout  int64    `json:"timeout_tcp_inspect"`
 	Tags               []string `json:"tags"`
+	// L7Policies are an HTTP listener's policies with their rules. L7Error is set when they could
+	// not be read: then L7Policies is not "none".
+	L7Policies []LBL7Policy `json:"l7policies_expanded"`
+	L7Error    string       `json:"l7policies_error"`
 }
 
 // LBPool is a group of members traffic is shared across.

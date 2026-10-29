@@ -73,7 +73,8 @@ RESOURCES = [
      ["network", "router", "security_group", "security_group_rule", "ipv4_ip_pool", "network_domain"]),
     ("Load balancers",
      "Load balancers on an MTN Network, and their listeners, pools, members and health monitors, each its own resource.",
-     ["load_balancer", "load_balancer_listener", "load_balancer_pool", "load_balancer_member", "load_balancer_health_monitor"]),
+     ["load_balancer", "load_balancer_listener", "load_balancer_pool", "load_balancer_member", "load_balancer_health_monitor",
+      "load_balancer_instance_member", "load_balancer_l7_policy", "load_balancer_floating_ip"]),
     ("MOS (MTN Object Storage)",
      "S3-compatible buckets, listed in the console, with their access, CORS, lifecycle, access logging and "
      "object lock settings, and the objects in them (with retention).",
@@ -107,7 +108,8 @@ DATA_SOURCES = [
       "routers", "router", "floating_ips", "ssl_certificate", "ssl_certificates"]),
     ("Load balancers",
      ["load_balancers", "load_balancer", "load_balancer_listeners", "load_balancer_listener",
-      "load_balancer_pools", "load_balancer_pool", "load_balancer_members",
+      "load_balancer_pools", "load_balancer_pool", "load_balancer_members", "load_balancer_member",
+      "load_balancer_l7_policies", "load_balancer_l7_policy",
       "load_balancer_health_monitors", "load_balancer_health_monitor", "load_balancer_floating_ip_pools"]),
     ("Compute",
      ["instance", "instances", "app", "apps", "cluster", "clusters"]),
@@ -168,8 +170,6 @@ PLANNED = [
     ("Resources", [
         ("mtncloud_app", "Planned", "Apps from blueprints: several instances or containers deployed together."),
         ("mtncloud_datastore", "Planned", "Datastores: the storage that volumes are created on."),
-        ("mtncloud_load_balancer_l7_policy", "Next", "Load balancer rules that route or redirect HTTP requests by host, path, header or cookie."),
-        ("mtncloud_load_balancer_floating_ip", "Next", "A public address on a load balancer, from a floating IP pool by name."),
     ]),
     ("Data sources", []),
 ]

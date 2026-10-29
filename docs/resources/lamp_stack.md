@@ -64,7 +64,7 @@ resource "mtncloud_lamp_stack" "this" {
 - `php_version` (String) PHP version. Defaults to `8.4`.
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
 - `require_ssl` (Boolean) Require TLS for connections.
-- `security_groups` (Set of String) Security groups in the project, by name.
+- `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `use_host_ssl` (Boolean) Use the host's TLS certificate.
 - `user_owns_database` (Boolean) Make the user the database's owner. Defaults to `false`.

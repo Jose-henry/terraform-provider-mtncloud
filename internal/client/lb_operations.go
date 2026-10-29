@@ -147,10 +147,11 @@ func lbTransient(action, status string, env *lbEnvelope) bool {
 }
 
 // lbCreate reports an action that carries a requestId: the load balancer create and the piece
-// creates (guide 9.6).
+// creates (guide 9.6). The floating IP actions are as safe to repeat: attaching what is attached,
+// or detaching what is not, changes nothing (guide 9.6.2).
 func lbCreate(action string) bool {
 	switch action {
-	case "create", "listener-create", "pool-create", "member-add", "monitor-create", "l7policy-create":
+	case "create", "listener-create", "pool-create", "member-add", "monitor-create", "l7policy-create", "fip-attach", "fip-detach":
 		return true
 	}
 	return false

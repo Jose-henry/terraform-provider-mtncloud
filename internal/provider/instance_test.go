@@ -589,6 +589,56 @@ resource "terraform_data" "p" {
 	})
 }
 
+// The default group is always applied, so listing it too sends it once and keeps it in state as spelled.
+func TestInstance_DefaultGroupListed(t *testing.T) {
+	f, s := newInstFakes(t)
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	cfg := func(groups string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+  security_groups = `+groups)
+	}
+	sgs := func(p string) statecheck.StateCheck {
+		var want []knownvalue.Check
+		for _, n := range strings.Fields(p) {
+			want = append(want, knownvalue.StringExact(n))
+		}
+		return statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("security_groups"), knownvalue.SetExact(want))
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg(`["Default", "web"]`), ConfigStateChecks: []statecheck.StateCheck{sgs("Default web")}},
+			{
+				PreConfig: lock(func() {
+					if got := fmt.Sprint(s.lastCreate["securityGroups"]); strings.Count(got, "9301") != 1 {
+						t.Errorf("security groups sent %s, want the default (9301) once", got)
+					}
+				}),
+				Config:           cfg(`["Default", "web"]`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{
+				// Dropping it from the list keeps it applied: only the shown list changes.
+				Config:            cfg(`["web"]`),
+				ConfigStateChecks: []statecheck.StateCheck{sgs("web")},
+			},
+			{Config: cfg(`["web"]`), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				PreConfig: lock(func() {
+					for id, g := range s.sgs {
+						if !slices.Contains(g, 9301) {
+							t.Errorf("instance %v lost the default group: %v", id, g)
+						}
+					}
+				}),
+				Config: f.providerConfig(),
+			},
+		},
+	})
+}
+
 func TestInstance_ScaleAndLifecycle(t *testing.T) {
 	f, s := newInstFakes(t)
 	cfg := func(extra string) string {

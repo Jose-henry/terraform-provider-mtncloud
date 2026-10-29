@@ -114,7 +114,7 @@ Optional:
 
 - `datastore` (String) Datastore (storage type) of the root disk, by name. Left out, the project's default.
 - `floating_ip_pool` (String) Floating IP pool (public network) to give each node a public IP from, for example `public-network-01`.
-- `security_groups` (List of String) Security groups, by name. Left out, the project's default security group.
+- `security_groups` (List of String) Security groups, by name, in addition to the project's default group, which is always applied. Listing the default too changes nothing.
 
 <a id="nestedatt--master--data_volume"></a>
 ### Nested Schema for `master.data_volume`
@@ -159,7 +159,7 @@ Optional:
 - `networks` (List of String) MTN Networks of the project, by name; the first is the primary interface. Left out, the master's is used.
 - `plan` (String) Plan (size) of each worker node, by name, for example `G4S16`. Left out, the master's is used.
 - `root_volume_size` (Number) Root disk size in GB. Left out, the master's is used.
-- `security_groups` (List of String) Security groups, by name. Left out, the project's default security group. Left out, the master's is used.
+- `security_groups` (List of String) Security groups, by name, in addition to the project's default group, which is always applied. Listing the default too changes nothing. Left out, the master's is used.
 
 <a id="nestedatt--worker--data_volume"></a>
 ### Nested Schema for `worker.data_volume`

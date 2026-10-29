@@ -375,8 +375,39 @@ sections 9.2 to 9.6 and a live write probe on network 114 (dev-docs/api-research
 - The plugin answers a write with `pending: true` while its save job still runs, so an ACTIVE read
   straight after may be the load balancer as it was. Then the wait takes ACTIVE only after a
   PENDING_* read, or after 2 minutes without one.
-- Members are external (`address` + `port`) in this slice. Instance and cluster members, L7 policies
-  and floating IPs follow.
+- Members are external (`address` + `port`) in `mtncloud_load_balancer_member`. An instance is
+  `mtncloud_load_balancer_instance_member` (2026-10-29): `member-add` with `instanceId` adds every
+  address it has on the network as one group, tagged by the plugin, that its reconcile job keeps in
+  step as the instance scales; the resource's ID is the instance ID, and it reads the group's members
+  by that tag. One resource per instance and pool: `member-remove` removes the whole group, so create
+  refuses an instance already in the pool and points to import. Port, weight and backup replace the group (the plugin sets them for the group on add,
+  and new nodes take them). Cluster groups and pinned single nodes are not exposed yet.
+- L7 policies are `mtncloud_load_balancer_l7_policy` (2026-10-29), with their rules as a set
+  attribute: the plugin replaces every rule on an update, and a policy is never left with some of
+  its rules (it rolls a new one back). Updates send the whole policy. `position` is Required. The
+  cloud renumbers positions without gaps, so a policy can report a lower position than it was given:
+  it was created first, or one above it was deleted. Read keeps the configured value then, which is
+  the same order. A policy that really moved down reads higher, and one moved up pushes another down,
+  so drift still shows. The plugin validates positions as unique against what the listener holds
+  now (`LbTopology` validation), so a create or move onto a held position is refused, and with no
+  gaps a new policy can only go last; nothing can be reordered in place. Live QA (t92) hit this when
+  C (3) was made first and held 1. So the client runs one apply's creates on a listener in position
+  order (`l7Turn`: each waits 1.5 s for the others to start, then for lower ones to finish) and maps
+  the refusal to an error that explains the rule. A move-after-create approach was tried first and
+  dropped: moves are refused too. A plugin change (insert and shift, as the cloud API does) would lift
+  the limit; until then inserting before existing policies means removing and re-adding them. The read model carries each
+  HTTP listener's policies (`l7policies_expanded`, rules in `rules_expanded`); a listener whose
+  policies could not be read is an error, never "none".
+- The floating IP is `mtncloud_load_balancer_floating_ip` (2026-10-29, guide 9.6.2): `fip-attach`
+  with a pool (by name, resolved through `fip-options` at plan time) or a held address, `fip-detach`
+  with `release`. Both are retry-safe in the plugin, so a lost answer is retried. Read uses the
+  network's list row (`vip_floating`, read once per run); a confirmed "none", or another address, is
+  removed from state. Create refuses a load balancer that already has an address: a pool attach would
+  answer `existing` and adopt it, then release it on destroy. The row has no ID, so import can't check
+  one; an import keeps the address on destroy (`release_on_destroy = false`) until the configuration
+  is applied. `floating_ip_pool` always means a new address from that pool, so setting it replaces,
+  also after an import (keep `floating_ip_id` in the configuration then). A private-state "imported"
+  marker was tried and dropped: it could never be cleared when no update followed the import.
 
 ## D-034 Archives are typed resources on a MOS bucket (owner, 2026-10-29)
 The platform's archive API (`/api/archives/buckets`, Context7 reference and the CLI's `archives`

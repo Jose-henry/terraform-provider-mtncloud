@@ -191,7 +191,7 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			"security_groups": schema.SetAttribute{
 				Optional: true, ElementType: types.StringType,
 				Description: "Security groups to apply, by name, in addition to the project's default group, which is " +
-					"always applied. Changed in place. Each group needs the project as a location.",
+					"always applied; listing the default too changes nothing. Changed in place. Each group needs the project as a location.",
 			},
 			// Optional+Computed: the plan's root size (10 GB) applies when left out.
 			"root_volume_size": schema.Int64Attribute{
@@ -707,24 +707,13 @@ func (r *instanceResource) input(ctx context.Context, m instanceModel, diags *di
 		}
 		in.NetworkDomainID = d.ID
 	}
-	def, ok, err := r.client.DefaultSecurityGroup(ctx, p, project.ID)
+	sgs, err := r.client.SecurityGroupIDs(ctx, p, project.ID, stringsOf(ctx, m.SecurityGroups, diags))
 	if err != nil {
-		diags.AddError("Unable to read the project's security groups", err.Error())
+		diags.AddAttributeError(path.Root("security_groups"), "Unknown security group", err.Error())
 		return out, false
 	}
-	if ok {
-		in.SecurityGroupIDs = append(in.SecurityGroupIDs, def.ID)
-	}
-	for _, name := range stringsOf(ctx, m.SecurityGroups, diags) {
-		g, err := r.client.SecurityGroupByName(ctx, p, project.ID, name)
-		if err != nil {
-			diags.AddAttributeError(path.Root("security_groups"), "Unknown security group", err.Error())
-			return out, false
-		}
-		if !slices.Contains(in.SecurityGroupIDs, g.ID) {
-			in.SecurityGroupIDs = append(in.SecurityGroupIDs, g.ID)
-		}
-	}
+	in.SecurityGroupIDs = sgs
+	var ok bool
 	root := client.VolumeSpec{Root: true, Name: "root", Size: plan.RootBytes >> 30}
 	if v := m.RootVolumeSize; !v.IsNull() && !v.IsUnknown() {
 		root.Size = v.ValueInt64()

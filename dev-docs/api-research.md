@@ -651,6 +651,22 @@ in MOS, then delete the console record. The tenant has the archive API but no ar
   policy back (a step with `rolledBack: true`, answer `success: false`); a retry with the same
   `requestId` builds it whole, so a policy is never returned as existing with missing rules.
 
+### L7 policies, instance members, floating IP (live QA, 2026-10-29, dev tenant, `tf-acc-lb-*`, destroyed)
+- QA config `t91-lbmore`, 7 objects: the load balancer, 2 pools, a listener, an instance's members, a floating
+  IP and an L7 policy. Stage 1 created all 7, then `No changes.` Stage 2 changed the L7 policy in place, from
+  `REDIRECT_TO_POOL` to `REDIRECT_TO_URL` with code 301 and an inverted rule (1 changed), then `No changes.`
+  Destroying all 7 took about 5 minutes, most of it the load balancer.
+- `member-add` with `instanceId` added one member per node address of a 2-node instance. Both carry
+  the plugin's group tag. The answer is `{members:[...]}`, with no single piece.
+- `fip-attach` from a pool answered the address at once; the network's list row showed it in `vip_floating`.
+- L7 rules come back under `l7policies_expanded[].rules_expanded`. A redirect without a code reads 302.
+- Positions (t92, live): the plugin refuses a create at a position another policy holds now ("position 1
+  is used by another policy on this listener"). C was asked for 3 on an empty listener, was stored at 1,
+  and then blocked A at 1. Created in position order, A, B and C landed at 1, 2, 3 with `No changes.` (D-033, B-025).
+- Default security group (t94, live, admin project): an instance listing `default` and a WireGuard VPN
+  order listing no groups both came up with exactly one group, `default`
+  (`GET /api/instances/{id}/security-groups`). The instance record itself carries no groups.
+
 ## Archives (live probe, 2026-10-29, dev tenant, `tf-acc-arch-*`, all deleted)
 Through the CLI on a QA MOS bucket (`mtncloud_mos_bucket`, console record from the provider):
 - `archives add -d` builds `{"archiveBucket": {name, description, storageProvider: {id}, accounts: [],
