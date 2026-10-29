@@ -2,6 +2,20 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
+## Unreleased
+
+- New: `name_prefix` on `mtncloud_mos_bucket`. Bucket names are shared by every MTN Cloud tenant, so a name may already be taken; `name_prefix` makes a free one (the prefix and 8 random characters) when the bucket is created and keeps it. Set `name` or `name_prefix`. A bucket imported by name whose name starts with the prefix isn't replaced.
+- Changed: a bucket name another tenant uses now says so ("the name is taken by another tenant"), instead of "access denied". An archive name another tenant uses names that tenant, or says another tenant has it.
+- Changed: L7 policies can be inserted before others and reordered in place. A policy put at a position another holds goes there and the ones after it move down one; one apply places its new and moved policies in position order, so each ends where it is configured.
+- New: `timeouts {}` on `mtncloud_mos_object`, `mtncloud_mos_object_acl` and the bucket settings (`_bucket_acl`, `_cors`, `_lifecycle`, `_logging`, `_object_lock`).
+- Changed: `mtncloud_mos_object` refuses metadata names with capitals, and retention that is shortened without bypass or removed before it ends, at plan time instead of at apply. An upload over an object that already exists keeps its ACL.
+- Changed: catalog orders check every floating IP pool against its own group's network (managed Kubernetes `worker_floating_ip_pool` with `worker_networks`), at plan time only.
+- Fixed: legacy resources' and data sources' permission errors (403) now say what to do, as the others do.
+- Fixed: `mtncloud_virtual_images` crashed when the image list could not be read, and missed images past the first 200.
+- Fixed: a bad group or cloud is reported as "Unknown group or cloud", not "Unknown project".
+- Fixed: `secure = false` warns once, not twice.
+- Docs: the security group pages say that creating security groups is currently broken on MTN Cloud (the rules aren't applied and the group doesn't show in the console): don't rely on them; ask MTN Cloud support. The object ACL page shows `replace_triggered_by`.
+
 ## 0.6.0 (2026-10-29)
 
 - New: `mtncloud_load_balancer_l7_policy`, a layer 7 policy on an `HTTP` or `TERMINATED_HTTPS` listener with its rules: requests that match are sent to another pool (`REDIRECT_TO_POOL`), redirected (`REDIRECT_TO_URL`, `REDIRECT_PREFIX`) or rejected. Everything changes in place except the listener; the rules are replaced together. A refused rule leaves no policy behind. What each action needs is checked at plan time. Number a listener's policies 1, 2, 3 without gaps: the cloud refuses a position another policy holds, so a new policy can only go after the last one (the error says so). Policies created in one apply are made in position order, whatever order Terraform starts them in. After a policy is deleted the cloud closes the gap; the ones below it report a lower position, which is no change. `invert` defaults to `false`; `redirect_http_code` keeps its last value when taken out. Import: `<network_id>/<load_balancer_id>/<listener_id>/<l7_policy_id>`. Data sources `mtncloud_load_balancer_l7_policies` (a listener's policies, in the order they are tried) and `mtncloud_load_balancer_l7_policy`.

@@ -8,7 +8,7 @@ import (
 )
 
 func Provider() *schema.Provider {
-	return &schema.Provider{
+	p := &schema.Provider{
 		Schema: map[string]*schema.Schema{
 			// Optional (not Required) so the schema doesn't depend on MTNCLOUD_API_URL being set:
 			// the Framework half of the mux must declare the same schema. Configure checks it.
@@ -168,6 +168,8 @@ func Provider() *schema.Provider {
 		},
 		ConfigureContextFunc: providerConfigure,
 	}
+	withPermissionHints(p)
+	return p
 }
 
 func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {

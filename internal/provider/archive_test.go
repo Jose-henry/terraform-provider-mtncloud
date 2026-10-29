@@ -29,7 +29,7 @@ func (m *mosFake) archive(name string) map[string]any {
 	if rec := m.records[sid]; rec != nil {
 		sp["name"] = rec["name"]
 	}
-	out := map[string]any{"name": name, "storageProvider": sp, "owner": map[string]any{"id": 42, "name": "Kestrel-Dev_01"},
+	out := map[string]any{"name": name, "storageProvider": sp, "owner": map[string]any{"id": 9001, "name": "Acme"}, // whoami's tenant
 		"visibility": "private", "code": "c0de",
 		"filePath": "morpheus-archives/c0de/"} // mtncloud:allow-upstream-name (the platform's own archive prefix in the bucket, as the API answers it)
 	for k, v := range a {
@@ -67,7 +67,9 @@ func (m *mosFake) serveArchives(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			rows := []any{}
 			for name := range m.archives {
-				rows = append(rows, m.archive(name))
+				if !m.foreign[name] { // another tenant's private archive: not listed
+					rows = append(rows, m.archive(name))
+				}
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"archiveBuckets": rows, "meta": map[string]any{"total": len(rows)}})
 			return
@@ -76,7 +78,7 @@ func (m *mosFake) serveArchives(w http.ResponseWriter, r *http.Request) {
 		sp, _ := in["storageProvider"].(map[string]any)
 		sid, _ := sp["id"].(float64)
 		switch {
-		case m.archives[name] != 0:
+		case m.archives[name] != 0 || m.foreign[name]:
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(`{"success":false,"msg":"Name must be unique","errors":{"name":"must be unique"}}`))
 			return
@@ -92,6 +94,11 @@ func (m *mosFake) serveArchives(w http.ResponseWriter, r *http.Request) {
 		a := m.archive(name)
 		m.archMeta[name]["description"], m.archMeta[name]["isPublic"] = in["description"], in["isPublic"]
 		a["description"], a["isPublic"] = in["description"], in["isPublic"]
+		if m.loseCreate {
+			m.loseCreate = false
+			w.WriteHeader(http.StatusBadGateway) // made, but the answer is lost on the way back
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "archiveBucket": a})
 		return
 	}
@@ -254,16 +261,92 @@ resource "mtncloud_archive_bucket" "a" {
 }
 `
 	}
+	var oldID any
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
-			{Config: cfg("one")},
+			{Config: cfg("one"), Check: func(*terraform.State) error {
+				m.mu.Lock()
+				defer m.mu.Unlock()
+				oldID = m.archMeta["tf-acc-arch-b"]["id"]
+				return nil
+			}},
 			{
-				Config: cfg("two"),
+				// The old archive holds files: the replace is refused, since they would go with it.
+				PreConfig:   func() { m.setFiles("tf-acc-arch-b", 1) },
+				Config:      cfg("two"),
+				ExpectError: regexp.MustCompile(`(?s)holds 1 file.*force_destroy`),
+			},
+			{
+				PreConfig: func() { m.setFiles("tf-acc-arch-b", 0) },
+				Config:    cfg("two"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
 					plancheck.ExpectResourceAction("mtncloud_archive_bucket.a", plancheck.ResourceActionDestroyBeforeCreate)}},
+				Check: func(*terraform.State) error {
+					m.mu.Lock()
+					defer m.mu.Unlock()
+					if len(m.archives) != 1 || m.archMeta["tf-acc-arch-b"]["id"] == oldID {
+						t.Errorf("archives %v: the old one (ID %v) should be gone and a new one made", m.archives, oldID)
+					}
+					if got := m.records[m.archives["tf-acc-arch-b"]]["bucketName"]; got != "tf-acc-arch-b2" {
+						t.Errorf("the archive is on %v, want tf-acc-arch-b2", got)
+					}
+					return nil
+				},
 			},
 			{Config: cfg("two"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+// A create whose answer is lost adopts the archive it made (same name, same bucket), and drift made in
+// the console is put back by the next apply.
+func TestArchiveBucket_LostAnswerAndDrift(t *testing.T) {
+	f := newFakeAPI(t)
+	m := newMOSFake(t, f)
+	m.loseCreate = true
+	cfg := m.config(f) + `
+resource "mtncloud_mos_bucket" "b" {
+  name = "tf-acc-arch-d1"
+}
+resource "mtncloud_archive_bucket" "a" {
+  name        = "tf-acc-arch-d"
+  description = "exports"
+  mos_bucket  = mtncloud_mos_bucket.b.name
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				Check: func(s *terraform.State) error {
+					m.mu.Lock()
+					defer m.mu.Unlock()
+					want := strconv.FormatInt(m.archMeta["tf-acc-arch-d"]["id"].(int64), 10)
+					if got := s.RootModule().Resources["mtncloud_archive_bucket.a"].Primary.ID; len(m.archives) != 1 || got != want {
+						t.Errorf("state ID %s, archives %v: want the one archive made (%s) adopted", got, m.archives, want)
+					}
+					return nil
+				},
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				// Changed in the console: the plan puts it back in place.
+				PreConfig: func() {
+					m.mu.Lock()
+					m.archMeta["tf-acc-arch-d"]["description"], m.archMeta["tf-acc-arch-d"]["isPublic"] = "edited", true
+					m.mu.Unlock()
+				},
+				Config: cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_archive_bucket.a", plancheck.ResourceActionUpdate)}},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_archive_bucket.a", tfjsonpath.New("description"), knownvalue.StringExact("exports")),
+					statecheck.ExpectKnownValue("mtncloud_archive_bucket.a", tfjsonpath.New("public_url"), knownvalue.Bool(false)),
+				},
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 		},
 	})
 }
@@ -273,6 +356,10 @@ func TestArchiveBucket_Checks(t *testing.T) {
 	m := newMOSFake(t, f)
 	m.records[650] = map[string]any{"id": 650, "name": "Shared", "bucketName": "shared-data", "providerType": "s3", "config": map[string]any{}}
 	m.archives["taken"] = 650
+	m.archives["theirs"] = 650 // visible, owned by another tenant
+	m.archive("theirs")
+	m.archMeta["theirs"]["owner"] = map[string]any{"id": 42, "name": "Kestrel-Dev_01"}
+	m.foreign["hidden"] = true // another tenant's private archive: unlisted, but the name is taken
 	for name, c := range map[string]struct {
 		body, want string
 		planOnly   bool
@@ -281,12 +368,17 @@ func TestArchiveBucket_Checks(t *testing.T) {
 		"neither":      {``, `(?s)Missing Attribute Configuration`, true},
 		"unknown id":   {`mos_bucket_id = "999"`, `(?s)No such MOS bucket`, true},
 		"unregistered": {`mos_bucket = "not-in-console"`, `(?s)MOS bucket isn't in the console`, false},
-		"name taken":   {`mos_bucket = "shared-data"`, `(?s)named "taken" already exists.*unique across all tenants`, false},
+		"name taken":   {`mos_bucket = "shared-data"`, `(?s)named "taken" already exists.*your tenant's: import\s+it`, false},
+		"theirs":       {`mos_bucket = "shared-data"`, `(?s)Tenant "Kestrel-Dev_01" already has an archive named "theirs".*Choose another name`, false},
+		"hidden":       {`mos_bucket = "shared-data"`, `(?s)Archive name taken.*Another tenant has an archive named "hidden"`, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			archive := "tf-acc-arch-c"
-			if name == "name taken" {
+			switch name {
+			case "name taken":
 				archive = "taken"
+			case "theirs", "hidden":
+				archive = name
 			}
 			resource.UnitTest(t, resource.TestCase{
 				ProtoV6ProviderFactories: factories(),

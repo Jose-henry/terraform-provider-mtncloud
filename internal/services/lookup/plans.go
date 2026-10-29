@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 )
 
 func newPlans() datasource.DataSource { return &plansDataSource{} }
@@ -90,7 +92,7 @@ func (d *plansDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	}
 	project, err := d.client.ProjectByName(ctx, m.Project.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddAttributeError(pathOf("project"), "Unknown project", err.Error())
+		resp.Diagnostics.AddAttributeError(pathOf("project"), client.ProjectErrorTitle(err), err.Error())
 		return
 	}
 	image, err := d.client.ImageByName(ctx, m.Image.ValueString())

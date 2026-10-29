@@ -64,7 +64,7 @@ data "mtncloud_mos_bucket" "vault" {
 					plancheck.ExpectResourceAction("mtncloud_mos_object.record", plancheck.ResourceActionUpdate)}},
 			},
 			{Config: cfg("2031-01-01T00:00:00Z", false), ConfigPlanChecks: empty},
-			{Config: cfg("2029-01-01T00:00:00Z", false), ExpectError: regexp.MustCompile(`(?s)Retention can't be shortened.*bypass_governance_on_destroy = true`)},
+			{Config: cfg("2029-01-01T00:00:00Z", false), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)Retention can't be shortened.*bypass_governance_on_destroy = true`)},
 			{
 				// A destroy while retention holds it says how to get past it.
 				Config: cfg("2031-01-01T00:00:00Z", false), Destroy: true,

@@ -63,3 +63,17 @@ func TestDeletePlan(t *testing.T) {
 		}
 	}
 }
+
+func TestPoolNetwork(t *testing.T) {
+	primary := map[string]int64{"": 1, "master_": 2, "worker_": 3}
+	for attr, want := range map[string]int64{
+		"floating_ip_pool":        1,
+		"master_floating_ip_pool": 2,
+		"worker_floating_ip_pool": 3,
+		"edge_floating_ip_pool":   0,
+	} {
+		if got := poolNetwork(attr, primary); got != want {
+			t.Errorf("%s: network %d, want %d", attr, got, want)
+		}
+	}
+}

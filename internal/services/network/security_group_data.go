@@ -112,7 +112,7 @@ func (d *securityGroupData) Read(ctx context.Context, req datasource.ReadRequest
 		p, err := d.client.ProjectByName(ctx, m.Project.ValueString())
 		if err != nil {
 			if client.IsNoMatch(err) {
-				resp.Diagnostics.AddAttributeError(path.Root("project"), "Unknown project", err.Error())
+				resp.Diagnostics.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
 			} else {
 				resp.Diagnostics.AddError("Unable to read projects", err.Error())
 			}

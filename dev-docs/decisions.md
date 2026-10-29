@@ -389,13 +389,12 @@ sections 9.2 to 9.6 and a live write probe on network 114 (dev-docs/api-research
   it was created first, or one above it was deleted. Read keeps the configured value then, which is
   the same order. A policy that really moved down reads higher, and one moved up pushes another down,
   so drift still shows. The plugin validates positions as unique against what the listener holds
-  now (`LbTopology` validation), so a create or move onto a held position is refused, and with no
-  gaps a new policy can only go last; nothing can be reordered in place. Live QA (t92) hit this when
-  C (3) was made first and held 1. So the client runs one apply's creates on a listener in position
-  order (`l7Turn`: each waits 1.5 s for the others to start, then for lower ones to finish) and maps
-  the refusal to an error that explains the rule. A move-after-create approach was tried first and
-  dropped: moves are refused too. A plugin change (insert and shift, as the cloud API does) would lift
-  the limit; until then inserting before existing policies means removing and re-adding them. The read model carries each
+  now (`LbTopology` validation), so a create or move onto a held position was refused (live QA t92).
+  Since 2026-10-30 the plugin inserts and shifts, as the cloud API does (plugin 07b5e8d): a policy
+  goes in at its position and the ones from there move down one. The client runs one apply's creates
+  and moves on a listener in ascending position order (`l7Turn`: each waits 1.5 s for the others to
+  start, then for lower ones to finish), which lands each policy where it is configured in one
+  apply. The refusal mapping is gone. The read model carries each
   HTTP listener's policies (`l7policies_expanded`, rules in `rules_expanded`); a listener whose
   policies could not be read is an error, never "none".
 - The floating IP is `mtncloud_load_balancer_floating_ip` (2026-10-29, guide 9.6.2): `fip-attach`

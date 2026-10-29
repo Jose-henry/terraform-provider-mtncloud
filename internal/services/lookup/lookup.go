@@ -138,7 +138,7 @@ func tagsMatch(have map[string]string, want map[string]types.String) bool {
 // attribute, anything else (the API or the network failing) as an API error.
 func projectError(diags *diag.Diagnostics, err error) {
 	if client.IsNoMatch(err) {
-		diags.AddAttributeError(path.Root("project"), "Unknown project", err.Error())
+		diags.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
 		return
 	}
 	apiError(diags, "projects", err)

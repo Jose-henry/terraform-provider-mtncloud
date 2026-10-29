@@ -376,6 +376,14 @@ Never paste tokens, secret keys or passwords. `-V` already masks the bearer toke
   It lists headings (value `""`), pools (`{"name":"public-network-02","value":"pool-43"}`) and free
   addresses (`"ip-6420"`). Pool IDs differ from the external networks' option IDs (`public-network-02`
   is 32 there), but the names match, so plan time checks names against `openstackExternalNetworks`.
+- Checked live 2026-10-30 (sub-tenant token): the cluster form's call
+  `?zoneId=<cloud>&resourcePoolId=<project pool>` answers 200 with pools and free addresses, and so
+  do `cloudId=` and `config.resourcePoolId=pool-<id>`. With `zoneId` alone it answers 200 and an empty
+  list, not 500: only the path without `openStack/` answers 500. **Pool IDs are per project**: in the
+  `admin` project `public-network-01` is `pool-44`, in another project it is `pool-1487`. So the
+  provider resolves pools by name in the project's own list (clusters, instances). Catalog orders send
+  the value from MTN's own form option list (`pool-44` .. `pool-42`, the `admin` project's IDs) for
+  every project, which is what the console sends too.
 - `GET /api/containers/{id}` works: `ip` is the floating address, `internalIp` the private one. The
   instance lists its containers in `containers`.
 - Attach: `PUT /api/containers/{id}/attach-floating-ip {config:{osExternalNetworkId:"pool-<id>"}}`;
@@ -534,6 +542,12 @@ Sources read first: Dell *OneFS S3 API Guide* H18293.6 (Aug 2025, OneFS 9.12), a
 the tenant's key. The catalog workflow stores it in Cypher. Customers have no route to this API: a Terraform
 "access key" can only order catalog item 13 (rotation) or read the Cypher entries (D-007).
 
+**Bucket names are one namespace for every tenant.** OneFS keys S3 bucket names per access zone, and
+every tenant's user is in zone `system`. A name another tenant owns answers 403 AccessDenied
+(confirmed live by the owner 2026-10-30; as on AWS, where names are global); the provider reads a 403 on a name missing from the
+tenant's own list as "taken by another tenant" (B-022). Per-tenant namespaces would need one access
+zone per tenant, MTN's call.
+
 **Endpoints:** the public endpoint is reachable from the internet over path-style HTTPS with SigV4.
 The private endpoint (`:9021`) isn't reachable from outside MTN.
 The public endpoint balances across nodes, and **each node sees bucket and config changes a few seconds late**:
@@ -663,6 +677,10 @@ in MOS, then delete the console record. The tenant has the archive API but no ar
 - Positions (t92, live): the plugin refuses a create at a position another policy holds now ("position 1
   is used by another policy on this listener"). C was asked for 3 on an empty listener, was stored at 1,
   and then blocked A at 1. Created in position order, A, B and C landed at 1, 2, 3 with `No changes.` (D-033, B-025).
+  Plugin 07b5e8d (2026-10-30, console-tested by the plugin owner) inserts and shifts instead, and the
+  answer carries the listener's `l7policies` after the shift as `{id, name, position, action, tags}`.
+  Live QA t95 (2026-10-30): an insert at 1 and a full reorder each landed as configured in one apply,
+  then `No changes.`
 - Default security group (t94, live, admin project): an instance listing `default` and a WireGuard VPN
   order listing no groups both came up with exactly one group, `default`
   (`GET /api/instances/{id}/security-groups`). The instance record itself carries no groups.

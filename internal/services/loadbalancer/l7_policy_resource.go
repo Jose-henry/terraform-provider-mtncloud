@@ -94,10 +94,11 @@ func (r *l7PolicyResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Description: "What to do with a matching request: `REDIRECT_TO_POOL` (send it to `redirect_pool_id`), `REDIRECT_TO_URL` " +
 					"(redirect to `redirect_url`), `REDIRECT_PREFIX` (redirect to `redirect_prefix` plus the request's path) or `REJECT`."},
 			"position": schema.Int64Attribute{Required: true, Validators: []validator.Int64{int64validator.AtLeast(1)},
-				Description: "Its place in the listener's order, from 1. Number a listener's policies 1, 2, 3 without gaps: the cloud " +
-					"refuses a position another policy holds, so a new policy can only go after the last one. Policies created " +
-					"in one apply are made in position order. The cloud closes gaps, so after one above it is deleted a policy " +
-					"reports a lower position than this, which is the same order and no change."},
+				Description: "Its place in the listener's order, from 1. A policy put at a position another holds goes there, and " +
+					"the ones from that position on move down one; a position past the end puts it last. Number a listener's " +
+					"policies 1, 2, 3 without gaps: one apply places its new and moved policies in position order, so each " +
+					"ends where it is configured. The cloud closes gaps, so after one above it is deleted a policy reports a " +
+					"lower position than this, which is the same order and no change."},
 			"redirect_pool_id": schema.StringAttribute{Optional: true,
 				Description: "For `REDIRECT_TO_POOL`: the pool, for example `mtncloud_load_balancer_pool.api.id`. It must be an `HTTP`, " +
 					"`HTTPS`, `PROXY` or `PROXYV2` pool of the same load balancer."},
@@ -316,7 +317,7 @@ func (r *l7PolicyResource) Update(ctx context.Context, req resource.UpdateReques
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	plan.ID = state.ID
-	if err := r.client.UpdateLBL7Policy(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.ListenerID.ValueString(), plan.ID.ValueString(), s); err != nil {
+	if err := r.client.UpdateLBL7Policy(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.ListenerID.ValueString(), plan.ID.ValueString(), s, !plan.Position.Equal(state.Position)); err != nil {
 		resp.Diagnostics.AddError("Unable to change the L7 policy", err.Error())
 		return
 	}

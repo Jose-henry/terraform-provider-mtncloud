@@ -384,18 +384,7 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 			return refuse("Listener %v is %v; L7 policies need an HTTP or TERMINATED_HTTPS listener.", o["listenerId"], l["protocol"])
 		}
 		pols := list(l, "l7policies_expanded")
-		// As the plugin: a position another policy holds now is refused, on create and update.
-		taken := func(self any) bool {
-			for _, x := range pols {
-				if q := x.(map[string]any); q["id"] != self && fmt.Sprint(q["position"]) == fmt.Sprint(spec["position"]) {
-					return true
-				}
-			}
-			return false
-		}
-		if action != "l7policy-delete" && taken(o["l7policyId"]) {
-			return refuse("L7 policy '%v / %v': position %v is used by another policy on this listener", l["name"], spec["name"], spec["position"])
-		}
+		// As the plugin: a policy goes in at its position, and the others shift (placePolicy).
 		if action == "l7policy-create" {
 			pol := map[string]any{"id": p.id("l7"), "tags": []any{tag}, "provisioning_status": "ACTIVE", "operating_status": "ONLINE"}
 			if msg := setPolicy(pol, spec); msg != "" {

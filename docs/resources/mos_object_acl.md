@@ -3,12 +3,12 @@
 page_title: "mtncloud_mos_object_acl Resource - mtncloud"
 subcategory: ""
 description: |-
-  Who may read one object in a MOS bucket, as a canned ACL, for example to publish one file. Destroy sets it back to private. Uploading new content with mtncloud_mos_object keeps it.
+  Who may read one object in a MOS bucket, as a canned ACL, for example to publish one file. Destroy sets it back to private. Uploading new content with mtncloud_mos_object keeps it, but replacing the object deletes it with its ACL: add lifecycle { replace_triggered_by = [mtncloud_mos_object.<name>] } to set it again in the same apply.
 ---
 
 # mtncloud_mos_object_acl (Resource)
 
-Who may read one object in a MOS bucket, as a canned ACL, for example to publish one file. Destroy sets it back to `private`. Uploading new content with `mtncloud_mos_object` keeps it.
+Who may read one object in a MOS bucket, as a canned ACL, for example to publish one file. Destroy sets it back to `private`. Uploading new content with `mtncloud_mos_object` keeps it, but replacing the object deletes it with its ACL: add `lifecycle { replace_triggered_by = [mtncloud_mos_object.<name>] }` to set it again in the same apply.
 
 ## Example Usage
 
@@ -28,6 +28,11 @@ resource "mtncloud_mos_object_acl" "logo" {
   bucket = mtncloud_mos_object.logo.bucket
   key    = mtncloud_mos_object.logo.key
   acl    = "public-read"
+
+  # A replaced object is deleted with its ACL: set the ACL again in the same apply.
+  lifecycle {
+    replace_triggered_by = [mtncloud_mos_object.logo]
+  }
 }
 ```
 
@@ -40,10 +45,23 @@ resource "mtncloud_mos_object_acl" "logo" {
 - `bucket` (String) The bucket's name.
 - `key` (String) The object's name.
 
+### Optional
+
+- `timeouts` (Attributes) (see [below for nested schema](#nestedatt--timeouts))
+
 ### Read-Only
 
 - `grants` (List of String) The grants MOS holds, as `<grantee>:<permission>`.
 - `id` (String) `<bucket>/<key>`.
+
+<a id="nestedatt--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
+- `update` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 ## Import
 

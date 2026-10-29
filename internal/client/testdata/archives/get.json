@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "archiveBucket": {
+    "id": 7001,
+    "name": "tf-acc-archive-docs",
+    "description": "Release notes",
+    "storageProvider": {"id": 701, "name": "kestrel-files"},
+    "owner": {"id": 42, "name": "Kestrel-Dev_01"},
+    "visibility": "private",
+    "isPublic": true,
+    "rawSize": 2048,
+    "fileCount": 3,
+    "accounts": [],
+    "dateCreated": "2026-10-29T10:00:00Z",
+    "lastUpdated": "2026-10-29T10:05:00Z"
+  }
+}

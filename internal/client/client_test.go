@@ -393,6 +393,13 @@ func TestPlacement_DefaultsPick(t *testing.T) {
 	if !IsNoMatch(err) || !strings.Contains(err.Error(), `no group named "three"`) {
 		t.Errorf("unknown group: got %v", err)
 	}
+	// Reached through a project lookup, a bad group or cloud is titled as one, not as the project.
+	if got := ProjectErrorTitle(err); got != "Unknown group or cloud" {
+		t.Errorf("title %q for a bad group", got)
+	}
+	if got := ProjectErrorTitle(fmt.Errorf("lookup: %w", errors.New(`no project named "x"`))); got != "Unknown project" {
+		t.Errorf("title %q for a bad project", got)
+	}
 }
 
 func TestProjects_SkipsGroupHeaders(t *testing.T) {

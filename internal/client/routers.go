@@ -270,8 +270,8 @@ func (c *Client) PoolRouterProblem(ctx context.Context, netID int64, pool string
 	case ok:
 		return "", false
 	case len(others) > 0:
-		return fmt.Sprintf("Network %d is on router %s, so a floating IP can only come from that external network. Set "+
-			"floating_ip_pool to it, or change the router's external_network first (in its own apply).", netID, strings.Join(others, ", ")), true
+		return fmt.Sprintf("Network %d is on router %s, so a floating IP can only come from that external network. Use "+
+			"that pool, or change the router's external_network first (in its own apply).", netID, strings.Join(others, ", ")), true
 	}
 	return fmt.Sprintf("Network %d isn't on an MTN Router with external network %q, so the floating IP can't be attached "+
 		"and the apply will fail once the VM is running. Unless this apply creates that router, add one "+

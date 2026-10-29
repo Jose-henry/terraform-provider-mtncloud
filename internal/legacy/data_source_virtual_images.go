@@ -2,7 +2,7 @@ package legacy
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"strconv"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
@@ -104,7 +104,10 @@ func dataSourceVirtualImagesRead(ctx context.Context, d *schema.ResourceData, me
 		sortOrder = "desc"
 	}
 
-	output := ListAllVirtualImages(client, 200, sortOrder, d.Get("source").(string))
+	output, err := ListAllVirtualImages(client, 200, sortOrder, d.Get("source").(string))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	var virtulImageIDs []string
 
@@ -120,54 +123,29 @@ func dataSourceVirtualImagesRead(ctx context.Context, d *schema.ResourceData, me
 	return diags
 }
 
-func ListAllVirtualImages(client *sdk.Client, max int, sortOrder string, source string) (images []sdk.VirtualImage) {
-	// Fetch initial images
-	params := make(map[string]string)
-	params["max"] = strconv.Itoa(max)
-	params["sort"] = "id"
-	params["direction"] = sortOrder
-	params["filterType"] = source
-	resp, err := client.ListVirtualImages(&sdk.Request{
-		QueryParams: params,
-	})
-	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
-			log.Printf("API 404: %s - %v", resp, err)
-		} else {
-			log.Printf("API FAILURE: %s - %v", resp, err)
+// ListAllVirtualImages pages through every virtual image. A failed page is an error, never a
+// partial list read as complete.
+func ListAllVirtualImages(client *sdk.Client, max int, sortOrder string, source string) ([]sdk.VirtualImage, error) {
+	var images []sdk.VirtualImage
+	for offset := 0; ; offset += max {
+		params := map[string]string{
+			"max":        strconv.Itoa(max),
+			"offset":     strconv.Itoa(offset),
+			"sort":       "id",
+			"direction":  sortOrder,
+			"filterType": source,
 		}
-	}
-	log.Printf("API RESPONSE: %s", resp)
-
-	result := resp.Result.(*sdk.ListVirtualImagesResult)
-	pollIterations := result.Meta.Total / int64(max)
-	// Add Page 1 virtual images
-	images = append(images, *result.VirtualImages...)
-	currentPage := 1
-	for currentPage < int(pollIterations) {
-		// Fetch initial images
-		params := make(map[string]string)
-		params["max"] = strconv.Itoa(max)
-		params["sort"] = "id"
-		params["direction"] = sortOrder
-		params["filterType"] = source
-
-		params["offset"] = strconv.Itoa(currentPage * max)
-		resp, err := client.ListVirtualImages(&sdk.Request{
-			QueryParams: params,
-		})
+		resp, err := client.ListVirtualImages(&sdk.Request{QueryParams: params})
 		if err != nil {
-			if resp != nil && resp.StatusCode == 404 {
-				log.Printf("API 404: %s - %v", resp, err)
-			} else {
-				log.Printf("API FAILURE: %s - %v", resp, err)
-			}
+			return nil, err
 		}
-		log.Printf("API RESPONSE: %s", resp)
-
-		result := resp.Result.(*sdk.ListVirtualImagesResult)
+		result, ok := resp.Result.(*sdk.ListVirtualImagesResult)
+		if !ok || result.VirtualImages == nil {
+			return nil, fmt.Errorf("listing virtual images: unexpected response")
+		}
 		images = append(images, *result.VirtualImages...)
-		currentPage++
+		if len(*result.VirtualImages) < max || (result.Meta != nil && int64(len(images)) >= result.Meta.Total) {
+			return images, nil
+		}
 	}
-	return images
 }

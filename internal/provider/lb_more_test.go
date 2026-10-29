@@ -149,6 +149,8 @@ resource "mtncloud_load_balancer_l7_policy" "%[1]s" {
 	all := lbBase(f) + pol("a", 1, "") + pol("b", 2, "") + pol("c", 3, "")
 	noA := lbBase(f) + pol("b", 2, "") + pol("c", 3, "")
 	backwards := lbBase(f) + pol("a", 1, "  depends_on = [mtncloud_load_balancer_l7_policy.b]\n") + pol("b", 2, "")
+	inserted := lbBase(f) + pol("z", 1, "") + pol("a", 2, "") + pol("b", 3, "")
+	swapped := lbBase(f) + pol("b", 1, "") + pol("z", 2, "") + pol("a", 3, "")
 	order := func(want string) func(*terraform.State) error {
 		return func(*terraform.State) error {
 			plugin.mu.Lock()
@@ -179,7 +181,15 @@ resource "mtncloud_load_balancer_l7_policy" "%[1]s" {
 			{Config: noA, ConfigStateChecks: []statecheck.StateCheck{pos("b", 2), pos("c", 3)}, Check: order("b,c")},
 			{Config: noA, ConfigPlanChecks: empty},
 			{Config: f.providerConfig()},
-			{Config: backwards, ExpectError: regexp.MustCompile(`(?s)position 1 is used by another policy.*only\s+go\s+after\s+the\s+last\s+one`)},
+			// Made out of order (b first, so it lands at 1): a, inserted at 1, pushes b to 2.
+			{Config: backwards, ConfigStateChecks: []statecheck.StateCheck{pos("a", 1), pos("b", 2)}, Check: order("a,b")},
+			{Config: backwards, ConfigPlanChecks: empty},
+			// A new first policy, the others moved down one: one apply, and each ends where configured.
+			{Config: inserted, ConfigStateChecks: []statecheck.StateCheck{pos("z", 1), pos("a", 2), pos("b", 3)}, Check: order("z,a,b")},
+			{Config: inserted, ConfigPlanChecks: empty},
+			// Reordered in place: b first.
+			{Config: swapped, Check: order("b,z,a")},
+			{Config: swapped, ConfigPlanChecks: empty},
 		},
 	})
 }

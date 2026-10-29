@@ -231,7 +231,28 @@ func (c *Client) MOSBucketExists(ctx context.Context, name string) (bool, error)
 	if err = mosErr("read", "bucket "+name, err); IsMOSNotFound(err) {
 		return false, nil
 	}
+	if me := (*MOSError)(nil); errors.As(err, &me) && (me.Code == "AccessDenied" || me.Status == http.StatusForbidden) {
+		return false, c.takenOrDenied(ctx, name, err)
+	}
 	return err == nil, err
+}
+
+// takenOrDenied explains a 403 on a bucket: bucket names are shared by every tenant, so a name
+// another tenant owns answers 403, not 404. A bucket the tenant's own list holds keeps the
+// access-denied error (the keys may have been replaced).
+func (c *Client) takenOrDenied(ctx context.Context, name string, denied error) error {
+	own, err := c.ListMOSBuckets(ctx)
+	if err != nil {
+		return denied
+	}
+	for _, b := range own {
+		if b.Name == name {
+			return denied
+		}
+	}
+	return &MOSError{Op: "read", Code: "BucketAlreadyExists", Status: http.StatusForbidden, Msg: fmt.Sprintf(
+		"MOS bucket %s: the name is taken by another tenant. Bucket names are shared by every MTN Cloud tenant; choose another, "+
+			"for example with your company or project as a prefix.", name)}
 }
 
 // WaitMOSBucket waits until every node agrees the bucket exists (present) or is gone.

@@ -41,6 +41,10 @@ resource "mtncloud_mos_bucket_lifecycle" "site" {
 - `bucket` (String) The bucket's name in MOS, usually `mtncloud_mos_bucket.<name>.name`. Changing it moves the setting to another bucket.
 - `rule` (Attributes Set) The rules, 1 to 1000. Their order has no meaning. (see [below for nested schema](#nestedatt--rule))
 
+### Optional
+
+- `timeouts` (Attributes) (see [below for nested schema](#nestedatt--timeouts))
+
 ### Read-Only
 
 - `id` (String) The bucket's name.
@@ -59,6 +63,16 @@ Optional:
 - `expiration_date` (String) Delete objects on this date (`YYYY-MM-DD`, at midnight UTC).
 - `expiration_days` (Number) Delete objects this many days after they were written.
 - `prefix` (String) The rule covers objects whose names start with this. Unset covers the whole bucket.
+
+
+<a id="nestedatt--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
+- `update` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 ## Import
 

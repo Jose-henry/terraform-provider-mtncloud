@@ -44,6 +44,10 @@ resource "mtncloud_mos_bucket_cors" "site" {
 - `bucket` (String) The bucket's name in MOS, usually `mtncloud_mos_bucket.<name>.name`. Changing it moves the setting to another bucket.
 - `rule` (Attributes Set) The rules, 1 to 100. Their order has no meaning. (see [below for nested schema](#nestedatt--rule))
 
+### Optional
+
+- `timeouts` (Attributes) (see [below for nested schema](#nestedatt--timeouts))
+
 ### Read-Only
 
 - `id` (String) The bucket's name.
@@ -62,6 +66,16 @@ Optional:
 - `expose_headers` (Set of String) Response headers the browser may read.
 - `id` (String) A name for the rule.
 - `max_age_seconds` (Number) How long a browser may cache the answer to a preflight request, 1 to 86400 seconds.
+
+
+<a id="nestedatt--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
+- `update` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 ## Import
 

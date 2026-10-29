@@ -36,6 +36,7 @@ type bucketResource struct{ base }
 type bucketModel struct {
 	ID           types.String   `tfsdk:"id"`
 	Name         types.String   `tfsdk:"name"`
+	NamePrefix   types.String   `tfsdk:"name_prefix"`
 	ConsoleName  types.String   `tfsdk:"console_name"`
 	Endpoint     types.String   `tfsdk:"endpoint"`
 	EndpointURL  types.String   `tfsdk:"endpoint_url"`
@@ -61,12 +62,28 @@ func (r *bucketResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 				Computed:      true,
 				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
+			// Optional+Computed: written by the user, or made from name_prefix when the bucket is created.
 			"name": schema.StringAttribute{
 				Description: "The bucket's name in MOS: 3 to 63 lower-case letters, digits, dots and hyphens. Names are " +
-					"shared by every tenant on MOS. Changing it replaces the bucket, and its objects are lost.",
-				Required:      true,
-				Validators:    bucketNameValidators(),
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+					"shared by every tenant on MOS, so a name another tenant uses is refused: `name_prefix` avoids that. " +
+					"Set `name` or `name_prefix`, not both. Changing it replaces the bucket, and its objects are lost.",
+				Optional:   true,
+				Computed:   true,
+				Validators: append(bucketNameValidators(), stringvalidator.ExactlyOneOf(path.MatchRoot("name_prefix"))),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplaceIfConfigured(),
+				},
+			},
+			"name_prefix": schema.StringAttribute{
+				Description: "Make a unique name that starts with this prefix: the prefix and " + strconv.Itoa(suffixLen) + " random " +
+					"lower-case letters and digits, chosen when the bucket is created and kept from then on. Up to " +
+					strconv.Itoa(63-suffixLen) + " characters. Changing it replaces the bucket, and its objects are lost.",
+				Optional:   true,
+				Validators: []validator.String{stringvalidator.LengthBetween(1, 63-suffixLen), prefixValidator{}},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplaceIf(prefixChanged,
+					"Replaces the bucket, unless its name already starts with the prefix.",
+					"Replaces the bucket, unless its name already starts with the prefix.")},
 			},
 			// Optional+Computed: the user may name the console record; otherwise it takes the bucket's name.
 			"console_name": schema.StringAttribute{
@@ -154,8 +171,13 @@ func (r *bucketResource) Create(ctx context.Context, req resource.CreateRequest,
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	generated := plan.Name.IsUnknown() || plan.Name.IsNull()
+	if generated {
+		plan.Name = types.StringValue(prefixedName(plan.NamePrefix.ValueString()))
+	}
 	name := plan.Name.ValueString()
-	if plan.ConsoleName.IsUnknown() || plan.ConsoleName.IsNull() {
+	consoleDefault := plan.ConsoleName.IsUnknown() || plan.ConsoleName.IsNull()
+	if consoleDefault {
 		plan.ConsoleName = plan.Name
 	}
 	cr, err := r.client.MOSCredentials(ctx)
@@ -172,6 +194,15 @@ func (r *bucketResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	// A bucket that exists already is never adopted: it may hold someone's data. Import it instead.
 	exists, err := r.client.MOSBucketExists(ctx, name)
+	for try := 0; generated && try < 3 && (exists || client.IsMOSCode(err, "BucketAlreadyExists")); try++ {
+		name = prefixedName(plan.NamePrefix.ValueString()) // a made-up name that is taken: make another
+		plan.Name = types.StringValue(name)
+		in.BucketName = name
+		if consoleDefault {
+			plan.ConsoleName, in.Name = plan.Name, name
+		}
+		exists, err = r.client.MOSBucketExists(ctx, name)
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to check for an existing bucket", err.Error())
 		return

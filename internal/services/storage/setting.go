@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -12,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
@@ -46,7 +48,12 @@ func (r *setting[T]) Metadata(_ context.Context, req resource.MetadataRequest, r
 	resp.TypeName = req.ProviderTypeName + "_" + r.spec.typeName
 }
 
-func (r *setting[T]) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *setting[T]) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = withTimeouts(ctx, r.core(), timeouts.Opts{Create: true, Update: true, Delete: true})
+}
+
+// core is the schema without the timeouts block: the shape of the model T, which the data source shares.
+func (r *setting[T]) core() schema.Schema {
 	attrs := map[string]schema.Attribute{
 		"id": schema.StringAttribute{
 			Description:   "The bucket's name.",
@@ -61,7 +68,7 @@ func (r *setting[T]) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 		},
 	}
 	maps.Copy(attrs, r.spec.attributes)
-	resp.Schema = schema.Schema{Description: r.spec.about, Attributes: attrs}
+	return schema.Schema{Description: r.spec.about, Attributes: attrs}
 }
 
 func (r *setting[T]) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
@@ -69,31 +76,42 @@ func (r *setting[T]) ValidateConfig(ctx context.Context, req resource.ValidateCo
 		return
 	}
 	var m T
-	resp.Diagnostics.Append(req.Config.Get(ctx, &m)...)
+	_, _, d := coreGet(ctx, r.core(), tfsdk.State(req.Config), &m)
+	resp.Diagnostics.Append(d...)
 	if !resp.Diagnostics.HasError() {
 		r.spec.validate(&m, &resp.Diagnostics)
 	}
 }
 
-func (r *setting[T]) save(ctx context.Context, plan tfsdkGetter, state tfsdkSetter, diags *diag.Diagnostics, op string) {
+func (r *setting[T]) save(ctx context.Context, plan tfsdk.Plan, state *tfsdk.State, diags *diag.Diagnostics, op string) {
 	if !r.ready(diags) {
 		return
 	}
 	var m T
-	diags.Append(plan.Get(ctx, &m)...)
+	to, toRaw, d := coreGet(ctx, r.core(), tfsdk.State(plan), &m)
+	diags.Append(d...)
+	if diags.HasError() {
+		return
+	}
+	bound := to.Update
+	if op == "set" {
+		bound = to.Create
+	}
+	// Settling has no end of its own: bound it.
+	timeout, d := bound(ctx, mosTimeout)
+	diags.Append(d...)
 	if diags.HasError() {
 		return
 	}
 	id, bucket := r.spec.keys(&m)
-	// Settling has no end of its own: bound it.
-	ctx, cancel := context.WithTimeout(ctx, mosTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if err := r.spec.write(ctx, r.client, bucket.ValueString(), &m); err != nil {
 		diags.AddError(fmt.Sprintf("Unable to %s the %s", op, what(r.spec.typeName)), err.Error())
 		return
 	}
 	*id = *bucket
-	diags.Append(state.Set(ctx, &m)...)
+	diags.Append(coreSet(ctx, r.core(), state, &m, toRaw)...)
 }
 
 func (r *setting[T]) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -109,7 +127,8 @@ func (r *setting[T]) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		return
 	}
 	var m T
-	resp.Diagnostics.Append(req.State.Get(ctx, &m)...)
+	_, toRaw, d := coreGet(ctx, r.core(), req.State, &m)
+	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -122,7 +141,7 @@ func (r *setting[T]) Read(ctx context.Context, req resource.ReadRequest, resp *r
 	}
 	resp.Diagnostics.Append(diags...)
 	if !resp.Diagnostics.HasError() {
-		resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+		resp.Diagnostics.Append(coreSet(ctx, r.core(), &resp.State, &m, toRaw)...)
 	}
 }
 
@@ -131,12 +150,15 @@ func (r *setting[T]) Delete(ctx context.Context, req resource.DeleteRequest, res
 		return
 	}
 	var m T
-	resp.Diagnostics.Append(req.State.Get(ctx, &m)...)
+	to, _, d := coreGet(ctx, r.core(), req.State, &m)
+	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	timeout, d := to.Delete(ctx, mosTimeout)
+	resp.Diagnostics.Append(d...)
 	_, bucket := r.spec.keys(&m)
-	ctx, cancel := context.WithTimeout(ctx, mosTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if err := r.spec.clear(ctx, r.client, bucket.ValueString()); err != nil && !bucketGone(err) {
 		resp.Diagnostics.AddError("Unable to remove the "+what(r.spec.typeName), err.Error())
@@ -188,14 +210,6 @@ func bucketGoneIn(diags diag.Diagnostics) bool {
 		}
 	}
 	return false
-}
-
-type tfsdkGetter interface {
-	Get(ctx context.Context, target any) diag.Diagnostics
-}
-
-type tfsdkSetter interface {
-	Set(ctx context.Context, val any) diag.Diagnostics
 }
 
 // --- value helpers

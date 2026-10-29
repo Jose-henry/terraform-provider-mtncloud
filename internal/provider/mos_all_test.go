@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,8 +32,9 @@ resource "mtncloud_mos_bucket" "logs" {
   force_destroy = true
 }
 resource "mtncloud_mos_bucket_acl" "site" {
-  bucket = mtncloud_mos_bucket.site.name
-  acl    = "public-read"
+  bucket   = mtncloud_mos_bucket.site.name
+  acl      = "public-read"
+  timeouts = { create = "2m" }
 }
 resource "mtncloud_mos_bucket_cors" "site" {
   bucket = mtncloud_mos_bucket.site.name
@@ -76,14 +78,16 @@ resource "mtncloud_mos_object" "hello" {
   metadata = { team = "web" }
 }
 resource "mtncloud_mos_object" "page" {
-  bucket = mtncloud_mos_bucket.site.name
-  key    = "site/index.html"
-  source = "` + filepath.ToSlash(src) + `"
+  bucket   = mtncloud_mos_bucket.site.name
+  key      = "site/index.html"
+  source   = "` + filepath.ToSlash(src) + `"
+  timeouts = { update = "2m" }
 }
 resource "mtncloud_mos_object_acl" "page" {
-  bucket = mtncloud_mos_object.page.bucket
-  key    = mtncloud_mos_object.page.key
-  acl    = "public-read"
+  bucket   = mtncloud_mos_object.page.bucket
+  key      = mtncloud_mos_object.page.key
+  acl      = "public-read"
+  timeouts = { create = "2m" }
 }
 
 data "mtncloud_mos_credentials" "k" {}
@@ -177,13 +181,42 @@ data "mtncloud_mos_object_acl" "page" {
 			{Config: cfg, ResourceName: "mtncloud_mos_bucket_cors.site", ImportState: true, ImportStateVerify: true},
 			{Config: cfg, ResourceName: "mtncloud_mos_bucket_lifecycle.site", ImportState: true, ImportStateVerify: true},
 			{Config: cfg, ResourceName: "mtncloud_mos_bucket_logging.site", ImportState: true, ImportStateVerify: true},
-			{Config: cfg, ResourceName: "mtncloud_mos_bucket_acl.site", ImportState: true, ImportStateVerify: true},
-			{Config: cfg, ResourceName: "mtncloud_mos_object_acl.page", ImportState: true, ImportStateVerify: true},
+			{Config: cfg, ResourceName: "mtncloud_mos_bucket_acl.site", ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"timeouts"}},
+			{Config: cfg, ResourceName: "mtncloud_mos_object_acl.page", ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"timeouts"}},
 			{
 				Config: cfg, ResourceName: "mtncloud_mos_object.hello", ImportState: true, ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{"content", "bypass_governance_on_destroy"},
 			},
 		},
+	})
+}
+
+// An object written outside Terraform keeps its ACL when Terraform takes it over by uploading.
+func TestMOSObject_CreateKeepsACL(t *testing.T) {
+	f := newFakeAPI(t)
+	m := newMOSFake(t, f)
+	m.buckets["tf-acc-mos-keep"] = map[string]string{}
+	m.addObject("tf-acc-mos-keep", "page.html")
+	m.acls["tf-acc-mos-keep/page.html"] = "public-read"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{
+			Config: m.config(f) + `
+resource "mtncloud_mos_object" "page" {
+  bucket  = "tf-acc-mos-keep"
+  key     = "page.html"
+  content = "<h1>new</h1>"
+}
+`,
+			Check: func(*terraform.State) error {
+				m.mu.Lock()
+				defer m.mu.Unlock()
+				if got := m.acls["tf-acc-mos-keep/page.html"]; got != "public-read" {
+					return fmt.Errorf("ACL %q after the upload, want public-read", got)
+				}
+				return nil
+			},
+		}},
 	})
 }
 
@@ -245,6 +278,19 @@ resource "mtncloud_mos_object" "x" {
   content        = "a"
   content_base64 = "YQ=="
 }`, `Invalid Attribute Combination`},
+		"metadata name with capitals": {`
+resource "mtncloud_mos_object" "x" {
+  bucket   = "tf-acc-x"
+  key      = "a"
+  content  = "a"
+  metadata = { Team = "web" }
+}`, `(?s)Metadata name has capitals.*Use "team"`},
+		"bad timeout": {`
+resource "mtncloud_mos_bucket_acl" "x" {
+  bucket   = "tf-acc-x"
+  acl      = "private"
+  timeouts = { create = "soon" }
+}`, `timeouts`},
 		"lock days and years": {`
 resource "mtncloud_mos_bucket_object_lock" "x" {
   bucket = "tf-acc-x"

@@ -58,6 +58,7 @@ resource "mtncloud_mos_object" "report" {
 - `retain_until` (String) The date and time the retention ends, in RFC 3339 (`2027-01-31T00:00:00Z`). Moving it later is always allowed; moving it earlier needs `bypass_governance_on_destroy = true`.
 - `retention_mode` (String) Keep the object from deletion until `retain_until`: `GOVERNANCE`. The bucket must have object lock on.
 - `source` (String) A local file to upload. Its content is compared at every plan, so editing the file uploads it again.
+- `timeouts` (Attributes) (see [below for nested schema](#nestedatt--timeouts))
 
 ### Read-Only
 
@@ -65,6 +66,15 @@ resource "mtncloud_mos_object" "report" {
 - `id` (String) `<bucket>/<key>`.
 - `last_modified` (String) When the object was last written (RFC 3339).
 - `size` (Number) The object's size in bytes.
+
+<a id="nestedatt--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
+- `update` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 ## Import
 

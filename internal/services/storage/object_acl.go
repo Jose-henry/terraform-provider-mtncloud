@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -12,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
@@ -35,11 +38,17 @@ func (r *objectACLResource) Metadata(_ context.Context, req resource.MetadataReq
 	resp.TypeName = req.ProviderTypeName + "_mos_object_acl"
 }
 
-func (r *objectACLResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *objectACLResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = withTimeouts(ctx, r.core(), timeouts.Opts{Create: true, Update: true, Delete: true})
+}
+
+// core is the schema without the timeouts block: the shape of objectACLModel, which the data source shares.
+func (r *objectACLResource) core() schema.Schema {
 	replace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
-	resp.Schema = schema.Schema{
+	return schema.Schema{
 		Description: "Who may read one object in a MOS bucket, as a canned ACL, for example to publish one file. " +
-			"Destroy sets it back to `private`. Uploading new content with `mtncloud_mos_object` keeps it.",
+			"Destroy sets it back to `private`. Uploading new content with `mtncloud_mos_object` keeps it, but replacing " +
+			"the object deletes it with its ACL: add `lifecycle { replace_triggered_by = [mtncloud_mos_object.<name>] }` to set it again in the same apply.",
 		Attributes: map[string]schema.Attribute{
 			"id":     schema.StringAttribute{Description: "`<bucket>/<key>`.", Computed: true, PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()}},
 			"bucket": schema.StringAttribute{Description: "The bucket's name.", Required: true, Validators: bucketNameValidators(), PlanModifiers: replace},
@@ -54,8 +63,8 @@ func (r *objectACLResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 	}
 }
 
-func (r *objectACLResource) write(ctx context.Context, m *objectACLModel) error {
-	ctx, cancel := context.WithTimeout(ctx, mosTimeout)
+func (r *objectACLResource) write(ctx context.Context, m *objectACLModel, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if err := r.client.PutObjectACL(ctx, m.Bucket.ValueString(), m.Key.ValueString(), m.ACL.ValueString()); err != nil {
 		return err
@@ -79,15 +88,18 @@ func (r *objectACLResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 	var m objectACLModel
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &m)...)
+	to, toRaw, d := coreGet(ctx, r.core(), tfsdk.State(req.Plan), &m)
+	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.write(ctx, &m); err != nil {
+	timeout, d := to.Create(ctx, mosTimeout)
+	resp.Diagnostics.Append(d...)
+	if err := r.write(ctx, &m, timeout); err != nil {
 		resp.Diagnostics.AddError("Unable to set the object ACL", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+	resp.Diagnostics.Append(coreSet(ctx, r.core(), &resp.State, &m, toRaw)...)
 }
 
 func (r *objectACLResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -95,7 +107,8 @@ func (r *objectACLResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 	var m objectACLModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &m)...)
+	_, toRaw, d := coreGet(ctx, r.core(), req.State, &m)
+	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -108,7 +121,7 @@ func (r *objectACLResource) Read(ctx context.Context, req resource.ReadRequest, 
 		resp.Diagnostics.AddError("Unable to read the object ACL", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+	resp.Diagnostics.Append(coreSet(ctx, r.core(), &resp.State, &m, toRaw)...)
 }
 
 func (r *objectACLResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -116,15 +129,18 @@ func (r *objectACLResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 	var m objectACLModel
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &m)...)
+	to, toRaw, d := coreGet(ctx, r.core(), tfsdk.State(req.Plan), &m)
+	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if err := r.write(ctx, &m); err != nil {
+	timeout, d := to.Update(ctx, mosTimeout)
+	resp.Diagnostics.Append(d...)
+	if err := r.write(ctx, &m, timeout); err != nil {
 		resp.Diagnostics.AddError("Unable to change the object ACL", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+	resp.Diagnostics.Append(coreSet(ctx, r.core(), &resp.State, &m, toRaw)...)
 }
 
 func (r *objectACLResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -132,11 +148,14 @@ func (r *objectACLResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 	var m objectACLModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &m)...)
+	to, _, d := coreGet(ctx, r.core(), req.State, &m)
+	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	ctx, cancel := context.WithTimeout(ctx, mosTimeout)
+	timeout, d := to.Delete(ctx, mosTimeout)
+	resp.Diagnostics.Append(d...)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if err := r.client.PutObjectACL(ctx, m.Bucket.ValueString(), m.Key.ValueString(), "private"); err != nil && !client.IsMOSNotFound(err) {
 		resp.Diagnostics.AddError("Unable to reset the object ACL", err.Error())

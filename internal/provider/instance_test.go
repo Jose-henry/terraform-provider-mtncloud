@@ -979,6 +979,32 @@ func (s *instStore) floating(w http.ResponseWriter, r *http.Request, reply func(
 	reply(http.StatusOK, map[string]any{"success": true})
 }
 
+// The floating IP pool is checked at plan against the primary network's router: a router on another
+// external network is an error before the VM is made, and the router's own pool passes.
+func TestInstance_PoolCheckedAgainstRouter(t *testing.T) {
+	f, s := newInstFakes(t)
+	routers := newRouterStore()
+	routers.routers[9990] = map[string]any{"id": 9990, "name": "edge", "status": "ok", "enabled": true,
+		"externalNetwork": map[string]any{"id": 32, "name": "public-network-02"},
+		"interfaces":      []any{map[string]any{"network": map[string]any{"id": 9301}}}}
+	f.router = routers
+	cfg := func(pool string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+  floating_ip_pool = "`+pool+`"
+`)
+	}
+	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: []resource.TestStep{
+		{Config: cfg("public-network-01"), PlanOnly: true,
+			ExpectError: regexp.MustCompile(`(?s)Floating IP pool doesn't match the router.*edge \(external network public-network-02\)`)},
+		{Config: cfg("public-network-02"), PlanOnly: true, ExpectNonEmptyPlan: true},
+	}})
+	if n := s.count(); n != 0 {
+		t.Errorf("%d instances made by plans", n)
+	}
+}
+
 func TestInstance_FloatingIP(t *testing.T) {
 	f, s := newInstFakes(t)
 	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }

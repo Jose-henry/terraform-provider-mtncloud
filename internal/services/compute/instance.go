@@ -390,7 +390,7 @@ func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 	}
 	project, err := r.client.ProjectByNameAt(ctx, p, plan.Project.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("project"), "Unknown project", err.Error())
+		resp.Diagnostics.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
 		return
 	}
 	image, err := r.client.ImageByName(ctx, plan.Image.ValueString())
@@ -664,7 +664,7 @@ func (r *instanceResource) input(ctx context.Context, m instanceModel, diags *di
 	out.placement = p
 	project, err := r.client.ProjectByNameAt(ctx, p, m.Project.ValueString())
 	if err != nil {
-		diags.AddAttributeError(path.Root("project"), "Unknown project", err.Error())
+		diags.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
 		return out, false
 	}
 	image, err := r.client.ImageByName(ctx, m.Image.ValueString())

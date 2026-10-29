@@ -311,6 +311,38 @@ func TestOrder_NamesCheckedAtPlan(t *testing.T) {
 }
 
 // Let's Encrypt runs against an instance: context "instance", the instance as the target.
+// The floating IP pool is checked at plan against the router of the order's primary network: a
+// router on another external network is an error, before anything is ordered.
+func TestOrder_PoolCheckedAgainstRouter(t *testing.T) {
+	f, s, _ := orderFakes(t)
+	routers := newRouterStore()
+	routers.routers[9990] = map[string]any{"id": 9990, "name": "edge", "status": "ok", "enabled": true,
+		"externalNetwork": map[string]any{"id": 32, "name": "public-network-02"},
+		"interfaces":      []any{map[string]any{"network": map[string]any{"id": 9350}}}}
+	f.router = routers
+	cfg := func(pool string) string {
+		return f.providerConfig() + `resource "mtncloud_mysql" "db" {
+  name             = "db-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 40
+  networks         = ["app-net"]
+  version          = "8.4"
+  floating_ip_pool = "` + pool + `"
+}
+`
+	}
+	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: []resource.TestStep{
+		{Config: cfg("public-network-01"), PlanOnly: true,
+			ExpectError: regexp.MustCompile(`(?s)Floating IP pool doesn't match the router.*edge \(external network public-network-02\)`)},
+		{Config: cfg("public-network-02"), PlanOnly: true, ExpectNonEmptyPlan: true},
+	}})
+	if s.orders != 0 {
+		t.Errorf("%d orders placed by plans", s.orders)
+	}
+}
+
 func TestLetsEncryptOrder(t *testing.T) {
 	f, s, _ := orderFakes(t)
 	cfg := f.providerConfig() + `

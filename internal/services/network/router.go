@@ -173,7 +173,7 @@ func (r *routerResource) input(ctx context.Context, m routerModel, diags *diag.D
 	in := client.RouterInput{Name: m.Name.ValueString(), Description: m.Description.ValueString(), Enabled: m.Enabled.ValueBool()}
 	project, err := r.client.ProjectByName(ctx, m.Project.ValueString())
 	if err != nil {
-		diags.AddAttributeError(path.Root("project"), "Unknown project", err.Error())
+		diags.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
 		return in, false
 	}
 	in.ProjectID = project.ID

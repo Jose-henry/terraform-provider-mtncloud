@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -25,8 +26,9 @@ import (
 )
 
 var (
-	_ resource.ResourceWithImportState = (*objectResource)(nil)
-	_ resource.ResourceWithModifyPlan  = (*objectResource)(nil)
+	_ resource.ResourceWithImportState    = (*objectResource)(nil)
+	_ resource.ResourceWithModifyPlan     = (*objectResource)(nil)
+	_ resource.ResourceWithValidateConfig = (*objectResource)(nil)
 )
 
 // maxUpload caps what one object may hold: the provider reads it into memory to upload it in one
@@ -38,27 +40,28 @@ func newObject() resource.Resource { return &objectResource{} }
 type objectResource struct{ base }
 
 type objectModel struct {
-	ID            types.String `tfsdk:"id"`
-	Bucket        types.String `tfsdk:"bucket"`
-	Key           types.String `tfsdk:"key"`
-	Content       types.String `tfsdk:"content"`
-	ContentBase64 types.String `tfsdk:"content_base64"`
-	Source        types.String `tfsdk:"source"`
-	Metadata      types.Map    `tfsdk:"metadata"`
-	Checksum      types.String `tfsdk:"checksum_algorithm"`
-	RetentionMode types.String `tfsdk:"retention_mode"`
-	RetainUntil   types.String `tfsdk:"retain_until"`
-	Bypass        types.Bool   `tfsdk:"bypass_governance_on_destroy"`
-	ETag          types.String `tfsdk:"etag"`
-	Size          types.Int64  `tfsdk:"size"`
-	LastModified  types.String `tfsdk:"last_modified"`
+	ID            types.String   `tfsdk:"id"`
+	Bucket        types.String   `tfsdk:"bucket"`
+	Key           types.String   `tfsdk:"key"`
+	Content       types.String   `tfsdk:"content"`
+	ContentBase64 types.String   `tfsdk:"content_base64"`
+	Source        types.String   `tfsdk:"source"`
+	Metadata      types.Map      `tfsdk:"metadata"`
+	Checksum      types.String   `tfsdk:"checksum_algorithm"`
+	RetentionMode types.String   `tfsdk:"retention_mode"`
+	RetainUntil   types.String   `tfsdk:"retain_until"`
+	Bypass        types.Bool     `tfsdk:"bypass_governance_on_destroy"`
+	ETag          types.String   `tfsdk:"etag"`
+	Size          types.Int64    `tfsdk:"size"`
+	LastModified  types.String   `tfsdk:"last_modified"`
+	Timeouts      timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (r *objectResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_mos_object"
 }
 
-func (r *objectResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *objectResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	one := stringvalidator.ExactlyOneOf(path.MatchRoot("content"), path.MatchRoot("content_base64"), path.MatchRoot("source"))
 	keep := []planmodifier.String{stringplanmodifier.UseStateForUnknown()}
 	resp.Schema = schema.Schema{
@@ -105,6 +108,7 @@ func (r *objectResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"etag":          schema.StringAttribute{Description: "The object's ETag: the MD5 of its content for an object uploaded in one part.", Computed: true},
 			"size":          schema.Int64Attribute{Description: "The object's size in bytes.", Computed: true},
 			"last_modified": schema.StringAttribute{Description: "When the object was last written (RFC 3339).", Computed: true},
+			"timeouts":      timeouts.Attributes(ctx, timeouts.Opts{Create: true, Update: true, Delete: true}),
 		},
 	}
 }
@@ -143,6 +147,19 @@ func md5Hex(b []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// ValidateConfig refuses metadata names MOS would change: it stores them in lower case, so a
+// capital would read back different and never settle.
+func (r *objectResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var meta types.Map
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("metadata"), &meta)...)
+	for k := range meta.Elements() {
+		if k != strings.ToLower(k) {
+			resp.Diagnostics.AddAttributeError(path.Root("metadata"), "Metadata name has capitals",
+				fmt.Sprintf("MOS stores metadata names in lower case, so %q would read back as %q. Use %q.", k, strings.ToLower(k), strings.ToLower(k)))
+		}
+	}
+}
+
 // ModifyPlan uploads again when the content no longer matches what MOS holds: a source file edited
 // since the last apply, or the object overwritten outside Terraform (Read records its new ETag).
 func (r *objectResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
@@ -152,6 +169,10 @@ func (r *objectResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 	var plan, state objectModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	checkRetention(plan, state, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() || plan.Content.IsUnknown() || plan.ContentBase64.IsUnknown() || plan.Source.IsUnknown() {
 		return
 	}
@@ -192,12 +213,6 @@ func (r *objectResource) input(ctx context.Context, m *objectModel, diags *diag.
 	if !m.Metadata.IsNull() {
 		meta := map[string]string{}
 		diags.Append(m.Metadata.ElementsAs(ctx, &meta, false)...)
-		for k := range meta {
-			if k != strings.ToLower(k) {
-				diags.AddAttributeError(path.Root("metadata"), "Metadata name has capitals",
-					fmt.Sprintf("MOS stores metadata names in lower case, so %q would read back as %q. Use %q.", k, strings.ToLower(k), strings.ToLower(k)))
-			}
-		}
 		in.Metadata = meta
 	}
 	if !m.RetentionMode.IsNull() {
@@ -220,7 +235,17 @@ func (r *objectResource) Create(ctx context.Context, req resource.CreateRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	r.upload(ctx, &plan, "", &resp.Diagnostics)
+	timeout, d := plan.Timeouts.Create(ctx, mosTimeout)
+	resp.Diagnostics.Append(d...)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	// An object that already exists (create_before_destroy, or one written outside Terraform) keeps
+	// its ACL, so an mtncloud_mos_object_acl on it stays as it was set.
+	keep, ok := r.keptACL(ctx, plan, &resp.Diagnostics)
+	if !ok {
+		return
+	}
+	r.upload(ctx, &plan, keep, &resp.Diagnostics)
 	if !resp.Diagnostics.HasError() {
 		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	}
@@ -232,8 +257,6 @@ func (r *objectResource) upload(ctx context.Context, m *objectModel, acl string,
 		return
 	}
 	in.ACL = acl
-	ctx, cancel := context.WithTimeout(ctx, mosTimeout)
-	defer cancel()
 	o, err := r.client.PutMOSObject(ctx, in)
 	if err != nil {
 		diags.AddError("Unable to upload the object", err.Error())
@@ -288,6 +311,27 @@ func sameInstant(a, b string) bool {
 	return errA == nil && errB == nil && x.Equal(y)
 }
 
+// keptACL is the canned ACL an upload over an existing object must carry, since an upload resets it
+// to private: "" for private, or for no object yet.
+func (r *objectResource) keptACL(ctx context.Context, m objectModel, diags *diag.Diagnostics) (string, bool) {
+	acl, err := r.client.GetObjectACL(ctx, m.Bucket.ValueString(), m.Key.ValueString())
+	if client.IsMOSNotFound(err) {
+		return "", true
+	}
+	if err != nil {
+		diags.AddError("Unable to read the object's ACL before uploading it", err.Error())
+		return "", false
+	}
+	if acl.Canned == "custom" {
+		diags.AddWarning("Object ACL reset",
+			fmt.Sprintf("%s/%s had grants set outside Terraform that aren't a canned ACL. Uploading it again resets them to private.", m.Bucket.ValueString(), m.Key.ValueString()))
+	}
+	if acl.Canned == "private" || acl.Canned == "custom" {
+		return "", true
+	}
+	return acl.Canned, true
+}
+
 // expired reports a retain_until date that has passed: the retention no longer holds the object.
 func expired(until string) bool {
 	t, err := time.Parse(time.RFC3339, until)
@@ -305,36 +349,20 @@ func (r *objectResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 	reupload := plan.ETag.IsUnknown() || !plan.Metadata.Equal(state.Metadata) || !plan.Checksum.Equal(state.Checksum)
-	retention := !plan.RetentionMode.Equal(state.RetentionMode) || !sameInstant(plan.RetainUntil.ValueString(), state.RetainUntil.ValueString())
-	if !plan.RetentionMode.IsNull() && retention && !state.RetentionMode.IsNull() {
-		if err := r.checkShorter(plan, state); err != nil {
-			resp.Diagnostics.AddAttributeError(path.Root("retain_until"), "Retention can't be shortened", err.Error())
-			return
-		}
-	}
-	if state.RetentionMode.ValueString() != "" && plan.RetentionMode.IsNull() && !expired(state.RetainUntil.ValueString()) {
-		resp.Diagnostics.AddAttributeError(path.Root("retention_mode"), "Retention can't be removed",
-			"GOVERNANCE retention can't be taken off an object; it ends at retain_until. Leave retention_mode and retain_until set, or move retain_until.")
-		return
-	}
+	retention := retentionChanged(plan, state) // refused changes are caught at plan time (checkRetention)
+	timeout, d := plan.Timeouts.Update(ctx, mosTimeout)
+	resp.Diagnostics.Append(d...)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	switch {
 	case reupload:
 		// A new upload carries the retention with it. Overwriting an object under retention writes a
 		// new version on S3, but MOS keeps no versions, so it is refused there until retention ends.
 		// An upload also resets the object's ACL to private, so the current one goes with it: an
 		// mtncloud_mos_object_acl on this object stays as it was set.
-		acl, err := r.client.GetObjectACL(ctx, plan.Bucket.ValueString(), plan.Key.ValueString())
-		if err != nil && !client.IsMOSNotFound(err) {
-			resp.Diagnostics.AddError("Unable to read the object's ACL before uploading it again", err.Error())
+		keep, ok := r.keptACL(ctx, plan, &resp.Diagnostics)
+		if !ok {
 			return
-		}
-		keep := ""
-		if acl.Canned != "private" && acl.Canned != "custom" {
-			keep = acl.Canned
-		}
-		if acl.Canned == "custom" {
-			resp.Diagnostics.AddWarning("Object ACL reset",
-				fmt.Sprintf("%s had grants set outside Terraform that aren't a canned ACL. Uploading it again resets them to private.", plan.ID.ValueString()))
 		}
 		r.upload(ctx, &plan, keep, &resp.Diagnostics)
 	case retention && plan.RetentionMode.IsNull():
@@ -346,8 +374,6 @@ func (r *objectResource) Update(ctx context.Context, req resource.UpdateRequest,
 			resp.Diagnostics.AddAttributeError(path.Root("retain_until"), "Invalid retain_until", err.Error())
 			return
 		}
-		ctx, cancel := context.WithTimeout(ctx, mosTimeout)
-		defer cancel()
 		if err := r.client.PutObjectRetention(ctx, plan.Bucket.ValueString(), plan.Key.ValueString(), plan.RetentionMode.ValueString(), t, plan.Bypass.ValueBool()); err != nil {
 			resp.Diagnostics.AddError("Unable to change the object's retention", err.Error())
 			return
@@ -362,8 +388,27 @@ func (r *objectResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 }
 
+func retentionChanged(plan, state objectModel) bool {
+	return !plan.RetentionMode.Equal(state.RetentionMode) || !sameInstant(plan.RetainUntil.ValueString(), state.RetainUntil.ValueString())
+}
+
+// checkRetention refuses, at plan time, a retention change MOS would refuse: shortened without
+// bypass, or removed before it ends.
+func checkRetention(plan, state objectModel, diags *diag.Diagnostics) {
+	if !plan.RetentionMode.IsNull() && retentionChanged(plan, state) && !state.RetentionMode.IsNull() {
+		if err := checkShorter(plan, state); err != nil {
+			diags.AddAttributeError(path.Root("retain_until"), "Retention can't be shortened", err.Error())
+			return
+		}
+	}
+	if state.RetentionMode.ValueString() != "" && plan.RetentionMode.IsNull() && !expired(state.RetainUntil.ValueString()) {
+		diags.AddAttributeError(path.Root("retention_mode"), "Retention can't be removed",
+			"GOVERNANCE retention can't be taken off an object; it ends at retain_until. Leave retention_mode and retain_until set, or move retain_until.")
+	}
+}
+
 // checkShorter refuses to move a retention date earlier unless bypassing is on.
-func (r *objectResource) checkShorter(plan, state objectModel) error {
+func checkShorter(plan, state objectModel) error {
 	// A date that doesn't parse is reported where it is used, not here.
 	newT, errNew := time.Parse(time.RFC3339, plan.RetainUntil.ValueString())
 	oldT, errOld := time.Parse(time.RFC3339, state.RetainUntil.ValueString())
@@ -383,7 +428,9 @@ func (r *objectResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	ctx, cancel := context.WithTimeout(ctx, mosTimeout)
+	timeout, d := state.Timeouts.Delete(ctx, mosTimeout)
+	resp.Diagnostics.Append(d...)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if err := r.client.DeleteMOSObject(ctx, state.Bucket.ValueString(), state.Key.ValueString(), state.Bypass.ValueBool()); err != nil {
 		msg := err.Error()

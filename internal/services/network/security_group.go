@@ -334,7 +334,7 @@ func (r *securityGroupResource) Create(ctx context.Context, req resource.CreateR
 	}
 	project, err := r.client.ProjectByName(ctx, plan.Project.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("project"), "Unknown project", err.Error())
+		resp.Diagnostics.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
 		return
 	}
 

@@ -249,9 +249,10 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		return
 	}
 	if !planKnown(ctx, resp.Plan, r.inputs()) {
-		return // checked at apply
+		// Terraform plans again during apply once every input is known, so this runs then, before Create.
+		return
 	}
-	r.build(ctx, resp.Plan, req.Config, &resp.Diagnostics) // resolves every name; errors point at the attribute
+	r.build(ctx, resp.Plan, req.Config, true, &resp.Diagnostics) // resolves every name; errors point at the attribute
 }
 
 func shown(v attr.Value) string {
@@ -278,7 +279,10 @@ type volume struct {
 
 // build resolves every input to what the order form takes. Secrets come from cfg: they are never
 // in a plan.
-func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Diagnostics) map[string]any {
+// build resolves every name in the plan into the order's form values. checkPools is true at plan
+// time only: the floating IP pool check reads routers, and its warning should show once, not again
+// at create.
+func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools bool, diags *diag.Diagnostics) map[string]any {
 	form, err := r.client.CatalogForm(ctx, r.spec.item)
 	if err != nil {
 		diags.AddError("Unable to read the "+r.spec.item+" order form", err.Error())
@@ -294,8 +298,10 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 		diags.Append(p.GetAttribute(ctx, path.Root(a), &v)...)
 		return v
 	}
-	var primary int64         // the first network's ID
-	var pool, poolAttr string // the floating IP pool, by name
+	// A pool attribute pairs with the networks attribute of the same prefix: floating_ip_pool with
+	// networks, worker_floating_ip_pool with worker_networks.
+	primary := map[string]int64{} // prefix -> the first network's ID
+	pools := map[string]string{}  // pool attribute -> the external network's name
 	fail := func(a string, err error) {
 		diags.AddAttributeError(path.Root(a), "Invalid "+strings.ReplaceAll(strings.TrimSuffix(a, "_"), "_", " "), err.Error())
 	}
@@ -415,9 +421,7 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 					continue
 				}
 				out[f.key] = c.Value
-				if pool == "" {
-					pool, poolAttr = c.Name, f.attr // the external network's name, even when the value ("pool-<id>") was written
-				}
+				pools[f.attr] = c.Name // the external network's name, even when the value ("pool-<id>") was written
 			}
 		case kPlan:
 			v := str(p, f.attr)
@@ -467,8 +471,8 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 					fail(f.attr, err)
 					continue
 				}
-				if i == 0 && primary == 0 {
-					primary = n.ID
+				if i == 0 {
+					primary[strings.TrimSuffix(f.attr, "networks")] = n.ID
 				}
 				nets = append(nets, map[string]any{"primaryInterface": i == 0, "network": map[string]any{"id": "network-" + strconv.FormatInt(n.ID, 10)}})
 			}
@@ -525,16 +529,26 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, diags *diag.Di
 	}
 	// The floating IP is attached through the primary network's router, so check the pool now
 	// rather than after the order has built its VMs.
-	if pool != "" && primary != 0 {
-		switch msg, isErr := r.client.PoolRouterProblem(ctx, primary, pool); {
+	for attr, pool := range pools {
+		net := poolNetwork(attr, primary)
+		if !checkPools || net == 0 {
+			continue
+		}
+		switch msg, isErr := r.client.PoolRouterProblem(ctx, net, pool); {
 		case msg == "":
 		case isErr:
-			diags.AddAttributeError(path.Root(poolAttr), "Floating IP pool doesn't match the router", msg)
+			diags.AddAttributeError(path.Root(attr), "Floating IP pool doesn't match the router", msg)
 		default:
-			diags.AddAttributeWarning(path.Root(poolAttr), "Floating IP pool not checked against a router", msg)
+			diags.AddAttributeWarning(path.Root(attr), "Floating IP pool not checked against a router", msg)
 		}
 	}
 	return out
+}
+
+// poolNetwork is the primary network a floating IP pool attribute is attached through: the first
+// network of the attribute with the same prefix (worker_floating_ip_pool: worker_networks), or 0.
+func poolNetwork(attr string, primary map[string]int64) int64 {
+	return primary[strings.TrimSuffix(attr, "floating_ip_pool")]
 }
 
 func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -545,7 +559,7 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("timeouts"), &to)...)
 	timeout, d := to.Create(ctx, orderTimeout)
 	resp.Diagnostics.Append(d...)
-	config := r.build(ctx, req.Plan, req.Config, &resp.Diagnostics)
+	config := r.build(ctx, req.Plan, req.Config, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}

@@ -26,21 +26,25 @@ import (
 
 // mosFake is MOS (path-style S3, in memory) and the console's bucket records and archives.
 type mosFake struct {
-	mu       sync.Mutex
-	s3       *httptest.Server
-	buckets  map[string]map[string]string // bucket -> key -> body
-	records  map[int64]map[string]any     // console storage bucket records
-	archives map[string]int64             // archive name -> storage bucket record ID
-	archMeta map[string]map[string]any    // archive name -> its other fields (archive_test.go)
-	afiles   map[int64]*fakeArchiveFile   // archive file ID -> the file (archive_file_test.go)
-	alinks   map[int64][]*fakeArchiveLink // archive file ID -> its links
-	acls     map[string]string            // "<bucket>/<key>" (key empty for the bucket) -> canned ACL
-	settings map[string]string            // "<bucket>?cors" and so on -> the XML last put
-	meta     map[string]map[string]string // "<bucket>/<key>" -> user metadata
-	locked   map[string]bool              // buckets created with object lock
-	retained map[string][2]string         // "<bucket>/<key>" -> retention mode and until (RFC 3339)
-	next     int64
-	puts     int // records created or updated, by method
+	mu         sync.Mutex
+	s3         *httptest.Server
+	buckets    map[string]map[string]string // bucket -> key -> body
+	records    map[int64]map[string]any     // console storage bucket records
+	archives   map[string]int64             // archive name -> storage bucket record ID
+	archMeta   map[string]map[string]any    // archive name -> its other fields (archive_test.go)
+	afiles     map[int64]*fakeArchiveFile   // archive file ID -> the file (archive_file_test.go)
+	alinks     map[int64][]*fakeArchiveLink // archive file ID -> its links
+	acls       map[string]string            // "<bucket>/<key>" (key empty for the bucket) -> canned ACL
+	settings   map[string]string            // "<bucket>?cors" and so on -> the XML last put
+	meta       map[string]map[string]string // "<bucket>/<key>" -> user metadata
+	locked     map[string]bool              // buckets created with object lock
+	retained   map[string][2]string         // "<bucket>/<key>" -> retention mode and until (RFC 3339)
+	foreign    map[string]bool              // bucket names another tenant owns: 403 to this tenant, never listed
+	taken      func(string) bool            // more such names, decided per request (called with mu held)
+	heads      []string                     // bucket names asked about with HEAD, in order
+	loseCreate bool                         // the next archive create is made, but answers 502
+	next       int64
+	puts       int // records created or updated, by method
 }
 
 func newMOSFake(t *testing.T, f *fakeAPI) *mosFake {
@@ -48,7 +52,7 @@ func newMOSFake(t *testing.T, f *fakeAPI) *mosFake {
 	m := &mosFake{buckets: map[string]map[string]string{}, records: map[int64]map[string]any{}, archives: map[string]int64{}, archMeta: map[string]map[string]any{},
 		afiles: map[int64]*fakeArchiveFile{}, alinks: map[int64][]*fakeArchiveLink{},
 		acls: map[string]string{}, settings: map[string]string{}, meta: map[string]map[string]string{},
-		locked: map[string]bool{}, retained: map[string][2]string{}, next: 700}
+		locked: map[string]bool{}, retained: map[string][2]string{}, foreign: map[string]bool{}, next: 700}
 	m.s3 = httptest.NewTLSServer(http.HandlerFunc(m.serveS3))
 	t.Cleanup(m.s3.Close)
 	f.mos = http.HandlerFunc(m.serveConsole)
@@ -93,6 +97,10 @@ func (m *mosFake) serveS3(w http.ResponseWriter, r *http.Request) {
 	}
 	at := bucket + "/" + key
 	switch {
+	case key == "" && sub == "" && r.Method == http.MethodHead && m.headTaken(bucket):
+		s3Error(w, http.StatusForbidden, "AccessDenied")
+	case m.foreign[bucket]:
+		s3Error(w, http.StatusForbidden, "AccessDenied")
 	case bucket == "":
 		names := slices.Sorted(maps.Keys(m.buckets))
 		var b strings.Builder
@@ -314,6 +322,12 @@ func (m *mosFake) serveConsole(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// headTaken notes a HEAD on a bucket and reports whether another tenant owns that name.
+func (m *mosFake) headTaken(bucket string) bool {
+	m.heads = append(m.heads, bucket)
+	return m.foreign[bucket] || (m.taken != nil && m.taken(bucket))
+}
+
 func (m *mosFake) addObject(bucket, key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -457,6 +471,123 @@ resource "mtncloud_mos_bucket" "b" {
 	}
 }
 
+// A name another tenant owns answers 403, not 404: bucket names are shared by every tenant. It is
+// reported as taken, not as access denied, and nothing is created.
+func TestMOSBucket_NameTakenByAnotherTenant(t *testing.T) {
+	f := newFakeAPI(t)
+	m := newMOSFake(t, f)
+	m.foreign["their-bucket"] = true
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{
+			Config: m.config(f) + `
+resource "mtncloud_mos_bucket" "b" {
+  name = "their-bucket"
+}
+`,
+			ExpectError: regexp.MustCompile(`(?s)their-bucket: the name is taken by another tenant`),
+		}},
+	})
+	if len(m.records) != 0 {
+		t.Errorf("%d console records made", len(m.records))
+	}
+}
+
+// name_prefix makes a name once and keeps it. A made-up name another tenant has is replaced by
+// another before anything is created. Another prefix replaces the bucket; an imported bucket whose
+// name starts with the prefix is kept.
+func TestMOSBucket_NamePrefix(t *testing.T) {
+	f := newFakeAPI(t)
+	m := newMOSFake(t, f)
+	m.taken = func(name string) bool { return strings.HasPrefix(name, "tf-acc-mos-p-") && len(m.heads) == 1 }
+	cfg := func(prefix string) string {
+		return m.config(f) + `
+resource "mtncloud_mos_bucket" "b" {
+  name_prefix = "` + prefix + `"
+}
+`
+	}
+	nameOf := func(s *terraform.State) string {
+		return s.RootModule().Resources["mtncloud_mos_bucket.b"].Primary.Attributes["name"]
+	}
+	empty := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg("tf-acc-mos-p-"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_mos_bucket.b", tfjsonpath.New("name"), knownvalue.StringRegexp(regexp.MustCompile(`^tf-acc-mos-p-[a-z0-9]{8}$`))),
+					statecheck.ExpectKnownValue("mtncloud_mos_bucket.b", tfjsonpath.New("console_name"), knownvalue.StringRegexp(regexp.MustCompile(`^tf-acc-mos-p-[a-z0-9]{8}$`))),
+				},
+				Check: func(s *terraform.State) error {
+					m.mu.Lock()
+					defer m.mu.Unlock()
+					name := nameOf(s)
+					if _, ok := m.buckets[name]; !ok || len(m.buckets) != 1 {
+						return fmt.Errorf("buckets %v, want only %s", slices.Collect(maps.Keys(m.buckets)), name)
+					}
+					if len(m.heads) < 2 || m.heads[0] == name {
+						return fmt.Errorf("asked about %v: the taken first name should have been dropped for %s", m.heads, name)
+					}
+					return nil
+				},
+			},
+			{Config: cfg("tf-acc-mos-p-"), ConfigPlanChecks: empty},
+			{
+				Config: cfg("tf-acc-mos-q-"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_mos_bucket.b", plancheck.ResourceActionDestroyBeforeCreate)}},
+			},
+			{Config: forget(f, "mtncloud_mos_bucket.b")},
+			{
+				// Imported by name, with a prefix its name starts with: kept, not replaced.
+				Config: cfg("tf-acc-mos-q"), ResourceName: "mtncloud_mos_bucket.b", ImportState: true, ImportStatePersist: true,
+				ImportStateIdFunc: func(*terraform.State) (string, error) {
+					m.mu.Lock()
+					defer m.mu.Unlock()
+					for name := range m.buckets {
+						return name, nil
+					}
+					return "", fmt.Errorf("no bucket")
+				},
+			},
+			{
+				Config: cfg("tf-acc-mos-q"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_mos_bucket.b", plancheck.ResourceActionUpdate)}},
+			},
+			{Config: cfg("tf-acc-mos-q"), ConfigPlanChecks: empty},
+		},
+	})
+}
+
+// Switching an existing bucket from name to a prefix its name starts with keeps it; a different name replaces it.
+func TestMOSBucket_NameToPrefixAndBack(t *testing.T) {
+	f := newFakeAPI(t)
+	m := newMOSFake(t, f)
+	cfg := func(attr string) string {
+		return m.config(f) + "resource \"mtncloud_mos_bucket\" \"b\" {\n  " + attr + "\n}\n"
+	}
+	action := func(a plancheck.ResourceActionType) resource.ConfigPlanChecks {
+		return resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("mtncloud_mos_bucket.b", a)}}
+	}
+	empty := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg(`name = "tf-acc-mos-n1"`)},
+			{Config: cfg(`name_prefix = "tf-acc-mos-n"`), ConfigPlanChecks: action(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_mos_bucket.b", tfjsonpath.New("name"), knownvalue.StringExact("tf-acc-mos-n1"))}},
+			{Config: cfg(`name_prefix = "tf-acc-mos-n"`), ConfigPlanChecks: empty},
+			{Config: cfg(`name = "tf-acc-mos-n1"`), ConfigPlanChecks: action(plancheck.ResourceActionUpdate)},
+			{Config: cfg(`name = "tf-acc-mos-n1"`), ConfigPlanChecks: empty},
+			{Config: cfg(`name = "tf-acc-mos-n2"`), ConfigPlanChecks: action(plancheck.ResourceActionDestroyBeforeCreate)},
+		},
+	})
+}
+
 func TestMOSBucket_PlanTimeChecks(t *testing.T) {
 	f := newFakeAPI(t)
 	m := newMOSFake(t, f)
@@ -465,6 +596,10 @@ func TestMOSBucket_PlanTimeChecks(t *testing.T) {
 		"like an IP":       {`name = "10.20.0.1"`, `look like an IP address`},
 		"unknown endpoint": {"name = \"ok-name\"\n  endpoint = \"internal\"", `value must be one of`},
 		"no private one":   {"name = \"ok-name\"\n  endpoint = \"private\"", `no private endpoint`},
+		"name and prefix":  {"name = \"ok-name\"\n  name_prefix = \"ok-\"", `(?s)Invalid Attribute Combination`},
+		"neither":          {`endpoint = "public"`, `(?s)Invalid Attribute Combination`},
+		"bad prefix":       {`name_prefix = "Bad-"`, `(?s)Invalid name prefix.*can't start a bucket name`},
+		"long prefix":      {`name_prefix = "` + strings.Repeat("a", 56) + `"`, `(?s)name_prefix.*length`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			resource.UnitTest(t, resource.TestCase{

@@ -9,6 +9,11 @@ description: |-
 
 One rule of a security group, for rules managed apart from the group (for example from another module). Leave `rules` unset on that `mtncloud_security_group`: using both on one group makes them undo each other. Every change replaces the rule.
 
+!> **Don't rely on this resource yet.** Creating security groups on MTN Cloud is currently broken on
+the platform side. Terraform creates the group, but MTN Cloud doesn't apply its rules and the group
+doesn't show in the console. Until MTN fixes this, contact MTN Cloud support to set up the security
+groups you need. Instances and orders always get the project's `default` group.
+
 ## Example Usage
 
 ```terraform

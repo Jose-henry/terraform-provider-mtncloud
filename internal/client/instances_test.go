@@ -341,6 +341,15 @@ func TestWaitForPowerChange(t *testing.T) {
 	if in, err := f.client(t, grace).WaitForPowerChange(t.Context(), 9701, "running", "suspended"); err != nil || in.Status != "suspended" {
 		t.Errorf("changed: %v, err %v", in, err)
 	}
+	// A grace spent on failed reads is the API's problem: it is reported as such, never as the VM
+	// ignoring the call.
+	f = newFakeAPI(t)
+	f.route("GET", "/api/instances/9701", func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done() // the read hangs past the grace
+	})
+	if _, err := f.client(t, grace).WaitForPowerChange(t.Context(), 9701, "running", "suspended"); err == nil || errors.Is(err, ErrPowerIgnored) {
+		t.Errorf("failed reads: err %v, want the read's error", err)
+	}
 }
 
 func TestPowerInstance(t *testing.T) {

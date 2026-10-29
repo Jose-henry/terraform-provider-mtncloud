@@ -32,10 +32,23 @@ resource "mtncloud_mos_bucket_acl" "site" {
 - `acl` (String) `private` (only the tenant), `public-read` (anyone may list the bucket), `public-read-write` (anyone may also add and delete objects: rarely wise) or `authenticated-read` (any MOS user may list it).
 - `bucket` (String) The bucket's name in MOS, usually `mtncloud_mos_bucket.<name>.name`. Changing it moves the setting to another bucket.
 
+### Optional
+
+- `timeouts` (Attributes) (see [below for nested schema](#nestedatt--timeouts))
+
 ### Read-Only
 
 - `grants` (List of String) The grants MOS holds, as `<grantee>:<permission>`, for example `AllUsers:READ`.
 - `id` (String) The bucket's name.
+
+<a id="nestedatt--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
+- `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
+- `update` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 ## Import
 

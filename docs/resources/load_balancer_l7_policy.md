@@ -61,7 +61,7 @@ resource "mtncloud_load_balancer_l7_policy" "moved" {
 - `listener_id` (String) The listener, for example `mtncloud_load_balancer_listener.web.id`. It must be `HTTP` or `TERMINATED_HTTPS`. Changing it replaces the policy.
 - `load_balancer_id` (String) ID of the load balancer, for example `mtncloud_load_balancer.web.id`. Changing it replaces the resource.
 - `network_id` (Number) ID of the MTN Network the load balancer is on, for example `mtncloud_network.app.id`. Your tenant must own it: a network shared with you is read-only. Changing it replaces the resource.
-- `position` (Number) Its place in the listener's order, from 1. Number a listener's policies 1, 2, 3 without gaps: the cloud refuses a position another policy holds, so a new policy can only go after the last one. Policies created in one apply are made in position order. The cloud closes gaps, so after one above it is deleted a policy reports a lower position than this, which is the same order and no change.
+- `position` (Number) Its place in the listener's order, from 1. A policy put at a position another holds goes there, and the ones from that position on move down one; a position past the end puts it last. Number a listener's policies 1, 2, 3 without gaps: one apply places its new and moved policies in position order, so each ends where it is configured. The cloud closes gaps, so after one above it is deleted a policy reports a lower position than this, which is the same order and no change.
 
 ### Optional
 

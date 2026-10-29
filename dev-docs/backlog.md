@@ -164,15 +164,19 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
   outlives the build (a Kubernetes build took more than 24 minutes; the token lasts 24). Confirm the
   `worker` block, worker add body and autoscaler body.
 - Document in the guide and the cluster page that a cluster apply needs a longer-lived token.
-- Error title says "Unknown project" for a bad group or cloud.
-- The insecure-connection warning is printed twice.
-- Legacy resources' 403 errors lack the permission hint the client adds.
-- Instances can't use security groups made in the same run until the cloud sync lists them
-  (70+ minutes): document it, or wait for the option at plan time.
+- Done 2026-10-30: a bad group or cloud is titled "Unknown group or cloud", not "Unknown project".
+- Done 2026-10-30: the insecure-connection warning shows once (the Framework half gives it for both).
+- Done 2026-10-30: legacy resources' and data sources' 403 errors carry the permission hint
+  (`internal/legacy/permission_hint.go`, every CRUD wrapped). Found on the way: `mtncloud_virtual_images`
+  panicked on any failed list and lost images past the first page; fixed.
+- Security groups (owner, 2026-10-30): creating security groups is broken on the platform side (the
+  group is made, but its rules aren't applied and it doesn't show in the console). The security group
+  and rule pages now say not to rely on them and to ask MTN Cloud support. No code change. The 70+
+  minute sync wait is part of the same platform problem.
 - Live-untested for the customer role (403): SSL certificate, standalone floating IP, library option
   lists and types, shell script tasks and the workflows built on them, NFS/SMB orders. Need a login
   with those permissions.
-- The QA project `tf-acc-proj-w1hl0` must be deleted by an admin login (owner).
+- The QA project `tf-acc-proj-w1hl0`: the owner deletes it.
 - From the review of the QA fixes (2026-10-28), low severity:
   - Instance resize: if the platform accepts the resize but never applies it, the apply waits out the
     update timeout and fails with a generic timeout. Report the plan and status the instance was
@@ -265,10 +269,12 @@ form's plan field is a select, and falls back to the wizard's list otherwise. Mu
 - A router whose external network changes in the same apply as a new instance or order with that pool
   fails the plan (the check reads routers as they are). Workaround in the message: change the router
   in its own apply. Revisit if it bites.
-- Orders: the "not checked against a router" warning can show at plan, at the apply re-plan and at
-  create; only the first pool attribute is checked (managed Kubernetes `worker_floating_ip_pool` isn't).
-- Tests: no provider unit test drives `checkPoolRouter` or the order check, and none covers a power
-  grace spent on failed reads. Add them with the next instance or order change.
+- Done 2026-10-30: orders check every pool attribute against the first network of its own group
+  (`worker_floating_ip_pool` with `worker_networks`, `master_` with `master_networks`), at plan time
+  only, so the warning no longer shows again at create. (Terraform itself may show a plan warning
+  again in the apply's own plan.)
+- Done 2026-10-30: provider unit tests drive `checkPoolRouter` and the order check, and a client test
+  covers a power grace spent on failed reads.
 
 ## B-021 Load balancer resources must refresh the per-run snapshot (2026-10-29, from review) — done (D-033)
 `LoadBalancerSnapshot` caches one `read` per network and selector for the life of a provider instance.
@@ -277,13 +283,21 @@ must drop the cached entries for its network (add a delete-by-prefix to `lookupC
 source that `depends_on` the resource reads the load balancer as it was before the change.
 
 ## B-022 MOS follow-ups (from the 2026-10-29 review)
-- Settings and object resources use a fixed 5 min bound; add `timeouts {}` like `mtncloud_mos_bucket`.
-- Replacing an object (`-replace`, or a key change) uploads it as private while `mtncloud_mos_object_acl`
-  still holds the old value; the next apply sets it again. Carry the ACL on create when the object exists.
-- Metadata name case and retention changes are checked at apply time; move them to plan time.
-- A bucket name another tenant owns probably answers 403 on HeadBucket, which reads as "access denied".
-  Check live and map it to "the name is taken".
-- Re-test object lock and retention live once MTN enables object lock on the cluster.
+- Done 2026-10-30: `timeouts {}` on the bucket settings, `mtncloud_mos_object` and
+  `mtncloud_mos_object_acl`. The setting and object ACL models are shared with data sources, which
+  have no timeouts block, so those resources read and write the model through the schema without it
+  (`storage/timeouts.go`).
+- Done 2026-10-30: an upload over an object that already exists keeps its canned ACL, on create too.
+  A replace deletes the object with its ACL first, so the object ACL page and example show
+  `replace_triggered_by` to set it again in the same apply.
+- Done 2026-10-30: metadata name case (ValidateConfig) and retention shortening or removal
+  (ModifyPlan) are refused at plan time.
+- Done 2026-10-30: a 403 on a bucket name not in the tenant's own list reads "the name is taken by
+  another tenant". OneFS keys bucket names per access zone, and MTN puts every tenant's user in zone
+  `system`, so all tenants share one namespace (as all AWS accounts do). New `name_prefix` on
+  `mtncloud_mos_bucket` (as AWS's `bucket_prefix`): prefix plus 8 random characters, picked again if
+  taken. Confirmed live by the owner 2026-10-30: a name another tenant owns answers 403 AccessDenied.
+- Re-test object lock and retention live once MTN enables object lock on the cluster (owner: later).
 
 ## B-023 Load balancer follow-ups (from the 2026-10-29 review)
 - Done 2026-10-29 (plugin f577a90, guide 9.6): piece creates send a `requestId`; the plugin tags the
@@ -301,22 +315,38 @@ source that `depends_on` the resource reads the load balancer as it was before t
 - Not exposed yet: cluster-group members (`clusterGroup`) and pinning one node of an instance
   (`pinAddress`).
 
-## B-024 Archive follow-ups (from the 2026-10-29 review)
-- Client contract test for `internal/client/archives.go` with scrubbed fixtures in `testdata/archives/`
-  (nil body → 404, create answer without an ID, list pagination).
-- A test for the lost-answer adoption in create (a fake that answers 5xx after making the archive).
-- A `_drift` step (description or `isPublic` changed in the console).
-- `TestArchiveBucket_OtherBucketReplaces`: assert the old archive is gone, and that a replace is refused
-  while the old archive holds files.
-- Owner check before "import it": compare the found archive's owner with the caller's tenant, once
-  `internal/tenancy` exposes the tenant name. The error already names the owner.
-- Slice 2: `mtncloud_archive_file`, `mtncloud_archive_file_link`, `mtncloud_archive_files`.
+## B-024 Archive follow-ups (from the 2026-10-29 review) — done 2026-10-30
+- Client contract tests for `archives.go` (`testdata/archives/`, built from the documented answer
+  shape: the only live capture is an empty list), lost-answer adoption, a drift step, and the replace
+  test's assertions (old archive gone; refused while it holds files).
+- An archive name another tenant uses: a visible one names that tenant (owner compared with
+  `whoami`), and a private one, which the list doesn't show, maps the create's "must be unique" to
+  "another tenant has an archive named ...".
 
-## B-025 L7 policy positions: plugin limit (live QA t92, 2026-10-29)
-- The plugin refuses a position another policy on the listener holds now, on create and update, and the
-  cloud closes gaps. So a new policy can only go last, and policies can't be reordered in place
-  (D-033). The provider runs one apply's creates in position order and explains the refusal.
-- Ask the plugin owner for insert-and-shift on create and update (the cloud API's own behaviour):
-  validate a position against 1..count+1 instead of against the positions held now. Then reordering
-  and inserting work, and the provider's create ordering can stay as a harmless extra.
+## B-025 L7 policy positions (live QA t92, 2026-10-29) — provider side done 2026-10-30
+- The plugin now inserts and shifts (plugin 07b5e8d, guide 9.6): a position from 1 to count+1 goes
+  there and the others move down; past the end goes last; no position keeps an update's place.
+  The provider dropped its refusal mapping, and runs one apply's creates and moves on a listener in
+  ascending position order (`l7Turn`), so each lands where configured and the next plan is empty.
+- Checked live 2026-10-30 (QA t95): a1 b2, then z inserted at 1 (z1 a2 b3: 1 created, 2 moved), then
+  b1 z2 a3 in place (3 moved). Each apply landed in the configured order, and the next plan was
+  `No changes.`
+- The plugin also refuses a change that would leave a REJECT policy with no rules first on the
+  listener, including through a shift; the provider passes that message on.
 - `_disappears` steps for the L7 policy and the instance member are still missing.
+
+## B-026 Next tasks: apps, resources and groups (owner, 2026-10-30)
+Not built yet, to pick up after Kubernetes and clusters:
+- **Apps.** No resource creates or changes an app: only the `mtncloud_app` and `mtncloud_apps` data
+  sources exist (plan in B-017, with its open questions). Pools for an app's instances come from the
+  floating IP options source with `zoneId` + `resourcePoolId` (no VM exists yet), as clusters do.
+- **Resources.** An app's instances (add and remove, tiers) and the resources an app holds are part
+  of the app slice; nothing manages them today.
+- **Groups.** `mtncloud_group` is the legacy resource, never tested against MTN Cloud and not
+  migrated. Check what a sub-tenant login may do with `/api/groups` (customer-permissions.md), then
+  migrate it to the Framework with the usual tests, or mark it master-only.
+
+## B-027 Catalog order floating IP pools in other projects (2026-10-30)
+Pool IDs are per project (api-research, floating IPs): `public-network-02` is `pool-43` in `admin`
+and `pool-2002` in the QA project. Orders send the form's fixed value (`admin`'s IDs). Owner approved
+one test order in the QA project to see which address the VM gets.

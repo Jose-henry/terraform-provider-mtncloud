@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -109,8 +108,7 @@ func (c *Client) CreateLBL7Policy(ctx context.Context, networkID int64, lbID, li
 		return "", err
 	}
 	defer done()
-	id, err := c.createLBL7Policy(ctx, networkID, lbID, listenerID, s)
-	return id, l7PositionHint(err)
+	return c.createLBL7Policy(ctx, networkID, lbID, listenerID, s)
 }
 
 // l7Gather is how long a policy create waits for the other creates of the same apply to start.
@@ -122,11 +120,11 @@ type l7Gate struct {
 	pending map[*int64]bool
 }
 
-// l7Turn waits until no create of a lower position on the same listener is under way. The plugin
-// takes a position only when no policy holds it, and the cloud closes gaps, so a new policy can only
-// go after the listener's last one: creates in one apply must run in position order (D-033).
+// l7Turn waits until no create or move to a lower position on the same listener is under way. The
+// plugin inserts a policy at its position and shifts the ones at and below it down (D-033), so
+// placing one apply's policies in ascending position order lands each where it is configured.
 // Terraform starts them together, in any order; each waits l7Gather for the others to start, then
-// for the lower ones to finish. done ends this create's turn.
+// for the lower ones to finish. done ends this policy's turn.
 func (c *Client) l7Turn(ctx context.Context, listenerID string, pos int64) (done func(), err error) {
 	v, _ := c.l7Gates.LoadOrStore(listenerID, &l7Gate{pending: map[*int64]bool{}})
 	g := v.(*l7Gate)
@@ -163,16 +161,6 @@ func (c *Client) l7Turn(ctx context.Context, listenerID string, pos int64) (done
 	return done, nil
 }
 
-// l7PositionHint explains the plugin's refusal of a taken position.
-func l7PositionHint(err error) error {
-	if err == nil || !strings.Contains(err.Error(), "is used by another policy on this listener") {
-		return err
-	}
-	return fmt.Errorf("%w. A listener's policies are numbered 1, 2, 3 without gaps, and a position can't be given "+
-		"to a policy while another holds it, so a new policy can only go after the last one. Number the listener's "+
-		"policies from 1 without gaps; to put a new one before others, remove those and add them again after it", err)
-}
-
 func (c *Client) createLBL7Policy(ctx context.Context, networkID int64, lbID, listenerID string, s LBL7PolicySpec) (string, error) {
 	return c.pieceCreate(ctx, networkID, lbID, "l7policy-create", "L7 policy", map[string]any{"listenerId": listenerID, "spec": s.body()}, func(lb *LoadBalancer, tag string) string {
 		if l := ListenerOf(lb, listenerID); l != nil {
@@ -186,9 +174,18 @@ func (c *Client) createLBL7Policy(ctx context.Context, networkID int64, lbID, li
 	})
 }
 
-func (c *Client) UpdateLBL7Policy(ctx context.Context, networkID int64, lbID, listenerID, id string, s LBL7PolicySpec) error {
+// UpdateLBL7Policy changes an L7 policy. moved says its position changes: it then takes its turn
+// with the apply's other creates and moves on the listener (l7Turn).
+func (c *Client) UpdateLBL7Policy(ctx context.Context, networkID int64, lbID, listenerID, id string, s LBL7PolicySpec, moved bool) error {
+	if moved {
+		done, err := c.l7Turn(ctx, listenerID, s.Position)
+		if err != nil {
+			return err
+		}
+		defer done()
+	}
 	_, err := c.lbWrite(ctx, networkID, lbID, "l7policy-update", map[string]any{"listenerId": listenerID, "l7policyId": id, "spec": s.body()})
-	return l7PositionHint(err)
+	return err
 }
 
 func (c *Client) DeleteLBL7Policy(ctx context.Context, networkID int64, lbID, listenerID, id string) error {

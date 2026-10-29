@@ -9,6 +9,11 @@ description: |-
 
 A security group (firewall) for instances in one project. MTN Cloud adds two rules to every new group that allow all outbound traffic (IPv4 and IPv6); they appear in MTN Cloud after its next sync. By default Terraform leaves them in place; set `remove_default_egress` to remove them.
 
+!> **Don't rely on this resource yet.** Creating security groups on MTN Cloud is currently broken on
+the platform side. Terraform creates the group, but MTN Cloud doesn't apply its rules and the group
+doesn't show in the console. Until MTN fixes this, contact MTN Cloud support to set up the security
+groups you need. Instances and orders always get the project's `default` group.
+
 ## Example Usage
 
 ```terraform

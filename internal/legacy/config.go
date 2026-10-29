@@ -63,22 +63,8 @@ func (c *Config) Client() (*sdk.Client, diag.Diagnostics) {
 	if c.client == nil {
 		var client *sdk.Client
 		if c.Insecure {
+			// No warning here: the Framework half of the muxed provider gives it once for both.
 			client = sdk.NewClient(c.Url, sdk.WithDebug(debug), sdk.Insecure())
-			diags = append(diags, diag.Diagnostic{
-				Severity: diag.Warning,
-				Summary:  "SSL Certificate Verification Disabled",
-				Detail: `
-SSL certificate verification is disabled. To enable verification, set "secure = true" in your
-provider configuration or set environment variable MTNCLOUD_API_SECURE to true.
-provider "mtncloud" {
-	url = "https://..."
-	.
-	.
-	.
-	secure = true <-- set to true to enable certificate verification
-}
-`,
-			})
 		} else {
 			client = sdk.NewClient(c.Url, sdk.WithDebug(debug), sdk.WithErrCallbackFunc(certErrCallback))
 		}

@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"net/url"
@@ -59,7 +60,7 @@ func (c *Client) Placement(ctx context.Context) (*Placement, error) {
 		}
 		group, err := pick("group", groups, c.cfg.Defaults.Group)
 		if err != nil {
-			return nil, err
+			return nil, placementError{err}
 		}
 		clouds, err := c.options(ctx, "clouds", url.Values{"groupId": {itoa(group.ID)}})
 		if err != nil {
@@ -67,7 +68,7 @@ func (c *Client) Placement(ctx context.Context) (*Placement, error) {
 		}
 		cloud, err := pick("cloud", clouds, c.cfg.Defaults.Cloud)
 		if err != nil {
-			return nil, err
+			return nil, placementError{err}
 		}
 		return &Placement{CloudID: cloud.ID, CloudName: cloud.Name, GroupID: group.ID, GroupName: group.Name}, nil
 	})
@@ -205,6 +206,22 @@ func (c *Client) Groups(ctx context.Context) ([]Option, error) {
 	return c.options(ctx, "groups", nil)
 }
 
+// placementError is a group or cloud that can't be resolved (provider settings or env vars), which
+// surfaces through a project lookup: ProjectErrorTitle tells the two apart.
+type placementError struct{ err error }
+
+func (e placementError) Error() string { return e.err.Error() }
+func (e placementError) Unwrap() error { return e.err }
+
+// ProjectErrorTitle is the title for an error from a project lookup: "Unknown group or cloud" when
+// the group or cloud couldn't be resolved first, otherwise "Unknown project".
+func ProjectErrorTitle(err error) string {
+	if errors.As(err, new(placementError)) {
+		return "Unknown group or cloud"
+	}
+	return "Unknown project"
+}
+
 // PlacementForGroup is the placement of a named group: the group and its one OpenStack cloud.
 // Case is ignored, as the console does.
 func (c *Client) PlacementForGroup(ctx context.Context, name string) (*Placement, error) {
@@ -224,7 +241,7 @@ func (c *Client) PlacementForGroup(ctx context.Context, name string) (*Placement
 		}
 		cloud, err := pick("cloud", clouds, c.cfg.Defaults.Cloud)
 		if err != nil {
-			return nil, err
+			return nil, placementError{err}
 		}
 		return &Placement{CloudID: cloud.ID, CloudName: cloud.Name, GroupID: g.ID, GroupName: g.Name}, nil
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -227,8 +228,17 @@ func (r *archiveResource) Create(ctx context.Context, req resource.CreateRequest
 		resp.Diagnostics.AddError("Unable to check for an existing archive", err.Error())
 		return
 	} else if found != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("name"), "Archive already exists",
-			fmt.Sprintf("An archive named %q already exists (ID %d, owner %q), and archive names are unique across all tenants. If it is your tenant's, import it with `terraform import <address> %d`; otherwise choose another name.", name, found.ID, found.Owner, found.ID))
+		msg := fmt.Sprintf("An archive named %q already exists (ID %d), and archive names are unique across all tenants. "+
+			"If it is your tenant's, import it with `terraform import <address> %d`; otherwise choose another name.", name, found.ID, found.ID)
+		if who, werr := r.client.WhoAmI(ctx); werr == nil && found.Owner != "" {
+			if strings.EqualFold(found.Owner, who.AccountName) {
+				msg = fmt.Sprintf("An archive named %q already exists (ID %d). It is your tenant's: import it with "+
+					"`terraform import <address> %d`, or choose another name.", name, found.ID, found.ID)
+			} else {
+				msg = fmt.Sprintf("Tenant %q already has an archive named %q, and archive names are unique across all tenants. Choose another name.", found.Owner, name)
+			}
+		}
+		resp.Diagnostics.AddAttributeError(path.Root("name"), "Archive already exists", msg)
 		return
 	}
 	in := client.ArchiveBucketInput{Name: name, Description: plan.Description.ValueString(), StorageBucketID: sid, IsPublic: plan.PublicURL.ValueBool()}
@@ -238,6 +248,12 @@ func (r *archiveResource) Create(ctx context.Context, req resource.CreateRequest
 		if found, ferr := r.client.FindArchiveBucket(ctx, name); ferr == nil && found != nil && found.StorageBucketID == sid {
 			a, err = found, nil
 		}
+	}
+	if err != nil && strings.Contains(err.Error(), "must be unique") {
+		// Not in the list this tenant sees, yet taken: another tenant's private archive has the name.
+		resp.Diagnostics.AddAttributeError(path.Root("name"), "Archive name taken",
+			fmt.Sprintf("Another tenant has an archive named %q, and archive names are unique across all tenants. Choose another name. (%s)", name, err))
+		return
 	}
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create the archive", err.Error())

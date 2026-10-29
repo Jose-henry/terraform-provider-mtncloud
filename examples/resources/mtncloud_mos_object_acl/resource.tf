@@ -13,4 +13,9 @@ resource "mtncloud_mos_object_acl" "logo" {
   bucket = mtncloud_mos_object.logo.bucket
   key    = mtncloud_mos_object.logo.key
   acl    = "public-read"
+
+  # A replaced object is deleted with its ACL: set the ACL again in the same apply.
+  lifecycle {
+    replace_triggered_by = [mtncloud_mos_object.logo]
+  }
 }

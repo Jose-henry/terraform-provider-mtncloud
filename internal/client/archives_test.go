@@ -1,128 +1,87 @@
 package client
 
 import (
-	"io"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 )
 
-func TestArchivePath_EscapesEachPart(t *testing.T) {
-	for in, want := range map[string]string{
-		"docs":            "/api/archives/buckets/my%20files/files/docs",
-		"/docs/2026 q4/":  "/api/archives/buckets/my%20files/files/docs/2026%20q4",
-		".":               "/api/archives/buckets/my%20files/files/",
-		"":                "/api/archives/buckets/my%20files/files/",
-		"a/b%c/d?.txt":    "/api/archives/buckets/my%20files/files/a/b%25c/d%3F.txt",
-		"reports/x#y.pdf": "/api/archives/buckets/my%20files/files/reports/x%23y.pdf",
-	} {
-		if got := archivePath("my files", in); got != want {
-			t.Errorf("archivePath(%q) = %q, want %q", in, got, want)
-		}
+func archiveFixture(t *testing.T, file string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "archives", file))
+	if err != nil {
+		t.Fatal(err)
 	}
+	return b
 }
 
-func TestGetArchiveBucket_EmptyAnswerIsNotFound(t *testing.T) {
+func TestGetArchiveBucket(t *testing.T) {
 	f := newFakeAPI(t)
-	f.route("GET", "/api/archives/buckets/7", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{}`)) })
-	f.route("GET", "/api/archives/files/9", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{}`)) })
-	c := f.client(t)
-	if _, err := c.GetArchiveBucket(t.Context(), 7); !IsNotFound(err) {
-		t.Errorf("archive: err %v, want not found", err)
+	f.route("GET", "/api/archives/buckets/7001", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(archiveFixture(t, "get.json"))
+	})
+	a, err := f.client(t).GetArchiveBucket(t.Context(), 7001)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := c.GetArchiveFile(t.Context(), 9); !IsNotFound(err) {
-		t.Errorf("file: err %v, want not found", err)
+	want := ArchiveBucket{ID: 7001, Name: "tf-acc-archive-docs", Description: "Release notes", StorageBucketID: 701,
+		StorageBucket: "kestrel-files", Owner: "Kestrel-Dev_01", Visibility: "private", IsPublic: true, FileCount: 3, RawSize: 2048}
+	if *a != want {
+		t.Errorf("got %+v\nwant %+v", *a, want)
 	}
 }
 
-func TestCreateArchiveBucket_AnswerWithoutIDIsAnError(t *testing.T) {
+// A 200 with no archive in it is the API's way of saying "gone": it reads as a 404.
+func TestGetArchiveBucket_NullIsNotFound(t *testing.T) {
+	f := newFakeAPI(t)
+	f.route("GET", "/api/archives/buckets/7001", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(archiveFixture(t, "get_null.json"))
+	})
+	if _, err := f.client(t).GetArchiveBucket(t.Context(), 7001); !IsNotFound(err) {
+		t.Errorf("err %v, want a 404", err)
+	}
+}
+
+// A create answer that names no archive is an error, never an archive with ID 0 in state.
+func TestCreateArchiveBucket_NoIDInAnswer(t *testing.T) {
 	f := newFakeAPI(t)
 	f.route("POST", "/api/archives/buckets", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"success":true,"archiveBucket":{}}`))
+		_, _ = w.Write(archiveFixture(t, "create_no_id.json"))
 	})
-	if _, err := f.client(t).CreateArchiveBucket(t.Context(), ArchiveBucketInput{Name: "x", StorageBucketID: 1}); err == nil {
-		t.Error("no error for an answer without an archive")
+	_, err := f.client(t).CreateArchiveBucket(t.Context(), ArchiveBucketInput{Name: "tf-acc-archive-docs", StorageBucketID: 701})
+	if err == nil || !strings.Contains(err.Error(), "names no archive") {
+		t.Errorf("err %v", err)
 	}
 }
 
-// The upload sends the raw content, the folder in the path and the name in filename.
-func TestUploadArchiveFile_SendsTheRawContent(t *testing.T) {
+// The list is read page by page until meta.total, and FindArchiveBucket looks through all of it.
+func TestListArchiveBuckets_Pages(t *testing.T) {
+	const total = pageSize + 3
 	f := newFakeAPI(t)
-	var body, ctype, name string
-	f.route("POST", "/api/archives/buckets/exports/files/docs/2026", func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		body, ctype, name = string(b), r.Header.Get("Content-Type"), r.URL.Query().Get("filename")
-		_, _ = w.Write([]byte(`{"success":true,"archiveFile":{"id":1626,"name":"note.txt","filePath":"docs/2026/note.txt"}}`))
-	})
-	a, err := f.client(t).UploadArchiveFile(t.Context(), "exports", "/docs/2026/note.txt", []byte("hello\x00bin"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a.ID != 1626 || body != "hello\x00bin" || ctype != "application/octet-stream" || name != "note.txt" {
-		t.Errorf("id %d, body %q, type %q, filename %q", a.ID, body, ctype, name)
-	}
-}
-
-// An upload answer without the file: it is found by its path.
-func TestUploadArchiveFile_FindsTheFileWhenTheAnswerHasNone(t *testing.T) {
-	f := newFakeAPI(t)
-	f.route("POST", "/api/archives/buckets/exports/files/", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"success":true}`))
-	})
-	f.route("GET", "/api/archives/buckets/exports/files/", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"archiveFiles":[{"id":5,"filePath":"top.txt","isDirectory":true},{"id":6,"filePath":"/top.txt"}],"meta":{"total":2}}`))
-	})
-	a, err := f.client(t).UploadArchiveFile(t.Context(), "exports", "top.txt", nil)
-	if err != nil || a.ID != 6 || a.FilePath != "top.txt" {
-		t.Fatalf("got %+v, %v; want file 6 at top.txt", a, err)
-	}
-}
-
-// The create answer has only the secret (live): the link is found among the file's links by it.
-func TestCreateArchiveFileLink_FindsTheLinkBySecret(t *testing.T) {
-	f := newFakeAPI(t)
-	var expire string
-	f.route("POST", "/api/archives/files/1626/links", func(w http.ResponseWriter, r *http.Request) {
-		expire = r.URL.Query().Get("expireSeconds")
-		_, _ = w.Write([]byte(`{"success":true,"secretAccessKey":"5ec7e7b"}`))
-	})
-	f.route("GET", "/api/archives/files/1626/links", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"archiveFileLinks":[{"id":7,"secretAccessKey":"5ec7e7a","expirationDate":null},` +
-			`{"id":8,"secretAccessKey":"5ec7e7b","dateCreated":"2026-10-29T12:05:20Z","expirationDate":"2026-10-29T12:06:20Z"}],"meta":{"total":2}}`))
+	calls := 0
+	f.route("GET", "/api/archives/buckets", func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		var items []string
+		for i := offset; i < min(offset+pageSize, total); i++ {
+			items = append(items, fmt.Sprintf(`{"id": %d, "name": "a-%d"}`, 8000+i, i))
+		}
+		_, _ = fmt.Fprintf(w, `{"archiveBuckets": [%s], "meta": {"total": %d}}`, strings.Join(items, ","), total)
 	})
 	c := f.client(t)
-	l, err := c.CreateArchiveFileLink(t.Context(), 1626, 60)
-	if err != nil {
-		t.Fatal(err)
+	all, err := c.ListArchiveBuckets(t.Context())
+	if err != nil || len(all) != total || calls != 2 {
+		t.Fatalf("%d archives in %d calls, err %v", len(all), calls, err)
 	}
-	if l.ID != 8 || l.FileID != 1626 || l.ExpirationDate != "2026-10-29T12:06:20Z" || expire != "60" {
-		t.Errorf("got %+v, expireSeconds %q", l, expire)
+	a, err := c.FindArchiveBucket(t.Context(), fmt.Sprintf("a-%d", total-1))
+	if err != nil || a == nil || a.ID != 8000+total-1 {
+		t.Errorf("found %+v, err %v", a, err)
 	}
-	// 0 means never: the parameter is left out, as the CLI does (live).
-	if _, err := c.CreateArchiveFileLink(t.Context(), 1626, 0); err != nil || expire != "" {
-		t.Errorf("never-expiring link: err %v, expireSeconds %q", err, expire)
-	}
-	if got := c.ArchiveLinkURL("5ec7e7b"); got != f.srv.URL+"/public-archives/link?s=5ec7e7b" {
-		t.Errorf("link URL %q", got)
-	}
-}
-
-// A link whose answer was lost is the one link that wasn't there before: never an untracked public link.
-func TestCreateArchiveFileLink_LostAnswerFindsTheNewLink(t *testing.T) {
-	f := newFakeAPI(t)
-	made := false
-	f.route("POST", "/api/archives/files/1626/links", func(w http.ResponseWriter, _ *http.Request) {
-		made = true
-		w.WriteHeader(http.StatusBadGateway) // the gateway lost the answer; the link exists
-	})
-	f.route("GET", "/api/archives/files/1626/links", func(w http.ResponseWriter, _ *http.Request) {
-		rows := `{"id":7,"secretAccessKey":"5ec7e7a"}`
-		if made {
-			rows += `,{"id":9,"secretAccessKey":"5ec7e7c","expirationDate":null}`
-		}
-		_, _ = w.Write([]byte(`{"archiveFileLinks":[` + rows + `],"meta":{"total":` + map[bool]string{false: "1", true: "2"}[made] + `}}`))
-	})
-	l, err := f.client(t, fastPoll).CreateArchiveFileLink(t.Context(), 1626, 0)
-	if err != nil || l.ID != 9 || l.Secret != "5ec7e7c" {
-		t.Fatalf("got %+v, %v; want the new link 9", l, err)
+	if a, err := c.FindArchiveBucket(t.Context(), "nope"); a != nil || err != nil {
+		t.Errorf("found %+v, err %v; want nothing", a, err)
 	}
 }

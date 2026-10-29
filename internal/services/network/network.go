@@ -75,7 +75,7 @@ func (b *base) planProject(ctx context.Context, req resource.ModifyPlanRequest, 
 	if req.State.Raw.IsNull() {
 		if !plan.IsUnknown() {
 			if _, err := b.client.ProjectByName(ctx, plan.ValueString()); err != nil {
-				resp.Diagnostics.AddAttributeError(at, "Unknown project", err.Error())
+				resp.Diagnostics.AddAttributeError(at, client.ProjectErrorTitle(err), err.Error())
 			}
 		}
 		return
@@ -93,7 +93,7 @@ func (b *base) planProject(ctx context.Context, req resource.ModifyPlanRequest, 
 	from, errFrom := b.client.ProjectByName(ctx, state.ValueString())
 	to, errTo := b.client.ProjectByName(ctx, plan.ValueString())
 	if errTo != nil {
-		resp.Diagnostics.AddAttributeError(at, "Unknown project", errTo.Error())
+		resp.Diagnostics.AddAttributeError(at, client.ProjectErrorTitle(errTo), errTo.Error())
 		return
 	}
 	if errFrom != nil || from.ID != to.ID {
