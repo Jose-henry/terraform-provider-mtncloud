@@ -373,3 +373,21 @@ sections 9.2 to 9.6 and a live write probe on network 114 (dev-docs/api-research
   PENDING_* read, or after 2 minutes without one.
 - Members are external (`address` + `port`) in this slice. Instance and cluster members, L7 policies
   and floating IPs follow.
+
+## D-034 Archives are typed resources on a MOS bucket (owner, 2026-10-29)
+The platform's archive API (`/api/archives/buckets`, Context7 reference and the CLI's `archives`
+commands; there are no MTN docs for it) is wrapped as `mtncloud_archive_bucket` plus data sources;
+files and download links follow (slice 2). Live probe on the dev tenant: dev-docs/api-research.md.
+- The bucket is named either way (owner: "use bucket name and id"): `mos_bucket` (its MOS name,
+  matched on the console record's `bucketName`) or `mos_bucket_id` (the record ID, what
+  `mtncloud_mos_bucket.id` is). Exactly one is set; ModifyPlan resolves the other at plan time, and
+  a bucket made in the same run is resolved at create. The API can't move an archive, so another
+  bucket replaces it.
+- Archives are created private (`visibility: private`, no `accounts`): sharing with other tenants is a
+  master-tenant job (D-004) and is left out. `public_url` (`isPublic`) is exposed, with the warning
+  that anyone can then download the files.
+- Names are unique across every tenant: create looks the name up first and says "import it"; after
+  a lost answer it adopts the archive with that name on that bucket (rule 11).
+- Deleting an archive deletes its files, also in MOS (live). Destroy refuses while `fileCount > 0`
+  unless `force_destroy`, as `mtncloud_mos_bucket` does for objects.
+

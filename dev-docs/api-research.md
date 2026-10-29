@@ -633,3 +633,23 @@ in MOS, then delete the console record. The tenant has the archive API but no ar
   `deleting` on delete.
 - `loadbalancer-update` (added 2026-10-29, guide 9.6): spec keys `name`, `description`, `tags`,
   `adminStateUp` only; null leaves a field, `""`/`[]` clears; any other key is refused by name.
+
+## Archives (live probe, 2026-10-29, dev tenant, `tf-acc-arch-*`, all deleted)
+Through the CLI on a QA MOS bucket (`mtncloud_mos_bucket`, console record from the provider):
+- `archives add -d` builds `{"archiveBucket": {name, description, storageProvider: {id}, accounts: [],
+  visibility, isPublic}}`. The storage provider choices come from `GET /api/options/storageProviders`
+  (console record names and IDs).
+- Create answers `{success, archiveBucket: {id, name, description, storageProvider: {id, name (the
+  record's console name)}, owner: {id, name}, createdBy, isPublic, visibility, code, filePath
+  ("morpheus-archives/<code>/", the prefix in the MOS bucket), rawSize (null when empty), fileCount,
+  accounts, dateCreated, lastUpdated}}`. `GET /api/archives/buckets/{id or name}` answers the same.
+- Upload: `POST /api/archives/buckets/<name>/files/<folder>?filename=<file>` with the raw body
+  (`application/octet-stream`); the folder is made on the way.
+- List: `GET /api/archives/buckets/<name>/files/<folder>` answers `{archiveFiles: [{id, name,
+  filePath (the whole path, "docs/hello.txt"), isDirectory, status, rawSize, contentType, ...}],
+  archiveFileCount, parentDirectory, archiveBucket, isOwner, meta}`. A missing folder is a 200 with
+  `msg: "Directory not found."` and no files.
+- `DELETE /api/archives/buckets/{id}` on an archive holding a file: `{"success": true}`; afterwards the
+  MOS bucket held no objects. Confirmed in the provider's QA: an uploaded file sits in the MOS bucket
+  at `<filePath>docs/hello.txt`, and is gone from the bucket after the archive is deleted.
+

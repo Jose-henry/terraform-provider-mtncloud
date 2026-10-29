@@ -31,6 +31,7 @@ type mosFake struct {
 	buckets  map[string]map[string]string // bucket -> key -> body
 	records  map[int64]map[string]any     // console storage bucket records
 	archives map[string]int64             // archive name -> storage bucket record ID
+	archMeta map[string]map[string]any    // archive name -> its other fields (archive_test.go)
 	acls     map[string]string            // "<bucket>/<key>" (key empty for the bucket) -> canned ACL
 	settings map[string]string            // "<bucket>?cors" and so on -> the XML last put
 	meta     map[string]map[string]string // "<bucket>/<key>" -> user metadata
@@ -42,7 +43,7 @@ type mosFake struct {
 
 func newMOSFake(t *testing.T, f *fakeAPI) *mosFake {
 	t.Helper()
-	m := &mosFake{buckets: map[string]map[string]string{}, records: map[int64]map[string]any{}, archives: map[string]int64{},
+	m := &mosFake{buckets: map[string]map[string]string{}, records: map[int64]map[string]any{}, archives: map[string]int64{}, archMeta: map[string]map[string]any{},
 		acls: map[string]string{}, settings: map[string]string{}, meta: map[string]map[string]string{},
 		locked: map[string]bool{}, retained: map[string][2]string{}, next: 700}
 	m.s3 = httptest.NewTLSServer(http.HandlerFunc(m.serveS3))
@@ -252,12 +253,8 @@ func md5Of(s string) string {
 func (m *mosFake) serveConsole(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if r.URL.Path == "/api/archives/buckets" {
-		rows := []any{}
-		for name, id := range m.archives {
-			rows = append(rows, map[string]any{"name": name, "storageProvider": map[string]any{"id": id}})
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"archiveBuckets": rows, "meta": map[string]any{"total": len(rows)}})
+	if strings.HasPrefix(r.URL.Path, "/api/archives") {
+		m.serveArchives(w, r)
 		return
 	}
 	id, _ := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, "/api/storage-buckets/"), 10, 64)

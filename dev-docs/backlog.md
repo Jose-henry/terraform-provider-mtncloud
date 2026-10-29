@@ -296,3 +296,14 @@ source that `depends_on` the resource reads the load balancer as it was before t
 - Plugin side: a listener has no `description`, and `defaultTlsContainerRef: null`,
   `sniContainerRefs: []` and a member's `monitorAddress: null` are read as "leave it". The provider
   replaces the piece when one of those is removed; a plugin fix would let it update in place.
+
+## B-024 Archive follow-ups (from the 2026-10-29 review)
+- Client contract test for `internal/client/archives.go` with scrubbed fixtures in `testdata/archives/`
+  (nil body → 404, create answer without an ID, list pagination).
+- A test for the lost-answer adoption in create (a fake that answers 5xx after making the archive).
+- A `_drift` step (description or `isPublic` changed in the console).
+- `TestArchiveBucket_OtherBucketReplaces`: assert the old archive is gone, and that a replace is refused
+  while the old archive holds files.
+- Owner check before "import it": compare the found archive's owner with the caller's tenant, once
+  `internal/tenancy` exposes the tenant name. The error already names the owner.
+- Slice 2: `mtncloud_archive_file`, `mtncloud_archive_file_link`, `mtncloud_archive_files`.

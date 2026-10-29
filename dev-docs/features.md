@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 103 | 105 |
-| Usable with a customer (sub-tenant) login | 103 | 100 |
+| Available today | 104 | 107 |
+| Usable with a customer (sub-tenant) login | 104 | 102 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 4 | 0 |
@@ -232,6 +232,14 @@ S3-compatible buckets, listed in the console, with their access, CORS, lifecycle
 | [`mtncloud_mos_object`](../docs/resources/mos_object.md) | Yes (read verified) |
 | [`mtncloud_mos_object_acl`](../docs/resources/mos_object_acl.md) | Yes (read verified) |
 
+### Archives
+
+File stores (Tools > Archives) whose files are kept in a MOS bucket.
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_archive_bucket`](../docs/resources/archive_bucket.md) | Yes (read verified) |
+
 ### Secrets and keys
 
 Cypher secrets, SSH key pairs and SSL certificates you upload.
@@ -367,6 +375,13 @@ Old names kept for now; each page says what replaces it and how to move without 
 | [`mtncloud_mos_object`](../docs/data-sources/mos_object.md) | Yes (read verified) |
 | [`mtncloud_mos_object_acl`](../docs/data-sources/mos_object_acl.md) | Yes (read verified) |
 | [`mtncloud_mos_objects`](../docs/data-sources/mos_objects.md) | Yes (read verified) |
+
+### Archives
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_archive_bucket`](../docs/data-sources/archive_bucket.md) | Yes (read verified) |
+| [`mtncloud_archive_buckets`](../docs/data-sources/archive_buckets.md) | Yes (read verified) |
 
 ### Storage
 
