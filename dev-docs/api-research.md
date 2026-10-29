@@ -520,3 +520,43 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
 - Workers: `GET /api/clusters/{id}/workers`, `POST /api/clusters/{id}/servers` (add), `DELETE .../servers/{id}`.
   Autoscaler: `POST /api/clusters/{id}/configure-autoscaler` with
   `{cluster: {autoScalerEnabled, autoScalerGroups: [{minNodes, maxNodes}]}}`.
+
+## MOS (OneFS S3) live capability probe (2026-10-29, Akatsuki dev tenant)
+
+Owner approved the probe. Keys were read from Cypher (`secret/MOS-<tenant>_<user>_{access_key,secret_key,public_endpoint_url,private_endpoint_url}`)
+into memory only. Every bucket was `tf-acc-mos-probe-*`, deleted afterwards, and 20 listings confirmed none were left.
+Sources read first: Dell *OneFS S3 API Guide* H18293.6 (Aug 2025, OneFS 9.12), and the automation repo's
+`S3 Folder (Operational)/CreateMOS-S3.sh` and `upload-mos-creds-to-cypher.sh`.
+
+**How keys are made (automation repo):** one OneFS user per tenant (the sanitised tenant name) in access zone
+`system`, created with the cluster admin API (`POST /platform/14/auth/users`). The key comes from
+`POST /platform/14/protocols/s3/keys/<user>`, which generates a new key and replaces the old one, so it rotates
+the tenant's key. The catalog workflow stores it in Cypher. Customers have no route to this API: a Terraform
+"access key" can only order catalog item 13 (rotation) or read the Cypher entries (D-007).
+
+**Endpoints:** the public endpoint is reachable from the internet over path-style HTTPS with SigV4.
+The private endpoint (`:9021`) isn't reachable from outside MTN.
+The public endpoint balances across nodes, and **each node sees bucket and config changes a few seconds late**:
+- a new bucket answered `head` 404 on 11 of 12 reads in its first seconds;
+- lifecycle and CORS reads returned the old value for about 2 to 10 seconds;
+- objects were consistent at once.
+Every create or update must read back until several reads in a row agree, and a 404 right after a create is
+retried (rule 13).
+
+| Area | Result | Notes |
+|---|---|---|
+| Bucket create, head, delete, list, location | works | location is null |
+| Bucket ACL get/put (canned) | works | |
+| Object put/get/head/delete, list v1/v2, object ACL get/put | works | user metadata kept; `ContentType` dropped (`binary/octet-stream` returned) |
+| List object versions | answers | only `VersionId: null`; there are no versions |
+| Bucket logging get/put | works | writes log objects into the target bucket (one test bucket held 9 after a minute), so destroy must empty the logs first or refuse |
+| Lifecycle get/put/delete | works | prefix filter, legacy prefix, `Expiration.Days`, `AbortIncompleteMultipartUpload`; **tag filter and transitions: 501** |
+| CORS get/put/delete | works | |
+| Object lock config get | answers `ObjectLockConfigurationNotFoundError` (implemented) | not written: enabling is irreversible; retention can make a bucket undeletable |
+| Object retention get | answers `NoSuchObjectLockConfiguration` (implemented) | |
+| Encryption (bucket default), policy, tagging (bucket and object), public access block, notification, replication, website, versioning put, legal hold | **501 NotImplemented** | |
+| `x-amz-server-side-encryption: AES256` on put-object | **silently ignored** (200, no `ServerSideEncryption` in head) | the provider must never offer SSE |
+
+Lifecycle and CORS working, and object lock implemented, mean OneFS is 9.12 or later, probably 9.14 (lifecycle).
+The admin API path `platform/14` fits that. Confirm with `isi version` (owner to run). Encryption at rest is
+only cluster DARE (self-encrypting drives); confirm with `isi encryption status`.

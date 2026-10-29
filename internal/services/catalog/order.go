@@ -33,6 +33,7 @@ const orderTimeout = 90 * time.Minute
 var (
 	_ resource.ResourceWithModifyPlan  = (*orderResource)(nil)
 	_ resource.ResourceWithImportState = (*orderResource)(nil)
+	_ resource.ResourceWithMoveState   = (*orderResource)(nil)
 )
 
 // orderResource is one catalog item, ordered (D-026). Its inputs can't change after the order:
@@ -47,6 +48,11 @@ func orderResources() []func() resource.Resource {
 	out := []func() resource.Resource{}
 	for _, s := range orderSpecs() {
 		out = append(out, func() resource.Resource { return &orderResource{spec: s} })
+		if s.movedFrom != "" {
+			alias := s
+			alias.typeName, alias.movedFrom, alias.deprecated = s.movedFrom, "", s.typeName
+			out = append(out, func() resource.Resource { return &orderResource{spec: alias} })
+		}
 	}
 	return out
 }
@@ -75,7 +81,7 @@ func (r *orderResource) inputs() map[string]field {
 
 func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	where := "Instances"
-	if r.spec.managed {
+	if r.spec.app {
 		where = "Apps"
 	}
 	desc := r.spec.about + " Ordered from MTN Cloud's catalog (" + r.spec.item + "). The order's inputs can't be changed " +
@@ -120,6 +126,36 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 		}
 	}
 	resp.Schema = schema.Schema{Description: desc, Attributes: attrs, Blocks: blocks}
+	if r.spec.deprecated != "" {
+		resp.Schema.DeprecationMessage = "Renamed to mtncloud_" + r.spec.deprecated + ". Rename the resource in your " +
+			"configuration and add a `moved {}` block from this address to the new one (Terraform 1.8 or newer): nothing is " +
+			"replaced. On older Terraform, run `terraform state rm` on this address, then `terraform import` the new one with the same order ID."
+		resp.Schema.Description = "**Deprecated:** renamed to `mtncloud_" + r.spec.deprecated + "`. " + desc
+	}
+}
+
+// MoveState accepts the state of the type's former name (`moved {}` from the deprecated alias). The
+// schema is the same, so the state is taken as it is.
+func (r *orderResource) MoveState(ctx context.Context) []resource.StateMover {
+	if r.spec.movedFrom == "" {
+		return nil
+	}
+	var s resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &s)
+	return []resource.StateMover{{
+		SourceSchema: &s.Schema,
+		StateMover: func(_ context.Context, req resource.MoveStateRequest, resp *resource.MoveStateResponse) {
+			if req.SourceTypeName != "mtncloud_"+r.spec.movedFrom || !strings.HasSuffix(req.SourceProviderAddress, "/mtncloud") {
+				return
+			}
+			if req.SourceState == nil {
+				resp.Diagnostics.AddError("Unable to move "+req.SourceTypeName,
+					"The saved state doesn't match the resource's schema. Run `terraform apply` with the previous name first, then move it.")
+				return
+			}
+			resp.TargetState.Raw = req.SourceState.Raw
+		},
+	}}
 }
 
 func (r *orderResource) attribute(f field) schema.Attribute {
@@ -610,7 +646,7 @@ func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *dia
 	}
 	var ids []int64
 	for _, in := range all {
-		if in.ProjectID == pr.ID && madeBy(in.Name, name.ValueString(), r.spec.managed) {
+		if in.ProjectID == pr.ID && madeBy(in.Name, name.ValueString(), r.spec.app) {
 			ids = append(ids, in.ID)
 		}
 	}
@@ -618,7 +654,7 @@ func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *dia
 }
 
 // madeBy reports whether an instance is named after an order: exactly "<name>", or "<name>-<n>"
-// for the nodes of a multi-node managed service. A single-VM order never claims "<name>-2", which
+// for the nodes of a multi-node app (managed services, self-managed Kubernetes). A single-VM order never claims "<name>-2", which
 // may be another order's or the user's own (destroy deletes what this matches). Case is ignored.
 func madeBy(instance, order string, nodes bool) bool {
 	got, n := strings.ToLower(instance), strings.ToLower(order)
@@ -741,8 +777,8 @@ func (r *orderResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(found))...)
 }
 
-// Delete deletes what the order made (owner, D-029), then its inventory record. A managed service
-// is an app: its app (named after the order) is deleted with its instances. Other instances are
+// Delete deletes what the order made (owner, D-029), then its inventory record. An app order
+// (managed services, self-managed Kubernetes): its app (named after the order) is deleted with its instances. Other instances are
 // deleted through an app only when the app holds nothing else, directly otherwise; then it waits
 // until they are gone. It refuses rather than guess: while the order still runs, after an import
 // that hasn't been applied, when a lookup fails, or when nothing it made can be found. An order that
@@ -820,10 +856,10 @@ func (r *orderResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		refuse("Its apps couldn't be listed: " + err.Error() + ".")
 		return
 	}
-	plan := deletePlan(apps, ids, name.ValueString(), r.spec.managed)
+	plan := deletePlan(apps, ids, name.ValueString(), r.spec.app)
 	if len(plan.apps) == 0 && len(plan.instances) == 0 {
 		refuse(fmt.Sprintf("Nothing it made was found: no instance named %q is in its project%s. Check it in the console.",
-			name.ValueString(), map[bool]string{true: ", and no app has that name", false: ""}[r.spec.managed]))
+			name.ValueString(), map[bool]string{true: ", and no app has that name", false: ""}[r.spec.app]))
 		return
 	}
 	for _, appID := range plan.apps {
@@ -861,11 +897,11 @@ type orderDeletion struct {
 	apps, instances, gone []int64
 }
 
-// deletePlan decides how an order's instances are deleted. A managed service's own app (named after
+// deletePlan decides how an order's instances are deleted. An app order's own app (named after
 // the order, and holding at least one of its instances) goes with all its instances. Any other app goes whole only when every instance in it
 // is the order's: an app that also holds someone else's instance is left, and the order's
 // instances in it are deleted one by one.
-func deletePlan(apps []client.App, ids []int64, name string, managed bool) orderDeletion {
+func deletePlan(apps []client.App, ids []int64, name string, app bool) orderDeletion {
 	var out orderDeletion
 	mine := map[int64]bool{}
 	for _, id := range ids {
@@ -879,7 +915,7 @@ func deletePlan(apps []client.App, ids []int64, name string, managed bool) order
 			all = all && mine[id]
 		}
 		// The name alone isn't enough: another project, or the user, may have an app of that name.
-		own := managed && holds && strings.EqualFold(a.Name, name)
+		own := app && holds && strings.EqualFold(a.Name, name)
 		if !own && (!holds || !all) {
 			continue
 		}

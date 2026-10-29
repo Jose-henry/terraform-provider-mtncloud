@@ -39,9 +39,13 @@ type orderSpec struct {
 	typeName string // resource type, without the provider prefix
 	item     string // catalog item name
 	about    string
-	managed  bool // a managed service: an app (under Apps, not Instances), its VMs "<name>-<n>"
+	app      bool // the order makes an app (under Apps, not Instances), its VMs "<name>-<n>"
 	target   bool // runs against an existing instance (context "instance")
 	fields   []field
+	// movedFrom is a former type name. The old name stays as a deprecated alias, and a `moved {}`
+	// block moves its state here without a replace.
+	movedFrom  string
+	deprecated string // set on the alias: the type name that replaces it
 }
 
 // vm is the placement, size, disks and networking a VM item's form asks for. req lists the base
@@ -168,20 +172,20 @@ func orderSpecs() []orderSpec {
 		{typeName: "nginx_web_server", item: "MTN Nginx Web Server", about: "An Nginx web server on its own VM.",
 			fields: with(vm("labels", "resourcepool", "plan", "volumes", "networks"), webPort,
 				field{attr: "scale_factor", key: "scalefactor", kind: kNumber, def: "1", desc: "Number of VMs. Defaults to 1."})},
-		{typeName: "managed_database", item: "MTN Managed Database", managed: true, about: "A managed MySQL or PostgreSQL database service.",
+		{typeName: "managed_database", item: "MTN Managed Database", app: true, about: "A managed MySQL or PostgreSQL database service.",
 			fields: with(with(vm("labels", "resourcepool", "plan", "volumes", "networks", "securitygroups"),
 				field{attr: "engine", key: "db_engine", kind: kSelect, required: true, desc: "`mysql` or `postgres`."},
 				field{attr: "mysql_version", key: "mysqlVersion", kind: kSelect, desc: "MySQL version, when `engine` is `mysql`."},
 				field{attr: "postgresql_version", key: "pgVersion", kind: kSelect, desc: "PostgreSQL version, when `engine` is `postgres`."},
 				field{attr: "node_count", key: "no_nodes", kind: kNumber, def: "1", desc: "Number of nodes. Defaults to 1."},
 			), adminFields()...)},
-		{typeName: "managed_mq", item: "MTN Managed MQ", managed: true, about: "A managed message queue (RabbitMQ) service.",
+		{typeName: "managed_mq", item: "MTN Managed MQ", app: true, about: "A managed message queue (RabbitMQ) service.",
 			fields: with(with(vm("labels", "resourcepool", "plan", "volumes", "networks"),
 				field{attr: "engine", key: "msg_engine", kind: kSelect, desc: "Messaging engine, for example `rabbit`."},
 				field{attr: "rabbitmq_version", key: "rabbitmqVersion", kind: kSelect, desc: "RabbitMQ version, when `engine` is `rabbit`."},
 				field{attr: "node_count", key: "no_nodes", kind: kNumber, required: true, def: "1", desc: "Number of nodes."},
 			), adminFields()...)},
-		{typeName: "managed_streaming", item: "MTN Managed Streaming", managed: true, about: "A managed event streaming (Kafka) service.",
+		{typeName: "managed_streaming", item: "MTN Managed Streaming", app: true, about: "A managed event streaming (Kafka) service.",
 			fields: with(with(vm("labels", "plan", "volumes", "networks", "securitygroups"),
 				field{attr: "kafka_version", key: "kafkaVersion", kind: kSelect, desc: "Kafka version, as the form lists it."},
 			), adminFields()...)},
@@ -203,7 +207,8 @@ func orderSpecs() []orderSpec {
 		appliance("MTN FortiADC (BYOL)", "fortiadc", "A FortiADC application delivery controller. Bring your own license."),
 		appliance("MTN FortiManager (BYOL)", "fortimanager", "A FortiManager. Bring your own license."),
 		appliance("MTN FortiAnalyzer (BYOL)", "fortianalyzer", "A FortiAnalyzer. Bring your own license."),
-		{typeName: "managed_kubernetes", item: "MTN KUBERNETES (MK8S)", managed: true, about: "A Kubernetes cluster that MTN Cloud installs and manages.",
+		{typeName: "self_managed_kubernetes", movedFrom: "managed_kubernetes", item: "MTN KUBERNETES (MK8S)", app: true,
+			about: "A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it.",
 			fields: []field{
 				{attr: "name", key: "name", kind: kText, required: true, desc: "Cluster name. Its VMs are named after it."},
 				{attr: "group", key: "group-vpn", kind: kGroup},

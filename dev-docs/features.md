@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 89 | 86 |
-| Usable with a customer (sub-tenant) login | 89 | 81 |
+| Available today | 90 | 86 |
+| Usable with a customer (sub-tenant) login | 90 | 81 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 4 | 0 |
@@ -146,14 +146,20 @@ Managed services ordered from MTN's catalog. They show under Apps in the console
 | Type | Customer login |
 |---|---|
 | [`mtncloud_managed_database`](../docs/resources/managed_database.md) | Yes (read verified) |
-| [`mtncloud_managed_kubernetes`](../docs/resources/managed_kubernetes.md) | Yes (read verified) |
 | [`mtncloud_managed_mq`](../docs/resources/managed_mq.md) | Yes (read verified) |
 | [`mtncloud_managed_streaming`](../docs/resources/managed_streaming.md) | Yes (read verified) |
-| [`mtncloud_siem`](../docs/resources/siem.md) | Yes (read verified) |
+
+### Catalog: self-managed Kubernetes
+
+A Kubernetes cluster MTN Cloud builds and you run. It shows under Apps in the console.
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_self_managed_kubernetes`](../docs/resources/self_managed_kubernetes.md) | Yes (read verified) |
 
 ### Catalog: network and security appliances
 
-VPNs, firewalls and bastion hosts ordered from MTN's catalog (BYOL: bring your own license).
+VPNs, firewalls, bastion hosts and a SIEM server ordered from MTN's catalog (BYOL: bring your own license).
 
 | Type | Customer login |
 |---|---|
@@ -163,6 +169,7 @@ VPNs, firewalls and bastion hosts ordered from MTN's catalog (BYOL: bring your o
 | [`mtncloud_fortimanager`](../docs/resources/fortimanager.md) | Yes (read verified) |
 | [`mtncloud_fortinet_firewall`](../docs/resources/fortinet_firewall.md) | Yes (read verified) |
 | [`mtncloud_fortiweb`](../docs/resources/fortiweb.md) | Yes (read verified) |
+| [`mtncloud_siem`](../docs/resources/siem.md) | Yes (read verified) |
 | [`mtncloud_vpn_service`](../docs/resources/vpn_service.md) | Yes (read verified) |
 | [`mtncloud_wireguard_vpn`](../docs/resources/wireguard_vpn.md) | Yes (read verified) |
 
@@ -219,6 +226,14 @@ Autoscaling thresholds.
 | Type | Customer login |
 |---|---|
 | [`mtncloud_scale_threshold`](../docs/resources/scale_threshold.md) | Yes (read verified) |
+
+### Deprecated names
+
+Old names kept for now; each page says what replaces it and how to move without replacing anything.
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_managed_kubernetes`](../docs/resources/managed_kubernetes.md) | Yes (read verified) |
 
 ## Data sources
 

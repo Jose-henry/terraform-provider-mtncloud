@@ -54,10 +54,13 @@ RESOURCES = [
      ["mysql", "postgresql", "mariadb", "mongodb", "lamp_stack", "lemp_stack", "wordpress", "apache_web_server", "nginx_web_server"]),
     ("Catalog: managed services",
      "Managed services ordered from MTN's catalog. They show under Apps in the console.",
-     ["managed_database", "managed_mq", "managed_streaming", "managed_kubernetes", "siem"]),
+     ["managed_database", "managed_mq", "managed_streaming"]),
+    ("Catalog: self-managed Kubernetes",
+     "A Kubernetes cluster MTN Cloud builds and you run. It shows under Apps in the console.",
+     ["self_managed_kubernetes"]),
     ("Catalog: network and security appliances",
-     "VPNs, firewalls and bastion hosts ordered from MTN's catalog (BYOL: bring your own license).",
-     ["vpn_service", "wireguard_vpn", "bastion_host", "fortinet_firewall", "fortiweb", "fortiadc", "fortimanager", "fortianalyzer"]),
+     "VPNs, firewalls, bastion hosts and a SIEM server ordered from MTN's catalog (BYOL: bring your own license).",
+     ["vpn_service", "wireguard_vpn", "bastion_host", "siem", "fortinet_firewall", "fortiweb", "fortiadc", "fortimanager", "fortianalyzer"]),
     ("Catalog: file shares and certificates",
      "NFS and SMB shares (created, updated and deleted by orders) and Let's Encrypt certificates for instances.",
      ["nfs_share", "smb_share", "letsencrypt_certificate"]),
@@ -74,6 +77,9 @@ RESOURCES = [
     ("Scaling",
      "Autoscaling thresholds.",
      ["scale_threshold"]),
+    ("Deprecated names",
+     "Old names kept for now; each page says what replaces it and how to move without replacing anything.",
+     ["managed_kubernetes"]),
 ]
 
 DATA_SOURCES = [

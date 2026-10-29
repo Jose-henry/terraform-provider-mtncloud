@@ -1,4 +1,4 @@
-resource "mtncloud_managed_kubernetes" "k8s" {
+resource "mtncloud_self_managed_kubernetes" "k8s" {
   name                    = "apps-k8s"
   project                 = "web-prod"
   master_plan             = "G2S4"

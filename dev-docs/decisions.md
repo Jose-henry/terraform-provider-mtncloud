@@ -246,6 +246,15 @@ infrastructure), and a generic `mtncloud_catalog_order`. Inputs per item:
 - **Cypher:** no `ttl`, or `0`, means no expiry (owner). Keys are stored with their size
   (`password/15/x`, `key/256/x`; platform docs via NotebookLM), so the provider uses one form.
 
+## D-030 Kubernetes is self-managed; SIEM isn't a managed service (owner, 2026-10-29)
+Owner: "those two are self managed". `mtncloud_managed_kubernetes` is renamed
+`mtncloud_self_managed_kubernetes`. It is still an app (destroy goes through its app, D-029). The old
+name stays registered as a deprecated alias of the same spec, and the new type implements
+`MoveState`, so `moved {}` moves the state with nothing replaced (Terraform 1.8+). Remove the alias in
+a later minor release, with a changelog note. `mtncloud_siem` keeps its name. It was never an app; it is
+now listed with the security appliances. The spec flag `managed` is renamed `app`, since it means
+"deleted through its app", not "managed by MTN".
+
 ## D-029 Catalog orders are destroyed through what they made (owner, 2026-10-28)
 
 Reverses the "no destroy" part of D-028. The owner: "when a user does destroy for a catalog order

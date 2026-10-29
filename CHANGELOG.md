@@ -4,6 +4,9 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+- **Renamed:** `mtncloud_managed_kubernetes` is now `mtncloud_self_managed_kubernetes`. The cluster is built by MTN Cloud and run by you, so "managed" was wrong (D-030). The old name still works, with a deprecation warning, and will be removed in a later release. To switch with nothing replaced, rename the resource and add a `moved {}` block from the old address to the new one (Terraform 1.8 or newer). Destroy still goes through the cluster's app.
+- Docs: `mtncloud_siem` is listed with the security appliances, not under managed services.
+
 ## 0.5.0 (2026-10-28)
 
 - `mtncloud_instance`: power control. `power_state` (`running`, `stopped`, `suspended`) powers the VM in place and puts back a change made in the console; left out, it only shows the state. A new `restart_trigger` value reboots the VM. A power call refused at create is a warning, so the new VM isn't tainted.
