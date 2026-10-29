@@ -93,7 +93,9 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		f.calls[r.URL.Path]++
 		sg, net, router, inst, order, clu, lb, mos := f.sg, f.net, f.router, f.inst, f.order, f.clu, f.lb, f.mos
 		f.mu.Unlock()
-		if lb != nil && (strings.HasPrefix(r.URL.Path, "/api/tasks") || strings.HasPrefix(r.URL.Path, "/api/job-executions/")) &&
+		lbPath := strings.HasPrefix(r.URL.Path, "/api/tasks") || strings.HasPrefix(r.URL.Path, "/api/job-executions/") ||
+			strings.HasPrefix(r.URL.Path, "/api/subnets/") || (net == nil && r.URL.Path == "/api/networks/114")
+		if lb != nil && lbPath &&
 			r.Header.Get("Authorization") == "Bearer test-token" {
 			lb.ServeHTTP(w, r)
 			return

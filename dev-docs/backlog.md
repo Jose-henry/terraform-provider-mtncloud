@@ -270,7 +270,7 @@ form's plan field is a select, and falls back to the wizard's list otherwise. Mu
 - Tests: no provider unit test drives `checkPoolRouter` or the order check, and none covers a power
   grace spent on failed reads. Add them with the next instance or order change.
 
-## B-021 Load balancer resources must refresh the per-run snapshot (2026-10-29, from review)
+## B-021 Load balancer resources must refresh the per-run snapshot (2026-10-29, from review) — done (D-033)
 `LoadBalancerSnapshot` caches one `read` per network and selector for the life of a provider instance.
 Data sources only read, so that is safe today. When the load balancer resources land, every write
 must drop the cached entries for its network (add a delete-by-prefix to `lookupCache`), or a data
@@ -285,3 +285,14 @@ source that `depends_on` the resource reads the load balancer as it was before t
   Check live and map it to "the name is taken".
 - Re-test object lock and retention live once MTN enables object lock on the cluster.
 
+## B-023 Load balancer follow-ups (from the 2026-10-29 review)
+- Piece creates have no request ID, so a write that timed out (8 min) or ended with no output is not
+  retried, and the next apply can't tell the piece was made. A monitor, member or listener create
+  then fails on "already has ..."; a pool is made twice. Ask the plugin for a `requestId` on piece
+  creates (as on `create`), or look the piece up before creating (rule 11).
+- Done 2026-10-29: the plugin's top-level `pending` and `piece` are carried through (`runLBEnv`).
+  After a pending answer, ACTIVE counts only once a PENDING_* read was seen, or after
+  `LBPendingGrace` (2 min); a piece's ID comes from `piece` first.
+- Plugin side: a listener has no `description`, and `defaultTlsContainerRef: null`,
+  `sniContainerRefs: []` and a member's `monitorAddress: null` are read as "leave it". The provider
+  replaces the piece when one of those is removed; a plugin fix would let it update in place.

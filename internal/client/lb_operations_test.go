@@ -44,7 +44,7 @@ func newLBFake(t *testing.T, outputs ...string) *lbFake {
 		n := f.runs.Add(1)
 		_, _ = w.Write([]byte(`{"success":true,"jobExecution":{"id":` + itoa(31000+n) + `}}`))
 	})
-	for i := range 6 {
+	for i := range max(6, len(outputs)) {
 		out := outputs[min(i, len(outputs)-1)]
 		f.route("GET", "/api/job-executions/"+itoa(int64(31001+i)), func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write(lbJob(t, out))
@@ -277,8 +277,13 @@ func TestLBCustomerText(t *testing.T) {
 }
 
 func TestRunLB_WriteTimeoutIsNotRetried(t *testing.T) {
-	if lbTransient("create", lbTimedOut, nil) {
-		t.Error("a timed-out write counted as nothing ran")
+	for _, action := range []string{"pool-create", "member-add", "delete"} {
+		if lbTransient(action, lbTimedOut, nil) || lbTransient(action, "error", nil) {
+			t.Errorf("%s: a write that may have acted counted as nothing ran", action)
+		}
+	}
+	if !lbTransient("create", lbTimedOut, nil) {
+		t.Error("a timed-out load balancer create wasn't retried: its requestId makes that safe")
 	}
 	if !lbTransient("read", lbTimedOut, nil) {
 		t.Error("a timed-out read wasn't retried")

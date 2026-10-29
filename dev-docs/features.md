@@ -6,11 +6,11 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 98 | 105 |
-| Usable with a customer (sub-tenant) login | 98 | 100 |
+| Available today | 103 | 105 |
+| Usable with a customer (sub-tenant) login | 103 | 100 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
-| Coming next | 3 | 0 |
+| Coming next | 4 | 0 |
 
 ## Who can use what
 
@@ -204,6 +204,18 @@ MTN Networks and MTN Routers, security groups (instance firewalls) and their rul
 | [`mtncloud_router`](../docs/resources/router.md) | Yes, built for customers |
 | [`mtncloud_security_group`](../docs/resources/security_group.md) | Yes, built for customers |
 | [`mtncloud_security_group_rule`](../docs/resources/security_group_rule.md) | Yes, built for customers |
+
+### Load balancers
+
+Load balancers on an MTN Network, and their listeners, pools, members and health monitors, each its own resource.
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_load_balancer`](../docs/resources/load_balancer.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_health_monitor`](../docs/resources/load_balancer_health_monitor.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_listener`](../docs/resources/load_balancer_listener.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_member`](../docs/resources/load_balancer_member.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_pool`](../docs/resources/load_balancer_pool.md) | Yes (read verified) |
 
 ### MOS (MTN Object Storage)
 
@@ -436,7 +448,8 @@ Designed, **not available yet**, and all meant for customers.
 |---|---|---|
 | `mtncloud_app` | Planned | Apps from blueprints: several instances or containers deployed together. |
 | `mtncloud_datastore` | Planned | Datastores: the storage that volumes are created on. |
-| `mtncloud_load_balancer` | Next | Load balancers, with listeners, pools, members and health monitors (the data sources are done). |
+| `mtncloud_load_balancer_l7_policy` | Next | Load balancer rules that route or redirect HTTP requests by host, path, header or cookie. |
+| `mtncloud_load_balancer_floating_ip` | Next | A public address on a load balancer, from a floating IP pool by name. |
 
 ### Data sources
 

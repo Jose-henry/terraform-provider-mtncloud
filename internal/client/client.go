@@ -29,7 +29,8 @@ type Logger func(ctx context.Context, msg string, fields map[string]any)
 type Config struct {
 	URL string // console URL, for example https://console.cloud.mtn.ng
 
-	// Either Token, or Username and Password (plus Tenant, the subdomain, for sub-tenant users).
+	// Either Token, or Username and Password (plus Tenant, the subdomain or account ID, for
+	// sub-tenant users).
 	Token    string
 	Username string
 	Password string
@@ -60,6 +61,13 @@ type Config struct {
 	// LBAttempt bounds one run of the load balancer task, from execute to the job's end. Data
 	// sources have no timeouts {}, so without it a stalled console job would hang a plan.
 	LBAttempt time.Duration
+	// LBWriteAttempt bounds one run of a load balancer write: the plugin itself waits up to 3
+	// minutes for the cloud, and an update first waits for the save.
+	LBWriteAttempt time.Duration
+	// LBPendingGrace is how long a write the plugin answered with pending (its save still running)
+	// may read ACTIVE before that is believed: until the save reaches the cloud, the load balancer
+	// still reads as it was.
+	LBPendingGrace time.Duration
 	// MOSLostAfter is how long a written MOS setting may stay invisible before it counts as lost
 	// and is written again: settling takes a few seconds, a lost write never settles.
 	MOSLostAfter time.Duration
@@ -83,8 +91,9 @@ type Client struct {
 
 	cache lookupCache
 
-	// mosLocks holds one lock per MOS bucket: settings writes to a bucket must not overlap (mosLock).
-	mosLocks sync.Map // bucket name -> chan struct{}
+	// locks holds one lock per key (keyLock): settings writes to one MOS bucket, and changes to one
+	// load balancer, must not overlap.
+	locks sync.Map // key -> chan struct{}
 }
 
 // Defaults returns the provider-wide group, cloud and project.
@@ -309,7 +318,8 @@ func (c *Client) relogin(ctx context.Context, rejected string) (string, error) {
 	return c.loginLocked(ctx)
 }
 
-// loginLocked runs the OAuth password grant. Sub-tenant users log in as subdomain\username.
+// loginLocked runs the OAuth password grant. Sub-tenant users log in as <tenant>\username, where
+// <tenant> is the subdomain or the numeric account ID (both checked live, 2026-10-29).
 func (c *Client) loginLocked(ctx context.Context) (string, error) {
 	username := c.cfg.Username
 	if c.cfg.Tenant != "" {
@@ -326,7 +336,7 @@ func (c *Client) loginLocked(ctx context.Context) (string, error) {
 	if err != nil {
 		var apiErr *APIError
 		if errors.As(err, &apiErr) && (apiErr.StatusCode == http.StatusBadRequest || apiErr.StatusCode == http.StatusUnauthorized) {
-			return "", fmt.Errorf("MTN Cloud login failed for %q: wrong username, password or tenant subdomain (%s)", username, apiErr.Message)
+			return "", fmt.Errorf("MTN Cloud login failed for %q: wrong username, password or tenant (subdomain or account ID) (%s)", username, apiErr.Message)
 		}
 		return "", err
 	}

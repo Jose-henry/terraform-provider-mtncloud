@@ -75,6 +75,10 @@ type lbEnvelope struct {
 	Retryable     bool            `json:"retryable"`
 	NetworkAccess string          `json:"networkAccess"`
 	Result        json.RawMessage `json:"result"`
+	// Pending and Piece answer a write, beside result: the save is still running, and the piece
+	// as the cloud has it (only once the load balancer has settled).
+	Pending bool            `json:"pending"`
+	Piece   json.RawMessage `json:"piece"`
 }
 
 type lbJobExecution struct {
@@ -121,11 +125,12 @@ func lbRead(action string) bool {
 // lbTransient reports a run that did nothing and can be tried again: the console stalled before the
 // plugin read its inputs (action is empty then), the job ended with no output (a plugin reload), or
 // the plugin said so itself. Writes say so at the top level; reads inside result (lookupFailed,
-// retryable), as the guide's error table lists. A run that ran out of time may still be running,
-// so it is retried only for a read: repeating a write could make it twice.
+// retryable), as the guide's error table lists. A run that ran out of time, or ended with no
+// output, may still have acted, so it is retried only when repeating it is safe: a read, or a
+// load balancer create, whose requestId makes the plugin answer with the one already made.
 func lbTransient(action, status string, env *lbEnvelope) bool {
 	if env == nil {
-		return status == "error" || (status == lbTimedOut && lbRead(action))
+		return (status == "error" || status == lbTimedOut) && (lbRead(action) || action == "create")
 	}
 	if env.Success {
 		return false
@@ -141,7 +146,8 @@ func lbTransient(action, status string, env *lbEnvelope) bool {
 	return env.Retryable || inner.Retryable || inner.LookupFailed
 }
 
-// lbTimedOut is the status runLBOnce reports when one attempt ran out of time (LBAttempt).
+// lbTimedOut is the status runLBOnce reports when one attempt ran out of time (LBAttempt for a
+// read, LBWriteAttempt for a write).
 const lbTimedOut = "timed out"
 
 // attemptExpired reports that one attempt ran out of time while the caller's context is still live.
@@ -181,6 +187,16 @@ const lbRetries = 4
 // runLB runs one plugin action and returns its result. Transient failures are retried with
 // backoff inside ctx; a refusal comes back as *LBError with the plugin's message.
 func (c *Client) runLB(ctx context.Context, action string, in map[string]any) (json.RawMessage, error) {
+	env, err := c.runLBEnv(ctx, action, in)
+	if err != nil {
+		return nil, err
+	}
+	return env.Result, nil
+}
+
+// runLBEnv is runLB with the whole answer, for writes: their pending flag and piece sit beside
+// the result.
+func (c *Client) runLBEnv(ctx context.Context, action string, in map[string]any) (*lbEnvelope, error) {
 	id, err := c.lbTaskID(ctx)
 	if err != nil {
 		return nil, err
@@ -216,14 +232,18 @@ func (c *Client) runLB(ctx context.Context, action string, in map[string]any) (j
 		if len(env.Result) == 0 || string(env.Result) == "null" {
 			return nil, &LBError{Action: action, Msg: fmt.Sprintf("The load balancer %s operation answered without a result. Try again.", action)}
 		}
-		return env.Result, nil
+		return env, nil
 	}
 }
 
 // runLBOnce executes the task once and waits for its job to end. env is nil when the job left no
 // output.
 func (c *Client) runLBOnce(parent context.Context, taskID int64, action string, opts map[string]any) (string, *lbEnvelope, error) {
-	ctx, cancel := context.WithTimeout(parent, c.cfg.LBAttempt)
+	bound := c.cfg.LBWriteAttempt
+	if lbRead(action) {
+		bound = c.cfg.LBAttempt
+	}
+	ctx, cancel := context.WithTimeout(parent, bound)
 	defer cancel()
 	suffix := make([]byte, 4)
 	_, _ = rand.Read(suffix)

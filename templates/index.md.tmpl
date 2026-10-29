@@ -25,7 +25,7 @@ The provider signs in with a username and password, or an API token:
 * [Environment variables](guides/auth.md#environment-variables)
 * [Configuring the provider: every way to set it up](guides/configuration.md) (credentials, group, cloud and project, variables and files)
 
-A customer login also needs your tenant's subdomain, set with `tenant_subdomain` or `MTNCLOUD_API_TENANT`.
+A customer login also needs your tenant's subdomain or account ID, set with `tenant_subdomain` or `MTNCLOUD_API_TENANT`.
 
 TLS certificates are verified by default. Set `secure = false` (or `MTNCLOUD_API_SECURE=false`) only
 for a console with a self-signed certificate, never in production.

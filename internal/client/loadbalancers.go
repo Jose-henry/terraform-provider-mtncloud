@@ -206,8 +206,8 @@ func (c *Client) GetLoadBalancer(ctx context.Context, networkID int64, id, name 
 
 // LoadBalancerSnapshot is GetLoadBalancer read once per provider instance and key: every data source
 // about one load balancer (its listeners, pools, members, monitors) shares one console job, which
-// takes several seconds. Only data sources use it. The load balancer resources (next slice) must read
-// fresh and drop these entries after a change (backlog B-021).
+// takes several seconds. Data sources and the resources' reads use it; every write drops its
+// network's entries (lbChanged), so a read after a change is fresh.
 func (c *Client) LoadBalancerSnapshot(ctx context.Context, networkID int64, id, name string) (*LoadBalancer, bool, error) {
 	type snap struct {
 		lb        *LoadBalancer

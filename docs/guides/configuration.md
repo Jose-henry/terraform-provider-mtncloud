@@ -64,11 +64,13 @@ variables.
 
 ### Username and password
 
-You log in to the console as `subdomain\username`. Terraform takes the two parts separately:
+You log in to the console as `subdomain\username`. Terraform takes the two parts separately. The
+tenant can also be given by its numeric account ID instead of the subdomain: `42\jdoe` works as
+well as `acme\jdoe`.
 
 | Setting | Provider block | Environment variable |
 |---|---|---|
-| Tenant subdomain | `tenant_subdomain` | `MTNCLOUD_API_TENANT` |
+| Tenant subdomain or account ID | `tenant_subdomain` | `MTNCLOUD_API_TENANT` |
 | Username | `username` | `MTNCLOUD_API_USERNAME` |
 | Password | `password` | `MTNCLOUD_API_PASSWORD` |
 
@@ -347,7 +349,7 @@ stored in state as sensitive values, because you need to read them back.
 |---|---|---|
 | `url` | `MTNCLOUD_API_URL` | Console address (required) |
 | `secure` | `MTNCLOUD_API_SECURE` | Verify TLS (default `true`) |
-| `tenant_subdomain` | `MTNCLOUD_API_TENANT` | Subdomain, for username login |
+| `tenant_subdomain` | `MTNCLOUD_API_TENANT` | Subdomain or account ID, for username login |
 | `username` | `MTNCLOUD_API_USERNAME` | Username login (wins over a token) |
 | `password` | `MTNCLOUD_API_PASSWORD` | Password for username login |
 | `access_token` | `MTNCLOUD_API_TOKEN` | Token login |

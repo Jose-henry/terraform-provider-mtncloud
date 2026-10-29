@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -21,6 +22,18 @@ type cacheEntry struct {
 	done chan struct{}
 	val  any
 	err  error
+}
+
+// forget drops every entry whose key starts with prefix, so the next lookup loads it again: a
+// write calls it for what it changed.
+func (c *lookupCache) forget(prefix string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k := range c.entries {
+		if strings.HasPrefix(k, prefix) {
+			delete(c.entries, k)
+		}
+	}
 }
 
 func cached[T any](ctx context.Context, c *lookupCache, key string, load func(context.Context) (T, error)) (val T, err error) {

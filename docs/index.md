@@ -25,7 +25,7 @@ The provider signs in with a username and password, or an API token:
 * [Environment variables](guides/auth.md#environment-variables)
 * [Configuring the provider: every way to set it up](guides/configuration.md) (credentials, group, cloud and project, variables and files)
 
-A customer login also needs your tenant's subdomain, set with `tenant_subdomain` or `MTNCLOUD_API_TENANT`.
+A customer login also needs your tenant's subdomain or account ID, set with `tenant_subdomain` or `MTNCLOUD_API_TENANT`.
 
 TLS certificates are verified by default. Set `secure = false` (or `MTNCLOUD_API_SECURE=false`) only
 for a console with a self-signed certificate, never in production.
@@ -78,6 +78,6 @@ provider "mtncloud" {
 - `password` (String, Sensitive) Password of MTN Cloud user for authentication
 - `project` (String) Default project, by name (for example web-prod), for resources that don't set one. Can also be set with the MTNCLOUD_PROJECT environment variable.
 - `secure` (Boolean) Verify the MTN Cloud console's TLS certificate. Defaults to "true". Set to "false" only for a console with a self-signed certificate.
-- `tenant_subdomain` (String) The tenant subdomain used for authentication
+- `tenant_subdomain` (String) Your tenant, for a username login: its subdomain or its numeric account ID (both work).
 - `url` (String) The URL of the MTN Cloud console where requests will be directed.
 - `username` (String) Username of MTN Cloud user for authentication

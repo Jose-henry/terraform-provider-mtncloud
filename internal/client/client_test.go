@@ -170,6 +170,28 @@ func TestLogin_PasswordGrantWithTenant(t *testing.T) {
 	}
 }
 
+// The tenant can be the numeric account ID instead of the subdomain (checked live, 2026-10-29).
+func TestLogin_TenantByAccountID(t *testing.T) {
+	f := newFakeAPI(t)
+	var got string
+	f.route("POST", "/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		got = r.PostForm.Get("username")
+		_, _ = w.Write([]byte(`{"access_token":"fresh"}`))
+	})
+	f.route("GET", "/api/whoami", func(w http.ResponseWriter, _ *http.Request) {
+		body, _ := os.ReadFile(filepath.Join("testdata", "lookups", "whoami_subtenant.json"))
+		_, _ = w.Write(body)
+	})
+	c := f.client(t, func(c *Config) { c.Token, c.Username, c.Password, c.Tenant = "", "jdoe", "pw", "42" }) // ggignore: fake test credential
+	if _, err := c.WhoAmI(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got != `42\jdoe` {
+		t.Errorf("username %q, want 42\\jdoe", got)
+	}
+}
+
 func TestLogin_WrongPasswordIsClear(t *testing.T) {
 	f := newFakeAPI(t)
 	f.route("POST", "/oauth/token", func(w http.ResponseWriter, _ *http.Request) {
@@ -178,7 +200,7 @@ func TestLogin_WrongPasswordIsClear(t *testing.T) {
 	})
 	c := f.client(t, func(c *Config) { c.Token, c.Username, c.Password = "", "jdoe", "bad" })
 	_, err := c.WhoAmI(t.Context())
-	if err == nil || !strings.Contains(err.Error(), "wrong username, password or tenant subdomain") {
+	if err == nil || !strings.Contains(err.Error(), "wrong username, password or tenant (subdomain or account ID)") {
 		t.Fatalf("got %v", err)
 	}
 	if strings.Contains(err.Error(), "bad") {

@@ -26,13 +26,19 @@ const mosSettingTries = 3
 // lifecycle put together kept only one; one after the other kept both). Terraform applies a
 // bucket's ACL, CORS, lifecycle, logging and object lock in parallel, so they take turns here.
 func (c *Client) mosLock(ctx context.Context, key string) (func(), error) {
-	v, _ := c.mosLocks.LoadOrStore(key, make(chan struct{}, 1))
+	return c.keyLock(ctx, "mos:"+key, key)
+}
+
+// keyLock waits until no other write holds key, then holds it until the returned func runs. what
+// names it in the error when ctx ends first.
+func (c *Client) keyLock(ctx context.Context, key, what string) (func(), error) {
+	v, _ := c.locks.LoadOrStore(key, make(chan struct{}, 1))
 	ch := v.(chan struct{})
 	select {
 	case ch <- struct{}{}:
 		return func() { <-ch }, nil
 	case <-ctx.Done():
-		return nil, fmt.Errorf("waiting for another change to %s: %w", key, ctx.Err())
+		return nil, fmt.Errorf("waiting for another change to %s: %w", what, ctx.Err())
 	}
 }
 

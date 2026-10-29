@@ -16,7 +16,7 @@ Do these once, in the console, before you use Terraform.
 
 1. **Create your account** at [cloud.mtn.ng](https://cloud.mtn.ng), then log in to the console at
    [console.cloud.mtn.ng](https://console.cloud.mtn.ng). You log in as `subdomain\username`: note
-   your subdomain, Terraform needs it.
+   your subdomain (your tenant's account ID works too), Terraform needs it.
 2. **Create a project.** Everything you build (networks, routers, security groups, servers) lives in
    a project. In the console, open the catalog and order **Create Project**, with a name such as
    `web-prod`. MTN Cloud names it `web-prod-<your tenant>`; in Terraform you can use the short name.

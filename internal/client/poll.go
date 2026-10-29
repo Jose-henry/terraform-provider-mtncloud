@@ -51,6 +51,12 @@ func pollDefaults(cfg *Config) {
 	if cfg.LBAttempt <= 0 {
 		cfg.LBAttempt = 3 * time.Minute
 	}
+	if cfg.LBWriteAttempt <= 0 {
+		cfg.LBWriteAttempt = 8 * time.Minute
+	}
+	if cfg.LBPendingGrace <= 0 {
+		cfg.LBPendingGrace = 2 * time.Minute
+	}
 	if cfg.MOSLostAfter <= 0 {
 		cfg.MOSLostAfter = 30 * time.Second
 	}

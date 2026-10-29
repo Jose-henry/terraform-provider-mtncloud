@@ -618,3 +618,18 @@ in MOS, then delete the console record. The tenant has the archive API but no ar
   `name`, `externalId`; `availableFloatingIps[]` with `id`, `address`). Envelope keys: `success action
   caller networkAccess permissionSource result`. Scrubbed fixtures: `internal/client/testdata/lb/`.
 - The console's own `/api/load-balancers` inventory is empty for this tenant.
+
+## Load balancer writes (live probe, 2026-10-29, owner-approved, network 114, deleted afterwards)
+- `create` (empty load balancer, `listeners: []`, `pools: []`): 1 m 49 s; answer `result.loadbalancer`
+  (and `result.data`) at `PENDING_CREATE`, with no `pending` flag. Tags gain `mtncloud-req-<requestId>`.
+- `pool-create` and `listener-create` answer `{success, steps: [{kind, name, applied, created, id}]}`,
+  not the guide's `piece`; a pool created with a monitor gives two steps (`pool`, `health monitor`).
+  The provider takes the ID from `piece.id` or the step of its kind.
+- `delete` answers `{success, id, deleting: true}` after 31 s; a `read` then says "not found on this
+  network" once it is gone. `read` takes about 2 s on a small load balancer.
+- VIP subnet: the console subnet's `externalId` (`GET /api/subnets/{id}`) is the cloud subnet ID the
+  plugin wants; `mtncloud_network`'s subnet is the console's.
+- Guide mismatches reported to the plugin side: `steps[]` instead of `piece`, no `pending` flag, and
+  `deleting` on delete.
+- `loadbalancer-update` (added 2026-10-29, guide 9.6): spec keys `name`, `description`, `tags`,
+  `adminStateUp` only; null leaves a field, `""`/`[]` clears; any other key is refused by name.

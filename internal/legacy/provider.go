@@ -31,7 +31,7 @@ func Provider() *schema.Provider {
 			"tenant_subdomain": {
 				Type:          schema.TypeString,
 				Optional:      true,
-				Description:   "The tenant subdomain used for authentication",
+				Description:   "Your tenant, for a username login: its subdomain or its numeric account ID (both work).",
 				DefaultFunc:   schema.EnvDefaultFunc("MTNCLOUD_API_TENANT", nil),
 				ConflictsWith: []string{"access_token"},
 			},

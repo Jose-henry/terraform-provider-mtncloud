@@ -335,3 +335,41 @@ tests on 2026-10-29 (dev-docs/api-research.md, dev-docs/mos-capabilities.md).
 - Console records are matched on `bucketName` after one list call, not with `phrase`, whose fields
   aren't documented.
 
+## D-033 Load balancer resources change one piece at a time (owner, 2026-10-29)
+Builds on D-031. The load balancer and each listener, pool, member and health monitor are separate
+resources, written with the plugin's piece actions (`listener-create`, `pool-update`, `member-add`,
+`monitor-delete`, ..., and `loadbalancer-update` for the load balancer's own fields), never the
+whole-load-balancer `update`, so a stale state can't delete a sibling. Source: the plugin's guide
+sections 9.2 to 9.6 and a live write probe on network 114 (dev-docs/api-research.md).
+- Every piece takes `network_id` and `load_balancer_id` explicitly: the task needs both, and a
+  reference to `mtncloud_load_balancer.x.id` orders the work. Import paths are
+  `<network_id>/<load_balancer_id>[/<pool_id>][/<piece_id>]`; a monitor is found by its pool.
+- References between pieces are IDs (`default_pool_id`, `pool_id`), not names: piece names are optional
+  and not unique, and the reference is what makes Terraform create the pool before its listener and
+  delete it after. Names are for what Terraform didn't make: the `mtncloud_load_balancer*` data sources
+  resolve a load balancer, pool or listener by name to its ID.
+- Writes to one load balancer take turns (a per-load-balancer lock in the client): the plugin refuses
+  a second save while one runs. After each write the client polls until the load balancer is no
+  longer `PENDING_*`; `ERROR` fails the apply with the cloud's status. Each write drops the run's
+  cached reads of that network (B-021).
+- A create sends a random `requestId`; the plugin tags the new load balancer `mtncloud-req-<id>` and a
+  retried create finds that one. The tag is the plugin's, so it never shows in `tags`.
+- A new piece's ID comes from the answer's `piece.id` or, as the live plugin answers, from the step
+  of its kind in `steps[]`.
+- Name, description, tags and `enabled` change in place with `loadbalancer-update` (added by the
+  plugin at the provider's request, 2026-10-29). A load balancer is created enabled; `enabled =
+  false` is applied straight after the create. The VIP subnet and address can't change in the cloud:
+  they replace it.
+- What the plugin can't clear once set (a listener's certificate references, a member's
+  health-check address and port) replaces the piece when it is taken out of the configuration. A
+  listener has no description: the plugin has none. Optional+Computed settings with a cloud
+  default keep their last value when removed, and say so.
+- A new piece's ID is looked up on the load balancer when the answer doesn't name it (a monitor by
+  its pool, a member by address and port, a listener by protocol and port), also when the write
+  failed after the piece was made, so it is kept in state rather than left behind. Writes that may
+  have acted are not retried, except `create`, whose requestId makes it safe (B-023).
+- The plugin answers a write with `pending: true` while its save job still runs, so an ACTIVE read
+  straight after may be the load balancer as it was. Then the wait takes ACTIVE only after a
+  PENDING_* read, or after 2 minutes without one.
+- Members are external (`address` + `port`) in this slice. Instance and cluster members, L7 policies
+  and floating IPs follow.

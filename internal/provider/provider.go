@@ -71,7 +71,7 @@ func (p *mtncloudProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 			},
 			"tenant_subdomain": schema.StringAttribute{
 				Optional:    true,
-				Description: "The tenant subdomain used for authentication",
+				Description: "Your tenant, for a username login: its subdomain or its numeric account ID (both work).",
 			},
 			"username": schema.StringAttribute{
 				Optional:    true,
@@ -189,7 +189,7 @@ func stringOrEnv(v types.String, env string) string {
 }
 
 func (p *mtncloudProvider) Resources(context.Context) []func() resource.Resource {
-	return slices.Concat(network.Resources(), compute.Resources(), catalog.Resources(), automation.Resources(), secrets.Resources(), cluster.Resources(), storage.Resources())
+	return slices.Concat(network.Resources(), compute.Resources(), catalog.Resources(), automation.Resources(), secrets.Resources(), cluster.Resources(), loadbalancer.Resources(), storage.Resources())
 }
 
 func (p *mtncloudProvider) DataSources(context.Context) []func() datasource.DataSource {

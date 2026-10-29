@@ -71,6 +71,9 @@ RESOURCES = [
      "MTN Networks and MTN Routers, security groups (instance firewalls) and their rules, IP pools "
      "(static IP ranges for a network) and DNS domains (instance hostnames and domain join).",
      ["network", "router", "security_group", "security_group_rule", "ipv4_ip_pool", "network_domain"]),
+    ("Load balancers",
+     "Load balancers on an MTN Network, and their listeners, pools, members and health monitors, each its own resource.",
+     ["load_balancer", "load_balancer_listener", "load_balancer_pool", "load_balancer_member", "load_balancer_health_monitor"]),
     ("MOS (MTN Object Storage)",
      "S3-compatible buckets, listed in the console, with their access, CORS, lifecycle, access logging and "
      "object lock settings, and the objects in them (with retention).",
@@ -160,7 +163,8 @@ PLANNED = [
     ("Resources", [
         ("mtncloud_app", "Planned", "Apps from blueprints: several instances or containers deployed together."),
         ("mtncloud_datastore", "Planned", "Datastores: the storage that volumes are created on."),
-        ("mtncloud_load_balancer", "Next", "Load balancers, with listeners, pools, members and health monitors (the data sources are done)."),
+        ("mtncloud_load_balancer_l7_policy", "Next", "Load balancer rules that route or redirect HTTP requests by host, path, header or cookie."),
+        ("mtncloud_load_balancer_floating_ip", "Next", "A public address on a load balancer, from a floating IP pool by name."),
     ]),
     ("Data sources", []),
 ]

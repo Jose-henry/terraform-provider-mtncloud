@@ -6,6 +6,11 @@ the MTN-Cloud-Service-Automation repo, and read-only CLI output against
 date**. They are reference material, never hard-coded in Go: the provider resolves names and codes
 at plan time (see [catalog-lookups.md](catalog-lookups.md)).
 
+## Logging in
+A sub-tenant user logs in as `<tenant>\<username>`, where `<tenant>` is the tenant's subdomain **or its
+numeric account ID**: both work (owner's check against the dev tenant, 2026-10-29: `<id>\<user>` gave
+a token and `whoami` named the same account). So `tenant_subdomain` / `MTNCLOUD_API_TENANT` take either.
+
 ## Customer-facing names
 
 | Customer sees | Platform object | Terraform type (planned) |
