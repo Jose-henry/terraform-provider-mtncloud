@@ -2,7 +2,7 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
-## Unreleased
+## 0.6.0 (2026-10-29)
 
 - New: `mtncloud_load_balancer_l7_policy`, a layer 7 policy on an `HTTP` or `TERMINATED_HTTPS` listener with its rules: requests that match are sent to another pool (`REDIRECT_TO_POOL`), redirected (`REDIRECT_TO_URL`, `REDIRECT_PREFIX`) or rejected. Everything changes in place except the listener; the rules are replaced together. A refused rule leaves no policy behind. What each action needs is checked at plan time. Number a listener's policies 1, 2, 3 without gaps: the cloud refuses a position another policy holds, so a new policy can only go after the last one (the error says so). Policies created in one apply are made in position order, whatever order Terraform starts them in. After a policy is deleted the cloud closes the gap; the ones below it report a lower position, which is no change. `invert` defaults to `false`; `redirect_http_code` keeps its last value when taken out. Import: `<network_id>/<load_balancer_id>/<listener_id>/<l7_policy_id>`. Data sources `mtncloud_load_balancer_l7_policies` (a listener's policies, in the order they are tried) and `mtncloud_load_balancer_l7_policy`.
 - New: `mtncloud_load_balancer_instance_member`, an instance in a pool: every address it has on the load balancer's network becomes a member, and the console keeps the pool in step as the instance scales. Changing the port, weight or `backup` replaces the members. One per instance and pool: create refuses an instance that already has members in the pool (import them instead). Import: `<network_id>/<load_balancer_id>/<pool_id>/<instance_id>`.
