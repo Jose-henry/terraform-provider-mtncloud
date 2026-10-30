@@ -214,6 +214,7 @@ Open questions before building:
    app resource only manages membership, never the instance's own settings.
 4. Managed services' apps come from catalog orders: they are read with the data source, not managed
    by `mtncloud_app` (adopting one would let two resources delete the same VMs).
+   Their day-2 settings go through `mtncloud_app_settings` (B-028), which never deletes.
 
 Tests: unit (set diff to add/remove calls), client contract (add/remove/sg/delete query flags),
 provider unit (create → empty plan → add an instance → remove → import), acceptance in `admin`
@@ -352,3 +353,72 @@ and `pool-2002` in the QA project. Orders send the form's fixed value (`admin`'s
 2026-10-30: this works in every project (MTN's workflow handles it); no change and no catalog QA.
 Also confirmed: networks are created before anything is provisioned on them, so an order naming a
 network that doesn't exist yet fails at plan time, by design.
+
+## B-028 Day-2 settings on instances and apps that something else owns (owner approved 2026-10-30)
+A catalog order owns what it makes: after create it only reads, and on destroy it deletes the VMs, or
+the app with its VMs (D-029). Changing an input fails the plan. So an ordered VM or app can't be
+managed day-2 today. The owner confirmed live behaviour: everything an instance can do (resize
+included) works on a VM a catalog workflow made, and the workflow doesn't reset changes later.
+Importing the VM into `mtncloud_instance` is not the answer: two resources would delete it, and a
+replace on image, project or root disk would rebuild it without the service the order installed.
+
+### 1. `mtncloud_instance_settings` (approved)
+- Adopts any existing instance by `instance_id` (from an order's `instance_ids`, an app, or the
+  console). Changing `instance_id` plans a replace, which is safe: destroy deletes nothing.
+- Day-2, same as `mtncloud_instance`: plan resize, extra disks and NICs, power state, security groups,
+  floating IP, labels, tags, expiry, scale thresholds. An attribute left out isn't managed.
+- Read-only (computed): image, project, root disk, name, IPs. Changing them would rebuild the VM.
+- Destroy only stops tracking the instance (with a warning); the owner (order or app) deletes it.
+- Several servers in one instance: resize, power, security groups, labels and tags are instance-level
+  calls and apply to every server. Floating IPs are attached one per server (`instance.go`
+  `ContainerIDs` loop), but `public_ip` holds one address and the drift check only reads that one
+  (B-013): expose a list of public IPs, one per server, and check each. Changing the server count in
+  place needs research (`mtncloud_instance` replaces on `scale_factor`; an adopted instance can't be
+  replaced).
+- Code: in `internal/services/compute/`. Move `mtncloud_instance`'s update steps (resize, disks,
+  security groups, floating IP, power) into shared functions both resources call; plan checks are
+  shared too. `mtncloud_instance`'s tests must pass unchanged first. No new client calls.
+- Tests: adopt then empty plan; resize, security group and power changes each then empty plan;
+  destroy leaves the VM; import; VM gone leaves state; drift fixed; mutation-check destroy and resize.
+  Live QA (with permission): one `tf-acc-*` order in `admin`, adopt its VM, resize, change security
+  groups, attach a floating IP, stop and start, each then `No changes.`; destroy the settings (VM
+  stays), then the order (VM goes).
+
+### 2. `mtncloud_app_settings` (approved)
+App API (Context7, apidocs reference): `PUT /api/apps/{id}` (name, description, labels, environment,
+ownerId: changing the owner changes it on every instance in the app), `POST add-instance`
+(instanceId, tierName) and `remove-instance`, `GET/POST security-groups`, `state`, `refresh`,
+`prepare-apply` and apply (Terraform, CloudFormation and ARM blueprint apps only; others get a 400),
+`DELETE` (removeInstances, preserveVolumes, releaseFloatingIps). There is no app-level power, resize,
+disk, NIC or floating IP call: VMs are reconfigured through their instances.
+- Adopts any existing app by `app_id`, including a catalog order's app. Destroy deletes nothing.
+- Manages: description, labels, environment, owner (description warns it changes every instance's
+  owner), membership (add and remove instances by tier; removing a node from a managed service is
+  allowed, with a warning that it can break the service), and name once catch 1 is fixed.
+- Security groups: **pending**. App-level security groups don't work on MTN yet (owner, 2026-10-30):
+  they go through the instance. When they work, only one of the app and `mtncloud_instance_settings`
+  may own an instance's security groups, or the two undo each other on every apply.
+- State, refresh and prepare-apply: only if MTN's app type allows it. Read one managed service's app
+  (`apps get <id> -j`, read-only) first; if it isn't a Terraform/CloudFormation/ARM app, leave them out.
+
+### 3. Catch 1: renaming breaks an order's destroy — fix the orders
+An order finds its app by the order's name and its VMs by `<name>-<n>` (D-029). Renaming the app
+(`mtncloud_app_settings`) or a VM (`mtncloud_instance_settings`) means the order can't find what it
+made: destroy then refuses, so nothing is deleted, but the user is stuck.
+Fix (in `internal/services/catalog/order.go`): save the app's ID at create, as `instance_ids` already
+are, and delete by the saved IDs; the name lookup is only a fallback for older state. Until this
+ships, both settings resources refuse to rename anything an order made.
+
+### 4. Catch 2: instances added to an order's app die with the order — option (a), approved
+Destroying an order deletes its app with every instance in it, so an instance added through
+`mtncloud_app_settings` (and owned by a `mtncloud_instance`) would be deleted too.
+Fix, option (a): on destroy, an order deletes only the instances it made (its saved `instance_ids`),
+removes any other instance from the app first (`remove-instance`), then deletes the app. Rejected
+option (b): refusing at plan to add instances to an order's app.
+
+### 5. Order of work
+1. The order fixes (catches 1 and 2), with provider unit tests and mutation checks.
+2. `mtncloud_instance_settings`.
+3. `mtncloud_app_settings`.
+4. `mtncloud_app` (B-017), creating apps, reusing the same building blocks.
+Research alongside: the server count in place; one managed service's app type.
