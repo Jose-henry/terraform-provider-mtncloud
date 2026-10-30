@@ -181,7 +181,8 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Required: true, ElementType: types.StringType,
 				Description: "IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`. The first is the " +
 					"primary network. Any change replaces the instance: MTN Cloud doesn't report an instance's network card IDs, " +
-					"so a network can't be added to a running instance safely.",
+					"so a network can't be added to a running instance safely. Create the networks first: an ID known at plan " +
+					"time must be a network in the instance's project, or the plan fails.",
 				Validators: []validator.List{
 					listvalidator.SizeAtLeast(1),
 					listvalidator.UniqueValues(),
@@ -399,6 +400,7 @@ func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 		return
 	}
 	r.checkNames(ctx, plan, p, project.ID, image, &resp.Diagnostics)
+	r.checkNetworks(ctx, plan, state, hasState, project.ID, &resp.Diagnostics)
 	// Only for a new attach: an address already attached isn't checked again (one router list per change).
 	if !resp.Diagnostics.HasError() && known(plan.FloatingIPPool) && (!hasState || !sameName(plan.FloatingIPPool, state.FloatingIPPool)) {
 		r.checkPoolRouter(ctx, plan, &resp.Diagnostics)
@@ -593,6 +595,44 @@ func (r *instanceResource) checkNames(ctx context.Context, m instanceModel, p *c
 		}
 		diags.AddAttributeError(path.Root("floating_ip_pool"), "Unknown floating IP pool",
 			fmt.Sprintf("no floating IP pool named %q. Available pools: %s. %s", m.FloatingIPPool.ValueString(), strings.Join(names, ", "), client.SyncHint))
+	}
+}
+
+// checkNetworks checks that each network ID known at plan time is a network in the instance's
+// project, so a wrong ID fails the plan instead of the create. IDs not known yet (a network made in
+// the same apply) and IDs the instance already has are skipped.
+func (r *instanceResource) checkNetworks(ctx context.Context, plan, state instanceModel, hasState bool, projectID int64, diags *diag.Diagnostics) {
+	if plan.Networks.IsUnknown() || plan.Networks.IsNull() {
+		return
+	}
+	had := map[string]bool{}
+	if hasState && sameName(plan.Project, state.Project) { // a project move makes a new VM: check them all
+
+		for _, s := range stringsOf(ctx, state.Networks, diags) {
+			had[s] = true
+		}
+	}
+	for _, e := range plan.Networks.Elements() {
+		s, ok := e.(types.String)
+		if !ok || !known(s) || had[s.ValueString()] {
+			continue
+		}
+		id, err := strconv.ParseInt(s.ValueString(), 10, 64)
+		if err != nil {
+			continue // the attribute's validator reports it
+		}
+		n, err := r.client.GetNetwork(ctx, id)
+		switch {
+		case client.IsNotFound(err):
+			diags.AddAttributeError(path.Root("networks"), "Unknown network",
+				fmt.Sprintf("No network with ID %d exists. Create the network first, or use its resource's id, "+
+					"for example mtncloud_network.app.id.", id))
+		case err != nil:
+			diags.AddAttributeError(path.Root("networks"), "Unable to read network", err.Error())
+		case n.ProjectID != 0 && n.ProjectID != projectID:
+			diags.AddAttributeError(path.Root("networks"), "Network in another project",
+				fmt.Sprintf("Network %d (%s) is in project %q, not the instance's project. Use a network in the same project.", id, n.Name, n.ProjectName))
+		}
 	}
 }
 

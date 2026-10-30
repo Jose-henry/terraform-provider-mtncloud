@@ -90,7 +90,7 @@ resource "mtncloud_instance" "worker" {
 ### Required
 
 - `image` (String) Operating system image, by name (`MTN Ubuntu Server 24.04.3LTS`) or code (`MTN-U24.04LTS`); the `mtncloud_images` data source lists them. Changing it replaces the instance.
-- `networks` (List of String) IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`. The first is the primary network. Any change replaces the instance: MTN Cloud doesn't report an instance's network card IDs, so a network can't be added to a running instance safely.
+- `networks` (List of String) IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`. The first is the primary network. Any change replaces the instance: MTN Cloud doesn't report an instance's network card IDs, so a network can't be added to a running instance safely. Create the networks first: an ID known at plan time must be a network in the instance's project, or the plan fails.
 - `plan` (String) Size of the VM, for example `G2S4` (the `mtncloud_plans` data source lists a project's sizes). **Changing it restarts the VM**, in place.
 
 ### Optional

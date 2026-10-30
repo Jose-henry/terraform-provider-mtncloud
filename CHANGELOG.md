@@ -10,6 +10,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 - New: `timeouts {}` on `mtncloud_mos_object`, `mtncloud_mos_object_acl` and the bucket settings (`_bucket_acl`, `_cors`, `_lifecycle`, `_logging`, `_object_lock`).
 - Changed: `mtncloud_mos_object` refuses metadata names with capitals, and retention that is shortened without bypass or removed before it ends, at plan time instead of at apply. An upload over an object that already exists keeps its ACL.
 - Changed: catalog orders check every floating IP pool against its own group's network (managed Kubernetes `worker_floating_ip_pool` with `worker_networks`), at plan time only.
+- Changed: `mtncloud_instance` checks at plan time that each network ID is a network in the instance's project, instead of failing at create. A network made in the same apply is not checked until it exists.
 - Fixed: legacy resources' and data sources' permission errors (403) now say what to do, as the others do.
 - Fixed: `mtncloud_virtual_images` crashed when the image list could not be read, and missed images past the first 200.
 - Fixed: a bad group or cloud is reported as "Unknown group or cloud", not "Unknown project".

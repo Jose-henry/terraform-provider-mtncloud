@@ -1005,6 +1005,26 @@ func TestInstance_PoolCheckedAgainstRouter(t *testing.T) {
 	}
 }
 
+// A network ID known at plan time must be a network in the instance's project.
+func TestInstance_NetworkChecked(t *testing.T) {
+	f, s := newInstFakes(t)
+	cfg := func(nets string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = [`+nets+`]
+`)
+	}
+	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: []resource.TestStep{
+		{Config: cfg(`"9999"`), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)Unknown network.*No network with ID 9999 exists`)},
+		{Config: cfg(`"9301", "9399"`), PlanOnly: true,
+			ExpectError: regexp.MustCompile(`(?s)Network in another project.*9399 \(data-net\) is in project "data-Acme"`)},
+		{Config: cfg(`"9301", "9303"`), PlanOnly: true, ExpectNonEmptyPlan: true},
+	}})
+	if n := s.count(); n != 0 {
+		t.Errorf("%d instances made by plans", n)
+	}
+}
+
 func TestInstance_FloatingIP(t *testing.T) {
 	f, s := newInstFakes(t)
 	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
@@ -1227,6 +1247,8 @@ resource "mtncloud_instance" "app" {
 }
 `
 	}
+	// A move to another project takes a network of that project (9399 is in data-Acme).
+	toData := func(c string) string { return strings.Replace(c, `networks = ["9301"]`, `networks = ["9399"]`, 1) }
 	both := `  group   = "mtnng_cloud_az_1"
   project = "web-prod"`
 	check := func(attr, want string) statecheck.StateCheck {
@@ -1243,7 +1265,7 @@ resource "mtncloud_instance" "app" {
 			// The same group and project set on the instance: no change.
 			{Config: cfg(both, `  group = "MTNNG_CLOUD_AZ_1"
   project = "web-prod"`), ConfigPlanChecks: instPlan(plancheck.ResourceActionNoop)},
-			{Config: cfg(both, `  project = "data"`), ConfigPlanChecks: instPlan(plancheck.ResourceActionReplace),
+			{Config: toData(cfg(both, `  project = "data"`)), ConfigPlanChecks: instPlan(plancheck.ResourceActionReplace),
 				ConfigStateChecks: []statecheck.StateCheck{check("project", "data")}},
 		},
 	})
