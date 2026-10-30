@@ -23,9 +23,6 @@ import (
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 )
 
-// projectType is the catalog item MTN's own "Create Project" workflow is ordered by.
-const projectType = "Create Project"
-
 // The workflow usually finishes within a minute; this bounds one that never reports.
 const projectTimeout = 15 * time.Minute
 
@@ -176,7 +173,12 @@ func (r *projectResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 	// The catalog form's fields; MTN's workflow names the pool "<projectName>-<tenant>" in the cloud.
-	item, err := r.client.OrderWorkflow(ctx, projectType, map[string]any{
+	itemName, err := r.itemName(ctx, projectItem)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to find the Create Project catalog item", err.Error())
+		return
+	}
+	item, err := r.client.OrderWorkflow(ctx, itemName, map[string]any{
 		"groupName":          strconv.FormatInt(p.GroupID, 10),
 		"cloud":              strconv.FormatInt(p.CloudID, 10),
 		"projectName":        plan.Name.ValueString(),
@@ -205,7 +207,7 @@ func (r *projectResource) Create(ctx context.Context, req resource.CreateRequest
 		// Nothing was made, so nothing is kept: the next apply orders again.
 		resp.Diagnostics.AddError("Project order failed",
 			fmt.Sprintf("The %q workflow for %s ended with %q%s. Check the order (ID %d) under Catalog > Inventory.",
-				projectType, plan.FullName.ValueString(), executionStatus(item), message(item), item.ID))
+				projectItem.Name(), plan.FullName.ValueString(), executionStatus(item), message(item), item.ID))
 		return
 	case err != nil:
 		// The order is placed: keep it, so a retry never orders a second project.
@@ -269,16 +271,16 @@ func (r *projectResource) Read(ctx context.Context, req resource.ReadRequest, re
 		resp.Diagnostics.AddError("Unable to read the project order", err.Error())
 		return
 	}
-	if item.TypeName != projectType {
+	if !r.isItem(ctx, projectItem, item) {
 		resp.Diagnostics.AddError("Not a project order",
-			fmt.Sprintf("Catalog order %d is a %q, not a %q. Import the project by its own order ID.", id, item.TypeName, projectType))
+			fmt.Sprintf("Catalog order %d is a %q, not a %q. Import the project by its own order ID.", id, item.TypeName, projectItem.Name()))
 		return
 	}
 	if done, ok := client.ExecutionDone(item.Execution); (done && !ok) || strings.EqualFold(item.Status, "failed") {
 		// It failed after Create stopped waiting: nothing was made, so the next apply orders again.
 		resp.Diagnostics.AddWarning("Project order failed",
 			fmt.Sprintf("The %q workflow for %s (order %d) ended with %q%s. The next apply orders it again.",
-				projectType, state.FullName.ValueString(), id, executionStatus(item), message(item)))
+				projectItem.Name(), state.FullName.ValueString(), id, executionStatus(item), message(item)))
 		resp.State.RemoveResource(ctx)
 		return
 	}

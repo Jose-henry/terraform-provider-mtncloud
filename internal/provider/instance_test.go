@@ -38,6 +38,7 @@ type instStore struct {
 	pending      map[int64]bool
 	fail         string // the next create ends in this status
 	stuck        bool   // instances never leave "provisioning"
+	sgsDenied    int64  // reading this instance's security groups answers 403
 	lostReplies  int    // the next creates are applied but answer 502
 	creates      int
 	lastCreate   map[string]any
@@ -138,6 +139,8 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case len(parts) == 2 && parts[1] == "threshold":
 		s.thresholds[id] = body["instanceThreshold"].(map[string]any)
 		reply(http.StatusOK, map[string]any{"success": true, "instanceThreshold": s.thresholds[id]})
+	case len(parts) == 2 && parts[1] == "security-groups" && r.Method == http.MethodGet && id == s.sgsDenied:
+		reply(http.StatusForbidden, map[string]any{"success": false, "msg": "Unauthorized"})
 	case len(parts) == 2 && parts[1] == "security-groups" && r.Method == http.MethodGet:
 		list := []any{}
 		for _, g := range s.sgs[id] {
@@ -1269,4 +1272,66 @@ resource "mtncloud_instance" "app" {
 				ConfigStateChecks: []statecheck.StateCheck{check("project", "data")}},
 		},
 	})
+}
+
+// install_agent left out follows the primary network's router when the instance is made: on behind
+// a router with an external network (the agent can reach MTN Cloud), off without one. It is kept
+// after, so a router added later changes nothing.
+func TestInstance_AgentFollowsRouter(t *testing.T) {
+	f, s := newInstFakes(t)
+	routers := newRouterStore()
+	edge := map[string]any{"id": 9990, "name": "edge", "status": "ok", "enabled": true,
+		"externalNetwork": map[string]any{"id": 31, "name": "public-network-01"},
+		"interfaces":      []any{map[string]any{"network": map[string]any{"id": 9301}}}}
+	f.router = routers
+	setRouter := func(on bool) func() {
+		return func() {
+			routers.mu.Lock()
+			defer routers.mu.Unlock()
+			delete(routers.routers, 9990)
+			if on {
+				routers.routers[9990] = edge
+			}
+		}
+	}
+	cfg := func(extra string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+`+extra)
+	}
+	state := func(want bool) []statecheck.StateCheck {
+		return []statecheck.StateCheck{statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("install_agent"), knownvalue.Bool(want))}
+	}
+	sent := func(want bool) func() {
+		return func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if cfg := s.lastCreate["config"].(map[string]any); cfg["noAgent"] != !want {
+				t.Errorf("noAgent %v, want %v", cfg["noAgent"], !want)
+			}
+		}
+	}
+	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: []resource.TestStep{
+		{
+			// Decided at create, not at plan: the plan shows it unknown.
+			PreConfig: setRouter(true), Config: cfg(""), ConfigStateChecks: state(true),
+			ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+				plancheck.ExpectUnknownValue("mtncloud_instance.app", tfjsonpath.New("install_agent"))}},
+		},
+		{
+			// No router reaching MTN Cloud when it is made again: no agent.
+			PreConfig: func() { sent(true)(); setRouter(false)() },
+			Config:    cfg(""), Taint: []string{"mtncloud_instance.app"}, ConfigStateChecks: state(false),
+		},
+		{
+			// Kept: a router added later changes nothing.
+			PreConfig:        func() { sent(false)(); setRouter(true)() },
+			Config:           cfg(""),
+			ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+		},
+		{Config: cfg("  install_agent = true\n"), PlanOnly: true, ExpectNonEmptyPlan: true,
+			ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{
+				plancheck.ExpectResourceAction("mtncloud_instance.app", plancheck.ResourceActionReplace)}}},
+	}})
 }

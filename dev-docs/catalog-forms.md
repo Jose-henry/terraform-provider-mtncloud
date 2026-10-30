@@ -1,5 +1,10 @@
 # Catalog order forms (read 2026-10-27)
 
+> **Update 2026-10-31.** Items are now found by code (`/api/catalog-item-types`); see `itemCodes` and
+> each spec in `internal/services/catalog/order_specs.go`. Item 53 is now "MTN PfSense VPN" (was "MTN
+> VPN Service"); item 72 "MTN SOPHOS Firewall (BYOL)" is new. The live form is checked at plan time
+> and by `TestAccCatalogForms_MatchSpecs`, so this table is history, not the source of truth.
+
 Every item a customer can order, from a customer login's `GET /api/catalog/types/{id}` (read-only
 captures `.captures/au-cat-<id>.txt`; field names only, no tenant data). The input names are the
 keys an order sends in `config.customOptions`. `mtncloud_catalog_item` shows the same at plan time.

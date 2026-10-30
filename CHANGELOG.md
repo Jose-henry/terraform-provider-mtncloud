@@ -2,6 +2,22 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
+## Unreleased
+
+- **Changed: a changed input on a catalog order now plans a replace** instead of an error, so `terraform apply -replace` and `terraform plan -destroy` work. The order and what it made are deleted, then the item is ordered again. Add `lifecycle { prevent_destroy = true }` to guard a server against an accidental replace. This includes the provider's default project or group: changing `project`/`group` on the provider (or `MTNCLOUD_PROJECT`/`MTNCLOUD_GROUP`) now plans a replace of every order that relies on it, where it used to be an error. An `extra_inputs` or list input that goes from left out to empty is no change.
+- **Changed: an order succeeds only when what it made is running.** An instance that fails after the workflow fails the apply with MTN Cloud's message, and the resource is tainted, so the next apply orders again. New attribute `instance_statuses`; an instance that fails later plans a replace.
+- **Changed: orders follow the live order form.** Catalog items are found by their code, so MTN renaming an item no longer breaks it. At plan time each order is checked against the form as it is now: fields it requires (some only while another field is set), hidden fields and pre-filled values it sends, fields used only while another is set, and the limits its help text states (root disk, network count, plan size). Plans come from each form's own list; a plan's size code picks it (`G2S4` picks `Small (G2S4)`), and an unknown plan lists the form's choices by name. New argument `extra_inputs` for a field the form requires that this version has no argument for.
+- **Renamed:** `mtncloud_vpn_service` is now `mtncloud_pfsense_vpn` (MTN renamed the item to "MTN PfSense VPN"). Its disks are fixed by MTN Cloud (50 GB), so `root_volume_size` and `data_volume_size` are gone, and it needs two networks. The old name still works, with a deprecation warning; move with a `moved {}` block (Terraform 1.8 or newer).
+- New: `mtncloud_sophos_firewall` (MTN SOPHOS Firewall, BYOL).
+- Changed: a new Fortinet, FortiADC, FortiManager, FortiAnalyzer or SOPHOS order must set `root_volume_size` (at least 40, 30, 500, 250 and 80 GB); the form's own default is smaller. Existing orders without it are left as they are.
+- Changed: `extra_inputs` is sensitive (a form field can be a password); its values are kept in state.
+- Fixed: `mtncloud_wireguard_vpn` requires `root_volume_size`, as its form does; it failed with "VOLUMES is required" otherwise.
+- Changed: `admin_username` is optional on the managed services and MongoDB (the form's default is sent); MongoDB's `admin_password` is needed only while `enable_auth` is on.
+- Changed: `mtncloud_instance` `install_agent`, left out, is on when the primary network is on an MTN Router with an external network and off otherwise, decided at create (the plan shows it as known after apply) and kept. Existing instances keep what they have.
+- New: the `mtncloud_instance` data source shows `networks`, `security_groups` and `volumes`.
+- Changed: a 403 says what blocked it: a role (as before), MTN Cloud's web firewall (with its reference ID), or a network or IP block.
+- Docs: examples pin `~> 0.7`; wrong descriptions on `mtncloud_ansible_tower_task`, `mtncloud_catalog_item_type` and `mtncloud_vdi_pool` fixed; the version note on `mtncloud_user_role` removed; the appliance examples meet each item's minimums.
+
 ## 0.7.0 (2026-10-30)
 
 - New: `name_prefix` on `mtncloud_mos_bucket`. Bucket names are shared by every MTN Cloud tenant, so a name may already be taken; `name_prefix` makes a free one (the prefix and 8 random characters) when the bucket is created and keeps it. Set `name` or `name_prefix`. A bucket imported by name whose name starts with the prefix isn't replaced.

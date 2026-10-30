@@ -1,0 +1,13 @@
+{
+ "success": true,
+ "data": [
+  {
+   "name": "Read & Write",
+   "value": "readWrite"
+  },
+  {
+   "name": "Owner",
+   "value": "dbOwner"
+  }
+ ]
+}

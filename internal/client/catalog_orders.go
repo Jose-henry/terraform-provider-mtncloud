@@ -11,6 +11,7 @@ import (
 // workflow item (a project, MOS, ...) runs an execution; it is null until the workflow starts.
 type OrderedItem struct {
 	ID            int64
+	TypeID        int64  // the catalog item's ID, which a rename keeps
 	TypeName      string // the catalog item type, for example "Create Project"
 	Status        string // the item's own status, for example "ORDERED"; it doesn't follow the execution
 	StatusMessage string
@@ -26,6 +27,7 @@ type Execution struct {
 type wireOrderedItem struct {
 	ID   int64 `json:"id"`
 	Type struct {
+		ID   int64  `json:"id"`
 		Name string `json:"name"`
 	} `json:"type"`
 	Status        string  `json:"status"`
@@ -37,7 +39,7 @@ type wireOrderedItem struct {
 }
 
 func (w wireOrderedItem) item() *OrderedItem {
-	it := &OrderedItem{ID: w.ID, TypeName: w.Type.Name, Status: w.Status, StatusMessage: deref(w.StatusMessage)}
+	it := &OrderedItem{ID: w.ID, TypeID: w.Type.ID, TypeName: w.Type.Name, Status: w.Status, StatusMessage: deref(w.StatusMessage)}
 	if w.Execution != nil {
 		it.Execution = &Execution{ID: w.Execution.ID, Status: w.Execution.Status}
 	}

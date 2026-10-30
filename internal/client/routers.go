@@ -277,3 +277,18 @@ func (c *Client) PoolRouterProblem(ctx context.Context, netID int64, pool string
 		"and the apply will fail once the VM is running. Unless this apply creates that router, add one "+
 		"(mtncloud_router with external_network = %q and this network) and reference it in depends_on.", netID, pool, pool), false
 }
+
+// HasExternalRouter reports whether a network is on an MTN Router with an external network: a VM on
+// it can reach MTN Cloud, so the agent can report in.
+func (c *Client) HasExternalRouter(ctx context.Context, netID int64) (bool, error) {
+	routers, err := c.ListRouters(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, rt := range routers {
+		if rt.ExternalNetworkID != 0 && slices.Contains(rt.NetworkIDs, netID) {
+			return true, nil
+		}
+	}
+	return false, nil
+}

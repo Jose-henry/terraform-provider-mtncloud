@@ -39,7 +39,7 @@ data "mtncloud_virtual_images" "example_virtual_images" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `ids` (List of String)
+- `ids` (List of String) The IDs of the virtual images that match the filters.
 
 <a id="nestedblock--filter"></a>
 ### Nested Schema for `filter`

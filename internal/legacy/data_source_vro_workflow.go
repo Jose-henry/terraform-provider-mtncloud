@@ -17,6 +17,7 @@ func dataSourceVrealizeOrchestratorWorkflow() *schema.Resource {
 		Schema: map[string]*schema.Schema{
 			"value": {
 				Type:          schema.TypeInt,
+				Description:   "The workflow's value (its ID in the option list); give this or `name`",
 				Optional:      true,
 				Computed:      true,
 				ConflictsWith: []string{"name"},

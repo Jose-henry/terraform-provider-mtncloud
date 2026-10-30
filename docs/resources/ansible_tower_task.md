@@ -2,12 +2,12 @@
 page_title: "mtncloud_ansible_tower_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud vRealize Orchestrator (vRO) task resource
+  Provides an MTN Cloud Ansible Tower task resource: a task that runs an Ansible Tower job template from an Ansible Tower integration.
 ---
 
 # mtncloud_ansible_tower_task
 
-Provides a MTN Cloud vRealize Orchestrator (vRO) task resource
+Provides an MTN Cloud Ansible Tower task resource: a task that runs an Ansible Tower job template from an Ansible Tower integration.
 
 ## Example Usage
 

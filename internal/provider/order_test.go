@@ -99,9 +99,11 @@ func TestMySQLOrder(t *testing.T) {
 				},
 			},
 			{Config: cfg(body), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
-			// An ordered item can't change; a secret isn't stored, so changing it shows nothing.
-			{Config: cfg(strings.Replace(body, `"G2S4"`, `"G1S1"`, 1)), PlanOnly: true,
-				ExpectError: regexp.MustCompile(`(?s)Can't change an ordered MTN MySQL.*plan`)},
+			// An order can't change: a changed input orders it again (a replace), so -replace and
+			// destroy plan too. A secret isn't stored, so changing it shows nothing.
+			{Config: cfg(strings.Replace(body, `"G2S4"`, `"G1S2"`, 1)), PlanOnly: true, ExpectNonEmptyPlan: true,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_mysql.db", plancheck.ResourceActionReplace)}}},
 			{Config: cfg(strings.Replace(body, "s3cret-value", "other", 1)), PlanOnly: true},
 			// Import by order ID: the configuration is adopted, nothing is ordered again.
 			{Config: cfg(body), ResourceName: "mtncloud_mysql.db", ImportState: true, ImportStateId: "9801",
@@ -295,7 +297,7 @@ func TestOrder_NamesCheckedAtPlan(t *testing.T) {
 	}
 	steps := []resource.TestStep{}
 	for _, c := range []struct{ change, to, want string }{
-		{`"8.4"`, `"5.7"`, `(?s)no version "5.7": choose one of 8.4, 8.0`},
+		{`"8.4"`, `"5.7"`, `(?s)no version "5.7": choose one of 8.4 LTS, 8.0`},
 		{`"app-net"`, `"nope"`, `no network named "nope"`},
 		{`"G2S4"`, `"G9S9"`, `G9S9`},
 		{`"web-prod-Acme"`, `"nope"`, `nope`},
@@ -370,10 +372,13 @@ resource "mtncloud_letsencrypt_certificate" "web" {
 				},
 			},
 			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
-			// A new target instance, or an input left out at order time, would never reach MTN Cloud.
-			{Config: strings.Replace(cfg, `"9705"`, `"9706"`, 1), PlanOnly: true, ExpectError: regexp.MustCompile(`instance_id = "9705"`)},
+			// A new target instance, or an input added after the order, orders it again.
+			{Config: strings.Replace(cfg, `"9705"`, `"9706"`, 1), PlanOnly: true, ExpectNonEmptyPlan: true,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_letsencrypt_certificate.web", plancheck.ResourceActionReplace)}}},
 			{Config: strings.Replace(cfg, "staging     = true", "staging     = true\n  admin_email = \"ops@example.com\"", 1), PlanOnly: true,
-				ExpectError: regexp.MustCompile(`admin_email = nothing \(left out\)`)},
+				ExpectNonEmptyPlan: true, ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_letsencrypt_certificate.web", plancheck.ResourceActionReplace)}}},
 			{
 				// Destroy deletes nothing: the certificate stays on the instance.
 				Config: f.providerConfig(),

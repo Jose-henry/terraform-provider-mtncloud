@@ -15,9 +15,10 @@ func dataSourceEnvironments() *schema.Resource {
 		ReadContext: dataSourceEnvironmentsRead,
 		Schema: map[string]*schema.Schema{
 			"ids": {
-				Type:     schema.TypeList,
-				Computed: true,
-				Elem:     &schema.Schema{Type: schema.TypeInt},
+				Type:        schema.TypeList,
+				Description: "The IDs of the environments that match the filters.",
+				Computed:    true,
+				Elem:        &schema.Schema{Type: schema.TypeInt},
 			},
 			"sort_ascending": {
 				Type:        schema.TypeBool,

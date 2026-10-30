@@ -233,12 +233,17 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 					"may apply the network's domain, shown here. Changing it replaces the instance.",
 				PlanModifiers: keep,
 			},
+			// Optional+Computed: left out, it follows the primary network's router at create (owner,
+			// 2026-10-30), then stays as it was set.
 			"install_agent": schema.BoolAttribute{
-				Optional: true, Computed: true, Default: booldefault.StaticBool(true),
-				Description: "Install the MTN Cloud agent, for monitoring, logs and automation. Defaults to `true`. The agent " +
-					"needs the primary network to be on an MTN Router with an external network, so it can reach MTN Cloud: " +
-					"without one, the VM stays \"provisioning\" (finalizing) until the create timeout. Changing it replaces the instance.",
-				PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
+				Optional: true, Computed: true,
+				Description: "Install the MTN Cloud agent, for monitoring, logs and automation. The agent needs the primary " +
+					"network to be on an MTN Router with an external network, so it can reach MTN Cloud: without one, the VM " +
+					"stays \"provisioning\" (finalizing) until the create timeout. Left out, it is `true` when the primary " +
+					"network is on such a router and `false` otherwise, decided when the instance is created (the plan shows " +
+					"it as known after apply) and kept after. " +
+					"Changing it replaces the instance.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown(), boolplanmodifier.RequiresReplace()},
 			},
 			"create_user": schema.BoolAttribute{
 				Optional: true, Computed: true, Default: booldefault.StaticBool(true),
@@ -806,6 +811,12 @@ func (r *instanceResource) Create(ctx context.Context, req resource.CreateReques
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	// Decided here, not at plan: a router made in the same apply may attach the network after the
+	// plan, and a value fixed at plan would then differ from the one planned again during apply.
+	if plan.InstallAgent.IsUnknown() {
+		on, _ := r.agentByRouter(ctx, plan, &resp.Diagnostics)
+		plan.InstallAgent = types.BoolValue(on)
+	}
 	res, ok := r.input(ctx, plan, &resp.Diagnostics)
 	if !ok {
 		return
@@ -1638,3 +1649,27 @@ func recordUnconfirmed(ctx context.Context, priv interface {
 
 // fipUnconfirmedKey marks, in private state, an attach that was sent but whose address never showed.
 const fipUnconfirmedKey = "floating_ip_unconfirmed"
+
+// agentByRouter is install_agent's default, decided at create: on when the primary network is on a
+// router with an external network (the agent can reach MTN Cloud), off otherwise. ok is false when
+// the network can't be read from the plan. A router list that can't be read leaves the agent on, as before, with a warning.
+func (r *instanceResource) agentByRouter(ctx context.Context, plan instanceModel, diags *diag.Diagnostics) (bool, bool) {
+	if plan.Networks.IsUnknown() || plan.Networks.IsNull() || len(plan.Networks.Elements()) == 0 {
+		return false, false
+	}
+	first, ok := plan.Networks.Elements()[0].(types.String)
+	if !ok || !known(first) {
+		return false, false
+	}
+	id, err := strconv.ParseInt(first.ValueString(), 10, 64)
+	if err != nil {
+		return false, false
+	}
+	on, err := r.client.HasExternalRouter(ctx, id)
+	if err != nil {
+		diags.AddAttributeWarning(path.Root("install_agent"), "Agent default not checked",
+			"The routers couldn't be read to see whether the primary network reaches MTN Cloud, so the agent is installed: "+err.Error())
+		return true, true
+	}
+	return on, true
+}

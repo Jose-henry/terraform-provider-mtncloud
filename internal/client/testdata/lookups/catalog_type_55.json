@@ -1,0 +1,206 @@
+{
+ "catalogItemType": {
+  "id": 55,
+  "name": "MTN MongoDB",
+  "type": "workflow",
+  "context": "appliance",
+  "optionTypes": [],
+  "form": {
+   "options": [
+    {
+     "id": 1,
+     "fieldName": "group-vpn",
+     "type": "group",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 2,
+     "fieldName": "cloud",
+     "type": "cloud",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 4,
+     "fieldName": "environment",
+     "type": "environment",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 6,
+     "fieldName": "resourcepool",
+     "type": "resourcePool",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 3,
+     "fieldName": "name",
+     "type": "text",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 5,
+     "fieldName": "labels",
+     "type": "textArray",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 7,
+     "fieldName": "plan",
+     "type": "select",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 8,
+     "fieldName": "volumes",
+     "type": "diskManager",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 9,
+     "fieldName": "networks",
+     "type": "networkManager",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 10,
+     "fieldName": "securitygroups",
+     "type": "secGroup",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 11,
+     "fieldName": "floatingip",
+     "type": "select",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 5501,
+     "fieldName": "mongodbVersion",
+     "type": "select",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "defaultValue": "8.2"
+    },
+    {
+     "id": 5502,
+     "fieldName": "mongoUserRole",
+     "type": "select",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "defaultValue": "Read & Write"
+    },
+    {
+     "id": 5503,
+     "fieldName": "enableAuth",
+     "type": "checkbox",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "defaultValue": "on"
+    },
+    {
+     "id": 5504,
+     "fieldName": "adminUsername",
+     "type": "text",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "defaultValue": "Admin",
+     "fieldLabel": "Admin Username"
+    },
+    {
+     "id": 5505,
+     "fieldName": "adminPassword",
+     "type": "password",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "fieldLabel": "Admin Password",
+     "visibleOnCode": "enableAuth",
+     "requireOnCode": "enableAuth",
+     "helpBlock": "Password for the global administrator. Required if enableAuth is checked."
+    },
+    {
+     "id": 5506,
+     "fieldName": "hostCIDRs",
+     "type": "textarea",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "defaultValue": "0.0.0.0/0"
+    },
+    {
+     "id": 5507,
+     "fieldName": "initReplicaSet",
+     "type": "checkbox",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 5508,
+     "fieldName": "replicaSetName",
+     "type": "text",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "defaultValue": "rs0",
+     "visibleOnCode": "initReplicaSet"
+    },
+    {
+     "id": 5509,
+     "fieldName": "installMongosh",
+     "type": "checkbox",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "defaultValue": "on"
+    },
+    {
+     "id": 5510,
+     "fieldName": "newField",
+     "type": "text",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "fieldLabel": "New Field"
+    },
+    {
+     "id": 5511,
+     "fieldName": "oplogSizeMB",
+     "type": "number",
+     "required": false,
+     "fieldLabel": "Oplog Size",
+     "requireOnCode": "initReplicaSet",
+     "fieldContext": "config.customOptions",
+     "config": {}
+    }
+   ],
+   "fieldGroups": []
+  }
+ }
+}

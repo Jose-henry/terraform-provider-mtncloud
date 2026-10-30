@@ -27,4 +27,4 @@ data "mtncloud_environments" "tf_environments" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `ids` (List of Number)
+- `ids` (List of Number) The IDs of the environments that match the filters.

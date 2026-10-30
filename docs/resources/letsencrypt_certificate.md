@@ -2,12 +2,12 @@
 page_title: "mtncloud_letsencrypt_certificate Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Its inputs can't be changed afterwards. terraform destroy deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning.
+  Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Changing an input orders it again. terraform destroy deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning.
 ---
 
 # mtncloud_letsencrypt_certificate
 
-Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Its inputs can't be changed afterwards. `terraform destroy` deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning.
+Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Changing an input orders it again. `terraform destroy` deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning.
 
 ## Example Usage
 
@@ -61,5 +61,5 @@ Write the inputs exactly as ordered: the first apply after an import records the
 
 - Create orders the certificate for the instance and waits for the workflow. The domain must already
   resolve to the instance's public IP.
-- The inputs can't be changed afterwards. Destroy deletes nothing: the certificate stays on the
+- A changed input orders the certificate again (the plan shows a replace). Destroy deletes nothing: the certificate stays on the
   instance until the instance is deleted, and the resource is only removed from state, with a warning.

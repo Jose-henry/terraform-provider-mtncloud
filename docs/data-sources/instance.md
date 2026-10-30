@@ -43,7 +43,19 @@ output "db_address" {
 - `group` (String) Group the instance belongs to.
 - `image` (String) Image name, for example `MTN Ubuntu Server 24.04.3LTS`.
 - `labels` (List of String) Labels.
+- `networks` (List of String) Network IDs of the instance's network cards, primary first, as `mtncloud_instance` takes them.
 - `plan` (String) Plan (size) name, for example `G2S4`.
 - `private_ip` (String) Private address, or empty.
 - `public_ip` (String) Floating (public) address, or empty.
+- `security_groups` (List of String) Names of the security groups applied to the instance, sorted, the project's default group included. Null, with a warning, when your role can't read them.
 - `status` (String) Status, for example `running` or `stopped`.
+- `volumes` (Attributes List) Disks, root first. (see [below for nested schema](#nestedatt--volumes))
+
+<a id="nestedatt--volumes"></a>
+### Nested Schema for `volumes`
+
+Read-Only:
+
+- `name` (String) Disk name.
+- `root` (Boolean) Whether this is the root (boot) disk.
+- `size` (Number) Size in GB.

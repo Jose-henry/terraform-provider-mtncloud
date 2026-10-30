@@ -14,7 +14,7 @@ import (
 
 func resourceUserRole() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud user role resource (This resource requires MTN Cloud 6.0.4 or later).",
+		Description:   "Provides an MTN Cloud user role resource.",
 		CreateContext: resourceUserRoleCreate,
 		ReadContext:   resourceUserRoleRead,
 		UpdateContext: resourceUserRoleUpdate,

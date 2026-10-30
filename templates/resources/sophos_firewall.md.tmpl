@@ -1,0 +1,58 @@
+---
+page_title: "mtncloud_sophos_firewall Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_sophos_firewall
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_sophos_firewall/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_sophos_firewall/import.sh" }}
+
+The order doesn't show what it was placed with, so the inputs come from your configuration: write them
+exactly as ordered. The first apply after an import records them, finds the instances by name, and orders nothing.
+
+## Notes
+
+- **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
+  finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
+  they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
+  message; the resource is then tainted, so the next apply deletes it and orders again.
+- **A changed input orders again.** An order can't be edited, so changing any input plans a
+  replace: what the order made is deleted, then the item is ordered again. `terraform apply
+  -replace` does the same on purpose, and an instance that fails later also plans a replace. To
+  stop a plan from deleting a server by accident, add `lifecycle { prevent_destroy = true }`.
+- **Checked against the live order form.** MTN can change its order forms, so each plan checks
+  the order against the form as it is now: the fields it requires (some only while another field
+  is set), the fields it hides and fills itself, the values it pre-fills, and the limits its help
+  text states (disk sizes, network counts, plan sizes). Plans are the form's own list. A field
+  the form requires that has no argument here goes in `extra_inputs`.
+- **Destroy deletes what the order made.** Its instances are deleted with their disks and floating
+  IPs, then the order's record in Catalog > Inventory. A managed service is an app (under Apps in the
+  console), so its app is deleted with all its instances. Another app is deleted only if it holds
+  nothing but this order's instances; otherwise only the order's instances leave it. Destroy waits
+  until they are gone (`timeouts { delete }`, default 90 minutes). It refuses, deleting nothing, while
+  the order's workflow still runs past the timeout, after an import that hasn't been applied, or when
+  nothing the order made can be found. To keep what it made, use a `removed` block
+  (`lifecycle { destroy = false }`) or `terraform state rm` instead. If everything it made is
+  deleted outside Terraform, the next plan orders it again.
+- **Secrets are write-only** (Terraform 1.11 or newer): they are sent with the order and never stored
+  in state or plans.
+- **Names are checked when you plan**: project, plan, networks, security groups, floating IP pool,
+  environment and every choice list (versions and so on) are looked up in MTN Cloud before anything
+  is ordered, and an unknown value lists the valid ones. A floating IP pool must also be the external
+  network of the router that holds the first network: another pool is an error, and no router a warning.
+- **A failed workflow** is reported with MTN Cloud's message and nothing is kept; delete whatever it
+  left in the console before applying again.

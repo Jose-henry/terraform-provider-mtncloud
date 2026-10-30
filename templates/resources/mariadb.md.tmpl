@@ -26,9 +26,19 @@ exactly as ordered. The first apply after an import records them, finds the inst
 
 ## Notes
 
-- **An order, not a live object.** Create places the catalog order and waits for MTN's workflow to
-  finish, then finds the instances it made by `name` in the project (`instance_ids`). The inputs
-  can't be changed afterwards: the plan refuses, so nothing is ever ordered twice by accident.
+- **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
+  finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
+  they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
+  message; the resource is then tainted, so the next apply deletes it and orders again.
+- **A changed input orders again.** An order can't be edited, so changing any input plans a
+  replace: what the order made is deleted, then the item is ordered again. `terraform apply
+  -replace` does the same on purpose, and an instance that fails later also plans a replace. To
+  stop a plan from deleting a server by accident, add `lifecycle { prevent_destroy = true }`.
+- **Checked against the live order form.** MTN can change its order forms, so each plan checks
+  the order against the form as it is now: the fields it requires (some only while another field
+  is set), the fields it hides and fills itself, the values it pre-fills, and the limits its help
+  text states (disk sizes, network counts, plan sizes). Plans are the form's own list. A field
+  the form requires that has no argument here goes in `extra_inputs`.
 - **Destroy deletes what the order made.** Its instances are deleted with their disks and floating
   IPs, then the order's record in Catalog > Inventory. A managed service is an app (under Apps in the
   console), so its app is deleted with all its instances. Another app is deleted only if it holds

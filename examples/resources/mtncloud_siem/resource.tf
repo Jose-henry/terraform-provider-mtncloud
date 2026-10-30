@@ -7,7 +7,7 @@ resource "mtncloud_siem" "this" {
   name             = "siem-1"
   project          = "web-prod"
   plan             = "G2S4"
-  root_volume_size = 40
+  root_volume_size = 100
   networks         = ["app-net"]
   security_groups  = ["web"]
   version          = "4.14.6"

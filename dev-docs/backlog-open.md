@@ -59,7 +59,13 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 
 ## 2. Features not built
 
-- [ ] **Firewall 403s (B-018 #5).** Recognise the web firewall's HTML "Access Restricted" page and say it was the firewall, with its reference ID, instead of a bare 403.
+- [ ] **Catalog QA (B-029 #8).** Order every catalog item live (`tf-acc-*` in `admin`): apply, plan `No changes.`, destroy.
+- [ ] **Catalog form snapshot in the docs (B-029 #7, report B6).** Each order page shows the form's help text and requirements.
+- [ ] **Legacy descriptions (report B5).** About 80 one-line legacy descriptions to rewrite in the newer style.
+- [ ] **MOS order resource (B-032).** Proposal; needs the owner's approval.
+- [ ] **Cluster layouts by code (B-033).** With the cluster work.
+
+- [x] **Firewall 403s (B-018 #5, report A6).** Done 2026-10-31: the firewall page, a network block and a role refusal each get their own message. Confirm the match on the next real firewall page.
 - [ ] **Customer-login refusal at plan time (B-007).** Refuse master-only resources at plan for a customer login (`internal/tenancy`, D-004), before the API's 403.
 - [ ] **`dhcp_range` and `host_routes` on `mtncloud_network` (B-010).** Blocked until a real value is created in the console and captured.
 - [ ] **Load balancer members (B-023).** Cluster-group members (`clusterGroup`) and pinning one node of an instance (`pinAddress`).

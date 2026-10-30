@@ -422,3 +422,77 @@ option (b): refusing at plan to add instances to an order's app.
 3. `mtncloud_app_settings`.
 4. `mtncloud_app` (B-017), creating apps, reusing the same building blocks.
 Research alongside: the server count in place; one managed service's app type.
+
+## B-029 Catalog orders follow the live form (issue report v0.7.0 A1–A5, B2–B3, B6, B8; owner 2026-10-30) — 1–7 done 2026-10-31, QA (8) open
+Sources: the issue report (sub-tenant tester, 2026-10-28→30) and a read-only dump of all 29 forms
+(`/api/catalog/types/<id>`, 2026-10-30). Owner's rules for catalog resources:
+- MTN changes names, forms, inputs and help text without notice: resources must follow the live
+  form, not a copy of it.
+- Every option (plans, versions, pools, ...) comes from that form's own lists, never from the
+  instance wizard's (a form's plan list has its own IDs and, for PfSense, its own names).
+- What the form requires is required; optional inputs may stay. Hidden fields are sent with the
+  form's default, as the console does (PfSense root disk 50 GB, fixed: not user-settable).
+- An order succeeds only when its workflow succeeded and everything it made finished provisioning;
+  an order that makes nothing to wait for (NFS, SMB, certificate) stops at the workflow.
+- A changed input plans a replace (owner approved), so `-replace` and `-destroy` work.
+Work:
+1. Items by stable code (`/api/catalog-item-types`, readable by a customer login), then known names;
+   a renamed item warns and carries on. `mtncloud_vpn_service` → `mtncloud_pfsense_vpn` (moved).
+2. Inputs RequiresReplace instead of the "can't change" error (report A4).
+3. Failed VMs fail the order and taint it; refresh plans a replace for a failed VM (report A1).
+4. Plan-time checks from the live form: required, hidden defaults, conditional requirements
+   (`requireOnCode`, `visibleOnCode`), help-text minimums per spec (disk, interfaces), the form's help
+   text in errors. `extra_inputs` for fields this provider version doesn't know yet.
+5. Plans from the form only (no wizard fallback); `G2S4` matches `Small (G2S4)`; errors list names.
+6. WireGuard: `volumes` required; labels key `labels`. New `mtncloud_sophos_firewall` (code SPH004).
+7. A drift check against the live forms: `TestAccCatalogForms_MatchSpecs` (reads only; passed
+   2026-10-30). A committed form snapshot for the docs (report B6: help text on each page) is still open.
+8. Live QA of every catalog item (owner approved 2026-10-30), `tf-acc-*` in `admin`.
+Found on the form dump: only WireGuard's required flags differed; Apache/Nginx have a hidden
+`labelss = Apache`; MongoDB `adminPassword` is required when `enableAuth` is on.
+Done 2026-10-31: every spec has its code and help-text rules; the forms' plan lists, read live, are the
+instance plans (`G1S1` … `Ge96L384`) for every item except PfSense (`Small (G2S4)`, `Medium (G4S4)`,
+`Large (G4S8)`); plan-size rules read `G<n>S<n>` and `Ge<n>[SML]<n>`. The examples meet each item's
+stated minimums. Open: the QA run (8), and the docs snapshot (7).
+Review 2026-10-31, left open: (a) PfSense's form hides `name` behind a template; if its workflow names
+the VM from the template, the order finds no instance by name. Check in QA. (b) `collectFields` walks
+maps, so if a form repeats a field with different metadata, which copy wins is random (none does
+today). (c) No test yet that plans an order from 0.7.0 state with the new provider (expects no diff),
+nor one of the workflow-timeout error path.
+
+## B-030 Instance agent follows the router (owner 2026-10-30) — done 2026-10-31
+`install_agent` left out: on when the primary network is on a router with an external gateway, off
+otherwise (decided at create when the network is new), then kept. `create_user` stays on by default.
+Orders, apps and clusters keep what their form or blueprint sets. A router list that can't be read
+leaves the agent on, with a warning. A router made in the same apply as a new network may not be
+attached yet when the instance is created: the agent is then off (set `install_agent` to be sure).
+
+## B-031 Issue report, other items (v0.7.0)
+- A6 (done 2026-10-31): a 403 with a JSON body keeps the role hint; the firewall's "Access
+  Restricted" page names the firewall and its reference ID; any other non-JSON body says the
+  network or IP may be blocked. Both halves (legacy via `client.ForbiddenHint`) say the same. The
+  firewall page's exact markup was never captured, so the match is loose: confirm on the next one.
+- B1 (done): examples pin `~> 0.7`. Release checklist: bump the pin in
+  `examples/provider/provider.tf` and `examples/guides/getting_started/provider.tf` on every minor.
+- B4, B9 (done): descriptions fixed; "6.0.4" removed; `ids` and `value` described.
+- B7 (done): `mtncloud_instance` data source has `networks` (IDs, primary first),
+  `security_groups` (names) and `volumes`. Per-interface IPs aren't in the client's instance read yet.
+- B5: about 80 one-line legacy descriptions to rewrite.
+- Clusters (owner): Kubernetes goes through the cluster API, not the catalog. Two cluster types:
+  managed Kubernetes and Docker, layouts starting with "MTN". Later.
+
+## B-032 A MOS order resource (owner asked 2026-10-31) — proposal, needs approval
+Today MOS keys are adopted, never ordered (D-007): ordering catalog item `s32311` rotates the
+tenant-wide key, which breaks every other user of MOS in the tenant. Proposal: `mtncloud_mos_access`
+- Create adopts the keys already in Cypher; it orders only when the tenant has none, or when
+  `rotate = true` is set (stated as breaking other users in the description).
+- Changing `rotate_trigger` (any string) orders again, so rotation is a deliberate act.
+- Destroy does nothing in MTN Cloud (the keys stay; removing them would break other users), with a
+  warning.
+- The keys are never in state; the provider reads them from Cypher as today.
+Owner to decide: build it, and whether adopting with no order is the right default.
+
+## B-033 Cluster layouts by name (2026-10-31)
+`internal/services/cluster/cluster.go` `defaultLayouts` picks "MTN Kubernetes Single-Master" and
+"MTN Docker Cluster" by name. MTN renames things (PfSense, 2026-10-30): when clusters are worked on
+(B-016), pick layouts by code, keeping the names as a fallback.

@@ -192,6 +192,11 @@ data "mtncloud_instance" "one" {
 		check("cloud", knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
 		check("group", knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
 		check("id", knownvalue.NotNull()),
+		check("networks", knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("9301")})),
+		// The project's default group is applied without being asked for, and shown here.
+		check("security_groups", knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("default")})),
+		check("volumes", knownvalue.ListExact([]knownvalue.Check{knownvalue.ObjectExact(map[string]knownvalue.Check{
+			"name": knownvalue.StringExact("root"), "size": knownvalue.Int64Exact(10), "root": knownvalue.Bool(true)})})),
 	}
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
@@ -201,7 +206,38 @@ data "mtncloud_instance" "one" {
 			{Config: one(`  id = mtncloud_instance.app.id`), ConfigStateChecks: byName},
 			{Config: one(`  name = "app-1"
   project = "web-prod"`), ConfigStateChecks: byName},
-			{Config: one(`  name = "nope"`), ExpectError: regexp.MustCompile(`No such instance`)},
+			{
+				// A role that can't read an instance's groups still gets the instance (a copy made in
+				// the console, so the resource's own read isn't refused).
+				PreConfig: func() {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					for id, in := range s.insts {
+						cp := map[string]any{}
+						for k, v := range in {
+							cp[k] = v
+						}
+						cp["id"], cp["name"] = id+20000, "console-vm"
+						s.insts[id+20000], s.sgsDenied = cp, id+20000
+						break
+					}
+				},
+				Config: one(`  name = "console-vm"`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					check("name", knownvalue.StringExact("console-vm")), check("security_groups", knownvalue.Null())},
+			},
+			{
+				PreConfig: func() {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					for id := range s.insts {
+						if id > 20000 {
+							delete(s.insts, id)
+						}
+					}
+				},
+				Config: one(`  name = "nope"`), ExpectError: regexp.MustCompile(`No such instance`),
+			},
 			{Config: one(`  id = 999999`), ExpectError: regexp.MustCompile(`No such instance`)},
 			{Config: one(`  name = "app-1"
   project = "data"`), ExpectError: regexp.MustCompile(`(?s)No such instance.*in\s+project\s+data`)},

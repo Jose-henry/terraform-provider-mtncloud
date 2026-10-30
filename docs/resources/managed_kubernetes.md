@@ -45,6 +45,7 @@ terraform import mtncloud_self_managed_kubernetes.k8s <order id>
 - `api_endpoint` (String) Address the Kubernetes API is published at.
 - `cni` (String) Network plugin: `flannel` or `calico`.
 - `environment` (String) Environment, by name or code.
+- `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
 - `labels` (Set of String) Labels.
 - `master_count` (Number) Number of master nodes. Defaults to 1.
@@ -67,6 +68,7 @@ terraform import mtncloud_self_managed_kubernetes.k8s <order id>
 
 - `id` (String) Order ID (Catalog > Inventory).
 - `instance_ids` (List of String) IDs of the instances the order created, found by name in the project.
+- `instance_statuses` (Map of String) Status of each instance the order created, by instance ID, for example `running`. A `failed` instance plans a replace: the order is deleted and placed again.
 - `status` (String) The order's workflow result, for example `success`.
 
 <a id="nestedblock--master_data_volume"></a>

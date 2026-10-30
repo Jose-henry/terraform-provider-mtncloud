@@ -11,7 +11,7 @@ import (
 
 func dataSourceVDIPool() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud user group data source.",
+		Description: "Provides an MTN Cloud VDI pool data source: looks up a virtual desktop pool by name or ID.",
 		ReadContext: dataSourceVDIPoolRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

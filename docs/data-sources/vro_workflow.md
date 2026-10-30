@@ -23,7 +23,7 @@ data "mtncloud_vro_workflow" "example_vro_workflow" {
 ### Optional
 
 - `name` (String) The name of the vRealize orchestrator workflow
-- `value` (Number)
+- `value` (Number) The workflow's value (its ID in the option list); give this or `name`
 
 ### Read-Only
 

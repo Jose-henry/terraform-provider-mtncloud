@@ -2,12 +2,12 @@
 page_title: "mtncloud_catalog_item_type Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud user group data source.
+  Provides an MTN Cloud catalog item type data source: looks up a self-service catalog item type by name or ID.
 ---
 
 # mtncloud_catalog_item_type (Data Source)
 
-Provides a MTN Cloud user group data source.
+Provides an MTN Cloud catalog item type data source: looks up a self-service catalog item type by name or ID.
 
 ## Example Usage
 

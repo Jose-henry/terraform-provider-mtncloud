@@ -37,7 +37,7 @@ data "mtncloud_groups" "terraform_test" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `ids` (List of String)
+- `ids` (List of String) The IDs of the groups that match the filters.
 
 <a id="nestedblock--filter"></a>
 ### Nested Schema for `filter`

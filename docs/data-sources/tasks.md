@@ -38,7 +38,7 @@ data "mtncloud_tasks" "example_tasks" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `ids` (List of String)
+- `ids` (List of String) The IDs of the tasks that match the filters.
 
 <a id="nestedblock--filter"></a>
 ### Nested Schema for `filter`

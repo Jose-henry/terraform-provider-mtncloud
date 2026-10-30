@@ -3,12 +3,12 @@
 page_title: "mtncloud_user_role Resource - mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud user role resource (This resource requires MTN Cloud 6.0.4 or later).
+  Provides an MTN Cloud user role resource.
 ---
 
 # mtncloud_user_role (Resource)
 
-Provides a MTN Cloud user role resource (This resource requires MTN Cloud 6.0.4 or later).
+Provides an MTN Cloud user role resource.
 
 ## Example Usage
 

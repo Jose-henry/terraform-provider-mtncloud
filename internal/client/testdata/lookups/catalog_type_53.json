@@ -1,0 +1,122 @@
+{
+ "catalogItemType": {
+  "id": 53,
+  "name": "MTN PfSense VPN",
+  "type": "workflow",
+  "context": "appliance",
+  "optionTypes": [],
+  "form": {
+   "options": [
+    {
+     "id": 1,
+     "fieldName": "group-vpn",
+     "type": "group",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 2,
+     "fieldName": "cloud",
+     "type": "cloud",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 4,
+     "fieldName": "environment",
+     "type": "environment",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 6,
+     "fieldName": "resourcepool",
+     "type": "resourcePool",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 3,
+     "fieldName": "name",
+     "type": "text",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "isHidden": true,
+     "defaultValue": "${userInitials}-${accountId}-MTN-CLOUD-${type}-${sequence+0}"
+    },
+    {
+     "id": 5,
+     "fieldName": "label",
+     "type": "textArray",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 5301,
+     "fieldName": "plan",
+     "type": "select",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "fieldLabel": "PLAN"
+    },
+    {
+     "id": 8,
+     "fieldName": "volumes",
+     "type": "diskManager",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {
+      "defaultValue": "[{\"rootVolume\":true,\"name\":\"root\",\"size\":50}]"
+     },
+     "isHidden": true,
+     "fieldLabel": "VOLUMES"
+    },
+    {
+     "id": 5302,
+     "fieldName": "volume",
+     "type": "byteSize",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "fieldLabel": "VOLUMES",
+     "defaultValue": 53687091200
+    },
+    {
+     "id": 9,
+     "fieldName": "networks",
+     "type": "networkManager",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "fieldLabel": "NETWORKS",
+     "helpBlock": "Note: Service requires at least 2 interfaces with the same floating IPs selected"
+    },
+    {
+     "id": 10,
+     "fieldName": "securitygroups",
+     "type": "secGroup",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 11,
+     "fieldName": "floatingip",
+     "type": "select",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {},
+     "fieldLabel": "FLOATING IP"
+    }
+   ],
+   "fieldGroups": []
+  }
+ }
+}

@@ -14,7 +14,7 @@ import (
 
 func resourceAnsibleTowerTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud vRealize Orchestrator (vRO) task resource",
+		Description:   "Provides an MTN Cloud Ansible Tower task resource: a task that runs an Ansible Tower job template from an Ansible Tower integration.",
 		CreateContext: resourceAnsibleTowerTaskCreate,
 		ReadContext:   resourceAnsibleTowerTaskRead,
 		UpdateContext: resourceAnsibleTowerTaskUpdate,

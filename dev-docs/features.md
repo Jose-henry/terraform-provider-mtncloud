@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 109 | 111 |
-| Usable with a customer (sub-tenant) login | 109 | 106 |
+| Available today | 111 | 111 |
+| Usable with a customer (sub-tenant) login | 111 | 106 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 2 | 0 |
@@ -169,8 +169,9 @@ VPNs, firewalls, bastion hosts and a SIEM server ordered from MTN's catalog (BYO
 | [`mtncloud_fortimanager`](../docs/resources/fortimanager.md) | Yes (read verified) |
 | [`mtncloud_fortinet_firewall`](../docs/resources/fortinet_firewall.md) | Yes (read verified) |
 | [`mtncloud_fortiweb`](../docs/resources/fortiweb.md) | Yes (read verified) |
+| [`mtncloud_pfsense_vpn`](../docs/resources/pfsense_vpn.md) | Yes (read verified) |
 | [`mtncloud_siem`](../docs/resources/siem.md) | Yes (read verified) |
-| [`mtncloud_vpn_service`](../docs/resources/vpn_service.md) | Yes (read verified) |
+| [`mtncloud_sophos_firewall`](../docs/resources/sophos_firewall.md) | Yes (read verified) |
 | [`mtncloud_wireguard_vpn`](../docs/resources/wireguard_vpn.md) | Yes (read verified) |
 
 ### Catalog: file shares and certificates
@@ -274,6 +275,7 @@ Old names kept for now; each page says what replaces it and how to move without 
 | Type | Customer login |
 |---|---|
 | [`mtncloud_managed_kubernetes`](../docs/resources/managed_kubernetes.md) | Yes (read verified) |
+| [`mtncloud_vpn_service`](../docs/resources/vpn_service.md) | Yes (read verified) |
 
 ## Data sources
 

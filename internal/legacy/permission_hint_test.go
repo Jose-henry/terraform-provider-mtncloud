@@ -62,7 +62,9 @@ func TestPermissionHint_AllWrapped(t *testing.T) {
 	var hits atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"success":false,"msg":"refused"}`))
 	}))
 	defer srv.Close()
 	reached := 0

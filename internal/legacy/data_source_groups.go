@@ -18,9 +18,10 @@ func dataSourceGroups() *schema.Resource {
 		ReadContext: dataSourceGroupsRead,
 		Schema: map[string]*schema.Schema{
 			"ids": {
-				Type:     schema.TypeList,
-				Computed: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
+				Type:        schema.TypeList,
+				Description: "The IDs of the groups that match the filters.",
+				Computed:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 			"sort_ascending": {
 				Type:        schema.TypeBool,

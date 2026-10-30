@@ -43,3 +43,30 @@ func (b *base) ready(diags *diag.Diagnostics) bool {
 	}
 	return true
 }
+
+// Catalog items are found by code (MTN renames items: "MTN VPN Service" became "MTN PfSense VPN",
+// 2026-10-30, code MVPNSV02 kept), and ordered by the name they have now.
+var (
+	projectItem = client.CatalogItemRef{Code: "001034sd", Names: []string{"Create Project"}}
+	nfsItem     = client.CatalogItemRef{Code: "nfs12", Names: []string{"MTN NFS"}}
+	smbItem     = client.CatalogItemRef{Code: "smb12", Names: []string{"MTN SMB"}}
+)
+
+// itemName is the item's name now, which an order is placed by.
+func (b *base) itemName(ctx context.Context, ref client.CatalogItemRef) (string, error) {
+	it, err := b.client.FindCatalogItem(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	return it.Name, nil
+}
+
+// isItem reports whether an inventory item was ordered from this catalog item: the same item ID, a
+// name it has had, or its name now.
+func (b *base) isItem(ctx context.Context, ref client.CatalogItemRef, item *client.OrderedItem) bool {
+	if ref.Is(item.TypeName) {
+		return true
+	}
+	it, err := b.client.FindCatalogItem(ctx, ref)
+	return err == nil && (it.ID == item.TypeID || it.Name == item.TypeName)
+}

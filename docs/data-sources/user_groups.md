@@ -33,7 +33,7 @@ data "mtncloud_user_groups" "example_user_groups" {
 ### Read-Only
 
 - `id` (String) The ID of this resource.
-- `ids` (List of String)
+- `ids` (List of String) The IDs of the user groups that match the filters.
 
 <a id="nestedblock--filter"></a>
 ### Nested Schema for `filter`

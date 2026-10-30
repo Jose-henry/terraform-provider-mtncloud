@@ -60,7 +60,7 @@ RESOURCES = [
      ["self_managed_kubernetes"]),
     ("Catalog: network and security appliances",
      "VPNs, firewalls, bastion hosts and a SIEM server ordered from MTN's catalog (BYOL: bring your own license).",
-     ["vpn_service", "wireguard_vpn", "bastion_host", "siem", "fortinet_firewall", "fortiweb", "fortiadc", "fortimanager", "fortianalyzer"]),
+     ["pfsense_vpn", "wireguard_vpn", "sophos_firewall", "bastion_host", "siem", "fortinet_firewall", "fortiweb", "fortiadc", "fortimanager", "fortianalyzer"]),
     ("Catalog: file shares and certificates",
      "NFS and SMB shares (created, updated and deleted by orders) and Let's Encrypt certificates for instances.",
      ["nfs_share", "smb_share", "letsencrypt_certificate"]),
@@ -91,7 +91,7 @@ RESOURCES = [
      ["scale_threshold"]),
     ("Deprecated names",
      "Old names kept for now; each page says what replaces it and how to move without replacing anything.",
-     ["managed_kubernetes"]),
+     ["managed_kubernetes", "vpn_service"]),
 ]
 
 DATA_SOURCES = [

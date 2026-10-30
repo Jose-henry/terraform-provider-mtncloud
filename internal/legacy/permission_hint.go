@@ -8,10 +8,9 @@ import (
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-)
 
-// forbiddenHint matches the hint the Framework client gives a 403, so both halves say the same.
-const forbiddenHint = "Your role does not allow this call. Ask your tenant administrator for the permission, or use a different account."
+	"github.com/mtn/terraform-provider-mtncloud/internal/client"
+)
 
 type crudFunc = func(context.Context, *schema.ResourceData, interface{}) diag.Diagnostics
 
@@ -78,6 +77,8 @@ func addForbiddenHint(diags diag.Diagnostics, last *sdk.Response) diag.Diagnosti
 	if last == nil || last.StatusCode != http.StatusForbidden {
 		return diags
 	}
+	// The client's own words, so both halves say the same: a role, the web firewall, or a network block.
+	forbiddenHint := client.ForbiddenHint(last.Body)
 	for i := range diags {
 		if diags[i].Severity != diag.Error {
 			continue

@@ -2,12 +2,12 @@
 page_title: "mtncloud_self_managed_kubernetes Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). The order's inputs can't be changed afterwards (replace it with terraform apply -replace=<address>). terraform destroy deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+  A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
 ---
 
 # mtncloud_self_managed_kubernetes
 
-A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). The order's inputs can't be changed afterwards (replace it with `terraform apply -replace=<address>`). `terraform destroy` deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
 
 ## Example Usage
 
@@ -45,6 +45,7 @@ resource "mtncloud_self_managed_kubernetes" "k8s" {
 - `api_endpoint` (String) Address the Kubernetes API is published at.
 - `cni` (String) Network plugin: `flannel` or `calico`.
 - `environment` (String) Environment, by name or code.
+- `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
 - `labels` (Set of String) Labels.
 - `master_count` (Number) Number of master nodes. Defaults to 1.
@@ -67,6 +68,7 @@ resource "mtncloud_self_managed_kubernetes" "k8s" {
 
 - `id` (String) Order ID (Catalog > Inventory).
 - `instance_ids` (List of String) IDs of the instances the order created, found by name in the project.
+- `instance_statuses` (Map of String) Status of each instance the order created, by instance ID, for example `running`. A `failed` instance plans a replace: the order is deleted and placed again.
 - `status` (String) The order's workflow result, for example `success`.
 
 <a id="nestedblock--master_data_volume"></a>
@@ -135,9 +137,19 @@ exactly as ordered. The first apply after an import records them, finds the inst
   terraform state rm mtncloud_managed_kubernetes.k8s
   terraform import mtncloud_self_managed_kubernetes.k8s <order id>
   ```
-- **An order, not a live object.** Create places the catalog order and waits for MTN's workflow to
-  finish, then finds the instances it made by `name` in the project (`instance_ids`). The inputs
-  can't be changed afterwards: the plan refuses, so nothing is ever ordered twice by accident.
+- **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
+  finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
+  they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
+  message; the resource is then tainted, so the next apply deletes it and orders again.
+- **A changed input orders again.** An order can't be edited, so changing any input plans a
+  replace: what the order made is deleted, then the item is ordered again. `terraform apply
+  -replace` does the same on purpose, and an instance that fails later also plans a replace. To
+  stop a plan from deleting a server by accident, add `lifecycle { prevent_destroy = true }`.
+- **Checked against the live order form.** MTN can change its order forms, so each plan checks
+  the order against the form as it is now: the fields it requires (some only while another field
+  is set), the fields it hides and fills itself, the values it pre-fills, and the limits its help
+  text states (disk sizes, network counts, plan sizes). Plans are the form's own list. A field
+  the form requires that has no argument here goes in `extra_inputs`.
 - **Destroy deletes what the order made.** Its instances are deleted with their disks and floating
   IPs, then the order's record in Catalog > Inventory. The cluster is an app (under Apps in the
   console), so its app is deleted with all its instances. Another app is deleted only if it holds

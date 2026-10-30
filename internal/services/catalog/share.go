@@ -31,12 +31,12 @@ const shareTimeout = 30 * time.Minute
 // has no API that reads a share back: state holds what was last ordered.
 type shareResource struct {
 	base
-	item string // "MTN NFS" or "MTN SMB"
+	item client.CatalogItemRef // nfsItem or smbItem
 	smb  bool
 }
 
-func newNFSShare() resource.Resource { return &shareResource{item: "MTN NFS"} }
-func newSMBShare() resource.Resource { return &shareResource{item: "MTN SMB", smb: true} }
+func newNFSShare() resource.Resource { return &shareResource{item: nfsItem} }
+func newSMBShare() resource.Resource { return &shareResource{item: smbItem, smb: true} }
 
 type shareModel struct {
 	ID              types.String   `tfsdk:"id"`
@@ -89,7 +89,7 @@ func (r *shareResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 		attrs["password_version"] = schema.Int64Attribute{Computed: true, Description: "Not used by NFS shares."}
 	}
 	resp.Schema = schema.Schema{
-		Description: "An " + kind + " file share, ordered from MTN Cloud's catalog (" + r.item + "). Quota and client changes are ordered as " +
+		Description: "An " + kind + " file share, ordered from MTN Cloud's catalog (" + r.item.Name() + "). Quota and client changes are ordered as " +
 			"updates; destroy orders its deletion. MTN Cloud doesn't report a share's settings back, so changes made in the console aren't seen.",
 		Attributes: attrs,
 		Blocks:     map[string]schema.Block{"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Update: true, Delete: true})},
@@ -99,7 +99,12 @@ func (r *shareResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 // order places one share order and waits for its result. A failure is an error, with the
 // workflow's own message; an unknown result is a warning. placed runs as soon as the order is placed, before the wait.
 func (r *shareResource) order(ctx context.Context, config map[string]any, what string, diags *diag.Diagnostics, placed func(int64)) *client.OrderedItem {
-	item, err := r.client.OrderWorkflow(ctx, r.item, config)
+	name, err := r.itemName(ctx, r.item)
+	if err != nil {
+		diags.AddError("Unable to "+what, err.Error())
+		return nil
+	}
+	item, err := r.client.OrderWorkflow(ctx, name, config)
 	if err != nil {
 		diags.AddError("Unable to "+what, err.Error())
 		return nil
@@ -199,8 +204,8 @@ func (r *shareResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		resp.Diagnostics.AddError("Unable to read the share's order", err.Error())
 		return
 	}
-	if item.TypeName != r.item {
-		resp.Diagnostics.AddError("Wrong catalog item", fmt.Sprintf("Order %d is a %q, not a %q.", id, item.TypeName, r.item))
+	if !r.isItem(ctx, r.item, item) {
+		resp.Diagnostics.AddError("Wrong catalog item", fmt.Sprintf("Order %d is a %q, not a %q.", id, item.TypeName, r.item.Name()))
 		return
 	}
 	if m.QuotaGB.IsNull() {
@@ -294,7 +299,7 @@ func (r *shareResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 func (r *shareResource) withUpdateType(ctx context.Context, cfg map[string]any, mode, what string, diags *diag.Diagnostics) bool {
 	form, err := r.client.CatalogForm(ctx, r.item)
 	if err != nil {
-		diags.AddError("Unable to read the "+r.item+" order form", err.Error())
+		diags.AddError("Unable to read the "+r.item.Name()+" order form", err.Error())
 		return false
 	}
 	c, err := r.client.FormChoice(ctx, form.Fields["updateType"], "client update type", mode)

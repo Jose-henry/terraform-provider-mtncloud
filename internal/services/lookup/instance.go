@@ -3,9 +3,11 @@ package lookup
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -31,7 +33,14 @@ type instanceOneModel struct {
 	PrivateIP types.String   `tfsdk:"private_ip"`
 	PublicIP  types.String   `tfsdk:"public_ip"`
 	Labels    []types.String `tfsdk:"labels"`
+	Networks  []types.String `tfsdk:"networks"`
+	SGs       []types.String `tfsdk:"security_groups"`
+	Volumes   types.List     `tfsdk:"volumes"`
 }
+
+var instanceVolumeType = types.ObjectType{AttrTypes: map[string]attr.Type{
+	"name": types.StringType, "size": types.Int64Type, "root": types.BoolType,
+}}
 
 func (d *instanceDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_instance"
@@ -61,6 +70,23 @@ func (d *instanceDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"private_ip": schema.StringAttribute{Computed: true, Description: "Private address, or empty."},
 			"public_ip":  schema.StringAttribute{Computed: true, Description: "Floating (public) address, or empty."},
 			"labels":     schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "Labels."},
+			"networks": schema.ListAttribute{
+				Computed: true, ElementType: types.StringType,
+				Description: "Network IDs of the instance's network cards, primary first, as `mtncloud_instance` takes them.",
+			},
+			"security_groups": schema.ListAttribute{
+				Computed: true, ElementType: types.StringType,
+				Description: "Names of the security groups applied to the instance, sorted, the project's default group included. " +
+					"Null, with a warning, when your role can't read them.",
+			},
+			"volumes": schema.ListNestedAttribute{
+				Computed: true, Description: "Disks, root first.",
+				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
+					"name": schema.StringAttribute{Computed: true, Description: "Disk name."},
+					"size": schema.Int64Attribute{Computed: true, Description: "Size in GB."},
+					"root": schema.BoolAttribute{Computed: true, Description: "Whether this is the root (boot) disk."},
+				}},
+			},
 		},
 	}
 }
@@ -125,6 +151,29 @@ func (d *instanceDataSource) Read(ctx context.Context, req datasource.ReadReques
 		apiError(&resp.Diagnostics, "projects", err)
 		return
 	}
+	// Security groups are a separate call: a role that can read instances but not their groups still
+	// gets the instance, with security_groups null and a warning.
+	var sgs []types.String
+	if groups, err := d.client.InstanceSecurityGroups(ctx, in.ID); err != nil {
+		resp.Diagnostics.AddAttributeWarning(path.Root("security_groups"), "Security groups not read", err.Error())
+	} else {
+		sgs = make([]types.String, 0, len(groups))
+		for _, g := range groups {
+			sgs = append(sgs, types.StringValue(g.Name))
+		}
+	}
+	slices.SortFunc(sgs, func(a, b types.String) int { return strings.Compare(a.ValueString(), b.ValueString()) })
+	nets := make([]types.String, len(in.Interfaces))
+	for i, nic := range in.Interfaces {
+		nets[i] = types.StringValue(fmt.Sprint(nic.NetworkID))
+	}
+	vols := make([]attr.Value, len(in.Volumes))
+	for i, v := range in.Volumes {
+		vols[i] = types.ObjectValueMust(instanceVolumeType.AttrTypes, map[string]attr.Value{
+			"name": types.StringValue(v.Name), "size": types.Int64Value(v.Size), "root": types.BoolValue(v.Root)})
+	}
+	volumes, diags := types.ListValue(instanceVolumeType, vols)
+	resp.Diagnostics.Append(diags...)
 	labels := make([]types.String, len(in.Labels))
 	for i, l := range in.Labels {
 		labels[i] = types.StringValue(l)
@@ -133,6 +182,7 @@ func (d *instanceDataSource) Read(ctx context.Context, req datasource.ReadReques
 		ID: types.Int64Value(in.ID), Name: types.StringValue(in.Name), Status: types.StringValue(in.Status),
 		Project: types.StringValue(project), Group: types.StringValue(in.GroupName), Cloud: types.StringValue(in.CloudName), Image: types.StringValue(in.ImageName), Plan: types.StringValue(in.PlanName),
 		PrivateIP: types.StringValue(in.PrivateIP), PublicIP: types.StringValue(in.PublicIP), Labels: labels,
+		Networks: nets, SGs: sgs, Volumes: volumes,
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
 }

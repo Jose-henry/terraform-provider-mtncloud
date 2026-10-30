@@ -2,12 +2,12 @@
 page_title: "mtncloud_vdi_pool Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud user group data source.
+  Provides an MTN Cloud VDI pool data source: looks up a virtual desktop pool by name or ID.
 ---
 
 # mtncloud_vdi_pool (Data Source)
 
-Provides a MTN Cloud user group data source.
+Provides an MTN Cloud VDI pool data source: looks up a virtual desktop pool by name or ID.
 
 ## Example Usage
 
