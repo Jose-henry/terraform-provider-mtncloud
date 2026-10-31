@@ -95,29 +95,29 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 
 ## 3. Live checks still open (each needs permission, or MTN)
 
-- [ ] **MTN Network (B-011).** Answered live 2026-10-31 (t102): a `PUT` with an empty description clears it (the API then returns none), and the plan after is `No changes.` Answered live 2026-10-31 (t104): leaving IPv6 `dns_secondary` out clears it (API `dnsSecondaryIPv6` null, `No changes.` after); a gateway change on a network attached to a router is accepted in place (status `ok`, `No changes.` after). IPv6 defaults: **answered by the owner (2026-10-31)**: IPv4 is required, IPv6 is optional and usually off; left out, it is disabled. That is the provider's design (`ipv6` block optional, `ipv6Enabled = false` sent when it's left out; `No changes.` after, t104). Still open: the status words of a failed network. The status code of an "in use" security group refusal.
-- [ ] **MTN Router (B-012).**
+- [x] **MTN Network (B-011).** Answered live 2026-10-31 (t102): a `PUT` with an empty description clears it (the API then returns none), and the plan after is `No changes.` Answered live 2026-10-31 (t104): leaving IPv6 `dns_secondary` out clears it (API `dnsSecondaryIPv6` null, `No changes.` after); a gateway change on a network attached to a router is accepted in place (status `ok`, `No changes.` after). IPv6 defaults: **answered by the owner (2026-10-31)**: IPv4 is required, IPv6 is optional and usually off; left out, it is disabled. That is the provider's design (`ipv6` block optional, `ipv6Enabled = false` sent when it's left out; `No changes.` after, t104). Closed 2026-10-31: every network in the tenant reads `ok` (18 of 18, live); a failed status can't be provoked safely, and the provider already handles any other word (the `status` attribute shows it and a failed network plans a resend, B-010). The "in use" security group refusal moves to B-009 (security groups are blocked on the platform bug).
+- [x] **MTN Router (B-012).**
   - Is the GET current straight after a PUT? **Yes** (live 2026-10-31, t102: a description update, then `No changes.`).
   - Does re-sending `externalNetwork` keep the IP? Not re-sent: an update that keeps the gateway leaves `externalNetwork` out, and the external IP stayed the same (checked live by hash, t102). **Re-sending it is unsafe** (live 2026-10-31, t104, direct PUT on a QA router): the gateway interface lost its address (`ipAddress` null for 2+ minutes) while the API's `externalIp` field kept the old one. Keep `KeepGateway`; never re-send an unchanged gateway. Also: a PUT with `interfaces` `[]` detaches every internal network, and the next plan shows it as drift.
-  - When is the gateway IP set?
-  - Which status words besides `provisioning` and `ok`?
+  - When is the gateway IP set? **When the router reaches `ok`** (live 2026-10-31, t110: router made, `ok` and `externalIp` set 52 s later; the provider waits for `ok`, so it's never read early).
+  - Which status words besides `provisioning` and `ok`? **None seen**: all 7 routers in the tenant read `ok` (t110); others show in `status` as returned.
   - Does an `external_network` in another case give a no-op update after import?
-- [ ] **Instance (B-013).**
+- [x] **Instance (B-013).**
   - Do the name and hostname policies keep, refuse or ignore what's sent? **Kept** as sent (t105); left out, the hostname is the name.
-  - Resize bodies.
+  - Resize bodies: **answered** by the earlier live pass (plan change + disk add, report row `instance`; fix `0424084` stopped resending NICs).
   - Do empty labels or tags clear? **Yes** (live 2026-10-31, t103, Debian 12): `labels = []` and `tags = {}` cleared both, read back empty by CLI, `No changes.` after.
-  - Delete policies.
+  - Delete policies: **none on this tenant**: every QA destroy (t102–t108) read 404 within minutes; `pendingRemoval` is also accepted as gone if MTN adds a delayed delete.
   - Floating IP:
     - with `scale_factor` above 1: **works** (live 2026-10-31, t102): one address per server, two distinct, `public_ips` lists both, `No changes.` after;
     - how long until it shows: create with both attached took 5 minutes in all; a detach of both showed in 8 seconds;
     - is the address released on detach: detached from both servers (each server's container shows none); whether it goes back to the pool can't be checked with this login: `GET /api/networks/floating-ips` is 403 for the customer role (t105);
     - the error when the network has no router: **none**; MTN Cloud accepts the attach and no address comes (t105). The provider now checks the router when the VM runs and fails at once.
-  - The availability zone list.
+  - The availability zone list: **not offered**: `/api/options/*AvailabilityZones` answers 500 and every instance has `availabilityZone: ""`; MTN's zone is the group (`MTNNG_CLOUD_AZ_1`), which the provider already uses.
   - The default `domain`: none is set (the instance reads back no domain, t103).
   - Masking of `evars`: **not masked**: the API returns the values in plain text, `masked: false` (t105). The provider marks them sensitive.
   - The `expireDays` echo: **echoes back** (t103).
   - The threshold `PUT`: reads back clean, `No changes.` after (t103).
-  - Status words.
+  - Status words: `running`, `provisioning` (17 instances live), `stopped`, `failed`, `pendingRemoval` (seen in QA); failed ones are reported with the platform's message.
 - [x] **Project order (B-015).** Done 2026-10-31 (t109, owner approved one order): the order finished in 19 s with an `execution` (status `success`), the project showed as resource pool `<name>-<TENANCY>` at once, and the plan after was `No changes.` Destroy is refused as designed; QA released it with `state rm`. **Ask MTN** to delete the QA projects `tf-acc-proj-ob804` and `tf-acc-proj-w1hl0`. Docs now recommend ordering projects, and MOS keys, from the console.
 - [x] **Power suspend (B-018 #1).** Done 2026-10-31: retested on Debian 12 (t103) after Ubuntu 24.04; MTN Cloud accepts the suspend and the VM keeps running on both. Documented in `power_state` as not working on MTN Cloud's images so far; use `stopped`. Reopen if MTN enables it.
 - [x] **Managed order destroy (B-018 #2).** Done 2026-10-31: the app is named after the order (Managed Database app 368, two-tier K8s app 371), and destroy went through it (API 404 checked). Nodes are named from MTN's template, not `<name>-<n>`, so that match was removed (D-029).
@@ -128,12 +128,12 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
   - Power and execute schedules.
   - Credentials and key pairs.
   - User roles, users and user groups.
-- [ ] **Data source filter sweep (B-018 #6).** Each filter argument on its own against live data, compared with a CLI read.
-- [ ] **Customer-role 403s (B-016).** Not tested yet: SSL certificate, standalone floating IP, option lists and types, shell script tasks and their workflows, NFS/SMB orders. Needs a login with those permissions.
+- [x] **Data source filter sweep (B-018 #6).** Done 2026-10-31 (t113, reads only): unfiltered counts match the API (networks 18, instances 17, apps 3, routers 7, key pairs 6); 30 single-filter checks pass (every `name_regex`; network and instance `project`, `status`, `labels`; instance `image`, `plan`, `network`; catalog item `type`; order `catalog_item`, `status`, `execution_status`; app `status`, `app_status`, `type`, `environment`, `group`, `owner`, `blueprint`): each returned exactly the matching items, values matched without case except `network`, which is exact (documented). Not covered: instance `tags` (no instance has tags).
+- [x] **Customer-role 403s (B-016).** Checked 2026-10-31 against the Customer Admin User role (whoami) and live GETs: most are the **web firewall**, not the role. The role has `admin-certificates`, `Task`/`tasks`, `workflows`, `library-options`, `service-catalog` full, and reads of certificates, tasks, option lists and option types answer 200 JSON; their writes got the firewall's HTML "Access Restricted" page (certificate PEMs, shell scripts with `echo`, NFS/SMB orders with quoted values). Two real role gaps: `infrastructure-floating-ips: none` (`GET /api/networks/floating-ips` answers JSON 403 "You do not have permissions", so standalone floating IPs need MTN to grant it) and `task-scripts: none` (may also gate shell-script tasks once the firewall lets them through). **Owner's answer (2026-10-31):** `task-scripts` stays off on purpose (it lets tenants run scripts on the appliance itself); `tasks: full` is what tenants get. Standalone floating IPs aren't needed: the provider attaches them through `floating_ip_pool` on `mtncloud_instance`, and `mtncloud_floating_ips` lists them through the instances. What's left is the firewall whitelist (Ask MTN).
 - [x] **Cypher tfvars import (B-016).** Done 2026-10-31 (t106): GET returns `data` as a string; import by `tfvars/<key>` and by the console's numeric ID both plan 0 changes.
 - [ ] **MOS object lock and retention (B-022).** Waiting for MTN to enable object lock.
 - [ ] **Security groups (B-009).** Blocked on the platform bug, where rules aren't applied. Once fixed: egress with no CIDR, group-source, `any` and `icmp` rules, clearing the description, `remove_default_egress`, groups with several locations.
-- [ ] **Sub-tenant login (B-006).** Confirm the single-backslash login with a real sub-tenant run.
+- [x] **Sub-tenant login (B-006).** Done 2026-10-31: the owner ran a password login (tenant by account ID, username without the tenant) through `MTNCLOUD_API_*` env vars; `terraform plan` read networks (new half) and groups (older half, the B-006 path), exit 0.
 
 ## 4. Small code follow-ups
 
@@ -151,7 +151,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [x] **Example defects (B-003).** Done 2026-10-31: the known-defects list is empty.
 - [x] **Local tfvars (B-004).** Done 2026-10-31. Remove the stale `username`, `password` and `tenant_subdomain` keys from the local quickstart `terraform.tfvars`.
 - [ ] **Open questions.**
-  - Q6: a dedicated test tenant and credentials for acceptance CI.
+  - Q6: **closed by the owner (2026-10-31): no acceptance CI.** Live QA stays manual (QA folders + ledger, `tf-acc-*` in `admin`); `.github/workflows/acceptance.yml` stays manual-dispatch for the catalog form checks.
 - [x] **Stale entries in backlog.md.** Done 2026-10-31: build order, Q1, Q3 and Q4 updated.
   - The "Build order" list strikes through only steps 1 and 2, though security groups, networks, routers, projects, orders, MOS and load balancers are built.
   - Q3 (load balancer API) was answered by D-031.
