@@ -28,6 +28,12 @@ exactly as ordered. The first apply after an import records them, finds the inst
 
 - **Self-managed.** MTN Cloud builds the cluster (masters, workers, the CNI you pick); after that,
   upgrades, add-ons and day-to-day running are yours.
+- **Day-2 settings.** Changing an input here orders a new cluster. To change the nodes in place
+  (labels, tags, security groups, power, plan), use `mtncloud_instance_settings` with
+  `for_each = toset(<this>.instance_ids)`; for the app itself (name, labels, environment), use
+  `mtncloud_app_settings` with `app_id`. See the `mtncloud_app_settings` example.
+- **Tiers.** With `single_node = false`, the app has a `Master` and a `Worker` tier (checked live
+  with one master and one worker, 2026-10-31: about 14 minutes, then `No changes.`).
 - **Renamed from `mtncloud_managed_kubernetes`** (0.6.0). The old name still works for now, with a
   deprecation warning. To switch without replacing anything, rename the resource and add:
 

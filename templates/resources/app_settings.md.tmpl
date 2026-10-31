@@ -21,7 +21,11 @@ description: |-
 - **Owner.** Changing `owner` also changes the owner of every instance in the app.
 - **Settings left out** aren't managed: they show the app's values, and removing one from the
   configuration leaves the app as it is.
-- **VM settings** (plan, power, security groups) belong to each instance: use `mtncloud_instance_settings`.
+- **VM settings** (plan, power, security groups, labels, tags) belong to each instance: give every VM of the
+  app its own `mtncloud_instance_settings` with `for_each` over the order's `instance_ids`, as in the example.
+  One resource per VM keeps each VM's state, errors and plan lines apart, and a VM that needs other
+  settings (for example a bigger plan for workers) gets its own resource; never manage one VM from two
+  resources. Checked live on a self-managed Kubernetes order (master and worker, 2026-10-31).
 
 {{ .SchemaMarkdown | trimspace }}
 

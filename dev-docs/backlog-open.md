@@ -62,7 +62,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 
 - [x] **Order networks made in the same apply (B-034 #1).** Done 2026-10-31: networks by ID too.
 - [x] **Router waits for new subnets (B-034 #2).** Done 2026-10-31: a router made in the same apply as its networks waits for their subnets (within its create timeout) instead of failing with "no subnet yet, try again".
-- [ ] **Catalog QA (B-029 #8).** 2026-10-31 later: self-managed Kubernetes passed (apply, `No changes.`, destroy). Order every catalog item live (`tf-acc-*` in `admin`): apply, plan `No changes.`, destroy.
+- [ ] **Catalog QA (B-029 #8).** 2026-10-31 later: self-managed Kubernetes passed single-node and two-tier (1 master + 1 worker: `Master` and `Worker` tiers, about 14 minutes; apply, `No changes.`; day-2 `mtncloud_app_settings` plus `mtncloud_instance_settings` with `for_each` on its VMs, `No changes.`; destroy, API 404 checked). Owner chose linked per-VM resources over a wrapped block (2026-10-31: wrapping risks two resources fighting over a VM, and partial failures across VMs). Order every catalog item live (`tf-acc-*` in `admin`): apply, plan `No changes.`, destroy.
   2026-10-31: passed (apply, `No changes.`, destroy) for MySQL, PostgreSQL, MariaDB, MongoDB, Apache, Nginx,
   LAMP, LEMP, WordPress, Managed Database, Bastion, WireGuard, PfSense, Fortinet and SIEM. Blocked on MTN:
   Managed MQ and Streaming (their blueprints 16 and 21 aren't found, B-034 #6), SOPHOS (order 2758 never
