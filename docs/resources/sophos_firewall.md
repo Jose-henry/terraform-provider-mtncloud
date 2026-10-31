@@ -88,6 +88,11 @@ exactly as ordered. The first apply after an import records them, finds the inst
 
 ## Notes
 
+- **Known issue: the apply can't find the firewall's VM yet.** MTN's SOPHOS workflow names the VM
+  itself (`<initials>-<account>-MTN-CLOUD-SPH001-<n>`) instead of with `name`, so the apply waits
+  until its create timeout and then fails, telling you so. The firewall is still made: check
+  Instances in the console, and delete it there if you don't keep it. A fix is planned.
+
 - **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
   finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
   they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's

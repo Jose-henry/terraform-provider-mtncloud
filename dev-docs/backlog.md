@@ -535,3 +535,15 @@ Owner to decide: build it, and whether adopting with no order is the right defau
    order found it. Only app orders (managed services) get template-named VMs.
 9. (Fixed 2026-10-31, review.) **`allowed_cidrs` was sent one per line**; the form's pattern and help
    ask for commas. Sent `a, b` now.
+10. (Open, needs the owner's go-ahead.) **SOPHOS names its VM itself.** `Sophos/sophosheat.sh` (MTN
+    automation repo, lines 856-961) builds `<initials>-<account>-MTN-CLOUD-SPH001-<n>` and ignores
+    `customOptions.name`; it creates the VM through a Heat stack, and the platform discovers it
+    later (QA order 2758 sat about an hour unstarted, then made VM 4639 on the QA networks, which
+    blocked the router's delete until it was removed). Since 2026-10-31 Create waits for a VM named
+    after the order and fails at the create timeout, so it no longer reports a false success.
+    Proposal: the script prints ` Instance name : <name>` and ` Stack : <name>-stack`; on a
+    successful execution with no VM named after the order, read `/api/job-executions/{id}` output
+    for that line, take the VM of that name in the project, and save its ID. Destroy then needs
+    to delete a saved ID that is still in the project even though its name isn't the order's
+    (today it only deletes the saved IDs whose name matches): that is the part to agree first.
+    Fortinet, PfSense and WireGuard use the name sent (checked live).

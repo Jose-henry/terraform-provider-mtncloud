@@ -61,3 +61,11 @@ func pollDefaults(cfg *Config) {
 		cfg.MOSLostAfter = 30 * time.Second
 	}
 }
+
+// Await polls until ready reports true, with the client's backoff, until ctx ends. For a state the
+// client can't read by itself, such as an order's VM found by the resource's own rules.
+func (c *Client) Await(ctx context.Context, ready func(context.Context) (bool, error)) error {
+	_, err := poll(ctx, c, func(ctx context.Context) (bool, error) { return ready(ctx) },
+		func(ok bool, err error) (bool, error) { return ok, err })
+	return err
+}

@@ -725,7 +725,24 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if r.spec.app && !r.appReady(ctx, req.Plan, item.ID, before, &resp.Diagnostics) {
 		return
 	}
-	ids := r.findInstances(ctx, req.Plan, &resp.Diagnostics)
+	// Success is what the order made, running (owner, 2026-10-30): wait for its VM, within the
+	// create timeout. A VM can show up after the workflow ends, and some workflows name it
+	// themselves (SOPHOS: "<initials>-<account>-MTN-CLOUD-SPH001-1", QA 2026-10-31).
+	var ids []int64
+	werr := r.client.Await(ctx, func(ctx context.Context) (bool, error) {
+		var err error
+		ids, err = r.instancesNamed(ctx, req.Plan, &resp.Diagnostics)
+		return len(ids) > 0, err
+	})
+	if werr != nil {
+		var name types.String
+		resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("name"), &name)...)
+		resp.Diagnostics.AddError(r.spec.item+" instance not found",
+			fmt.Sprintf("Order %d's workflow succeeded, but no instance named %q is in the project (%s). MTN's workflow may "+
+				"have named it itself: check Instances in the console. The next apply deletes the order and orders it again; "+
+				"raise timeouts.create if the VM is only slow to appear.", item.ID, name.ValueString(), werr))
+		return
+	}
 	statuses := map[string]string{}
 	for _, id := range ids {
 		in, err := r.client.WaitForInstance(ctx, id)

@@ -330,3 +330,29 @@ resource "mtncloud_managed_streaming" "k" {
 		}},
 	})
 }
+
+// A workflow that succeeds without a VM the order can find (SOPHOS names its VM itself, QA
+// 2026-10-31) fails the apply at the create timeout instead of succeeding with nothing.
+func TestOrder_NoInstance(t *testing.T) {
+	f, s, _ := orderFakes(t)
+	s.made = func(map[string]any) {} // the workflow makes nothing named after the order
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{
+			Config: f.providerConfig() + `
+resource "mtncloud_mysql" "db" {
+  name             = "db-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 40
+  networks         = ["app-net"]
+  timeouts {
+    create = "5s"
+  }
+}
+`,
+			ExpectError: regexp.MustCompile(wrapped(`(?s)instance not found.*no instance named "db-1" is in the project.*named it itself`)),
+		}, {Config: forget(f, "mtncloud_mysql.db")}},
+	})
+}
