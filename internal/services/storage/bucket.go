@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
+
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -14,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -66,24 +67,22 @@ func (r *bucketResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 			"name": schema.StringAttribute{
 				Description: "The bucket's name in MOS: 3 to 63 lower-case letters, digits, dots and hyphens. Names are " +
 					"shared by every tenant on MOS, so a name another tenant uses is refused: `name_prefix` avoids that. " +
-					"Set `name` or `name_prefix`, not both. Changing it replaces the bucket, and its objects are lost.",
+					"Set `name` or `name_prefix`, not both. Set at create: MTN Object Storage can't rename a bucket, so a change is refused at plan time.",
 				Optional:   true,
 				Computed:   true,
 				Validators: append(bucketNameValidators(), stringvalidator.ExactlyOneOf(path.MatchRoot("name_prefix"))),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
-					stringplanmodifier.RequiresReplaceIfConfigured(),
+					planmodifiers.SetAtCreate("bucket"),
 				},
 			},
 			"name_prefix": schema.StringAttribute{
 				Description: "Make a unique name that starts with this prefix: the prefix and " + strconv.Itoa(suffixLen) + " random " +
 					"lower-case letters and digits, chosen when the bucket is created and kept from then on. Up to " +
-					strconv.Itoa(63-suffixLen) + " characters. Changing it replaces the bucket, and its objects are lost.",
-				Optional:   true,
-				Validators: []validator.String{stringvalidator.LengthBetween(1, 63-suffixLen), prefixValidator{}},
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplaceIf(prefixChanged,
-					"Replaces the bucket, unless its name already starts with the prefix.",
-					"Replaces the bucket, unless its name already starts with the prefix.")},
+					strconv.Itoa(63-suffixLen) + " characters. Set at create: MTN Object Storage can't rename a bucket, so a change is refused at plan time.",
+				Optional:      true,
+				Validators:    []validator.String{stringvalidator.LengthBetween(1, 63-suffixLen), prefixValidator{}},
+				PlanModifiers: []planmodifier.String{prefixSetAtCreate{}},
 			},
 			// Optional+Computed: the user may name the console record; otherwise it takes the bucket's name.
 			"console_name": schema.StringAttribute{
@@ -115,7 +114,7 @@ func (r *bucketResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 				Optional:      true,
 				Computed:      true,
 				Default:       booldefault.StaticBool(false),
-				PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
+				PlanModifiers: []planmodifier.Bool{planmodifiers.SetAtCreate("bucket")},
 			},
 			// Optional+Computed with a default: a Terraform-only setting, never sent to the API.
 			"force_destroy": schema.BoolAttribute{

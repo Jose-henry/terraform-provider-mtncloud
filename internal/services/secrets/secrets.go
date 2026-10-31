@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -17,7 +19,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -85,7 +86,9 @@ func (r *generated) Metadata(_ context.Context, req resource.MetadataRequest, re
 
 func (r *generated) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	s := r.spec
-	replace := []planmodifier.String{stringplanmodifier.RequiresReplace()}
+	// Cypher makes the value when the key is written, so what it was made with can't change: a change
+	// is refused, never a new key in its place (owner, 2026-10-31). -replace makes a new value.
+	setAtCreate := []planmodifier.String{planmodifiers.SetAtCreate(s.what)}
 	attrs := map[string]schema.Attribute{
 		"id": schema.StringAttribute{
 			Computed: true, Description: fmt.Sprintf("The Cypher key as stored, for example `%s/db-admin`.", s.mount),
@@ -93,21 +96,19 @@ func (r *generated) Schema(_ context.Context, _ resource.SchemaRequest, resp *re
 		},
 		"name": schema.StringAttribute{
 			Required:      true,
-			Description:   fmt.Sprintf("Key name, without the `%s/` mount, for example `db-admin`. Changing it makes a new %s.", s.mount, s.what),
-			PlanModifiers: replace,
+			Description:   fmt.Sprintf("Key name, without the `%s/` mount, for example `db-admin`. Set at create: a change is refused at plan time (run terraform apply -replace for a new %s).", s.mount, s.what),
+			PlanModifiers: setAtCreate,
 			Validators: []validator.String{stringvalidator.RegexMatches(regexp.MustCompile(`^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`),
 				"letters, digits, `.`, `_` and `-`, in `/`-separated parts")},
 		},
 		"ttl": schema.StringAttribute{
 			Optional: true,
 			Description: fmt.Sprintf("Lease: how long the %s lives before MTN Cloud deletes it, in seconds or as `15m`, `8h`, `7d`. "+
-				"Leave it out, or `0`, to keep it for good. Changing it makes a new %s.", s.what, s.what),
-			// The lease isn't read back: after an import, state has none, and that isn't a change.
-			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplaceIf(
-				func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-					resp.RequiresReplace = !req.StateValue.IsNull()
-				}, "Changing the lease makes a new key.", "Changing the lease makes a new key.")},
-			Validators: []validator.String{stringvalidator.RegexMatches(ttlFormat, "seconds, or a number followed by s, m, h, d, w or y")},
+				"Leave it out, or `0`, to keep it for good. Set at create: a change is refused at plan time.", s.what),
+			// The lease isn't read back as a ttl: after an import, state has none, and a ttl then
+			// describes the lease the key has. A key without one (any made with no ttl) refuses it.
+			PlanModifiers: []planmodifier.String{ttlAtCreate{what: s.what}},
+			Validators:    []validator.String{stringvalidator.RegexMatches(ttlFormat, "seconds, or a number followed by s, m, h, d, w or y")},
 		},
 		"value": schema.StringAttribute{
 			Computed: true, Sensitive: true,
@@ -119,8 +120,8 @@ func (r *generated) Schema(_ context.Context, _ resource.SchemaRequest, resp *re
 		// Optional+Computed with a default: left out, the default size is used and shown.
 		attrs[s.size] = schema.Int64Attribute{
 			Optional: true, Computed: true, Default: int64default.StaticInt64(s.sizeDef),
-			Description:   s.sizeDesc + " Changing it makes a new " + s.what + ".",
-			PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()},
+			Description:   s.sizeDesc + " Set at create: a change is refused at plan time.",
+			PlanModifiers: []planmodifier.Int64{planmodifiers.SetAtCreate(s.what)},
 			Validators:    []validator.Int64{s.sizeOK},
 		}
 	}
@@ -243,6 +244,11 @@ func (r *generated) Read(ctx context.Context, req resource.ReadRequest, resp *re
 		return
 	}
 	m.Value = types.StringValue(secret.Value)
+	var lease []byte // whether the key has a lease, for a ttl set on a state without one
+	if secret.LeaseSeconds > 0 {
+		lease = []byte(`{"v":1}`)
+	}
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, leaseKey, lease)...)
 	if !m.Name.IsNull() {
 		r.set(ctx, &resp.State, m, &resp.Diagnostics)
 		return
@@ -286,4 +292,32 @@ func (r *generated) ImportState(ctx context.Context, req resource.ImportStateReq
 		return
 	}
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+// leaseKey marks, in private state, a key that has a lease (read back on every refresh).
+const leaseKey = "has_lease"
+
+// ttlAtCreate is SetAtCreate for ttl, which isn't read back: on a state without one, a ttl is
+// adopted only when the key has a lease (an import of such a key), and refused when it has none,
+// as setting it would change nothing in MTN Cloud.
+type ttlAtCreate struct{ what string }
+
+func (m ttlAtCreate) Description(ctx context.Context) string {
+	return planmodifiers.SetAtCreate(m.what).Description(ctx)
+}
+
+func (m ttlAtCreate) MarkdownDescription(ctx context.Context) string { return m.Description(ctx) }
+
+func (m ttlAtCreate) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.State.Raw.IsNull() || req.PlanValue.IsUnknown() || req.PlanValue.Equal(req.StateValue) {
+		return
+	}
+	if req.StateValue.IsNull() {
+		b, d := req.Private.GetKey(ctx, leaseKey)
+		resp.Diagnostics.Append(d...)
+		if len(b) > 0 {
+			return
+		}
+	}
+	planmodifiers.RefuseChange(&resp.Diagnostics, req.Path, m.what, req.StateValue)
 }

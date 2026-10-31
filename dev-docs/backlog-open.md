@@ -31,7 +31,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 **`mtncloud_instance_settings`**
 - [x] Adopts any existing instance by `instance_id`, whether it came from an order, an app or the console. Destroy only stops tracking it; the owner deletes the VM.
 - [x] Day-2, done 2026-10-31: plan resize (disks kept), power state, security groups, description, labels, tags.
-- [x] Day-2, added 2026-10-31: data disks (append-only, attached in place), floating IP (`floating_ip_pool`, one per server, re-attached when released), scaling (`scale`), and `expire_date` (read only: expiry can only be set at create). NICs can't be added in place (as on `mtncloud_instance`, where a new network replaces the VM).
+- [x] Day-2, added 2026-10-31: data disks (append-only, attached in place), floating IP (`floating_ip_pool`, one per server, re-attached when released), scaling (`scale`), and `expire_date` (read only: expiry can only be set at create). NICs can't be added here (on `mtncloud_instance` they now change in place).
 - [x] Read-only: image, project, root disk, name and IPs, since changing them would rebuild the VM.
 - [x] **Several servers in one instance.** Done 2026-10-31: `public_ips` (one per server, read from each server's container when there are several; a role that can't read them falls back to the instance's one address); drift and re-attach per server. Live check with `scale_factor = 2` still open. Was: (Floating IPs attach per server; `public_ip` still shows one, B-013.) Resize, power, security groups, labels and tags apply to every server. A floating IP is attached per server, but `public_ip` holds only one: expose one public IP per server and check drift on each (B-013).
 - [x] **Changing the number of servers in place.** Done 2026-10-31: Add Node (`PUT /api/instances/{id}/action?code=generic-add-node`, empty body, one server per call, about 4 minutes) and Remove Node (`PUT /api/containers/{id}/action?code=generic-remove-node`, seconds), codes read from the actions lists. `scale_factor` is in place on `mtncloud_instance` and on `mtncloud_instance_settings`; live 1 -> 2 -> 1 with floating IPs, `No changes.` after each (t105). During Add Node the instance stays `running` (435 s in t108) while the new server reads `deploying`, so the wait reads `GET /api/instances/{id}?details=true`, whose `containerDetails[].status` covers every server in one call. Live 2 -> 1 through `scale_factor` in 20 s (t108).
@@ -69,7 +69,10 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
   2026-10-31: passed (apply, `No changes.`, destroy) for MySQL, PostgreSQL, MariaDB, MongoDB, Apache, Nginx,
   LAMP, LEMP, WordPress, Managed Database, Bastion, WireGuard, PfSense, Fortinet and SIEM. Blocked on MTN:
   Managed MQ and Streaming (their blueprints 16 and 21 aren't found, B-034 #6), SOPHOS (order 2758 never
-  started in an hour). Not yet run: FortiWeb, FortiADC, FortiManager, FortiAnalyzer (BYOL, large disks).
+  started in an hour). FortiWeb, FortiManager and FortiAnalyzer passed 2026-10-31 (t115: apply, `No changes.`, destroy, 404s).
+  **FortiADC** (order 2768) is a Heat workflow like SOPHOS (`Fortinet/FortiADCheat.sh`): its record showed
+  no execution while the workflow made VM `<initials>-<account>-MTN-CLOUD-FADC001-1`, so an order with no
+  execution is never taken as withdrawn. Fixed 2026-11-01 (`heat` on the spec).
 - [x] **Catalog form snapshot in the docs (B-029 #7, report B6).** Done 2026-10-31: `internal/services/catalog/forms/*.json` (written by `TestAccCatalogForms_Snapshot`, drift-checked by `TestAccCatalogForms_MatchSpecs`) feed each argument's description; the `mtncloud_catalog_item` data source shows each input's rules; locked, not-blank, pattern and range are checked at plan.
 - [x] **App orders wait for the app (B-034 #3).** Done 2026-10-31: managed services' workflows end once they ask for the app, whose VMs MTN names itself. Create waits for the app named after the order and takes its VMs; destroy deletes the app.
 - [x] **Never-blank lists send their first choice (B-034 #4).** Done 2026-10-31: MQ and Streaming workflows failed on `msg_engine`/`kafkaVersion` null.
@@ -135,9 +138,12 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [x] **Resize that never applies (B-016).** Done 2026-10-31: the error names the plan and disks the instance is still on.
 - [x] **Unreadable option values (B-016).** Done 2026-10-31.
 - [x] **Missing `_disappears` tests.** Done 2026-10-31: L7 policy, load balancer instance member, and security group rule (with drift and a refused rule partway through a group update).
-- [ ] **Revisit if it bites.**
-  - Adding a network to a running instance replaces it (B-016).
-  - A router change in the same apply as a new pool user fails the plan (B-020).
+- [x] **Revisit if it bites.** Done 2026-10-31 (owner asked):
+  - Network cards and data disks change in place (B-016). Live QA 2026-10-31 on a `tf-acc` VM: resize takes
+    the full lists (kept cards and disks by ID, new without), and anything left out is removed (a disk is deleted).
+    Card IDs come from `?details=true` (`containerDetails[].server.interfaces`); the instance's own list has none.
+  - A pool on another router's external network is a warning (B-020): the runtime check fails an instance whose
+    address can't come.
 
 ## 5. Debt and housekeeping
 

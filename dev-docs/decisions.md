@@ -458,6 +458,42 @@ run would make the result differ from the plan ("inconsistent result"). The know
 copy it, unless they use `replace_triggered_by` (the documented way). Create adopts an existing schedule
 only when times, zone and copied values all match, so it never takes over another config's schedule.
 
+## D-038 What MTN Cloud can't change is refused at plan time, never replaced (owner, 2026-10-31)
+Supersedes the 2026-10-30 rule that a changed catalog-order input orders it again. Owner: things
+that have no way to change after creation "shouldn't be editable", like key pairs; "dont reinvent
+things". So:
+
+- **In place where the API can:** instance disks (grow, add, remove one, named), cards, plan,
+  scale; `mtncloud_instance_settings` disks the same way (shared `planVolumes`); load balancer
+  instance-member `weight`/`backup` (`member-update`); a load balancer's floating IP (detach, then
+  attach: a pool, a held ID, or the address itself; a failed attach puts a kept old address back);
+  Cypher `value`/`ttl` (Cypher overwrites a key).
+- **Refused at plan time** (`planmodifiers.SetAtCreate`, `RefuseChange`; legacy `setAtCreate` in
+  `CustomizeDiff`), with the value to set back and how to get a new one: instance hostname, group,
+  project, image, datastore, domain, `env_vars` (value never shown), agent, create-user, first
+  network; router name; network CIDR, IPv6, project; security group project; bucket name, prefix,
+  object lock; object key; archive path; link expiry; share name; generated Cypher settings; LB
+  protocols, ports, member address/subnet, monitor type, VIP; key pair name and keys; credential
+  type and store; user tenant and `password_expired` (the update body has neither); SAML tenant.
+- **Catalog orders** are placed once: a changed input is refused, never ordered again. Plan,
+  labels, security groups, floating IP and data disks of the VMs an order made change through
+  `mtncloud_instance_settings`, which the error names. A failed order still re-orders (it is broken,
+  like a VM deleted outside Terraform), and `-replace` still works (no value changes).
+- **Still replaced:** parent references (`network_id`, `instance_id`, `load_balancer_id`, ...):
+  the child must follow its parent. Security group rules: the cloud has no rule update, and the
+  console's PUT changes only its own record (live 2026-10-31: the rule kept its cloud ID while the
+  console showed the new port), so using it would show one port while the firewall enforces
+  another. The description suggests `create_before_destroy`.
+- **Target orders** follow their instance: a new `instance_id` places the order again (its destroy
+  deletes nothing), so a replaced instance never strands it (review, 2026-11-01).
+- **Irreversible side effects take the safe side:** a load balancer floating IP swap releases the
+  old address only when state and plan both say `release_on_destroy = true`.
+- **FortiADC is a Heat order** like SOPHOS (`Fortinet/FortiADCheat.sh` names the VM
+  `<initials>-<account>-MTN-CLOUD-FADC001-<n>` and reports it). Live 2026-10-31: the order's VM was
+  never found by name, so destroy left it, and its floating IP kept QA's router from being deleted.
+- **Task type:** fixed. `PUT /api/tasks/{id}` answers success but keeps the type, by code or by ID,
+  and `tasks update` has no type option (live 2026-10-31, task 457, deleted).
+
 ## D-037 Registry address `mtncloud-mcs/mtncloud` (2026-10-31)
 Supersedes D-021. The owner moved the repository to the `mtncloud-mcs` GitHub organisation
 (`github.com/mtncloud-mcs/terraform-provider-mtncloud`) to make the provider official. `main.go` serves

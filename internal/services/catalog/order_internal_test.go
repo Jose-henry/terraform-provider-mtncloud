@@ -2,7 +2,12 @@ package catalog
 
 import (
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 )
@@ -80,6 +85,48 @@ func TestPoolNetwork(t *testing.T) {
 	} {
 		if got := poolNetwork(attr, primary); got != want {
 			t.Errorf("%s: network %d, want %d", attr, got, want)
+		}
+	}
+}
+
+// The orders whose workflow builds the VM through a Heat stack, names it itself and reports it:
+// exactly those whose MTN script does (`Sophos/sophosheat.sh`, `Fortinet/FortiADCheat.sh`). One
+// missing is found by the order's name, which the VM never has, so destroy deletes nothing.
+func TestHeatSpecs(t *testing.T) {
+	var got []string
+	for _, s := range orderSpecs() {
+		if s.heat {
+			got = append(got, s.typeName)
+		}
+	}
+	slices.Sort(got)
+	if want := []string{"fortiadc", "sophos_firewall"}; !slices.Equal(got, want) {
+		t.Errorf("heat orders = %v, want %v", got, want)
+	}
+}
+
+// A refused change never shows a sensitive input's old value: a secret, or extra_inputs, where a
+// form field can be a password. A plain input shows the value to set back.
+func TestRefuseInputHidesSecrets(t *testing.T) {
+	r := &orderResource{spec: orderSpec{item: "MTN MySQL"}}
+	held := types.MapValueMust(types.StringType, map[string]attr.Value{"dbRootPassword": types.StringValue("hunter2")})
+	for _, c := range []struct {
+		name   string
+		f      field
+		before attr.Value
+		shown  bool
+	}{
+		{"extra_inputs", field{attr: "extra_inputs", kind: kExtra}, held, false},
+		{"database_password", field{attr: "database_password", kind: kSecret}, types.StringValue("hunter2"), false},
+		{"version", field{attr: "version", kind: kText}, types.StringValue("hunter2"), true},
+	} {
+		var d diag.Diagnostics
+		r.refuseInput(c.name, c.f, c.before, &d)
+		if !d.HasError() {
+			t.Fatalf("%s: no error", c.name)
+		}
+		if got := strings.Contains(d[0].Detail(), "hunter2"); got != c.shown {
+			t.Errorf("%s: value shown = %v, want %v: %s", c.name, got, c.shown, d[0].Detail())
 		}
 	}
 }

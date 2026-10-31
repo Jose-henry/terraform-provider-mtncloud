@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -63,6 +65,9 @@ func (b *rbase) ready(diags *diag.Diagnostics) bool {
 	return true
 }
 
+// replaceStr and replaceInt are for references to a parent (network, load balancer, pool, listener,
+// instance): when the parent is replaced, its pieces follow. What the cloud can't change on the piece
+// itself is fixed (owner, 2026-10-31): refused at plan time, never replaced.
 var (
 	replaceStr   = []planmodifier.String{stringplanmodifier.RequiresReplace()}
 	replaceInt   = []planmodifier.Int64{int64planmodifier.RequiresReplace()}
@@ -72,14 +77,28 @@ var (
 	listenerKind = "listener"
 )
 
-// removedReplaces is said of an Optional argument the cloud can't clear once set (a listener's
-// certificate: guide 9.6), so taking it out of the configuration replaces the piece instead.
-const removedReplaces = "Taking it out of the configuration replaces the resource: the cloud can't clear it."
+func fixedStr(kind string) []planmodifier.String {
+	return []planmodifier.String{planmodifiers.SetAtCreate(kind)}
+}
 
-func replaceIfRemovedStr() []planmodifier.String {
-	return []planmodifier.String{stringplanmodifier.RequiresReplaceIf(func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-		resp.RequiresReplace = !req.StateValue.IsNull() && req.PlanValue.IsNull()
-	}, removedReplaces, removedReplaces)}
+func fixedInt(kind string) []planmodifier.Int64 {
+	return []planmodifier.Int64{planmodifiers.SetAtCreate(kind)}
+}
+
+// keptOnceSet is said of an Optional argument the cloud can't clear once set (a listener's
+// certificate: guide 9.6): it can change, but taking it out is refused.
+const keptOnceSet = "It can change, but not be taken out once set: the cloud can't clear it (refused at plan time)."
+
+// noClear refuses taking out an argument the cloud can't clear.
+type noClear struct{ kind string }
+
+func (noClear) Description(context.Context) string               { return keptOnceSet }
+func (m noClear) MarkdownDescription(ctx context.Context) string { return m.Description(ctx) }
+
+func (m noClear) PlanModifyString(_ context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if !req.State.Raw.IsNull() && !req.StateValue.IsNull() && req.PlanValue.IsNull() {
+		planmodifiers.RefuseChange(&resp.Diagnostics, req.Path, m.kind, req.StateValue)
+	}
 }
 
 // keptWhenRemoved ends the description of an Optional+Computed argument that keeps its state value

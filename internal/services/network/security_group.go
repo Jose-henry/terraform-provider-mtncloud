@@ -295,7 +295,7 @@ func (r *securityGroupResource) ModifyPlan(ctx context.Context, req resource.Mod
 	if r.fillDefaults(ctx, &req, resp, "project"); resp.Diagnostics.HasError() {
 		return
 	}
-	r.planProject(ctx, req, resp)
+	r.planProject(ctx, "security group", req, resp)
 	if req.State.Raw.IsNull() || resp.Diagnostics.HasError() {
 		return
 	}

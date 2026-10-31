@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
+
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
@@ -45,15 +46,26 @@ func (prefixValidator) ValidateString(_ context.Context, req validator.StringReq
 	}
 }
 
-// prefixChanged replaces the bucket when name_prefix changes, unless the bucket's name already
-// starts with the new prefix (an imported bucket, or a name moved to name_prefix).
-func prefixChanged(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-	if req.State.Raw.IsNull() || req.PlanValue.Equal(req.StateValue) || req.PlanValue.IsUnknown() {
+// prefixSetAtCreate refuses a new name_prefix the bucket's name doesn't start with: MTN Object
+// Storage can't rename a bucket, and nothing is replaced to fake it (owner, 2026-10-31). A prefix the
+// name already starts with (an imported bucket, or a name moved to name_prefix) is no change.
+type prefixSetAtCreate struct{}
+
+func (prefixSetAtCreate) Description(context.Context) string {
+	return "Set when the bucket is created; a prefix its name doesn't start with is refused."
+}
+
+func (m prefixSetAtCreate) MarkdownDescription(ctx context.Context) string { return m.Description(ctx) }
+
+func (prefixSetAtCreate) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.State.Raw.IsNull() || req.PlanValue.Equal(req.StateValue) || req.PlanValue.IsUnknown() || req.PlanValue.IsNull() {
 		return
 	}
 	var name string
 	if d := req.State.GetAttribute(ctx, rootName, &name); d.HasError() {
 		return
 	}
-	resp.RequiresReplace = !req.PlanValue.IsNull() && !strings.HasPrefix(name, req.PlanValue.ValueString())
+	if !strings.HasPrefix(name, req.PlanValue.ValueString()) {
+		planmodifiers.RefuseChange(&resp.Diagnostics, req.Path, "bucket", req.StateValue)
+	}
 }

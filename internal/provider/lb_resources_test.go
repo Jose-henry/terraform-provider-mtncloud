@@ -32,10 +32,12 @@ type lbPlugin struct {
 	runs     map[string]int            // action -> runs
 	sent     map[string]map[string]any // action -> the last spec it was sent
 	released []string                  // fip-detach's release, per detach
+	held     map[string]map[string]any // addresses detached and kept in the project, by ID
+	failAt   int                       // the member-update run that fails (0: none)
 }
 
 func newLBPlugin() *lbPlugin {
-	return &lbPlugin{lbs: map[string]map[string]any{}, pending: map[string]bool{}, jobs: map[int64][]byte{}, runs: map[string]int{}, sent: map[string]map[string]any{}}
+	return &lbPlugin{lbs: map[string]map[string]any{}, pending: map[string]bool{}, jobs: map[int64][]byte{}, runs: map[string]int{}, sent: map[string]map[string]any{}, held: map[string]map[string]any{}}
 }
 
 func (p *lbPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +174,7 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 	case "fip-options":
 		return ok(map[string]any{"success": true,
 			"floatingIpPools":      []any{map[string]any{"name": "public-network-02", "externalId": "ext-02"}},
-			"availableFloatingIps": []any{map[string]any{"id": "fip-held", "address": "196.0.0.9"}}})
+			"availableFloatingIps": []any{map[string]any{"id": "fip-held", "address": "203.0.113.9"}}})
 	}
 	lbID, _ := o["lbId"].(string)
 	lb := p.lbs[lbID]
@@ -380,6 +382,9 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		if m == nil {
 			return refuse("Member %v is not in pool %v.", o["memberId"], o["poolId"])
 		}
+		if action == "member-update" && p.runs[action] == p.failAt {
+			return refuse("Member %v is busy.", o["memberId"])
+		}
 		if action == "member-remove" {
 			pool["members"] = append(list(pool, "members")[:i], list(pool, "members")[i+1:]...)
 		} else {
@@ -427,12 +432,18 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 			}
 			return refuse("Load balancer %s already has floating IP %v. Detach it first.", lbID, fip["floating_ip_address"])
 		}
-		fip := map[string]any{"id": "fip-held", "floating_ip_address": "196.0.0.9", "floating_network_id": "ext-02"}
+		fip := map[string]any{"id": "fip-held", "floating_ip_address": "203.0.113.9", "floating_network_id": "ext-02"}
+		if id, has := o["floatingIpId"].(string); has && id != "fip-held" {
+			if fip = p.held[id]; fip == nil {
+				return refuse("Floating IP %s is not one the project holds.", id)
+			}
+			delete(p.held, id)
+		}
 		if o["floatingIpId"] == nil {
 			if o["floatingIpPoolId"] != "ext-02" {
 				return refuse("External network %v is not reachable from subnet sub-82.", o["floatingIpPoolId"])
 			}
-			fip = map[string]any{"id": p.id("fip"), "floating_ip_address": "196.0.0.10", "floating_network_id": "ext-02"}
+			fip = map[string]any{"id": p.id("fip"), "floating_ip_address": "203.0.113.10", "floating_network_id": "ext-02"}
 		}
 		lb["fip"] = fip
 		return ok(map[string]any{"success": true, "floatingip": fip})
@@ -441,6 +452,9 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 			return refuse("release must be true or false.")
 		}
 		p.released = append(p.released, fmt.Sprint(o["release"]))
+		if fip, _ := lb["fip"].(map[string]any); fip != nil && o["release"] == false && fip["id"] != "fip-held" {
+			p.held[fmt.Sprint(fip["id"])] = fip
+		}
 		delete(lb, "fip")
 		return ok(map[string]any{"success": true})
 	}
@@ -661,21 +675,19 @@ resource "mtncloud_load_balancer_listener" "http" {
 					attr(s, "mtncloud_load_balancer_member.a", "id"), nil
 			}),
 			{
-				// The member's port can't change in the cloud: it is replaced.
-				Config: cfg("connection_limit = 500", "", "LEAST_CONNECTIONS", 3, 8081, 10),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_load_balancer_member.a", plancheck.ResourceActionDestroyBeforeCreate),
-				}},
+				// The member's port can't change in the cloud: refused, never replaced (owner, 2026-10-31).
+				Config:      cfg("connection_limit = 500", "", "LEAST_CONNECTIONS", 3, 8081, 10),
+				ExpectError: regexp.MustCompile(`port can't change`),
 			},
 			{
 				// Deleted outside Terraform: the next plan creates it again.
 				PreConfig:          plugin.deleteListener,
-				Config:             cfg("connection_limit = 500", "", "LEAST_CONNECTIONS", 3, 8081, 10),
+				Config:             changed,
 				PlanOnly:           true,
 				ExpectNonEmptyPlan: true,
 			},
-			{Config: cfg("connection_limit = 500", "", "LEAST_CONNECTIONS", 3, 8081, 10)},
-			{Config: cfg("connection_limit = 500", "", "LEAST_CONNECTIONS", 3, 8081, 10), ConfigPlanChecks: empty},
+			{Config: changed},
+			{Config: changed, ConfigPlanChecks: empty},
 		},
 	})
 }

@@ -261,7 +261,7 @@ func TestPoolRouterProblem(t *testing.T) {
 		wantErr bool
 	}{
 		{675, "PUBLIC-NETWORK-01", "", false},
-		{675, "public-network-02", "r-pub (external network public-network-01)", true},
+		{675, "public-network-02", "r-pub (external network public-network-01), so a floating IP can only come from that external network. If this apply changes that router's external_network to \"public-network-02\", ignore this", true},
 		{676, "public-network-01", "isn't on an MTN Router", false}, // a router without a gateway
 		{677, "public-network-01", "isn't on an MTN Router", false},
 	} {

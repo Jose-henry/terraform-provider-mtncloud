@@ -20,6 +20,7 @@ func resourceSAMLIdentitySource() *schema.Resource {
 		UpdateContext: resourceSAMLIdentitySourceUpdate,
 		DeleteContext: resourceSAMLIdentitySourceDelete,
 
+		CustomizeDiff: setAtCreate("identity source", "tenant_id"),
 		Schema: map[string]*schema.Schema{
 			"id": {
 				Type:        schema.TypeString,
@@ -30,7 +31,6 @@ func resourceSAMLIdentitySource() *schema.Resource {
 				Type:        schema.TypeInt,
 				Description: "The ID of the MTN Cloud tenant to associate the identity source with",
 				Required:    true,
-				ForceNew:    true,
 			},
 			"name": {
 				Type:        schema.TypeString,

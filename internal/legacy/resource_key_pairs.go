@@ -18,8 +18,15 @@ func resourceKeyPair() *schema.Resource {
 		Description:   "Provides an MTN Cloud key pair resource: an SSH public key that VMs can be created with.",
 		CreateContext: resourceKeyPairCreate,
 		ReadContext:   resourceKeyPairRead,
+		UpdateContext: resourceKeyPairRead, // every argument is set at create: nothing to send
 		DeleteContext: resourceKeyPairDelete,
 
+		CustomizeDiff: schema.CustomizeDiffFunc(func(ctx context.Context, d *schema.ResourceDiff, m interface{}) error {
+			if err := setAtCreate("key pair", "name", "public_key")(ctx, d, m); err != nil {
+				return err
+			}
+			return setAtCreateSecret("key pair", "private_key", "passphrase")(ctx, d, m)
+		}),
 		Schema: map[string]*schema.Schema{
 			"id": {
 				Type:        schema.TypeString,
@@ -29,19 +36,16 @@ func resourceKeyPair() *schema.Resource {
 			"name": {
 				Type:        schema.TypeString,
 				Description: "Name of the key pair",
-				ForceNew:    true,
 				Required:    true,
 			},
 			"public_key": {
 				Type:        schema.TypeString,
 				Description: "The public key of the key pair",
-				ForceNew:    true,
 				Required:    true,
 			},
 			"private_key": {
 				Type:        schema.TypeString,
 				Description: "The private key of the key pair",
-				ForceNew:    true,
 				Optional:    true,
 				Sensitive:   true,
 				StateFunc: func(v interface{}) string {
@@ -60,7 +64,6 @@ func resourceKeyPair() *schema.Resource {
 			"passphrase": {
 				Type:        schema.TypeString,
 				Description: "The passphrase for the private key of the key pair",
-				ForceNew:    true,
 				Optional:    true,
 				Sensitive:   true,
 			},

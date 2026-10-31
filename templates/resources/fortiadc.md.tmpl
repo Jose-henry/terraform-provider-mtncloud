@@ -22,18 +22,37 @@ Import is supported using the following syntax:
 {{codefile "shell" "examples/resources/mtncloud_fortiadc/import.sh" }}
 
 The order doesn't show what it was placed with, so the inputs come from your configuration: write them
-exactly as ordered. The first apply after an import records them, finds the instances by name, and orders nothing.
+exactly as ordered. The first apply after an import records them, finds the instance its workflow reported, and orders nothing.
 
 ## Notes
 
+- **An order takes about an hour.** MTN's FortiADC workflow builds the VM through a Heat stack, then
+  waits until MTN Cloud's own sync (about every 15 minutes) discovers it. The create timeout defaults
+  to 3 hours. Your login must outlast the apply:
+  - use `username` and `password` (or `MTNCLOUD_API_USERNAME` and `MTNCLOUD_API_PASSWORD`): the
+    provider logs in again when a token expires;
+  - or use an API token that lasts longer than the apply (a short-lived token fails the apply with a
+    401 while it waits, and the order goes on in MTN Cloud: import it afterwards);
+  - or order the appliance in the console.
+- **MTN names the VM, not you.** The workflow ignores `name` and names the VM from MTN's template,
+  `<initials>-<account>-MTN-CLOUD-FADC001-<n>`. It prints the VM it made, and the provider takes
+  `instance_ids` from that report, in the order's project only.
+- **Destroy leaves the Heat stack.** Destroy deletes the VM and its disks, but not the Heat stack
+  (`<vm name>-stack`) the workflow made it with, and a customer login can't delete a stack: its network
+  port and floating IP stay, and they keep the MTN Router from being deleted. Destroy warns with the
+  stack's name; ask MTN to delete it.
+
 - **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
-  finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
+  finish, finds the instance it made (`instance_ids`), and waits until
   they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
   message; the resource is then tainted, so the next apply deletes it and orders again.
-- **A changed input orders again.** An order can't be edited, so changing any input plans a
-  replace: what the order made is deleted, then the item is ordered again. `terraform apply
-  -replace` does the same on purpose, and an instance that fails later also plans a replace. To
-  stop a plan from deleting a server by accident, add `lifecycle { prevent_destroy = true }`.
+- **Placed once: a changed input is refused.** An order can't be edited, and Terraform won't
+  delete what an order made to order it again, so a changed input stops the plan with
+  `<input> can't change` and the value to set back. The plan, labels, security groups, floating IP
+  and data disks of the instances it made change in place through `mtncloud_instance_settings`
+  (the error says how). To order again on purpose, run `terraform apply -replace`; an instance
+  that fails later also plans a replace. To stop a plan from deleting a server by accident, add
+  `lifecycle { prevent_destroy = true }`.
 - **Checked against the live order form.** MTN can change its order forms, so each plan checks
   the order against the form as it is now: the fields it requires (some only while another field
   is set), the fields it hides and fills itself, the values it pre-fills, and the limits its help

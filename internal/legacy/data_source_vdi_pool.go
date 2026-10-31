@@ -52,9 +52,13 @@ func dataSourceVDIPoolRead(ctx context.Context, d *schema.ResourceData, meta int
 		return diag.Errorf("VDI Pool cannot be read without name or id")
 	}
 	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			log.Printf("API 404: %s - %v", resp, err)
-			return nil
+		if id == 0 {
+			if nd := nameLookupError(client, err, "VDI pool", name, sdk.VDIPoolsPath); nd != nil {
+				return nd
+			}
+		}
+		if resp != nil && resp.StatusCode == http.StatusNotFound && id != 0 {
+			return notFoundByID("VDI pool", int64(id))
 		} else {
 			log.Printf("API FAILURE: %s - %v", resp, err)
 			return diag.FromErr(err)

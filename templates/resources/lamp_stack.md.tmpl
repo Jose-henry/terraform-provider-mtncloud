@@ -30,10 +30,13 @@ exactly as ordered. The first apply after an import records them, finds the inst
   finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
   they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
   message; the resource is then tainted, so the next apply deletes it and orders again.
-- **A changed input orders again.** An order can't be edited, so changing any input plans a
-  replace: what the order made is deleted, then the item is ordered again. `terraform apply
-  -replace` does the same on purpose, and an instance that fails later also plans a replace. To
-  stop a plan from deleting a server by accident, add `lifecycle { prevent_destroy = true }`.
+- **Placed once: a changed input is refused.** An order can't be edited, and Terraform won't
+  delete what an order made to order it again, so a changed input stops the plan with
+  `<input> can't change` and the value to set back. The plan, labels, security groups, floating IP
+  and data disks of the instances it made change in place through `mtncloud_instance_settings`
+  (the error says how). To order again on purpose, run `terraform apply -replace`; an instance
+  that fails later also plans a replace. To stop a plan from deleting a server by accident, add
+  `lifecycle { prevent_destroy = true }`.
 - **Checked against the live order form.** MTN can change its order forms, so each plan checks
   the order against the form as it is now: the fields it requires (some only while another field
   is set), the fields it hides and fills itself, the values it pre-fills, and the limits its help

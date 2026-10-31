@@ -99,11 +99,11 @@ func TestMySQLOrder(t *testing.T) {
 				},
 			},
 			{Config: cfg(body), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
-			// An order can't change: a changed input orders it again (a replace), so -replace and
-			// destroy plan too. A secret isn't stored, so changing it shows nothing.
-			{Config: cfg(strings.Replace(body, `"G2S4"`, `"G1S2"`, 1)), PlanOnly: true, ExpectNonEmptyPlan: true,
-				ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_mysql.db", plancheck.ResourceActionReplace)}}},
+			// An order is placed once: a changed input is refused, never ordered again (owner,
+			// 2026-10-31), and a day-2 input points at mtncloud_instance_settings. A secret isn't
+			// stored, so changing it shows nothing.
+			{Config: cfg(strings.Replace(body, `"G2S4"`, `"G1S2"`, 1)), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`(?s)plan can't change.*Set\s+it\s+back\s+to\s+"G2S4".*mtncloud_instance_settings`)},
 			{Config: cfg(strings.Replace(body, "s3cret-value", "other", 1)), PlanOnly: true},
 			// Import by order ID: the configuration is adopted, nothing is ordered again.
 			{Config: cfg(body), ResourceName: "mtncloud_mysql.db", ImportState: true, ImportStateId: "9801",
@@ -218,6 +218,16 @@ func TestOrder_DestroyEdges(t *testing.T) {
 		},
 		"saved instance renamed": {
 			prep:    func(_ *orderStore, insts *instStore) { insts.insts[9701]["name"] = "db-1-2" },
+			wantErr: "Nothing it made was found",
+		},
+		// An older order has no execution, but it saved its VM: it isn't taken for one that never
+		// started, so its record isn't deleted.
+		"no execution, saved instance renamed": {
+			prep: func(s *orderStore, insts *instStore) {
+				s.items[9801]["execution"] = nil
+				s.result = ""
+				insts.insts[9701]["name"] = "db-1-2"
+			},
 			wantErr: "Nothing it made was found",
 		},
 	} {
@@ -336,8 +346,8 @@ func TestOrder_PoolCheckedAgainstRouter(t *testing.T) {
 `
 	}
 	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: []resource.TestStep{
-		{Config: cfg("public-network-01"), PlanOnly: true,
-			ExpectError: regexp.MustCompile(`(?s)Floating IP pool doesn't match the router.*edge \(external network public-network-02\)`)},
+		// Another pool than the router's is a warning, not an error: the router may change in this apply (B-020).
+		{Config: cfg("public-network-01"), PlanOnly: true, ExpectNonEmptyPlan: true},
 		{Config: cfg("public-network-02"), PlanOnly: true, ExpectNonEmptyPlan: true},
 	}})
 	if s.orders != 0 {
@@ -372,13 +382,12 @@ resource "mtncloud_letsencrypt_certificate" "web" {
 				},
 			},
 			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
-			// A new target instance, or an input added after the order, orders it again.
-			{Config: strings.Replace(cfg, `"9705"`, `"9706"`, 1), PlanOnly: true, ExpectNonEmptyPlan: true,
-				ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_letsencrypt_certificate.web", plancheck.ResourceActionReplace)}}},
+			// An input added after the order is refused: never ordered again.
 			{Config: strings.Replace(cfg, "staging     = true", "staging     = true\n  admin_email = \"ops@example.com\"", 1), PlanOnly: true,
-				ExpectNonEmptyPlan: true, ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_letsencrypt_certificate.web", plancheck.ResourceActionReplace)}}},
+				ExpectError: regexp.MustCompile(`(?s)admin_email can't change.*Remove\s+it:\s+the\s+order\s+was\s+placed\s+without\s+it`)},
+			// A new target instance is the parent changing: placed again on it (D-038).
+			{Config: strings.Replace(cfg, `"9705"`, `"9706"`, 1), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+				plancheck.ExpectResourceAction("mtncloud_letsencrypt_certificate.web", plancheck.ResourceActionReplace)}}},
 			{
 				// Destroy deletes nothing: the certificate stays on the instance.
 				Config: f.providerConfig(),
@@ -440,4 +449,42 @@ removed {
   }
 }
 `
+}
+
+// An order whose record shows no execution fails its create, and destroying it is refused with
+// nothing deleted: no execution doesn't mean nothing was made (FortiADC QA, 2026-10-31: the workflow
+// made a VM while its record showed none), and deleting the record would orphan it. A removed block
+// lets go of it.
+func TestOrder_NoExecutionIsNeverWithdrawn(t *testing.T) {
+	f, s, insts := orderFakes(t)
+	s.insts = insts
+	s.result = "" // the execution never appears
+	cfg := f.providerConfig() + `resource "mtncloud_mysql" "db" {
+  name             = "db-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 40
+  networks         = ["app-net"]
+  database_name    = "shop"
+  database_user    = "shop"
+  database_password = "s3cret-value"
+  timeouts {
+    create = "3s"
+  }
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg, ExpectError: regexp.MustCompile(`not finished`)},
+			{Config: f.providerConfig(), ExpectError: regexp.MustCompile(`Order 9801 not deleted`)},
+			{Config: f.providerConfig() + "removed {\n  from = mtncloud_mysql.db\n  lifecycle {\n    destroy = false\n  }\n}\n"},
+		},
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.deleted) != 0 {
+		t.Errorf("deleted %v, want nothing", s.deleted)
+	}
 }

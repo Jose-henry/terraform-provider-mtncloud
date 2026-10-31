@@ -52,9 +52,13 @@ func dataSourcePowerScheduleRead(ctx context.Context, d *schema.ResourceData, me
 		return diag.Errorf("Power schedule cannot be read without name or id")
 	}
 	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			log.Printf("API 404: %s - %v", resp, err)
-			return nil
+		if id == 0 {
+			if nd := nameLookupError(client, err, "power schedule", name, sdk.PowerSchedulesPath); nd != nil {
+				return nd
+			}
+		}
+		if resp != nil && resp.StatusCode == http.StatusNotFound && id != 0 {
+			return notFoundByID("power schedule", int64(id))
 		} else {
 			log.Printf("API FAILURE: %s - %v", resp, err)
 			return diag.FromErr(err)

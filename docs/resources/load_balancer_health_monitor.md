@@ -48,7 +48,7 @@ resource "mtncloud_load_balancer_health_monitor" "web" {
 - `network_id` (Number) ID of the MTN Network the load balancer is on, for example `mtncloud_network.app.id`. Your tenant must own it: a network shared with you is read-only. Changing it replaces the resource.
 - `pool_id` (String) The pool it checks, for example `mtncloud_load_balancer_pool.web.id`. Changing it replaces the health monitor.
 - `timeout` (Number) Seconds to wait for an answer. Must be less than `delay`.
-- `type` (String) `HTTP`, `HTTPS`, `PING`, `TCP`, `TLS-HELLO`, `UDP-CONNECT` or `SCTP`. Changing it replaces the health monitor.
+- `type` (String) `HTTP`, `HTTPS`, `PING`, `TCP`, `TLS-HELLO`, `UDP-CONNECT` or `SCTP`. Set at create: the cloud can't change it, so a change is refused at plan time.
 
 ### Optional
 

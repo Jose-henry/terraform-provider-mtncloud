@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
+
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -65,13 +67,11 @@ func (r *shareResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 	keep := []planmodifier.String{stringplanmodifier.UseStateForUnknown()}
 	attrs := map[string]schema.Attribute{
 		"id": schema.StringAttribute{Computed: true, Description: "ID of the order that created the share.", PlanModifiers: keep},
-		"name": schema.StringAttribute{Required: true, Description: "Share (volume) name. Changing it makes a new share.",
-			// An imported share has no name in state yet: adopting one isn't a new share.
-			PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplaceIf(
-				func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-					resp.RequiresReplace = !req.StateValue.IsNull()
-				}, "Changing the name makes a new share.", "Changing the name makes a new share.")},
-			Validators: []validator.String{stringvalidator.RegexMatches(regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`), "letters, digits, `.`, `_` and `-`")}},
+		"name": schema.StringAttribute{Required: true,
+			Description: "Share (volume) name. Set at create: MTN Cloud can't rename a share, so a change is refused at plan time.",
+			// An imported share has no name in state yet: adopting one isn't a change.
+			PlanModifiers: []planmodifier.String{planmodifiers.SetAtCreateUnlessImported("share")},
+			Validators:    []validator.String{stringvalidator.RegexMatches(regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`), "letters, digits, `.`, `_` and `-`")}},
 		"quota_gb": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(10),
 			Description: "Size limit in GB. Defaults to 10. Changing it updates the share in place.",
 			Validators:  []validator.Int64{int64validator.AtLeast(1)}},

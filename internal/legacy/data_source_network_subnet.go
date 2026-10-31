@@ -2,6 +2,7 @@ package legacy
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -83,11 +84,10 @@ func dataSourceNetworkSubnetRead(ctx context.Context, d *schema.ResourceData, me
 		resp, err = client.GetNetworkSubnet(int64(id), &sdk.Request{})
 
 		if err != nil {
-			errorPrefix := "API FAILURE"
 			if resp != nil && resp.StatusCode == http.StatusNotFound {
-				errorPrefix = "API 404"
+				return notFoundByID("subnet", int64(id))
 			}
-			log.Printf("%s: %s - %v", errorPrefix, resp, err)
+			log.Printf("API FAILURE: %s - %v", resp, err)
 			return diag.FromErr(err)
 		}
 
@@ -110,7 +110,7 @@ func dataSourceNetworkSubnetRead(ctx context.Context, d *schema.ResourceData, me
 		listResult := resp.Result.(*sdk.ListNetworkSubnetsByNetworkResult)
 		networkSubnetsCount := len(*listResult.NetworkSubnets)
 		if networkSubnetsCount != 1 {
-			return diag.Errorf("found %d Network Subnets for %v", networkSubnetsCount, name)
+			return nameLookupFailed(client, "subnet", name, fmt.Sprintf("/api/networks/%d/subnets", network_id))
 		}
 		firstRecord := (*listResult.NetworkSubnets)[0]
 		networkSubnetID := firstRecord.ID

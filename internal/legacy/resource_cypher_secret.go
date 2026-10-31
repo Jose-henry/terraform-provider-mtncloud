@@ -19,8 +19,10 @@ func resourceCypherSecret() *schema.Resource {
 		Description:   "Provides an MTN Cloud Cypher secret resource: a value stored under `secret/` in Cypher, the tenant's secrets store.",
 		CreateContext: resourceCypherSecretCreate,
 		ReadContext:   resourceCypherSecretRead,
+		UpdateContext: resourceCypherSecretUpdate,
 		DeleteContext: resourceCypherSecretDelete,
 
+		CustomizeDiff: setAtCreate("Cypher secret", "key"),
 		Schema: map[string]*schema.Schema{
 			"id": {
 				Type:        schema.TypeString,
@@ -31,21 +33,18 @@ func resourceCypherSecret() *schema.Resource {
 				Type:        schema.TypeString,
 				Description: "The path of the cypher secret, excluding the secret prefix",
 				Required:    true,
-				ForceNew:    true,
 			},
 			"value": {
 				Type:        schema.TypeString,
 				Description: "The value of the cypher secret",
 				Required:    true,
 				Sensitive:   true,
-				ForceNew:    true,
 			},
 			"ttl": {
 				Type:        schema.TypeInt,
 				Description: "The time to live of the cypher secret",
 				Optional:    true,
 				Computed:    true,
-				ForceNew:    true,
 			},
 		},
 		Importer: &schema.ResourceImporter{
@@ -156,4 +155,10 @@ func resourceCypherSecretDelete(ctx context.Context, d *schema.ResourceData, met
 	log.Printf("API RESPONSE: %s", resp)
 	d.SetId("")
 	return diags
+}
+
+// resourceCypherSecretUpdate writes the key again with the new value and lease: Cypher overwrites a key in place,
+// so a new value never means a new secret (owner, 2026-10-31).
+func resourceCypherSecretUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	return resourceCypherSecretCreate(ctx, d, meta)
 }

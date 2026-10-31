@@ -82,7 +82,7 @@ func (s *orderStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.sent[id] = posted
 		}
 		item := map[string]any{"id": id, "type": map[string]any{"id": 10, "name": name, "type": "workflow"},
-			"status": "ORDERED", "statusMessage": nil, "execution": nil}
+			"status": "ORDERED", "statusMessage": nil, "execution": nil, "refType": "Workflow"}
 		s.items[id] = item
 		if s.postFail != 0 {
 			reply(s.postFail, map[string]any{"success": false, "msg": "upstream timed out"})

@@ -24,6 +24,7 @@ import (
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 	"github.com/mtn/terraform-provider-mtncloud/internal/normalize"
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
 	"github.com/mtn/terraform-provider-mtncloud/internal/validators"
 )
 
@@ -113,9 +114,9 @@ func (r *networkResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 			},
 			"cidr": schema.StringAttribute{
 				Required:      true,
-				Description:   "IPv4 address range, for example `10.0.1.0/24`. It can't change: a new range replaces the network.",
+				Description:   "IPv4 address range, for example `10.0.1.0/24`. Set at create: MTN Cloud can't change it, so a new range is refused at plan time.",
 				Validators:    []validator.String{validators.IPv4CIDR()},
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{planmodifiers.SetAtCreate("network")},
 			},
 			"gateway": schema.StringAttribute{
 				Required:    true,
@@ -260,7 +261,7 @@ func (r *networkResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if r.fillDefaults(ctx, &req, resp, "project"); resp.Diagnostics.HasError() {
 		return
 	}
-	r.planProject(ctx, req, resp)
+	r.planProject(ctx, "network", req, resp)
 	if req.State.Raw.IsNull() || resp.Diagnostics.HasError() {
 		return
 	}
@@ -277,19 +278,21 @@ func (r *networkResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 			fmt.Sprintf("Network %s is %q: MTN Cloud's network service refused one of its settings. This apply sends its "+
 				"settings again; if dhcp_range or host_routes caused it, change or remove them.", state.ID.ValueString(), state.Status.ValueString()))
 	}
-	// IPv6 on, off, or a new IPv6 range: replace, as for the IPv4 range.
-	if plan.IPv6.IsUnknown() || plan.IPv6.IsNull() != state.IPv6.IsNull() {
-		if !plan.IPv6.Equal(state.IPv6) {
-			resp.RequiresReplace.Append(path.Root("ipv6"))
-		}
+	// IPv6 on, off, or a new IPv6 range: refused, as for the IPv4 range (a value known only at apply
+	// is checked when Terraform plans again then).
+	if plan.IPv6.IsUnknown() {
+		return
+	}
+	if plan.IPv6.IsNull() != state.IPv6.IsNull() {
+		planmodifiers.RefuseChange(&resp.Diagnostics, path.Root("ipv6"), "network", state.IPv6)
 		return
 	}
 	if !plan.IPv6.IsNull() {
 		var p6, s6 ipv6Model
 		resp.Diagnostics.Append(plan.IPv6.As(ctx, &p6, objectAsOptions)...)
 		resp.Diagnostics.Append(state.IPv6.As(ctx, &s6, objectAsOptions)...)
-		if !p6.CIDR.Equal(s6.CIDR) {
-			resp.RequiresReplace.Append(path.Root("ipv6").AtName("cidr"))
+		if !p6.CIDR.IsUnknown() && !p6.CIDR.Equal(s6.CIDR) {
+			planmodifiers.RefuseChange(&resp.Diagnostics, path.Root("ipv6").AtName("cidr"), "network", s6.CIDR)
 		}
 	}
 }

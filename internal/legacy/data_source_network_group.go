@@ -66,9 +66,13 @@ func dataSourceNetworkGroupRead(ctx context.Context, d *schema.ResourceData, met
 		return diag.Errorf("Network group cannot be read without name or id")
 	}
 	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			log.Printf("API 404: %s - %v", resp, err)
-			return nil
+		if id == 0 {
+			if nd := nameLookupError(client, err, "network group", name, sdk.NetworkGroupsPath); nd != nil {
+				return nd
+			}
+		}
+		if resp != nil && resp.StatusCode == http.StatusNotFound && id != 0 {
+			return notFoundByID("network group", int64(id))
 		} else {
 			log.Printf("API FAILURE: %s - %v", resp, err)
 			return diag.FromErr(err)

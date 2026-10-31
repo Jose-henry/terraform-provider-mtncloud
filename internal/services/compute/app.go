@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
+
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -65,8 +67,8 @@ func (r *appResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				Description: "Environment by name or code, for example `Production`. Changed in place."},
 			// Optional+Computed: left out, the provider's group is used, and state keeps it.
 			"group": schema.StringAttribute{Optional: true, Computed: true,
-				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown(), stringplanmodifier.RequiresReplace()},
-				Description:   "Group, by name, for example `MTNNG_CLOUD_AZ_1`. Defaults to the provider's `group`. Changing it replaces the app."},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
+				Description:   "Group, by name, for example `MTNNG_CLOUD_AZ_1`. Defaults to the provider's `group`. Set at create: MTN Cloud can't move an app, so a change is refused at plan time."},
 			"status":       schema.StringAttribute{Computed: true, Description: "The app's status, for example `running`."},
 			"instance_ids": schema.SetAttribute{Computed: true, ElementType: types.StringType, Description: "IDs of the instances in the app."},
 		},
@@ -82,13 +84,13 @@ func (r *appResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReq
 	if req.State.Raw.IsNull() {
 		return
 	}
-	// The provider's group fills a group left out after the attribute's RequiresReplace has run, so a
-	// filled group that isn't the app's is checked here: it can't change in place.
+	// The provider's group fills a group left out, so the check is made here, after that: MTN Cloud
+	// can't move an app, and a change is refused, never a replace (owner, 2026-10-31).
 	var planned, current types.String
 	resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, path.Root("group"), &planned)...)
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("group"), &current)...)
 	if known(planned) && !strings.EqualFold(planned.ValueString(), current.ValueString()) {
-		resp.RequiresReplace.Append(path.Root("group"))
+		planmodifiers.RefuseChange(&resp.Diagnostics, path.Root("group"), "app", current)
 	} else if known(planned) {
 		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("group"), current)...)
 	}

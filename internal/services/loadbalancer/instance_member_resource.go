@@ -16,9 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -56,7 +54,6 @@ func (r *instanceMemberResource) Metadata(_ context.Context, req resource.Metada
 }
 
 func (r *instanceMemberResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	replaceBool := []planmodifier.Bool{boolplanmodifier.RequiresReplace()}
 	resp.Schema = schema.Schema{
 		Description: "An instance in a load balancer pool: every address the instance has on the load balancer's network becomes a " +
 			"member, as one group. The console keeps the group in step with the instance: when it gains or loses nodes, they are " +
@@ -74,17 +71,17 @@ func (r *instanceMemberResource) Schema(ctx context.Context, _ resource.SchemaRe
 			"instance_id": schema.Int64Attribute{Required: true, PlanModifiers: replaceInt,
 				Description: "The instance, for example `mtncloud_instance.web.id`. A new instance can take up to a minute to be accepted. " +
 					"Changing it replaces the members."},
-			"pin_address": schema.StringAttribute{Optional: true, PlanModifiers: replaceStr, Validators: []validator.String{validators.IPv4Address()},
+			"pin_address": schema.StringAttribute{Optional: true, PlanModifiers: fixedStr("member"), Validators: []validator.String{validators.IPv4Address()},
 				Description: "One of the instance's addresses on the load balancer's network, to add only that node. It stays a member " +
-					"when the instance scales, and other nodes aren't added. Leave it out for every node. Changing it replaces the member."},
-			"port": schema.Int64Attribute{Required: true, PlanModifiers: replaceInt, Validators: portValid,
-				Description: "The port the instance listens on. Changing it replaces the members."},
+					"when the instance scales, and other nodes aren't added. Leave it out for every node. Set at create: the cloud can't change it, so a change is refused at plan time."},
+			"port": schema.Int64Attribute{Required: true, PlanModifiers: fixedInt("member"), Validators: portValid,
+				Description: "The port the instance listens on. Set at create: the cloud can't change it, so a change is refused at plan time."},
 			// Optional+Computed with a default: most members share traffic equally.
-			"weight": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1), PlanModifiers: replaceInt,
+			"weight": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1),
 				Validators:  []validator.Int64{int64validator.Between(0, 256)},
-				Description: "Each member's share of the traffic, 0 to 256; 0 sends them none. Defaults to `1`. Changing it replaces the members."},
-			"backup": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), PlanModifiers: replaceBool,
-				Description: "Only send traffic here when every other member is down. Defaults to `false`. Changing it replaces the members."},
+				Description: "Each member's share of the traffic, 0 to 256; 0 sends them none. Defaults to `1`. Changed in place on each member."},
+			"backup": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false),
+				Description: "Only send traffic here when every other member is down. Defaults to `false`. Changed in place on each member."},
 			"members": schema.ListNestedAttribute{Computed: true,
 				Description: "The instance's members now, sorted by address. The list follows the instance as it scales.",
 				NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
@@ -94,7 +91,7 @@ func (r *instanceMemberResource) Schema(ctx context.Context, _ resource.SchemaRe
 			},
 		},
 		Blocks: map[string]schema.Block{
-			"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Delete: true}),
+			"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Update: true, Delete: true}),
 		},
 	}
 }
@@ -122,8 +119,18 @@ func (r *instanceMemberResource) fill(m *instanceMemberRes, lb *client.LoadBalan
 			"id": types.StringValue(x.ID), "address": types.StringValue(x.Address)}))
 	}
 	m.Members = types.ListValueMust(instanceMemberType, elems)
-	// The group was added with one port, weight and backup; its first member shows them.
+	// The group was added with one port, weight and backup; its first member shows them. Members that
+	// disagree (an update stopped part-way, or a change in the console) read as a value no
+	// configuration has (weight -1, backup null), so the next plan sets every member again.
 	m.Port, m.Weight, m.Backup = types.Int64Value(flat[0].Port), types.Int64Value(flat[0].Weight), types.BoolValue(flat[0].Backup)
+	for _, x := range flat[1:] {
+		if x.Weight != flat[0].Weight {
+			m.Weight = types.Int64Value(-1)
+		}
+		if x.Backup != flat[0].Backup {
+			m.Backup = types.BoolNull()
+		}
+	}
 	return false
 }
 
@@ -209,7 +216,7 @@ func (r *instanceMemberResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 }
 
-// Update only takes new timeouts: every argument replaces the members.
+// Update changes weight and backup on each member in place; the rest is fixed or a parent.
 func (r *instanceMemberResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state instanceMemberRes
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -218,7 +225,43 @@ func (r *instanceMemberResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 	plan.ID, plan.Members = state.ID, state.Members
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if plan.Weight.Equal(state.Weight) && plan.Backup.Equal(state.Backup) {
+		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		return
+	}
+	if !r.ready(&resp.Diagnostics) {
+		return
+	}
+	timeout, d := plan.Timeouts.Update(ctx, lbTimeout)
+	resp.Diagnostics.Append(d...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	// Weight and backup change on each member in place: the members stay in the pool throughout.
+	var members []struct {
+		ID      types.String `tfsdk:"id"`
+		Address types.String `tfsdk:"address"`
+	}
+	resp.Diagnostics.Append(state.Members.ElementsAs(ctx, &members, false)...)
+	weight, backup := plan.Weight.ValueInt64(), plan.Backup.ValueBool()
+	for _, m := range members {
+		err := r.client.UpdateLBMember(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(),
+			m.ID.ValueString(), client.LBMemberSpec{Weight: &weight, Backup: &backup})
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to change the instance's members",
+				fmt.Sprintf("Member %s (%s): %s. The members changed so far keep the new value; the next apply sets "+
+					"them all.", m.ID.ValueString(), m.Address.ValueString(), err))
+			// A fresh context: the failure may have been the timeout. State takes the members as they
+			// are, so mixed members read as a change still to make.
+			rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+			defer rcancel()
+			r.refresh(rctx, &state, &resp.State, &resp.Diagnostics)
+			return
+		}
+	}
+	r.refresh(ctx, &plan, &resp.State, &resp.Diagnostics)
 }
 
 func (r *instanceMemberResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

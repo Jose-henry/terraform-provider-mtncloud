@@ -1,6 +1,7 @@
 package client
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -231,6 +232,22 @@ func (w wireInstance) instance() *Instance {
 		} else {
 			in.Volumes = append(in.Volumes, vol)
 		}
+	}
+	// Data volumes in the order they were made: MTN Cloud lists them by display slot, and a disk
+	// added after one was removed takes the free slot (live QA 2026-10-31), so its order would move.
+	// IDs only grow, so a new disk is always last. One not saved yet (no ID) goes after them.
+	if len(in.Volumes) > 1 && in.Volumes[0].Root {
+		slices.SortStableFunc(in.Volumes[1:], func(a, b Volume) int {
+			switch {
+			case a.ID <= 0 && b.ID <= 0:
+				return 0
+			case a.ID <= 0:
+				return 1
+			case b.ID <= 0:
+				return -1
+			}
+			return cmp.Compare(a.ID, b.ID)
+		})
 	}
 	for _, i := range w.Interfaces {
 		if i.Network == nil {
@@ -543,14 +560,18 @@ func (c *Client) UpdateInstance(ctx context.Context, id int64, u InstanceUpdate)
 	return c.do(ctx, http.MethodPut, "/api/instances/"+itoa(id), nil, map[string]any{"instance": inst}, nil)
 }
 
-// ResizeInstance reconfigures an instance: a new plan restarts the VM; new volumes and network
-// cards are attached. Kept volumes and cards are sent with their IDs, so nothing is removed.
+// ResizeInstance reconfigures an instance: a new plan restarts the VM. Volumes and cards are the
+// full lists wanted: kept ones go with their IDs, new ones without, and ones left out are removed
+// (a removed volume is deleted, live QA 2026-10-31). With no cards, the cards aren't changed.
 func (c *Client) ResizeInstance(ctx context.Context, id int64, r ResizeInput) error {
 	nics := make([]map[string]any, len(r.Interfaces))
 	for i, n := range r.Interfaces {
 		nics[i] = map[string]any{"network": map[string]any{"id": "network-" + itoa(n.NetworkID)}}
 		if n.ID != "" {
 			nics[i]["id"] = n.ID
+			if v, err := strconv.ParseInt(n.ID, 10, 64); err == nil {
+				nics[i]["id"] = v // as the console sends a card's ID
+			}
 		}
 	}
 	body := map[string]any{
@@ -558,7 +579,7 @@ func (c *Client) ResizeInstance(ctx context.Context, id int64, r ResizeInput) er
 		"volumes":               volumesBody(r.Volumes),
 		"deleteOriginalVolumes": false,
 	}
-	// Only when a card is added: the platform adds every card sent without an ID (live QA
+	// Only when the cards change: the platform adds every card sent without an ID (live QA
 	// 2026-10-28), and the CLI's own resize sends none.
 	if len(nics) > 0 {
 		body["networkInterfaces"] = nics

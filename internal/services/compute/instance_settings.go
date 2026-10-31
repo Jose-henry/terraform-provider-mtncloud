@@ -136,8 +136,11 @@ func (r *instanceSettingsResource) Schema(ctx context.Context, _ resource.Schema
 		Blocks: map[string]schema.Block{
 			"data_volume": schema.ListNestedBlock{
 				Description: "The instance's data disks (not the root disk), in order. With none, disks aren't managed. With " +
-					"some, they must start with the disks the instance has (the `mtncloud_instance` data source lists them), " +
-					"and disks added at the end are attached in place. A disk can't be changed or removed here.",
+					"some, they must start with the disks the instance has (the `mtncloud_instance` data source lists them). After " +
+					"that they change as on `mtncloud_instance`, in place: a larger `size` grows that disk with its data, a block " +
+					"added at the end adds a disk, and a block removed deletes that disk only (the plan warns which). A disk " +
+					"can't shrink, be renamed or move datastore (refused at plan time). Removing every block stops managing " +
+					"the disks; it deletes none.",
 				NestedObject: schema.NestedBlockObject{Attributes: map[string]schema.Attribute{
 					// Optional+Computed: MTN Cloud names unnamed disks.
 					"name": schema.StringAttribute{Optional: true, Computed: true, Description: "Disk name.",
@@ -177,7 +180,7 @@ func (r *instanceSettingsResource) Create(ctx context.Context, req resource.Crea
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	unconfirmed := r.apply(ctx, &plan, current, inst, false, types.StringNull(), &resp.Diagnostics)
+	unconfirmed := r.apply(ctx, &plan, current, inst, false, types.StringNull(), nil, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	if unconfirmed {
 		recordUnconfirmed(ctx, resp.Private, &resp.Diagnostics)
@@ -229,8 +232,7 @@ func (r *instanceSettingsResource) Read(ctx context.Context, req resource.ReadRe
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// ModifyPlan refuses, at plan, a disk change the cloud can't make in place: only disks added at the
-// end attach in place.
+// ModifyPlan plans disk changes as mtncloud_instance does, refusing what the cloud can't do in place.
 func (r *instanceSettingsResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() {
 		return
@@ -255,9 +257,10 @@ func (r *instanceSettingsResource) ModifyPlan(ctx context.Context, req resource.
 	if len(pv) == 0 || req.State.Raw.IsNull() || len(sv) == 0 {
 		return // not managed, or adopting / starting to manage them: checked against the instance at apply
 	}
-	if msg := disksAppendOnly(pv, sv); msg != "" {
-		resp.Diagnostics.AddAttributeError(path.Root("data_volume"), "Disk can't change in place", msg)
-	}
+	// Managed: the instance resource's rules. A kept disk grows in place, a removed block deletes
+	// that disk (the plan warns which), a new one goes at the end, and a disk is never renamed,
+	// shrunk or moved.
+	planVolumes(ctx, req, plan.DataVolumes, state.DataVolumes, resp)
 }
 
 // disksAppendOnly says why planned disks aren't the current ones plus some at the end ("" when they are).
@@ -330,7 +333,10 @@ func (r *instanceSettingsResource) Update(ctx context.Context, req resource.Upda
 	if state.FloatingIPPool.IsNull() {
 		partial = fromPool(ctx, req.Private, state.FloatingIPPool, plan.FloatingIPPool, &resp.Diagnostics)
 	}
-	unconfirmed := r.apply(ctx, &plan, state, inst, pending != nil, partial, &resp.Diagnostics)
+	keptB, d := req.Private.GetKey(ctx, keptDisksKey)
+	resp.Diagnostics.Append(d...)
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, keptDisksKey, nil)...) // this plan's only: never saved
+	unconfirmed := r.apply(ctx, &plan, state, inst, pending != nil, partial, keptDisks(keptB), &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	// Every server has its address (not just one of them): nothing is still on its way.
 	// The servers there are now (read back after a scale), not before the apply.
@@ -356,7 +362,7 @@ func (r *instanceSettingsResource) Update(ctx context.Context, req resource.Upda
 //
 // restart_trigger and floating_ip_pool are only what the configuration asked for (refresh never
 // reads them), so when apply stops before their step, they keep was: the next apply tries again.
-func (r *instanceSettingsResource) apply(ctx context.Context, plan *instanceSettingsModel, was instanceSettingsModel, inst *client.Instance, pending bool, partial types.String, diags *diag.Diagnostics) (unconfirmed bool) {
+func (r *instanceSettingsResource) apply(ctx context.Context, plan *instanceSettingsModel, was instanceSettingsModel, inst *client.Instance, pending bool, partial types.String, kept []int, diags *diag.Diagnostics) (unconfirmed bool) {
 	restarted, attached := false, false
 	defer func() {
 		if !restarted {
@@ -413,20 +419,63 @@ func (r *instanceSettingsResource) apply(ctx context.Context, plan *instanceSett
 		}
 	}
 	var werr error
-	// New disks: those configured past the ones the instance has (checked to match at plan, and
-	// here for an adopt, which has no state to check against).
-	var newDisks []dataVolumeModel
-	if pv := volumesOf(ctx, plan.DataVolumes, diags); len(pv) > 0 {
-		cur := dataDisks(inst)
+	// Disks, as mtncloud_instance changes them: a kept disk grows in place, a removed block deletes
+	// that disk, a new one is added at the end. kept is the plan's decision (planVolumes); an adopt
+	// has none, so its disks must be the instance's, then new ones at the end.
+	pv, cur := volumesOf(ctx, plan.DataVolumes, diags), dataDisks(inst)
+	switch {
+	case len(pv) == 0:
+		kept = nil // not managed: the disks there are, unchanged
+	case kept == nil:
 		if msg := disksAppendOnly(pv, cur); msg != "" {
 			diags.AddAttributeError(path.Root("data_volume"), "Disk can't change in place", msg)
 			r.settle(ctx, plan, inst, nil, diags)
 			return
 		}
-		newDisks = pv[len(cur):]
+		kept = make([]int, len(pv))
+		for i := range kept {
+			if kept[i] = i; i >= len(cur) {
+				kept[i] = -1
+			}
+		}
+	default:
+		if err := staleDisks(ctx, inst, was.DataVolumes, diags); err != nil {
+			diags.AddError("Instance changed since the plan", err.Error())
+			r.settle(ctx, plan, inst, nil, diags)
+			return
+		}
+	}
+	disks := make([]client.VolumeSpec, 0, len(pv))
+	for i, d := range pv {
+		spec := client.VolumeSpec{Size: d.Size.ValueInt64()}
+		if known(d.Name) {
+			spec.Name = d.Name.ValueString()
+		}
+		if kept != nil && kept[i] < 0 { // a new disk: its datastore, by name
+			ds, ok := (&instanceResource{r.base}).datastoreID(ctx, p, inst.ProjectID, d.Datastore, diags)
+			if !ok {
+				r.settle(ctx, plan, inst, nil, diags)
+				return
+			}
+			spec.DatastoreID = ds
+		}
+		disks = append(disks, spec)
+	}
+	if len(pv) == 0 {
+		for _, v := range inst.Volumes {
+			if !v.Root {
+				disks = append(disks, spec(v))
+			}
+		}
 	}
 	resizePlan := set(plan.Plan) && !strings.EqualFold(plan.Plan.ValueString(), inst.PlanName)
-	if resizePlan || len(newDisks) > 0 {
+	rc, err := buildReconfigure(client.InstanceInput{PlanID: inst.PlanID, Volumes: disks}, inst, nil, kept)
+	if err != nil {
+		diags.AddAttributeError(path.Root("data_volume"), "Unable to change the instance's disks", err.Error())
+		r.settle(ctx, plan, inst, nil, diags)
+		return
+	}
+	if resizePlan || rc.needed {
 		planID := inst.PlanID
 		if resizePlan {
 			image, err := r.client.ImageByName(ctx, inst.ImageName)
@@ -443,35 +492,19 @@ func (r *instanceSettingsResource) apply(ctx context.Context, plan *instanceSett
 			}
 			planID = pl.ID
 		}
-		// Kept volumes go with their IDs; new disks, at the end, without.
-		resize := client.ResizeInput{PlanID: planID}
-		for _, v := range inst.Volumes {
-			resize.Volumes = append(resize.Volumes, client.VolumeSpec{ID: v.ID, Root: v.Root, Name: v.Name, Size: v.Size, DatastoreID: v.DatastoreID})
-		}
-		for _, d := range newDisks {
-			spec := client.VolumeSpec{Size: d.Size.ValueInt64()}
-			if known(d.Name) {
-				spec.Name = d.Name.ValueString()
-			}
-			ds, ok := (&instanceResource{r.base}).datastoreID(ctx, p, inst.ProjectID, d.Datastore, diags)
-			if !ok {
-				r.settle(ctx, plan, inst, nil, diags)
-				return
-			}
-			spec.DatastoreID = ds
-			resize.Volumes = append(resize.Volumes, spec)
-		}
-		if err := r.client.ResizeInstance(ctx, id, resize); err != nil {
+		// Kept volumes go with their IDs (grown ones with the new size); new disks, at the end, without.
+		rc.input.PlanID, rc.want.PlanID = planID, planID
+		if err := r.client.ResizeInstance(ctx, id, rc.input); err != nil {
 			diags.AddError("Unable to reconfigure instance", err.Error())
 			r.settle(ctx, plan, inst, nil, diags)
 			return
 		}
-		got, err := r.client.WaitForResize(ctx, id, planID, len(resize.Volumes), 0)
+		got, err := r.client.WaitForReconfigure(ctx, id, rc.want)
 		if errors.Is(err, context.DeadlineExceeded) && got != nil {
 			diags.AddAttributeError(path.Root("plan"), "Resize not applied",
 				fmt.Sprintf("MTN Cloud accepted the change to instance %d, but by the timeout it was on plan %q (asked for %q) "+
 					"with %d of %d disks, status %q. Check it in the console, then apply again, or raise `timeouts { update = \"60m\" }`.",
-					id, got.PlanName, plan.Plan.ValueString(), len(got.Volumes), len(resize.Volumes), got.Status))
+					id, got.PlanName, plan.Plan.ValueString(), len(got.Volumes), rc.want.Volumes, got.Status))
 			err = nil
 		}
 		if got != nil {
@@ -607,11 +640,13 @@ func (r *instanceSettingsResource) refresh(ctx context.Context, m *instanceSetti
 		vols := dataDisks(in)
 		if p, err := r.client.PlacementForGroup(ctx, in.GroupName); err == nil {
 			for i := range vols {
-				var was types.String
-				if i < len(prior) {
-					was = prior[i].Datastore
+				// A datastore the configuration leaves out stays unset (Optional, not Computed): filled
+				// from the API it would differ from every plan.
+				if i >= len(prior) || prior[i].Datastore.IsNull() || prior[i].Datastore.IsUnknown() {
+					vols[i].Datastore = types.StringNull()
+					continue
 				}
-				vols[i].Datastore = (&instanceResource{r.base}).datastoreName(ctx, p, in.ProjectID, in.Volumes[dataIndex(in, i)].DatastoreID, was)
+				vols[i].Datastore = (&instanceResource{r.base}).datastoreName(ctx, p, in.ProjectID, in.Volumes[dataIndex(in, i)].DatastoreID, prior[i].Datastore)
 			}
 		}
 		m.DataVolumes, _ = types.ListValueFrom(ctx, dataVolumeType, vols)

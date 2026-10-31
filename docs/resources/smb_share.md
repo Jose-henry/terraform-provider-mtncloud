@@ -31,7 +31,7 @@ resource "mtncloud_smb_share" "files" {
 
 ### Required
 
-- `name` (String) Share (volume) name. Changing it makes a new share.
+- `name` (String) Share (volume) name. Set at create: MTN Cloud can't rename a share, so a change is refused at plan time.
 
 ### Optional
 

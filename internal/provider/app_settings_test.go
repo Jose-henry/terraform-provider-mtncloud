@@ -401,8 +401,8 @@ func TestApp_DefaultGroup(t *testing.T) {
 					a["group"] = map[string]any{"name": "OTHER_GROUP"}
 				}
 				s.mu.Unlock()
-			}, Config: cfg, PlanOnly: true, ExpectNonEmptyPlan: true, ConfigPlanChecks: resource.ConfigPlanChecks{
-				PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectResourceAction("mtncloud_app.shop", plancheck.ResourceActionReplace)}}},
+			}, Config: cfg, PlanOnly: true, // moved in the console: MTN Cloud can't move it back, so refused, never replaced
+				ExpectError: regexp.MustCompile(`group can't change`)},
 		},
 	})
 }

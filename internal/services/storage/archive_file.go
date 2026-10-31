@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -106,7 +108,7 @@ func (r *archiveFileResource) Schema(_ context.Context, _ resource.SchemaRequest
 					stringvalidator.RegexMatches(archiveFilePath, "must be a path such as `docs/report.pdf`, with no `/` at either end and no empty part"),
 					noDotParts{},
 				},
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{planmodifiers.SetAtCreate("archive file")},
 			},
 			"content":        schema.StringAttribute{Description: "The content, as text. Set one of `content`, `content_base64` and `source`.", Optional: true, Validators: []validator.String{one}},
 			"content_base64": schema.StringAttribute{Description: "The content, base64-encoded, for binary data.", Optional: true},

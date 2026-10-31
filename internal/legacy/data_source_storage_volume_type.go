@@ -64,9 +64,13 @@ func dataSourceStorageTypeRead(ctx context.Context, d *schema.ResourceData, meta
 		return diag.Errorf("Storage volume type cannot be read without name or id")
 	}
 	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			log.Printf("API 404: %s - %v", resp, err)
-			return nil
+		if id == 0 {
+			if nd := nameLookupError(client, err, "storage volume type", name, sdk.StorageVolumeTypesPath); nd != nil {
+				return nd
+			}
+		}
+		if resp != nil && resp.StatusCode == http.StatusNotFound && id != 0 {
+			return notFoundByID("storage volume type", int64(id))
 		} else {
 			log.Printf("API FAILURE: %s - %v", resp, err)
 			return diag.FromErr(err)

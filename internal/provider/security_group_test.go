@@ -299,11 +299,9 @@ func TestSecurityGroup_Lifecycle(t *testing.T) {
 				}},
 			},
 			{
-				// Another project replaces the group.
-				Config: sgConfig(f, strings.Replace(webRulesChanged, `"web-prod-Acme"`, `"data"`, 1)),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_security_group.web", plancheck.ResourceActionDestroyBeforeCreate),
-				}},
+				// Another project is refused: MTN Cloud can't move a security group.
+				Config:      sgConfig(f, strings.Replace(webRulesChanged, `"web-prod-Acme"`, `"data"`, 1)),
+				ExpectError: regexp.MustCompile(`project can't change`),
 			},
 		},
 	})

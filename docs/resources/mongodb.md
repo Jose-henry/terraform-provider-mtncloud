@@ -2,12 +2,12 @@
 page_title: "mtncloud_mongodb Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A MongoDB server on its own VM. Ordered from MTN Cloud's catalog (MTN MongoDB). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN MongoDB order form requires and allows (read 2026-10-31); every plan checks the live form.
+  A MongoDB server on its own VM. Ordered from MTN Cloud's catalog (MTN MongoDB). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN MongoDB order form requires and allows (read 2026-10-31); every plan checks the live form.
 ---
 
 # mtncloud_mongodb
 
-A MongoDB server on its own VM. Ordered from MTN Cloud's catalog (MTN MongoDB). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN MongoDB order form requires and allows (read 2026-10-31); every plan checks the live form.
+A MongoDB server on its own VM. Ordered from MTN Cloud's catalog (MTN MongoDB). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN MongoDB order form requires and allows (read 2026-10-31); every plan checks the live form.
 
 ## Example Usage
 
@@ -120,10 +120,13 @@ exactly as ordered. The first apply after an import records them, finds the inst
   finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
   they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
   message; the resource is then tainted, so the next apply deletes it and orders again.
-- **A changed input orders again.** An order can't be edited, so changing any input plans a
-  replace: what the order made is deleted, then the item is ordered again. `terraform apply
-  -replace` does the same on purpose, and an instance that fails later also plans a replace. To
-  stop a plan from deleting a server by accident, add `lifecycle { prevent_destroy = true }`.
+- **Placed once: a changed input is refused.** An order can't be edited, and Terraform won't
+  delete what an order made to order it again, so a changed input stops the plan with
+  `<input> can't change` and the value to set back. The plan, labels, security groups, floating IP
+  and data disks of the instances it made change in place through `mtncloud_instance_settings`
+  (the error says how). To order again on purpose, run `terraform apply -replace`; an instance
+  that fails later also plans a replace. To stop a plan from deleting a server by accident, add
+  `lifecycle { prevent_destroy = true }`.
 - **Checked against the live order form.** MTN can change its order forms, so each plan checks
   the order against the form as it is now: the fields it requires (some only while another field
   is set), the fields it hides and fills itself, the values it pre-fills, and the limits its help

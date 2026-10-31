@@ -59,7 +59,11 @@ func newCypherAPI(t *testing.T) (*cypherStore, string) {
 				s.createdByRead++
 				s.keys[key] = "created-by-read"
 			}
-			reply(map[string]any{"success": true, "data": s.keys[key], "lease_duration": 0})
+			lease := 0
+			if t := s.ttl[key]; t != "" && t != "0" {
+				lease = 3600
+			}
+			reply(map[string]any{"success": true, "data": s.keys[key], "lease_duration": lease})
 		case http.MethodDelete:
 			if _, ok := s.keys[key]; !ok {
 				w.WriteHeader(http.StatusNotFound)
@@ -119,12 +123,12 @@ resource "mtncloud_cypher_password" "db" {
 				}},
 			},
 			{
-				// A longer password is a new one.
-				Config: strings.Replace(cfg, `ttl  = "8h"`, "ttl = \"8h\"\n  length = 32", 1),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_cypher_password.db", plancheck.ResourceActionDestroyBeforeCreate),
-				}},
+				// A longer password would be a new one under whatever uses this one: refused, never
+				// replaced (owner, 2026-10-31).
+				Config:      strings.Replace(cfg, `ttl  = "8h"`, "ttl = \"8h\"\n  length = 32", 1),
+				ExpectError: regexp.MustCompile(`length can't change`),
 			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 		},
 		CheckDestroy: func(*terraform.State) error {
 			s.mu.Lock()
@@ -160,6 +164,9 @@ resource "mtncloud_cypher_uuid" "mac" {
 				},
 			},
 			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// Made without a lease: a ttl added later would change nothing in MTN Cloud, so it is refused.
+			{Config: strings.Replace(cfg, "bits = 128\n", "bits = 128\n  ttl  = \"8h\"\n", 1), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`ttl can't change`)},
 			{Config: cfg, ResourceName: "mtncloud_cypher_key.app", ImportState: true, ImportStateVerify: true},
 			// An import block with ttl in the configuration: the lease can't be read back, so the
 			// plan records it in state (an update with no API call), and never makes a new key.

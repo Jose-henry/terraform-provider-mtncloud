@@ -24,6 +24,7 @@ import (
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 	"github.com/mtn/terraform-provider-mtncloud/internal/normalize"
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
 )
 
 // A router is usually "ok" within seconds (captured 2026-10-27); these bound a stuck one.
@@ -68,9 +69,9 @@ func (r *routerResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 			},
 			"name": schema.StringAttribute{
 				Required:      true,
-				Description:   "Name of the router. MTN Cloud doesn't allow renaming a router: a new name replaces it.",
+				Description:   "Name of the router. Set at create: MTN Cloud can't rename a router, so a new name is refused at plan time.",
 				Validators:    []validator.String{stringvalidator.LengthBetween(1, 255)},
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{planmodifiers.SetAtCreate("router")},
 			},
 			"description": schema.StringAttribute{
 				Optional:    true,
@@ -129,7 +130,7 @@ func (r *routerResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 	if r.fillDefaults(ctx, &req, resp, "project"); resp.Diagnostics.HasError() {
 		return
 	}
-	r.planProject(ctx, req, resp)
+	r.planProject(ctx, "router", req, resp)
 	var plan routerModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {

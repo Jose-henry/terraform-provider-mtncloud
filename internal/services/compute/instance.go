@@ -25,7 +25,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -34,6 +33,7 @@ import (
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 	"github.com/mtn/terraform-provider-mtncloud/internal/normalize"
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
 )
 
 // Provisioning a VM takes minutes; these bound a stuck one.
@@ -152,27 +152,27 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			"hostname": schema.StringAttribute{
 				Optional: true, Computed: true,
 				Description: "Hostname set inside the VM. Left out, MTN Cloud derives it from the name or your hostname " +
-					"template. Changing it replaces the instance.",
+					"template. Set at create: MTN Cloud can't change it, so a change is refused at plan time.",
 				Validators: []validator.String{stringvalidator.RegexMatches(hostname,
 					"must be letters, digits and hyphens, at most 63 characters, not starting or ending with a hyphen")},
-				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown(), stringplanmodifier.RequiresReplaceIfConfigured()},
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown(), planmodifiers.SetAtCreate("instance")},
 			},
 			"description": schema.StringAttribute{Optional: true, Description: "Description of the instance."},
 			// Optional+Computed (group and project): left out, the provider's value is used, and state keeps it.
 			"group": schema.StringAttribute{
 				Optional: true, Computed: true,
 				Description: "Group the instance is provisioned into, by name, for example `MTNNG_CLOUD_AZ_1`. Defaults to the " +
-					"provider's `group`. Changing it, or that default when you rely on it, replaces the instance.",
+					"provider's `group`. Set at create: changing it, or that default when you rely on it, is refused at plan time.",
 			},
 			"project": schema.StringAttribute{
 				Optional: true, Computed: true,
 				Description: "Project the instance runs in, by name (for example `web-prod`; the full name with the tenant " +
-					"suffix also works). Defaults to the provider's `project`. Changing it to another project, or that default when you rely on it, replaces the instance.",
+					"suffix also works). Defaults to the provider's `project`. Set at create: moving to another project, or changing that default when you rely on it, is refused at plan time.",
 			},
 			"image": schema.StringAttribute{
 				Required: true,
 				Description: "Operating system image, by name (`MTN Ubuntu Server 24.04.3LTS`) or code (`MTN-U24.04LTS`); " +
-					"the `mtncloud_images` data source lists them. Changing it replaces the instance.",
+					"the `mtncloud_images` data source lists them. Set at create: MTN Cloud can't change it, so a change is refused at plan time.",
 			},
 			"plan": schema.StringAttribute{
 				Required: true,
@@ -181,10 +181,11 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			},
 			"networks": schema.ListAttribute{
 				Required: true, ElementType: types.StringType,
-				Description: "IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`. The first is the " +
-					"primary network. Any change replaces the instance: MTN Cloud doesn't report an instance's network card IDs, " +
-					"so a network can't be added to a running instance safely. Create the networks first: an ID known at plan " +
-					"time must be a network in the instance's project, or the plan fails.",
+				Description: "IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`, one card each. The " +
+					"first is the primary network (eth0): it is set at create, and a change is refused at plan time. Networks added at the end get a new " +
+					"card in place, and removing one removes its card and address in place; a network moved within the list is " +
+					"removed and added again at the end. On an instance with several servers (`scale_factor`) any change is refused " +
+					"(bring it to 1 first). An ID known at plan time must be a network in the instance's project, or the plan fails.",
 				Validators: []validator.List{
 					listvalidator.SizeAtLeast(1),
 					listvalidator.UniqueValues(),
@@ -207,7 +208,7 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			"datastore": schema.StringAttribute{
 				Optional: true,
 				Description: "Datastore of the root volume, by name, for example `__DEFAULT__` (the `mtncloud_datastores` " +
-					"data source lists them). Left out, the project's default. Changing it replaces the instance.",
+					"data source lists them). Left out, the project's default. Set at create: MTN Cloud can't change it, so a change is refused at plan time.",
 			},
 			"environment": schema.StringAttribute{
 				Optional:    true,
@@ -225,14 +226,14 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Optional: true, Sensitive: true, ElementType: types.StringType,
 				Description: "Environment variables for the instance's automation, name to value. Sensitive: values are " +
 					"hidden in plans, but stored in state. The variables MTN Cloud adds itself (address, host, ports) are " +
-					"not shown. Changing them replaces the instance.",
-				PlanModifiers: []planmodifier.Map{mapplanmodifier.RequiresReplace()},
+					"not shown. Set at create: a change is refused at plan time.",
+				PlanModifiers: []planmodifier.Map{planmodifiers.SetAtCreateSensitive("instance")},
 			},
 			// Optional+Computed: MTN Cloud may give the instance its network's domain when none is set.
 			"domain": schema.StringAttribute{
 				Optional: true, Computed: true,
 				Description: "Network domain the instance joins, by name, for example `example.com`. Left out, MTN Cloud " +
-					"may apply the network's domain, shown here. Changing it replaces the instance.",
+					"may apply the network's domain, shown here. Set at create: MTN Cloud can't change it, so a change is refused at plan time.",
 				PlanModifiers: keep,
 			},
 			// Optional+Computed: left out, it follows the primary network's router at create (owner,
@@ -244,14 +245,14 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 					"stays \"provisioning\" (finalizing) until the create timeout. Left out, it is `true` when the primary " +
 					"network is on such a router and `false` otherwise, decided when the instance is created (the plan shows " +
 					"it as known after apply) and kept after. " +
-					"Changing it replaces the instance.",
-				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown(), boolplanmodifier.RequiresReplace()},
+					"Set at create: MTN Cloud can't change it, so a change is refused at plan time.",
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown(), planmodifiers.SetAtCreate("instance")},
 			},
 			"create_user": schema.BoolAttribute{
 				Optional: true, Computed: true, Default: booldefault.StaticBool(true),
 				Description: "Create your user (from your Linux or Windows user settings) on the VM. Defaults to `true`. " +
-					"Changing it replaces the instance.",
-				PlanModifiers: []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
+					"Set at create: MTN Cloud can't change it, so a change is refused at plan time.",
+				PlanModifiers: []planmodifier.Bool{planmodifiers.SetAtCreate("instance")},
 			},
 			"scale_factor": schema.Int64Attribute{
 				Optional: true, Computed: true, Default: int64default.StaticInt64(1),
@@ -312,13 +313,17 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 		},
 		Blocks: map[string]schema.Block{
 			"data_volume": schema.ListNestedBlock{
-				Description: "Extra disks, in order. Volumes added at the end are attached in place; changing or removing one " +
-					"replaces the instance.",
+				Description: "Extra disks, in the order they were made, all changed in place: a block added attaches a new " +
+					"disk, a larger `size` grows that disk with its data kept, and a block removed **deletes that disk with its " +
+					"data** (the plan warns which). A disk can't shrink, change datastore or be renamed (refused at plan time). A block " +
+					"with a `name` is that disk wherever it is listed; one without is the disk at its position, so to remove a " +
+					"disk from the middle of the list, give the disks names. The root disk is `root_volume_size`.",
 				NestedObject: schema.NestedBlockObject{Attributes: map[string]schema.Attribute{
-					// Optional+Computed: MTN Cloud names unnamed volumes.
-					"name": schema.StringAttribute{Optional: true, Computed: true, Description: "Volume name.",
+					// Optional+Computed: left out, MTN Cloud names it at create, and the provider names a disk added later.
+					"name": schema.StringAttribute{Optional: true, Computed: true,
+						Description:   "Disk name. Left out, the next free `data-<n>`. It is how the disk is told apart from the others, and can't change once the disk exists.",
 						PlanModifiers: keep},
-					"size": schema.Int64Attribute{Required: true, Description: "Size in GB.",
+					"size": schema.Int64Attribute{Required: true, Description: "Size in GB. A larger size grows the disk in place; it can't shrink.",
 						Validators: []validator.Int64{int64validator.AtLeast(1)}},
 					"datastore": schema.StringAttribute{Optional: true, Description: "Datastore, by name. Left out, the project's default."},
 				}},
@@ -340,7 +345,7 @@ func usageRange(what string) schema.SingleNestedAttribute {
 	}
 }
 
-// ModifyPlan checks names at plan time (rule 17) and decides what a change replaces. The API can't
+// ModifyPlan checks names at plan time (rule 17) and decides what a change does. The API can't
 // change the primary network, an existing disk or the root size; changing a reference that names
 // the same thing ("web-prod" vs "web-prod-Acme", an image's name vs its code) is no change at all.
 func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
@@ -363,17 +368,11 @@ func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		r.planChanges(ctx, plan, state, resp)
+		r.planChanges(ctx, req, plan, state, resp)
 		defer r.planComputed(ctx, req, resp, state)
 	}
 	if !allKnown(plan.Group, plan.Project, plan.Image) {
-		// Known only at apply: on an existing instance, assume a different one, which replaces it.
-		for at, v := range map[string]types.String{"group": plan.Group, "project": plan.Project, "image": plan.Image} {
-			if hasState && v.IsUnknown() {
-				resp.RequiresReplace.Append(path.Root(at))
-			}
-		}
-		return // names are checked at apply
+		return // names are checked when Terraform plans again at apply, and a change refused then
 	}
 	p, err := r.client.PlacementForGroup(ctx, plan.Group.ValueString())
 	if err != nil {
@@ -408,13 +407,14 @@ func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 		return
 	}
 	// The same thing named another way (case, a code for a name, a short project name) is no change:
-	// the state's spelling stays. A real change of these replaces the instance.
-	same := func(at string, equal bool, stateValue types.String, replace bool) {
+	// the state's spelling stays. A real change of one MTN Cloud can't make is refused, never a
+	// replace (owner, 2026-10-31).
+	same := func(at string, equal bool, stateValue types.String, setAtCreate bool) {
 		switch {
 		case equal:
 			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root(at), stateValue)...)
-		case replace:
-			resp.RequiresReplace.Append(path.Root(at))
+		case setAtCreate:
+			planmodifiers.RefuseChange(&resp.Diagnostics, path.Root(at), "instance", stateValue)
 		}
 	}
 	same("group", strings.EqualFold(plan.Group.ValueString(), state.Group.ValueString()), state.Group, true)
@@ -456,29 +456,16 @@ func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 
 // planChanges decides what the API can't change in place: the root size, existing networks and
 // volumes. It needs no names resolved, so it also runs when a reference is unknown until apply.
-func (r *instanceResource) planChanges(ctx context.Context, plan, state instanceModel, resp *resource.ModifyPlanResponse) {
+func (r *instanceResource) planChanges(ctx context.Context, req resource.ModifyPlanRequest, plan, state instanceModel, resp *resource.ModifyPlanResponse) {
 	if v := plan.RootVolumeSize; !v.IsUnknown() && !v.IsNull() && v.ValueInt64() != state.RootVolumeSize.ValueInt64() {
 		resp.Diagnostics.AddAttributeError(path.Root("root_volume_size"), "Root volume can't be resized",
 			fmt.Sprintf("MTN Cloud can't change the root volume (%d GB) of an existing instance. Add a data_volume instead, "+
 				"or replace the instance with `terraform apply -replace=<address>`.", state.RootVolumeSize.ValueInt64()))
 	}
-	// Any change: MTN Cloud reports an instance's cards without IDs, and a resize that lists a card
-	// without its ID adds it again, so a network can't be added in place (seen live, 2026-10-28).
-	if !plan.Networks.Equal(state.Networks) {
-		resp.RequiresReplace.Append(path.Root("networks"))
-	}
-	if !r.volumesAppendOnly(ctx, plan, state, &resp.Diagnostics) {
-		resp.RequiresReplace.Append(path.Root("data_volume"))
-	}
-	// The framework leaves the name of an added volume null, but MTN Cloud names it: unknown.
-	vols := volumesOf(ctx, plan.DataVolumes, &resp.Diagnostics)
-	for i := len(volumesOf(ctx, state.DataVolumes, &resp.Diagnostics)); i < len(vols); i++ {
-		if vols[i].Name.IsNull() {
-			at := path.Root("data_volume").AtListIndex(i).AtName("name")
-			resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, at, types.StringUnknown())...)
-		}
-	}
-	// A new hostname replaces the instance (RequiresReplaceIfConfigured); a removed one keeps it.
+	// Cards and disks are added and removed in place (instance_reconfigure.go).
+	planNetworks(ctx, plan, state, resp)
+	planVolumes(ctx, req, plan.DataVolumes, state.DataVolumes, resp)
+	// A new hostname is refused (SetAtCreate); a removed one keeps it.
 	if plan.Hostname.IsNull() {
 		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("hostname"), state.Hostname)...)
 	}
@@ -629,9 +616,9 @@ func (r *instanceResource) checkNetworks(ctx context.Context, plan, state instan
 }
 
 // checkPoolRouter checks, before anything is created, that a floating IP can be attached from the
-// pool: the primary network must be on an MTN Router whose external network is that pool. A router
-// on another external network is an error. No router is only a warning, as the router may be made
-// in the same apply; a network not known yet (made in the same apply) isn't checked.
+// pool: the primary network must be on an MTN Router whose external network is that pool. Both a
+// router on another external network and no router are warnings, as the router may be changed or
+// made in the same apply (B-020; the apply fails fast once the VM runs); a network not known yet (made in the same apply) isn't checked.
 func (r *instanceResource) checkPoolRouter(ctx context.Context, m instanceModel, diags *diag.Diagnostics) {
 	if m.Networks.IsUnknown() || m.Networks.IsNull() || len(m.Networks.Elements()) == 0 {
 		return
@@ -647,31 +634,11 @@ func (r *instanceResource) checkPoolRouter(ctx context.Context, m instanceModel,
 	msg, isErr := r.client.PoolRouterProblem(ctx, netID, m.FloatingIPPool.ValueString())
 	switch {
 	case msg == "":
-	case isErr:
-		diags.AddAttributeError(path.Root("floating_ip_pool"), "Floating IP pool doesn't match the router", msg)
+	case isErr: // a warning, not an error: the router may be moved to this pool in the same apply (B-020)
+		diags.AddAttributeWarning(path.Root("floating_ip_pool"), "Floating IP pool doesn't match the router", msg)
 	default:
 		diags.AddAttributeWarning(path.Root("floating_ip_pool"), "Floating IP pool not checked against a router", msg)
 	}
-}
-
-// volumesAppendOnly reports whether existing data volumes are unchanged (new ones may follow). An
-// unset name or datastore means "whatever it is now".
-func (r *instanceResource) volumesAppendOnly(ctx context.Context, plan, state instanceModel, diags *diag.Diagnostics) bool {
-	if plan.DataVolumes.IsUnknown() {
-		return false
-	}
-	p, s := volumesOf(ctx, plan.DataVolumes, diags), volumesOf(ctx, state.DataVolumes, diags)
-	if len(p) < len(s) {
-		return false
-	}
-	for i := range s {
-		if !p[i].Size.Equal(s[i].Size) ||
-			(known(p[i].Name) && p[i].Name.ValueString() != s[i].Name.ValueString()) ||
-			!sameName(p[i].Datastore, s[i].Datastore) {
-			return false
-		}
-	}
-	return true
 }
 
 func isWindows(t client.InstanceType) bool {
@@ -1120,19 +1087,33 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 			return
 		}
 	}
-	resized := false
-	if current.PlanID != in.PlanID || len(in.Volumes) > len(current.Volumes) {
-		resize := client.ResizeInput{PlanID: in.PlanID}
-		// Existing volumes and cards go with their IDs, new ones (at the end) without.
-		for i, v := range in.Volumes {
-			if i < len(current.Volumes) {
-				cur := current.Volumes[i]
-				v = client.VolumeSpec{ID: cur.ID, Root: cur.Root, Name: cur.Name, Size: cur.Size, DatastoreID: cur.DatastoreID}
-			}
-			resize.Volumes = append(resize.Volumes, v)
+	// Cards are sent only when the networks change, each kept one with its ID: a card sent without
+	// its ID is added again (live QA 2026-10-28).
+	if err := staleState(ctx, current, state, &resp.Diagnostics); err != nil {
+		resp.Diagnostics.AddError("Instance changed since the plan", err.Error())
+		return
+	}
+	var cards []client.Card
+	if !plan.Networks.Equal(state.Networks) {
+		if cards, err = r.client.InstanceCards(ctx, id); err == nil {
+			cards, err = inStateOrder(cards, current.Interfaces)
 		}
-		// No cards are sent: a card sent without its ID is added again, and networks never change in place.
-		if err := r.client.ResizeInstance(ctx, id, resize); err != nil {
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to read the instance's network cards", err.Error())
+			return
+		}
+	}
+	kept, d := req.Private.GetKey(ctx, keptDisksKey)
+	resp.Diagnostics.Append(d...)
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, keptDisksKey, nil)...) // this plan's only: never saved
+	rc, err := buildReconfigure(in, current, cards, keptDisks(kept))
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to change the instance's disks", err.Error())
+		return
+	}
+	resized := false
+	if rc.needed {
+		if err := r.client.ResizeInstance(ctx, id, rc.input); err != nil {
 			resp.Diagnostics.AddError("Unable to reconfigure instance", err.Error())
 			return
 		}
@@ -1140,7 +1121,7 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 	var inst *client.Instance
 	if resized {
-		inst, err = r.client.WaitForResize(ctx, id, in.PlanID, len(in.Volumes), 0)
+		inst, err = r.client.WaitForReconfigure(ctx, id, rc.want)
 		if errors.Is(err, context.DeadlineExceeded) && inst != nil {
 			// Accepted, but not applied (B-016): say where it was left. State takes the instance as
 			// it is, so the next plan shows the resize again.
@@ -1148,7 +1129,7 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 				fmt.Sprintf("MTN Cloud accepted the resize of instance %d, but by the update timeout it was still on plan %q "+
 					"(asked for %q), status %q, with %d of %d disks. Check it in the console, then apply again, or raise "+
 					"`timeouts { update = \"60m\" }` if it is only slow.", id, inst.PlanName, plan.Plan.ValueString(), inst.Status,
-					len(inst.Volumes), len(in.Volumes)))
+					len(inst.Volumes), rc.want.Volumes))
 			err = nil
 		}
 	} else {

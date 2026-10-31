@@ -23,6 +23,7 @@ func resourceCredential() *schema.Resource {
 		UpdateContext: resourceCredentialUpdate,
 		DeleteContext: resourceCredentialDelete,
 
+		CustomizeDiff: setAtCreate("credential", "credential_store_integration_id", "type"),
 		Schema: map[string]*schema.Schema{
 			"id": {
 				Type:        schema.TypeString,
@@ -33,13 +34,11 @@ func resourceCredential() *schema.Resource {
 				Type:        schema.TypeInt,
 				Description: "The ID of the credential store integration",
 				Optional:    true,
-				ForceNew:    true,
 			},
 			"type": {
 				Type:         schema.TypeString,
 				Description:  "The credential type (access-key-secret, api-key, client-id-secret, email-private-key, tenant-username-keypair, username-password, username-api-key, username-keypair, username-password-keypair)",
 				Required:     true,
-				ForceNew:     true,
 				ValidateFunc: validation.StringInSlice([]string{"access-key-secret", "api-key", "client-id-secret", "email-private-key", "tenant-username-keypair", "username-password", "username-api-key", "username-keypair", "username-password-keypair"}, false),
 			},
 			"name": {

@@ -64,7 +64,7 @@ resource "mtncloud_instance_settings" "db" {
 
 ### Optional
 
-- `data_volume` (Block List) The instance's data disks (not the root disk), in order. With none, disks aren't managed. With some, they must start with the disks the instance has (the `mtncloud_instance` data source lists them), and disks added at the end are attached in place. A disk can't be changed or removed here. (see [below for nested schema](#nestedblock--data_volume))
+- `data_volume` (Block List) The instance's data disks (not the root disk), in order. With none, disks aren't managed. With some, they must start with the disks the instance has (the `mtncloud_instance` data source lists them). After that they change as on `mtncloud_instance`, in place: a larger `size` grows that disk with its data, a block added at the end adds a disk, and a block removed deletes that disk only (the plan warns which). A disk can't shrink, be renamed or move datastore (refused at plan time). Removing every block stops managing the disks; it deletes none. (see [below for nested schema](#nestedblock--data_volume))
 - `description` (String) Description shown in the console. Changed in place.
 - `floating_ip_pool` (String) Give the instance a floating (public) IP from this pool, for example `public-network-02`, one per server. An address it already has is kept. Changing the pool releases the old addresses and attaches new ones; an address released in the console is attached again. Left out, floating IPs aren't managed (removing it keeps the address). Needs the instance's network to be on an MTN Router with an external network.
 - `labels` (Set of String) Labels. Set, they replace the instance's labels in place; `[]` clears them.

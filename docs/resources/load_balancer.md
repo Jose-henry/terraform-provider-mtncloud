@@ -41,8 +41,8 @@ output "vip" {
 - `enabled` (Boolean) Whether the load balancer passes traffic. Defaults to `true`. **`false` takes the whole load balancer out of service**: every listener stops passing traffic until it is set back to `true`.
 - `tags` (Set of String) Tags on the load balancer, at most 50.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `vip_address` (String) The VIP's address on the subnet. Left unset, the cloud picks a free one. Changing it replaces the load balancer.
-- `vip_subnet_id` (String) The cloud ID of the subnet the VIP is on. Defaults to the network's subnet. Changing it replaces the load balancer.
+- `vip_address` (String) The VIP's address on the subnet. Left unset, the cloud picks a free one. Set at create: the cloud can't change it, so a change is refused at plan time.
+- `vip_subnet_id` (String) The cloud ID of the subnet the VIP is on. Defaults to the network's subnet. Set at create: the cloud can't change it, so a change is refused at plan time.
 
 ### Read-Only
 

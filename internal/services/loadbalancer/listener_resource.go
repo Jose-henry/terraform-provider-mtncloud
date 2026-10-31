@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -72,11 +73,11 @@ func (r *listenerResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			"load_balancer_id": lbIDAttr(),
 			"name":             nameAttr(listenerKind),
 			"description":      descriptionAttr(),
-			"protocol": schema.StringAttribute{Required: true, PlanModifiers: replaceStr,
+			"protocol": schema.StringAttribute{Required: true, PlanModifiers: fixedStr(listenerKind),
 				Validators:  []validator.String{stringvalidator.OneOf(listenerProtocols...)},
-				Description: "`HTTP`, `HTTPS` (passed through, still encrypted), `TERMINATED_HTTPS` (decrypted here with `tls_certificate_ref`), `TCP`, `UDP` or `SCTP`. Changing it replaces the listener."},
-			"port": schema.Int64Attribute{Required: true, PlanModifiers: replaceInt, Validators: portValid,
-				Description: "The port, 1 to 65535. Changing it replaces the listener."},
+				Description: "`HTTP`, `HTTPS` (passed through, still encrypted), `TERMINATED_HTTPS` (decrypted here with `tls_certificate_ref`), `TCP`, `UDP` or `SCTP`. Set at create: the cloud can't change it, so a change is refused at plan time."},
+			"port": schema.Int64Attribute{Required: true, PlanModifiers: fixedInt(listenerKind), Validators: portValid,
+				Description: "The port, 1 to 65535. Set at create: the cloud can't change it, so a change is refused at plan time."},
 			"default_pool_id": schema.StringAttribute{Optional: true,
 				Description: "The pool that gets this listener's traffic, for example `mtncloud_load_balancer_pool.web.id`. Leave it unset for none."},
 			// Optional+Computed: the cloud's default is no limit (-1).
@@ -87,11 +88,11 @@ func (r *listenerResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Validators:  []validator.Set{setvalidator.SizeAtLeast(1), setvalidator.ValueStringsAre(validators.NetworkCIDR())},
 				Description: "Only these source ranges may connect, for example `[\"203.0.113.0/24\"]`. Unset: anyone."},
 			"enabled": enabledAttr(listenerKind),
-			"tls_certificate_ref": schema.StringAttribute{Optional: true, PlanModifiers: replaceIfRemovedStr(),
+			"tls_certificate_ref": schema.StringAttribute{Optional: true, PlanModifiers: []planmodifier.String{noClear{listenerKind}},
 				Validators: []validator.String{stringvalidator.LengthAtLeast(1)},
 				Description: "For `TERMINATED_HTTPS`: the reference of a certificate uploaded in the console (the listener form shows it). " +
 					"Certificates and their private keys are never sent through Terraform. Required for `TERMINATED_HTTPS`, which " +
-					"must always keep a certificate: point it at another one to change it. " + removedReplaces},
+					"must always keep a certificate: point it at another one to change it. " + keptOnceSet},
 			"sni_certificate_refs": schema.SetAttribute{Optional: true, ElementType: types.StringType,
 				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 				Description: "More certificate references, picked by the host name the client asks for (SNI). Taking it out of the configuration removes them."},

@@ -266,11 +266,18 @@ func TestNetwork_Lifecycle(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{netCheck("dns_secondary", knownvalue.StringExact("102.90.109.125"))},
 			},
 			{
-				// Turning IPv6 on replaces the network.
+				// Turning IPv6 on is refused: MTN Cloud can't change it, and nothing is replaced.
+				Config: netConfig(f, `  project = "web-prod"
+  ipv6 = { cidr = "2001:db8:1::/64", gateway = "2001:db8:1::1" }`),
+				ExpectError: regexp.MustCompile(`ipv6 can't change`),
+			},
+			{
+				// Deleted outside Terraform: made again, now with IPv6.
+				PreConfig: func() { id := app(); store.mu.Lock(); delete(store.networks, id); store.mu.Unlock() },
 				Config: netConfig(f, `  project = "web-prod"
   ipv6 = { cidr = "2001:db8:1::/64", gateway = "2001:db8:1::1" }`),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_network.app", plancheck.ResourceActionDestroyBeforeCreate),
+					plancheck.ExpectResourceAction("mtncloud_network.app", plancheck.ResourceActionCreate),
 				}},
 				ConfigStateChecks: []statecheck.StateCheck{
 					netCheck("ipv6", knownvalue.ObjectPartial(map[string]knownvalue.Check{
@@ -279,7 +286,7 @@ func TestNetwork_Lifecycle(t *testing.T) {
 				},
 			},
 			{
-				// A new IPv6 DNS server is an update; a new IPv4 range is a replacement.
+				// A new IPv6 DNS server is an update.
 				Config: netConfig(f, `  project = "web-prod"
   ipv6 = { cidr = "2001:db8:1::/64", gateway = "2001:db8:1::1", dns_primary = "2001:db8::53" }`),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
@@ -287,19 +294,15 @@ func TestNetwork_Lifecycle(t *testing.T) {
 				}},
 			},
 			{
-				// Only the IPv6 range changes: a replacement too.
+				// A new IPv6 range, or IPv4 range, is refused.
 				Config: netConfig(f, `  project = "web-prod"
   ipv6 = { cidr = "2001:db8:2::/64", gateway = "2001:db8:2::1", dns_primary = "2001:db8::53" }`),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_network.app", plancheck.ResourceActionDestroyBeforeCreate),
-				}},
+				ExpectError: regexp.MustCompile(`ipv6.cidr can't change`),
 			},
 			{
 				Config: strings.Replace(netConfig(f, `  project = "web-prod"
   ipv6 = { cidr = "2001:db8:1::/64", gateway = "2001:db8:1::1", dns_primary = "2001:db8::53" }`), "10.20.1.", "10.20.2.", 2),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_network.app", plancheck.ResourceActionDestroyBeforeCreate),
-				}},
+				ExpectError: regexp.MustCompile(`cidr can't change`),
 			},
 			{
 				// Deleted outside Terraform: planned again.
@@ -310,11 +313,9 @@ func TestNetwork_Lifecycle(t *testing.T) {
 				}},
 			},
 			{
-				// Another project replaces it.
-				Config: netConfig(f, `  project = "web-prod"`),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_network.app", plancheck.ResourceActionDestroyBeforeCreate),
-				}},
+				// Another project is refused: MTN Cloud can't move a network.
+				Config:      netConfig(f, `  project = "web-prod"`),
+				ExpectError: regexp.MustCompile(`project can't change`),
 			},
 			{
 				// Still used by instances: destroy fails with a hint. Then free it so cleanup works.
@@ -375,16 +376,15 @@ func TestNetwork_ProviderProject(t *testing.T) {
 				ImportStateKind: resource.ImportBlockWithID,
 			},
 			{
-				Config: withProject("data", ""),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_network.app", plancheck.ResourceActionReplace),
-				}},
-				ConfigStateChecks: []statecheck.StateCheck{netCheck("project", knownvalue.StringExact("data"))},
+				// Another project is refused: MTN Cloud can't move a network.
+				Config:      withProject("data", ""),
+				ExpectError: regexp.MustCompile(`project can't change`),
 			},
 			{
-				PreConfig:        func() { t.Setenv("MTNCLOUD_PROJECT", "data") },
-				Config:           withProject("", ""),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				// So is a new provider default the network relies on.
+				PreConfig:   func() { t.Setenv("MTNCLOUD_PROJECT", "data") },
+				Config:      withProject("", ""),
+				ExpectError: regexp.MustCompile(`project can't change`),
 			},
 		},
 	})
@@ -475,21 +475,19 @@ func TestNetwork_FailuresAndIPv6(t *testing.T) {
 			},
 			{ResourceName: "mtncloud_network.app", ImportState: true, ImportStateVerify: true},
 			{
-				// IPv6 off replaces the network.
+				// IPv6 off is refused, never a replace.
 				PreConfig: lock(func() {
 					if n := len(store.networks); n != 1 {
 						t.Errorf("%d networks after a lost reply, want 1", n)
 					}
 				}),
-				Config: netConfig(f, `  project = "web-prod"`),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_network.app", plancheck.ResourceActionDestroyBeforeCreate),
-				}},
-				ConfigStateChecks: []statecheck.StateCheck{netCheck("ipv6", knownvalue.Null())},
+				Config:      netConfig(f, `  project = "web-prod"`),
+				ExpectError: regexp.MustCompile(`ipv6 can't change`),
 			},
 			{
-				// Created, but failed: reported, and kept in state for the next apply to replace.
-				PreConfig:   lock(func() { store.status = "failed" }),
+				// Deleted outside Terraform, then made again but failed: reported, and kept in state
+				// (tainted) for the next apply to replace.
+				PreConfig:   lock(func() { clear(store.networks); store.status = "failed" }),
 				Config:      netConfig(f, moved),
 				ExpectError: regexp.MustCompile(`Network creation failed`),
 			},

@@ -2,12 +2,12 @@
 page_title: "mtncloud_security_group_rule Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  One rule of a security group, for rules managed apart from the group (for example from another module). Leave rules unset on that mtncloud_security_group: using both on one group makes them undo each other. Every change replaces the rule.
+  One rule of a security group, for rules managed apart from the group (for example from another module). Leave rules unset on that mtncloud_security_group: using both on one group makes them undo each other. Every change replaces the rule: the cloud can't change a firewall rule, only add and delete one. The console's edit changes its own record but not the rule the cloud enforces (live check, 2026-10-31), so the provider never uses it. Add lifecycle { create_before_destroy = true } to add the new rule before the old one goes, so traffic is never cut.
 ---
 
 # mtncloud_security_group_rule
 
-One rule of a security group, for rules managed apart from the group (for example from another module). Leave `rules` unset on that `mtncloud_security_group`: using both on one group makes them undo each other. Every change replaces the rule.
+One rule of a security group, for rules managed apart from the group (for example from another module). Leave `rules` unset on that `mtncloud_security_group`: using both on one group makes them undo each other. Every change replaces the rule: the cloud can't change a firewall rule, only add and delete one. The console's edit changes its own record but not the rule the cloud enforces (live check, 2026-10-31), so the provider never uses it. Add `lifecycle { create_before_destroy = true }` to add the new rule before the old one goes, so traffic is never cut.
 
 !> **Don't rely on this resource yet.** Creating security groups on MTN Cloud is currently broken on
 the platform side. Terraform creates the group, but MTN Cloud doesn't apply its rules and the group

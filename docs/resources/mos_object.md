@@ -46,7 +46,7 @@ resource "mtncloud_mos_object" "report" {
 ### Required
 
 - `bucket` (String) The bucket's name.
-- `key` (String) The object's name in the bucket, for example `site/index.html`. Changing it replaces the object.
+- `key` (String) The object's name in the bucket, for example `site/index.html`. Set at create: MOS can't rename an object, so a change is refused at plan time.
 
 ### Optional
 

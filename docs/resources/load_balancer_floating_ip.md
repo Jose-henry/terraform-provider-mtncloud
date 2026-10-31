@@ -3,12 +3,12 @@
 page_title: "mtncloud_load_balancer_floating_ip Resource - mtncloud"
 subcategory: ""
 description: |-
-  A public IP on a load balancer: a floating IP attached to its VIP, taken from a pool or one your project already holds. A load balancer has at most one. The pool must be reachable from the load balancer's network, through its router's external network; otherwise the attach is refused and nothing is kept.
+  A public IP on a load balancer: a floating IP attached to its VIP, taken from a pool or one your project already holds (by its ID or the address itself). A load balancer has at most one. The pool must be reachable from the load balancer's network, through its router's external network; otherwise the attach is refused and nothing is kept. Another pool or address swaps it in place.
 ---
 
 # mtncloud_load_balancer_floating_ip (Resource)
 
-A public IP on a load balancer: a floating IP attached to its VIP, taken from a pool or one your project already holds. A load balancer has at most one. The pool must be reachable from the load balancer's network, through its router's external network; otherwise the attach is refused and nothing is kept.
+A public IP on a load balancer: a floating IP attached to its VIP, taken from a pool or one your project already holds (by its ID or the address itself). A load balancer has at most one. The pool must be reachable from the load balancer's network, through its router's external network; otherwise the attach is refused and nothing is kept. Another pool or address swaps it in place.
 
 ## Example Usage
 
@@ -18,6 +18,9 @@ resource "mtncloud_load_balancer_floating_ip" "web" {
   network_id       = mtncloud_network.app.id
   load_balancer_id = mtncloud_load_balancer.web.id
   floating_ip_pool = "public-network-02"
+
+  # Or an address the project already holds, by the IP itself (changing it swaps the address in place):
+  # floating_ip_address = "203.0.113.9"
 }
 
 output "public_ip" {
@@ -35,9 +38,10 @@ output "public_ip" {
 
 ### Optional
 
-- `floating_ip_id` (String) Attach this address, one your project holds (see `available_addresses` in `mtncloud_load_balancer_floating_ip_pools`). Give this or `floating_ip_pool`. Changing it replaces the floating IP.
-- `floating_ip_pool` (String) Take a new address from this pool, by name, for example `public-network-02` (see `mtncloud_load_balancer_floating_ip_pools`). Give this or `floating_ip_id`. Setting or changing it replaces the floating IP with a new address from the pool, so after an import keep `floating_ip_id` in the configuration.
-- `release_on_destroy` (Boolean) On destroy, give the address back to its pool (`true`, the default), or keep it in the project for reuse (`false`). An import sets `false`, so the first plan after it shows the change to `true` unless the configuration says `false`: until then a mistyped import ID can't release the real address.
+- `floating_ip_address` (String) Attach this address, one your project holds, by the IP itself, for example `203.0.113.9`. It is checked at plan time against the addresses the load balancer's network can use. Changing it swaps the address in place: the load balancer has no public IP for the few seconds between the detach and the attach, and the old address follows `release_on_destroy`.
+- `floating_ip_id` (String) Attach this address, one your project holds, by its ID (see `available_addresses` in `mtncloud_load_balancer_floating_ip_pools`). Otherwise the ID of the address attached. Changing it swaps the address in place: the load balancer has no public IP for the few seconds between the detach and the attach, and the old address follows `release_on_destroy`.
+- `floating_ip_pool` (String) Take a new address from this pool, by name, for example `public-network-02` (see `mtncloud_load_balancer_floating_ip_pools`). Give one of this, `floating_ip_id` or `floating_ip_address`. Changing it swaps the address in place: the load balancer has no public IP for the few seconds between the detach and the attach, and the old address follows `release_on_destroy`.
+- `release_on_destroy` (Boolean) On destroy or a swap, give the address back to its pool (`true`, the default), or keep it in the project for reuse (`false`). A swap releases the old address only when this was already `true` before the apply and still is: set to `false` in the same apply, the old address is kept. An import sets `false`, so the first plan after it shows the change to `true` unless the configuration says `false`: until then a mistyped import ID can't release the real address.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
@@ -52,6 +56,7 @@ Optional:
 
 - `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 - `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
+- `update` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 ## Import
 

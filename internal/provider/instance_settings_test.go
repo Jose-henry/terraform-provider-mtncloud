@@ -201,7 +201,7 @@ func TestInstanceSettings_FloatingIPAndScale(t *testing.T) {
 	})
 }
 
-// A data disk added to an ordered VM attaches in place; a disk changed or removed is refused at plan;
+// Data disks on an ordered VM change as on mtncloud_instance: added, grown and removed in place, a shrink refused;
 // with no data_volume blocks, disks aren't managed (B-028).
 func TestInstanceSettings_DataDisks(t *testing.T) {
 	f, s := newInstFakes(t)
@@ -233,7 +233,33 @@ func TestInstanceSettings_DataDisks(t *testing.T) {
 				return nil
 			}},
 			{Config: settingsConfig(f, disk("30")), ConfigPlanChecks: empty},
-			{Config: settingsConfig(f, disk("40")), PlanOnly: true, ExpectError: regexp.MustCompile(`Disk can't change in place`)},
+			// Grown in place: the same disk (its ID) with the new size, never a new one.
+			{Config: settingsConfig(f, disk("40")), ConfigStateChecks: []statecheck.StateCheck{
+				settingsAttr("data_volume", knownvalue.ListExact([]knownvalue.Check{knownvalue.ObjectPartial(map[string]knownvalue.Check{
+					"size": knownvalue.Int64Exact(40)})})),
+			}, Check: func(*terraform.State) error {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				vols := s.resizes[len(s.resizes)-1]["volumes"].([]any)
+				if len(vols) != 2 || vols[1].(map[string]any)["size"] != 40.0 || vols[1].(map[string]any)["id"] == nil || vols[1].(map[string]any)["id"] == -1.0 {
+					t.Errorf("resize sent %v: want the data disk with its ID at 40 GB", vols)
+				}
+				return nil
+			}},
+			{Config: settingsConfig(f, disk("40")), ConfigPlanChecks: empty},
+			{Config: settingsConfig(f, disk("40", "10")), ConfigStateChecks: []statecheck.StateCheck{settingsAttr("data_volume", knownvalue.ListSizeExact(2))}},
+			{Config: settingsConfig(f, disk("30", "10")), PlanOnly: true, ExpectError: regexp.MustCompile(`A disk can't shrink`)},
+			// The last block removed: that disk only is deleted, with a warning in the plan.
+			{Config: settingsConfig(f, disk("40")), ConfigStateChecks: []statecheck.StateCheck{settingsAttr("data_volume", knownvalue.ListSizeExact(1))},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if n := len(s.insts[9750]["volumes"].([]any)); n != 2 {
+						t.Errorf("%d volumes after the second disk was removed, want root and the 40 GB disk (2)", n)
+					}
+					return nil
+				}},
+			{Config: settingsConfig(f, disk("40")), ConfigPlanChecks: empty},
 			{Config: settingsConfig(f, ""), ConfigStateChecks: []statecheck.StateCheck{settingsAttr("data_volume", knownvalue.ListSizeExact(0))},
 				Check: func(*terraform.State) error {
 					s.mu.Lock()
@@ -441,6 +467,28 @@ func TestInstanceSettings_ScaleFactor(t *testing.T) {
 			}},
 			// Left out again: not managed, nothing changes.
 			{Config: cfg(""), ConfigPlanChecks: empty},
+		},
+	})
+}
+
+// An ordered VM's data disk on a named datastore, managed without saying which: the datastore
+// stays unset in state, so the plan after apply is empty, and the disk still grows in place.
+func TestInstanceSettings_DiskDatastoreLeftOut(t *testing.T) {
+	f, s := newInstFakes(t)
+	seedOrderVM(s, 9750)
+	s.mu.Lock()
+	s.insts[9750]["volumes"] = append(s.insts[9750]["volumes"].([]any),
+		s.volume(9750, 1, map[string]any{"name": "data", "size": 30, "datastoreId": "414"}))
+	s.mu.Unlock()
+	empty := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	disk := func(size string) string { return "  data_volume {\n    size = " + size + "\n  }\n" }
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: settingsConfig(f, disk("30"))},
+			{Config: settingsConfig(f, disk("30")), ConfigPlanChecks: empty},
+			{Config: settingsConfig(f, disk("40"))},
+			{Config: settingsConfig(f, disk("40")), ConfigPlanChecks: empty},
 		},
 	})
 }

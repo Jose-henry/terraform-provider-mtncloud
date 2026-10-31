@@ -48,7 +48,7 @@ output "app_subnet_id" {
 
 ### Required
 
-- `cidr` (String) IPv4 address range, for example `10.0.1.0/24`. It can't change: a new range replaces the network.
+- `cidr` (String) IPv4 address range, for example `10.0.1.0/24`. Set at create: MTN Cloud can't change it, so a new range is refused at plan time.
 - `gateway` (String) Gateway address inside `cidr`, usually its first address (`10.0.1.1` for `10.0.1.0/24`).
 - `name` (String) Name of the network.
 

@@ -45,7 +45,7 @@ resource "mtncloud_user" "tf_example_user" {
 - `linux_keypair_id` (Number) The private key pair id associated with the user account for accessing linux instances
 - `linux_password` (String) The password assigned to linux instances for this user account (external password changes are not detected)
 - `linux_username` (String) The username assigned to linux instances for this user account
-- `password_expired` (Boolean) Set user password expiration. After the first login you will be prompted to create a new password. This attribute only works during the initial user creation and will force the user to be deleted and recreated if the attribute is changed.
+- `password_expired` (Boolean) Set user password expiration. After the first login you will be prompted to create a new password. Set at create: MTN Cloud can't change it afterwards, so a change is refused at plan time.
 - `receive_notifications` (Boolean) Whether notification emails will be sent to the email address associated with the user account or not
 - `tenant_id` (Number) The ID of the tenant to create the user account in
 - `windows_password` (String, Sensitive) The password assigned to windows instances for this user account (external password changes are not detected)

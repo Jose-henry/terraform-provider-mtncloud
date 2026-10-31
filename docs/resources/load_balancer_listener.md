@@ -44,8 +44,8 @@ resource "mtncloud_load_balancer_listener" "http" {
 
 - `load_balancer_id` (String) ID of the load balancer, for example `mtncloud_load_balancer.web.id`. Changing it replaces the resource.
 - `network_id` (Number) ID of the MTN Network the load balancer is on, for example `mtncloud_network.app.id`. Your tenant must own it: a network shared with you is read-only. Changing it replaces the resource.
-- `port` (Number) The port, 1 to 65535. Changing it replaces the listener.
-- `protocol` (String) `HTTP`, `HTTPS` (passed through, still encrypted), `TERMINATED_HTTPS` (decrypted here with `tls_certificate_ref`), `TCP`, `UDP` or `SCTP`. Changing it replaces the listener.
+- `port` (Number) The port, 1 to 65535. Set at create: the cloud can't change it, so a change is refused at plan time.
+- `protocol` (String) `HTTP`, `HTTPS` (passed through, still encrypted), `TERMINATED_HTTPS` (decrypted here with `tls_certificate_ref`), `TCP`, `UDP` or `SCTP`. Set at create: the cloud can't change it, so a change is refused at plan time.
 
 ### Optional
 
@@ -61,7 +61,7 @@ resource "mtncloud_load_balancer_listener" "http" {
 - `sni_certificate_refs` (Set of String) More certificate references, picked by the host name the client asks for (SNI). Taking it out of the configuration removes them.
 - `tcp_inspect_timeout` (Number) How long to wait for more data to decide where a TCP connection goes, in milliseconds. The cloud's default applies when it isn't set on create. Taken out of the configuration, it keeps its last value.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `tls_certificate_ref` (String) For `TERMINATED_HTTPS`: the reference of a certificate uploaded in the console (the listener form shows it). Certificates and their private keys are never sent through Terraform. Required for `TERMINATED_HTTPS`, which must always keep a certificate: point it at another one to change it. Taking it out of the configuration replaces the resource: the cloud can't clear it.
+- `tls_certificate_ref` (String) For `TERMINATED_HTTPS`: the reference of a certificate uploaded in the console (the listener form shows it). Certificates and their private keys are never sent through Terraform. Required for `TERMINATED_HTTPS`, which must always keep a certificate: point it at another one to change it. It can change, but not be taken out once set: the cloud can't clear it (refused at plan time).
 
 ### Read-Only
 

@@ -19,6 +19,7 @@ func resourceUser() *schema.Resource {
 		UpdateContext: resourceUserUpdate,
 		DeleteContext: resourceUserDelete,
 
+		CustomizeDiff: setAtCreate("user", "tenant_id", "password_expired"),
 		Schema: map[string]*schema.Schema{
 			"id": {
 				Description: "The ID of the user account",
@@ -30,7 +31,6 @@ func resourceUser() *schema.Resource {
 				Type:        schema.TypeInt,
 				Computed:    true,
 				Optional:    true,
-				ForceNew:    true,
 			},
 			"first_name": {
 				Description: "The first name of the user account",
@@ -61,10 +61,9 @@ func resourceUser() *schema.Resource {
 				Sensitive:   true,
 			},
 			"password_expired": {
-				Description: "Set user password expiration. After the first login you will be prompted to create a new password. This attribute only works during the initial user creation and will force the user to be deleted and recreated if the attribute is changed.",
+				Description: "Set user password expiration. After the first login you will be prompted to create a new password. Set at create: MTN Cloud can't change it afterwards, so a change is refused at plan time.",
 				Type:        schema.TypeBool,
 				Optional:    true,
-				ForceNew:    true,
 			},
 			"receive_notifications": {
 				Description: "Whether notification emails will be sent to the email address associated with the user account or not",

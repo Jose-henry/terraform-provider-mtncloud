@@ -47,14 +47,14 @@ resource "mtncloud_load_balancer_instance_member" "admin" {
 - `load_balancer_id` (String) ID of the load balancer, for example `mtncloud_load_balancer.web.id`. Changing it replaces the resource.
 - `network_id` (Number) ID of the MTN Network the load balancer is on, for example `mtncloud_network.app.id`. Your tenant must own it: a network shared with you is read-only. Changing it replaces the resource.
 - `pool_id` (String) The pool, for example `mtncloud_load_balancer_pool.web.id`. Changing it replaces the members.
-- `port` (Number) The port the instance listens on. Changing it replaces the members.
+- `port` (Number) The port the instance listens on. Set at create: the cloud can't change it, so a change is refused at plan time.
 
 ### Optional
 
-- `backup` (Boolean) Only send traffic here when every other member is down. Defaults to `false`. Changing it replaces the members.
-- `pin_address` (String) One of the instance's addresses on the load balancer's network, to add only that node. It stays a member when the instance scales, and other nodes aren't added. Leave it out for every node. Changing it replaces the member.
+- `backup` (Boolean) Only send traffic here when every other member is down. Defaults to `false`. Changed in place on each member.
+- `pin_address` (String) One of the instance's addresses on the load balancer's network, to add only that node. It stays a member when the instance scales, and other nodes aren't added. Leave it out for every node. Set at create: the cloud can't change it, so a change is refused at plan time.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `weight` (Number) Each member's share of the traffic, 0 to 256; 0 sends them none. Defaults to `1`. Changing it replaces the members.
+- `weight` (Number) Each member's share of the traffic, 0 to 256; 0 sends them none. Defaults to `1`. Changed in place on each member.
 
 ### Read-Only
 
@@ -68,6 +68,7 @@ Optional:
 
 - `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 - `delete` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours). Setting a timeout for a Delete operation is only applicable if changes are saved into state before the destroy operation occurs.
+- `update` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
 
 
 <a id="nestedatt--members"></a>

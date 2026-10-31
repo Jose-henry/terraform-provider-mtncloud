@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
+
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -72,9 +74,9 @@ func (r *objectResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 			"bucket": schema.StringAttribute{Description: "The bucket's name.", Required: true, Validators: bucketNameValidators(),
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}},
 			"key": schema.StringAttribute{
-				Description: "The object's name in the bucket, for example `site/index.html`. Changing it replaces the object.",
+				Description: "The object's name in the bucket, for example `site/index.html`. Set at create: MOS can't rename an object, so a change is refused at plan time.",
 				Required:    true, Validators: []validator.String{stringvalidator.LengthBetween(1, 1024)},
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+				PlanModifiers: []planmodifier.String{planmodifiers.SetAtCreate("object")},
 			},
 			"content":        schema.StringAttribute{Description: "The content, as text. Set one of `content`, `content_base64` and `source`.", Optional: true, Validators: []validator.String{one}},
 			"content_base64": schema.StringAttribute{Description: "The content, base64-encoded, for binary data.", Optional: true},

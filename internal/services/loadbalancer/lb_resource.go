@@ -66,12 +66,12 @@ func (r *lbResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp 
 			"description": schema.StringAttribute{Optional: true, Computed: true,
 				Default: stringdefault.StaticString(""), Description: "A description."},
 			// Optional+Computed: defaults to the network's own subnet.
-			"vip_subnet_id": schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: append(keepStr, replaceStr...),
-				Description: "The cloud ID of the subnet the VIP is on. Defaults to the network's subnet. Changing it replaces the load balancer."},
+			"vip_subnet_id": schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: append(keepStr, fixedStr("load balancer")...),
+				Description: "The cloud ID of the subnet the VIP is on. Defaults to the network's subnet. Set at create: the cloud can't change it, so a change is refused at plan time."},
 			// Optional+Computed: the cloud picks a free address when it isn't set.
-			"vip_address": schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: append(keepStr, replaceStr...),
+			"vip_address": schema.StringAttribute{Optional: true, Computed: true, PlanModifiers: append(keepStr, fixedStr("load balancer")...),
 				Validators:  []validator.String{validators.IPv4Address()},
-				Description: "The VIP's address on the subnet. Left unset, the cloud picks a free one. Changing it replaces the load balancer."},
+				Description: "The VIP's address on the subnet. Left unset, the cloud picks a free one. Set at create: the cloud can't change it, so a change is refused at plan time."},
 			"tags": schema.SetAttribute{Optional: true, ElementType: types.StringType,
 				Validators:  []validator.Set{setvalidator.SizeBetween(1, 50), setvalidator.ValueStringsAre(stringvalidator.LengthBetween(1, 255))},
 				Description: "Tags on the load balancer, at most 50."},

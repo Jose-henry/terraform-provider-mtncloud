@@ -23,12 +23,12 @@ resource "mtncloud_cypher_key" "app" {
 
 ### Required
 
-- `name` (String) Key name, without the `key/` mount, for example `db-admin`. Changing it makes a new Base64 AES key.
+- `name` (String) Key name, without the `key/` mount, for example `db-admin`. Set at create: a change is refused at plan time (run terraform apply -replace for a new Base64 AES key).
 
 ### Optional
 
-- `bits` (Number) Key length in bits: 128, 192 or 256. Defaults to 256. Changing it makes a new Base64 AES key.
-- `ttl` (String) Lease: how long the Base64 AES key lives before MTN Cloud deletes it, in seconds or as `15m`, `8h`, `7d`. Leave it out, or `0`, to keep it for good. Changing it makes a new Base64 AES key.
+- `bits` (Number) Key length in bits: 128, 192 or 256. Defaults to 256. Set at create: a change is refused at plan time.
+- `ttl` (String) Lease: how long the Base64 AES key lives before MTN Cloud deletes it, in seconds or as `15m`, `8h`, `7d`. Leave it out, or `0`, to keep it for good. Set at create: a change is refused at plan time.
 
 ### Read-Only
 

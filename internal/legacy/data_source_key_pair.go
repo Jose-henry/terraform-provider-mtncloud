@@ -2,6 +2,7 @@ package legacy
 
 import (
 	"context"
+	"net/http"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -55,6 +56,9 @@ func dataSourceMorphesKeyPairRead(ctx context.Context, d *schema.ResourceData, m
 	}
 
 	if err != nil {
+		if resp != nil && resp.StatusCode == http.StatusNotFound && id != 0 {
+			return notFoundByID("key pair", id)
+		}
 		return diag.FromErr(err)
 	}
 	var keyPair *sdk.KeyPair
@@ -63,8 +67,11 @@ func dataSourceMorphesKeyPairRead(ctx context.Context, d *schema.ResourceData, m
 		keyPair = result.KeyPair
 	} else if name != "" {
 		listResult := resp.Result.(*sdk.ListKeyPairsResult)
-		keyPairs := listResult.KeyPairs
-		keyPair = &(*keyPairs)[0]
+		// The name filter ignores case, so two can match.
+		if listResult.KeyPairs == nil || len(*listResult.KeyPairs) != 1 {
+			return nameLookupFailed(client, "key pair", name, sdk.KeyPairsPath)
+		}
+		keyPair = &(*listResult.KeyPairs)[0]
 	}
 	if keyPair != nil {
 		d.SetId(int64ToString((*keyPair).ID))

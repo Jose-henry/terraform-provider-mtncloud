@@ -274,7 +274,7 @@ form's plan field is a select, and falls back to the wizard's list otherwise. Mu
 ## B-020 Floating IP pool check follow-ups (review, 2026-10-28)
 - A router whose external network changes in the same apply as a new instance or order with that pool
   fails the plan (the check reads routers as they are). Workaround in the message: change the router
-  in its own apply. Revisit if it bites.
+  in its own apply. Done 2026-10-31: it is a warning now (the runtime check catches a real mismatch).
 - Done 2026-10-30: orders check every pool attribute against the first network of its own group
   (`worker_floating_ip_pool` with `worker_networks`, `master_` with `master_networks`), at plan time
   only, so the warning no longer shows again at create. (Terraform itself may show a plan warning

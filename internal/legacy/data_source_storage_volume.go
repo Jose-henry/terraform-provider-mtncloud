@@ -99,8 +99,7 @@ func dataSourceStorageVolumeRead(ctx context.Context, d *schema.ResourceData, me
 	resp, err = client.GetStorageVolume(int64(id), &sdk.Request{})
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			log.Printf("API 404: %s - %v", resp, err)
-			return nil
+			return notFoundByID("storage volume", int64(id))
 		} else {
 			log.Printf("API FAILURE: %s - %v", resp, err)
 			return diag.FromErr(err)

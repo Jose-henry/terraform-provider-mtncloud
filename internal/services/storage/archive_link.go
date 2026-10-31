@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
+
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -66,7 +67,7 @@ func (r *archiveLinkResource) Schema(_ context.Context, _ resource.SchemaRequest
 					"who ever gets the URL can download the file until the link is destroyed.",
 				Required:      true,
 				Validators:    []validator.Int64{int64validator.AtLeast(0)},
-				PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()},
+				PlanModifiers: []planmodifier.Int64{planmodifiers.SetAtCreate("link")},
 			},
 			"link_id":           schema.StringAttribute{Description: "The link's ID.", Computed: true, PlanModifiers: keep},
 			"secret_access_key": schema.StringAttribute{Description: "The link's secret.", Computed: true, Sensitive: true, PlanModifiers: keep},

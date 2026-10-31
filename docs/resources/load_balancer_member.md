@@ -42,11 +42,11 @@ resource "mtncloud_load_balancer_member" "web" {
 
 ### Required
 
-- `address` (String) The server's IP address, for example an instance's private address. Changing it replaces the member.
+- `address` (String) The server's IP address, for example an instance's private address. Set at create: the cloud can't change it, so a change is refused at plan time.
 - `load_balancer_id` (String) ID of the load balancer, for example `mtncloud_load_balancer.web.id`. Changing it replaces the resource.
 - `network_id` (Number) ID of the MTN Network the load balancer is on, for example `mtncloud_network.app.id`. Your tenant must own it: a network shared with you is read-only. Changing it replaces the resource.
 - `pool_id` (String) The pool, for example `mtncloud_load_balancer_pool.web.id`. Changing it replaces the member.
-- `port` (Number) The port the server listens on. Changing it replaces the member.
+- `port` (Number) The port the server listens on. Set at create: the cloud can't change it, so a change is refused at plan time.
 
 ### Optional
 
@@ -55,7 +55,7 @@ resource "mtncloud_load_balancer_member" "web" {
 - `monitor_address` (String) Health-check this address instead of `address`. Taking it out of the configuration goes back to `address`.
 - `monitor_port` (Number) Health-check this port instead of `port`. Taking it out of the configuration goes back to `port`.
 - `name` (String) The member's name.
-- `subnet_id` (String) The cloud ID of the subnet the address is on, if not the load balancer's own. It must be your tenant's. Changing it replaces the member.
+- `subnet_id` (String) The cloud ID of the subnet the address is on, if not the load balancer's own. It must be your tenant's. Set at create: the cloud can't change it, so a change is refused at plan time.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `weight` (Number) Its share of the traffic against the pool's other members, 0 to 256; 0 sends it none. Defaults to `1`.
 

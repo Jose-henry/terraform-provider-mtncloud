@@ -51,9 +51,13 @@ func dataSourceExecuteScheduleRead(ctx context.Context, d *schema.ResourceData, 
 		return diag.Errorf("Execute schedule cannot be read without name or id")
 	}
 	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			log.Printf("API 404: %s - %v", resp, err)
-			return nil
+		if id == 0 {
+			if nd := nameLookupError(client, err, "execution schedule", name, sdk.ExecuteSchedulesPath); nd != nil {
+				return nd
+			}
+		}
+		if resp != nil && resp.StatusCode == http.StatusNotFound && id != 0 {
+			return notFoundByID("execution schedule", int64(id))
 		} else {
 			log.Printf("API FAILURE: %s - %v", resp, err)
 			return diag.FromErr(err)

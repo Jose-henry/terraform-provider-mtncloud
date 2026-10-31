@@ -58,7 +58,7 @@ resource "mtncloud_router" "edge" {
 
 ### Required
 
-- `name` (String) Name of the router. MTN Cloud doesn't allow renaming a router: a new name replaces it.
+- `name` (String) Name of the router. Set at create: MTN Cloud can't rename a router, so a new name is refused at plan time.
 - `networks` (Set of String) IDs of the MTN Networks the router connects, for example `[mtncloud_network.app.id]`. Networks are added and removed in place. Use the `mtncloud_network` data source for networks made outside Terraform.
 
 ### Optional

@@ -51,7 +51,8 @@ type orderSpec struct {
 	app      bool // the order makes an app (under Apps, not Instances), its VMs "<name>-<n>"
 	target   bool // runs against an existing instance (context "instance")
 	// heat: the workflow names the VM itself, builds it through a Heat stack that a delete leaves,
-	// and reports the VM in its output (SOPHOS, `Sophos/sophosheat.sh`). It takes about an hour.
+	// and reports the VM in its output (SOPHOS, `Sophos/sophosheat.sh`; FortiADC,
+	// `Fortinet/FortiADCheat.sh`, live 2026-10-31). It takes about an hour.
 	heat   bool
 	fields []field
 	// movedFrom is a former type name. The old name stays as a deprecated alias, and a `moved {}`
@@ -272,8 +273,8 @@ func orderSpecs() []orderSpec {
 			rules{minRootGB: 40, minNetworks: 1, maxNetworks: 2}),
 		appliance("MTN FortiWeb (BYOL)", "fortiweb", "A FortiWeb web application firewall. Bring your own license.",
 			rules{minRootGB: 70, minNetworks: 1, maxNetworks: 2, minCPU: 2, minMemoryGB: 8}),
-		appliance("MTN FortiADC (BYOL)", "fortiadc", "A FortiADC application delivery controller. Bring your own license.",
-			rules{minRootGB: 30, dataDiskGB: 30, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 16}),
+		heat(appliance("MTN FortiADC (BYOL)", "fortiadc", "A FortiADC application delivery controller. Bring your own license.",
+			rules{minRootGB: 30, dataDiskGB: 30, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 16})),
 		appliance("MTN FortiManager (BYOL)", "fortimanager", "A FortiManager. Bring your own license.",
 			rules{minRootGB: 500, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 8}),
 		appliance("MTN FortiAnalyzer (BYOL)", "fortianalyzer", "A FortiAnalyzer. Bring your own license.",

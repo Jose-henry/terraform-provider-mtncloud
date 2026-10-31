@@ -58,11 +58,38 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
   change the VM doesn't start within 2 minutes fails the apply (MTN Cloud accepts a suspend some VMs
   don't support); use `stopped` for those.
 - **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`, `scale`,
-  `floating_ip_pool`, `power_state`, `restart_trigger`,
-  `plan`, and volumes added at the end of `data_volume`.
-- **Replaces the instance:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`,
-  `env_vars`, `install_agent`, `create_user`, `scale_factor`, any change to `networks`, and
-  removing, reordering or changing existing data volumes.
+  `floating_ip_pool`, `power_state`, `restart_trigger`, `plan`, `scale_factor`, network cards and data
+  disks (below).
+- **Set at create:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`, `env_vars`,
+  `install_agent`, `create_user`, `root_volume_size`, and the first network in `networks` (the primary
+  card). MTN Cloud can't change these, so a change is refused at plan time and nothing is deleted. To
+  start again with other values, remove the instance from the configuration (which deletes it) and add
+  a new one, or run `terraform apply -replace=<address>` with the values unchanged.
+- **Network cards and disks.** Add a network to `networks` and it gets a new card, in place, after the
+  existing ones. Remove any network but the first and its card goes, in place, and its address is
+  released. A network moved within the list loses its card and gets a new one at the end. On an
+  instance with several servers (`scale_factor` above 1), a change to `networks` is refused: bring `scale_factor` to 1 first.
+- **Data disks change in place, and none is deleted to make a change.** A `data_volume` block added
+  attaches a new disk; a larger `size` grows that disk with its data kept. A block removed **deletes
+  that disk with its data**: the plan warns which. A block with a `name` is the disk with that name;
+  one without is the disk at its position, so to remove a disk from the middle of the list, name the
+  disks. Every disk has a name: left out, a new one gets the next free `data-<n>`. Refused at plan
+  time, deleting nothing: a smaller size, a new datastore, a new name for a disk (MTN Cloud can't
+  rename one), and disks listed out of the order they were made. The root disk is
+  `root_volume_size` and is never removed.
+
+  ```terraform
+  networks = [mtncloud_network.app.id, mtncloud_network.backup.id] # eth0 stays; eth1 added in place
+
+  data_volume {
+    name = "data-1"
+    size = 80 # was 50: grown in place, data kept
+  }
+  data_volume {
+    name = "logs" # added in place; delete this block and the disk is deleted
+    size = 100
+  }
+  ```
 - **Set at create only:** `expire_days` and `shutdown_days`. Changing them later is refused at plan
   time; extend or cancel an expiry in the console. `expire_date` and `shutdown_date` show the dates,
   including ones a policy sets.
@@ -84,8 +111,9 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
   marks the instance tainted, so the next apply replaces it; run `terraform untaint` to keep the VM
   and try the attach again. It needs the instance's network to be on an `mtncloud_router` with an
   `external_network`; reference the router (for example in `depends_on`) so it exists first. The plan
-  checks this: a router on another external network is an error naming the pool to use, and no router
-  at all is a warning (the router may come in the same apply).
+  checks this: a router on another external network, or no router at all, is a warning naming the pool
+  to use (the router may be made, or changed, in the same apply). If the address really can't come, the
+  apply fails once the VM is running.
   Changing the pool releases the old address and attaches a new one, waiting for each. An address
   released in the console is attached again by the next apply. A floating IP attached in the console,
   with no `floating_ip_pool` set, shows in `public_ip` and is left alone; setting `floating_ip_pool`

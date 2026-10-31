@@ -288,14 +288,14 @@ func TestRouter_Lifecycle(t *testing.T) {
 				ConfigPlanChecks: routerPlan(plancheck.ResourceActionUpdate),
 			},
 			{
-				// The API refuses renames, so a new name replaces the router.
-				Config:           routerConfig(f, strings.Replace(both, `"edge"`, `"edge-2"`, 1)),
-				ConfigPlanChecks: routerPlan(plancheck.ResourceActionDestroyBeforeCreate),
+				// The API refuses renames, so a new name is refused at plan time, never a replace.
+				Config:      routerConfig(f, strings.Replace(both, `"edge"`, `"edge-2"`, 1)),
+				ExpectError: regexp.MustCompile(`name can't change`),
 			},
 			{
-				// Deleted outside Terraform: planned again.
+				// Deleted outside Terraform: planned again, here with another name.
 				PreConfig: func() {
-					id := routers.byName("edge-2")
+					id := routers.byName("edge")
 					routers.mu.Lock()
 					delete(routers.routers, id)
 					routers.mu.Unlock()
@@ -424,6 +424,7 @@ func TestRouter_Failures(t *testing.T) {
 				Config:           cfg,
 				ConfigPlanChecks: routerPlan(plancheck.ResourceActionDestroyBeforeCreate),
 			},
+			{Config: f.providerConfig()}, // destroyed, so the next router is a new one
 			{
 				// Stuck: the create timeout ends the wait with the last status.
 				PreConfig: lock(func() { routers.stuck = true }),

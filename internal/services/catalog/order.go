@@ -90,9 +90,10 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 	if r.spec.app {
 		where = "Apps"
 	}
-	desc := r.spec.about + " Ordered from MTN Cloud's catalog (" + r.spec.item + "). An order can't be changed once " +
-		"placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and " +
-		"`terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. " +
+	desc := r.spec.about + " Ordered from MTN Cloud's catalog (" + r.spec.item + "). An order is placed once: a " +
+		"changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security " +
+		"groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. " +
+		"`terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. " +
 		"The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked " +
 		"at plan time against the item's live order form: what the form requires, its choices and its stated minimums. " +
 		"`terraform destroy` deletes what it made, shown under " + where + " in the console, with its disks and floating " +
@@ -288,10 +289,11 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 				}
 			}
 		}
-		// An order can't be changed: a changed input orders it again (owner, 2026-10-30), which also
-		// lets -replace and destroy plan with the new value in the configuration.
+		// An order is placed once: a changed input is refused at plan time, never ordered again
+		// (owner, 2026-10-31, superseding 2026-10-30). Day-2 changes to its VMs go through
+		// mtncloud_instance_settings. -replace still orders it again, as it changes no input.
 		replace := false
-		for name := range r.inputs() {
+		for name, f := range r.inputs() {
 			var before, after attr.Value
 			resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(name), &before)...)
 			resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, path.Root(name), &after)...)
@@ -307,7 +309,17 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 						"or checked. Set it to the size the order was placed with.")
 				continue
 			}
-			resp.RequiresReplace.Append(path.Root(name))
+			if r.spec.target && name == "instance_id" {
+				// The parent (D-038): a target order follows its instance. Its destroy deletes nothing,
+				// so it is placed again on the new one, as when the instance is replaced (its ID unknown).
+				resp.RequiresReplace = append(resp.RequiresReplace, path.Root(name))
+				replace = true
+				continue
+			}
+			if after.IsUnknown() {
+				continue // checked when Terraform plans again at apply, with the value known
+			}
+			r.refuseInput(name, f, before, &resp.Diagnostics)
 			replace = true
 		}
 		if !r.spec.target && !replace && !adopting {
@@ -641,8 +653,8 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 		}
 		switch msg, isErr := r.client.PoolRouterProblem(ctx, net, pool); {
 		case msg == "":
-		case isErr:
-			diags.AddAttributeError(path.Root(attr), "Floating IP pool doesn't match the router", msg)
+		case isErr: // a warning: the router may be moved to this pool in the same apply (B-020)
+			diags.AddAttributeWarning(path.Root(attr), "Floating IP pool doesn't match the router", msg)
 		default:
 			diags.AddAttributeWarning(path.Root(attr), "Floating IP pool not checked against a router", msg)
 		}
@@ -1333,6 +1345,9 @@ func (r *orderResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		return
 	}
 	plan := deletePlan(apps, ids, name.ValueString(), r.spec.app, r.appIDOf(ctx, req.State, &resp.Diagnostics))
+	// No execution on the record doesn't mean nothing was made (FortiADC QA, 2026-10-31: its record
+	// showed none while its workflow had made a VM), so nothing found is always refused, never
+	// taken as withdrawn: deleting the record would orphan what the workflow made.
 	if len(plan.apps) == 0 && len(plan.instances) == 0 && r.spec.heat {
 		refuse("Nothing it made was found: the VM its workflow reported isn't in its project. Check Instances in the console.")
 		return
@@ -1518,4 +1533,31 @@ func joinIDs(ids []int64) string {
 		out[i] = strconv.FormatInt(id, 10)
 	}
 	return strings.Join(out, ", ")
+}
+
+// day2 are the order inputs mtncloud_instance_settings changes on the order's VMs.
+var day2 = map[kind]string{kPlan: "plan", kLabels: "labels", kSecGroups: "security_groups", kFloatingIP: "floating_ip_pool"}
+
+// refuseInput is the plan-time error for a changed input. A secret's value is never shown.
+func (r *orderResource) refuseInput(name string, f field, before attr.Value, diags *diag.Diagnostics) {
+	fix := "Set it back to " + before.String() + "."
+	switch {
+	case f.kind == kSecret || f.kind == kExtra: // extra_inputs is sensitive: a form field there can be a password
+		fix = "Set it back to the value the order was placed with."
+	case before.IsNull():
+		fix = "Remove it: the order was placed without it."
+	}
+	how := "To get a new one, remove this order from the configuration (which deletes what it made), then add it again; " +
+		"or run `terraform apply -replace=<address>`."
+	if a, ok := day2[f.kind]; ok && !r.spec.target {
+		how = fmt.Sprintf("To change %s on the VMs it made, without ordering again, use `mtncloud_instance_settings` "+
+			"on each VM to change (`instance_id` = one of this order's `instance_ids`, `%s = ...`).", a, a)
+	}
+	if name == "data_volume" && !r.spec.target {
+		how = "To add, grow or remove a data disk on the VMs it made, without ordering again, use `mtncloud_instance_settings` " +
+			"on each VM to change (`instance_id` = one of this order's `instance_ids`, with `data_volume` blocks)."
+	}
+	diags.AddAttributeError(path.Root(name), name+" can't change",
+		fmt.Sprintf("A %s order is placed once, and Terraform won't delete what it made to order it again. %s %s",
+			r.spec.item, fix, how))
 }

@@ -2,7 +2,6 @@ package legacy
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -58,7 +57,7 @@ func dataSourceCatalogItemTypeRead(ctx context.Context, d *schema.ResourceData, 
 		listResult := listResp.Result.(*sdk.ListCatalogItemTypesResult)
 		catalogItemTypeCount := len(*listResult.CatalogItemTypes)
 		if catalogItemTypeCount != 1 {
-			return diag.FromErr(fmt.Errorf("found %d catalog item types for %v", catalogItemTypeCount, name))
+			return nameLookupFailed(client, "catalog item type", name, sdk.ServiceCatalogTypesPath)
 		}
 		firstRecord := (*listResult.CatalogItemTypes)[0]
 		catalogItemTypeID := firstRecord.Id
@@ -69,9 +68,8 @@ func dataSourceCatalogItemTypeRead(ctx context.Context, d *schema.ResourceData, 
 		return diag.Errorf("Catalog Item Type cannot be read without name or id")
 	}
 	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			log.Printf("API 404: %s - %v", resp, err)
-			return nil
+		if resp != nil && resp.StatusCode == http.StatusNotFound && id != 0 {
+			return notFoundByID("catalog item type", int64(id))
 		} else {
 			log.Printf("API FAILURE: %s - %v", resp, err)
 			return diag.FromErr(err)

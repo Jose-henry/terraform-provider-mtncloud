@@ -268,9 +268,35 @@ data "mtncloud_load_balancer_member" "first" {
 					a := s.RootModule().Resources[res].Primary.Attributes
 					return fmt.Sprintf("114/%s/%s/301", a["load_balancer_id"], a["pool_id"]), nil
 				}},
+			// A new weight changes the members in place: same members, never removed and added again.
 			{Config: cfg("301", 3), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-				plancheck.ExpectResourceAction(res, plancheck.ResourceActionDestroyBeforeCreate),
-			}}},
+				plancheck.ExpectResourceAction(res, plancheck.ResourceActionUpdate),
+			}}, ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue("data.mtncloud_load_balancer_member.first", tfjsonpath.New("weight"), knownvalue.Int64Exact(3)),
+			}, Check: func(*terraform.State) error {
+				plugin.mu.Lock()
+				defer plugin.mu.Unlock()
+				if n := plugin.runs["member-update"]; n != 2 {
+					return fmt.Errorf("%d member updates, want 2 (one per address)", n)
+				}
+				if n := plugin.runs["member-add"]; n != 1 {
+					return fmt.Errorf("%d member adds, want only the first", n)
+				}
+				return nil
+			}},
+			{Config: cfg("301", 3), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// The second member's update fails: the members now disagree, which state shows as a change
+			// still to make, so the next apply sets them all (never an empty plan with one left behind).
+			{PreConfig: func() {
+				plugin.mu.Lock()
+				defer plugin.mu.Unlock()
+				plugin.failAt = plugin.runs["member-update"] + 2
+			}, Config: cfg("301", 4), ExpectError: regexp.MustCompile(`(?s)Unable to change the instance's members.*busy`)},
+			{Config: cfg("301", 4), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+				plancheck.ExpectResourceAction(res, plancheck.ResourceActionUpdate),
+			}}, ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectKnownValue(res, tfjsonpath.New("weight"), knownvalue.Int64Exact(4))}},
+			{Config: cfg("301", 4), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{Config: cfg("301", 3)},
 			// A second owner for the same instance in the same pool is refused before anything is added.
 			{Config: cfg("301", 3) + `
 resource "mtncloud_load_balancer_instance_member" "again" {
@@ -327,10 +353,10 @@ resource "mtncloud_load_balancer_floating_ip" "pub" {
 					plugin.mu.Lock()
 					defer plugin.mu.Unlock()
 					for _, lb := range plugin.lbs {
-						lb["fip"] = map[string]any{"id": "fip-console", "floating_ip_address": "196.0.0.7", "floating_network_id": "ext-02"}
+						lb["fip"] = map[string]any{"id": "fip-console", "floating_ip_address": "203.0.113.7", "floating_network_id": "ext-02"}
 					}
 				},
-				Config: fromPool, ExpectError: regexp.MustCompile(`(?s)already has floating IP 196\.0\.0\.7.*terraform import`),
+				Config: fromPool, ExpectError: regexp.MustCompile(`(?s)already has floating IP 203\.0\.113\.7.*terraform import`),
 			},
 			{
 				PreConfig: func() {
@@ -341,7 +367,7 @@ resource "mtncloud_load_balancer_floating_ip" "pub" {
 					}
 				},
 				Config: fromPool, ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(res, tfjsonpath.New("address"), knownvalue.StringExact("196.0.0.10")),
+					statecheck.ExpectKnownValue(res, tfjsonpath.New("address"), knownvalue.StringExact("203.0.113.10")),
 					statecheck.ExpectKnownValue(res, tfjsonpath.New("release_on_destroy"), knownvalue.Bool(true)),
 				}},
 			{Config: fromPool, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
@@ -363,26 +389,51 @@ resource "mtncloud_load_balancer_floating_ip" "pub" {
 			},
 			{Config: fromPool},
 			{
-				// A held address, kept in the project on destroy.
+				// A held address instead: swapped in place, never replaced; the pool's address is kept, as
+				// release_on_destroy = false is set in the same apply.
 				Config: cfg("floating_ip_id = \"fip-held\"\n  release_on_destroy = false"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction(res, plancheck.ResourceActionDestroyBeforeCreate),
+					plancheck.ExpectResourceAction(res, plancheck.ResourceActionUpdate),
 				}},
-				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectKnownValue(res, tfjsonpath.New("address"), knownvalue.StringExact("196.0.0.9"))},
+				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectKnownValue(res, tfjsonpath.New("address"), knownvalue.StringExact("203.0.113.9"))},
 			},
+			{Config: cfg("floating_ip_id = \"fip-held\"\n  release_on_destroy = false"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 			{
-				// From the held address to a pool: a new address, never just a new name in state.
+				// An ID the project doesn't hold: the attach is refused, and the old address (kept, as
+				// release_on_destroy is false) goes back on. Nothing is lost.
+				Config:      cfg("floating_ip_id = \"fip-nope\"\n  release_on_destroy = false"),
+				ExpectError: regexp.MustCompile(`(?s)not one the project holds\.\s+The\s+old\s+address\s+203\.0\.113\.9\s+is\s+attached\s+again`),
+			},
+			{Config: cfg("floating_ip_id = \"fip-held\"\n  release_on_destroy = false"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectKnownValue(res, tfjsonpath.New("address"), knownvalue.StringExact("203.0.113.9"))}},
+			{
+				// From the held address to a pool: a new address, in place; the held one stays in the project.
 				Config: fromPool,
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction(res, plancheck.ResourceActionDestroyBeforeCreate),
+					plancheck.ExpectResourceAction(res, plancheck.ResourceActionUpdate),
 				}},
-				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectKnownValue(res, tfjsonpath.New("address"), knownvalue.StringExact("196.0.0.10"))},
+				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectKnownValue(res, tfjsonpath.New("address"), knownvalue.StringExact("203.0.113.10"))},
 			},
+			{Config: fromPool, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// By the address itself: one the network can't use is refused at plan time, listing the free ones.
+			{Config: cfg(`floating_ip_address = "203.0.113.99"`), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)203\.0\.113\.99\s+is\s+not\s+a\s+free\s+address.*Free\s+addresses:\s+203\.0\.113\.9`)},
+			{
+				Config: cfg(`floating_ip_address = "203.0.113.9"`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(res, plancheck.ResourceActionUpdate),
+				}},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(res, tfjsonpath.New("address"), knownvalue.StringExact("203.0.113.9")),
+					statecheck.ExpectKnownValue(res, tfjsonpath.New("floating_ip_id"), knownvalue.StringExact("fip-held")),
+				},
+			},
+			{Config: cfg(`floating_ip_address = "203.0.113.9"`), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 			{Config: lbBase(f), Check: func(*terraform.State) error {
 				plugin.mu.Lock()
 				defer plugin.mu.Unlock()
-				if got := fmt.Sprint(plugin.released); got != "[true false true]" {
-					return fmt.Errorf("detaches released %s, want [true false true]", got)
+				// pool → held (state: release), failed swap (false), held → pool (false), pool → address (true), destroy (true).
+				if got := fmt.Sprint(plugin.released); got != "[false false false true true]" {
+					return fmt.Errorf("detaches released %s, want [false false false true true]", got)
 				}
 				return nil
 			}},
@@ -525,4 +576,69 @@ resource "mtncloud_load_balancer_instance_member" "all" {
 			{Config: lbBase(f) + strings.Replace(pinned, "10.0.0.32", "10.0.0.99", 1), ExpectError: regexp.MustCompile(`not an address of instance`)},
 		},
 	})
+}
+
+// After an import, a configured pool is recorded only when the address attached is from that pool;
+// one from another pool is refused at apply (nothing changed), and the next apply swaps it for a
+// new address from the pool, keeping the imported one (release_on_destroy was false).
+func TestLoadBalancerFloatingIP_ImportAdoptsPool(t *testing.T) {
+	for _, c := range []struct {
+		name, from string
+		adopted    bool
+	}{{"same pool", "ext-02", true}, {"other pool", "ext-07", false}} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFakeAPI(t)
+			plugin := newLBPlugin()
+			f.lb = plugin
+			res := "mtncloud_load_balancer_floating_ip.pub"
+			fromPool := lbBase(f) + `
+resource "mtncloud_load_balancer_floating_ip" "pub" {
+  network_id       = 114
+  load_balancer_id = mtncloud_load_balancer.web.id
+  floating_ip_pool = "public-network-02"
+}
+`
+			adopt := resource.TestStep{Config: fromPool, ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue(res, tfjsonpath.New("floating_ip_id"), knownvalue.StringExact("fip-console")),
+				statecheck.ExpectKnownValue(res, tfjsonpath.New("floating_ip_pool"), knownvalue.StringExact("public-network-02")),
+			}}
+			if !c.adopted {
+				adopt = resource.TestStep{Config: fromPool, ExpectError: regexp.MustCompile(`(?s)isn't\s+from\s+pool\s+"public-network-02".*Nothing\s+was\s+changed`)}
+			}
+			steps := []resource.TestStep{
+				{Config: lbBase(f), PreConfig: func() {}},
+				{
+					PreConfig: func() {
+						plugin.mu.Lock()
+						defer plugin.mu.Unlock()
+						for _, lb := range plugin.lbs {
+							lb["fip"] = map[string]any{"id": "fip-console", "floating_ip_address": "203.0.113.7", "floating_network_id": c.from}
+						}
+					},
+					Config: fromPool, ResourceName: res, ImportState: true, ImportStatePersist: true,
+					ImportStateIdFunc: func(s *terraform.State) (string, error) {
+						return fmt.Sprintf("114/%s/fip-console", s.RootModule().Resources["mtncloud_load_balancer.web"].Primary.ID), nil
+					},
+				},
+				adopt,
+			}
+			if c.adopted {
+				steps = append(steps, resource.TestStep{Config: fromPool, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}})
+			} else {
+				steps = append(steps,
+					resource.TestStep{Config: fromPool, ConfigStateChecks: []statecheck.StateCheck{
+						statecheck.ExpectKnownValue(res, tfjsonpath.New("address"), knownvalue.StringExact("203.0.113.10")),
+					}, Check: func(*terraform.State) error {
+						plugin.mu.Lock()
+						defer plugin.mu.Unlock()
+						if got := fmt.Sprint(plugin.released); got != "[false]" {
+							return fmt.Errorf("detaches released %s, want [false]: the imported address kept", got)
+						}
+						return nil
+					}},
+					resource.TestStep{Config: fromPool, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}})
+			}
+			resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: steps})
+		})
+	}
 }

@@ -90,29 +90,29 @@ resource "mtncloud_instance" "worker" {
 
 ### Required
 
-- `image` (String) Operating system image, by name (`MTN Ubuntu Server 24.04.3LTS`) or code (`MTN-U24.04LTS`); the `mtncloud_images` data source lists them. Changing it replaces the instance.
-- `networks` (List of String) IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`. The first is the primary network. Any change replaces the instance: MTN Cloud doesn't report an instance's network card IDs, so a network can't be added to a running instance safely. Create the networks first: an ID known at plan time must be a network in the instance's project, or the plan fails.
+- `image` (String) Operating system image, by name (`MTN Ubuntu Server 24.04.3LTS`) or code (`MTN-U24.04LTS`); the `mtncloud_images` data source lists them. Set at create: MTN Cloud can't change it, so a change is refused at plan time.
+- `networks` (List of String) IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`, one card each. The first is the primary network (eth0): it is set at create, and a change is refused at plan time. Networks added at the end get a new card in place, and removing one removes its card and address in place; a network moved within the list is removed and added again at the end. On an instance with several servers (`scale_factor`) any change is refused (bring it to 1 first). An ID known at plan time must be a network in the instance's project, or the plan fails.
 - `plan` (String) Size of the VM, for example `G2S4` (the `mtncloud_plans` data source lists a project's sizes). **Changing it restarts the VM**, in place.
 - `root_volume_size` (Number) Root volume size in GB. MTN Cloud can't resize a root volume: add a `data_volume` instead. Windows images need at least 40 GB. Upgrading from 0.7.0, where it was optional, set it to the size the instance has (shown in state): any other size is refused, as a root disk can't be resized.
 
 ### Optional
 
-- `create_user` (Boolean) Create your user (from your Linux or Windows user settings) on the VM. Defaults to `true`. Changing it replaces the instance.
-- `data_volume` (Block List) Extra disks, in order. Volumes added at the end are attached in place; changing or removing one replaces the instance. (see [below for nested schema](#nestedblock--data_volume))
-- `datastore` (String) Datastore of the root volume, by name, for example `__DEFAULT__` (the `mtncloud_datastores` data source lists them). Left out, the project's default. Changing it replaces the instance.
+- `create_user` (Boolean) Create your user (from your Linux or Windows user settings) on the VM. Defaults to `true`. Set at create: MTN Cloud can't change it, so a change is refused at plan time.
+- `data_volume` (Block List) Extra disks, in the order they were made, all changed in place: a block added attaches a new disk, a larger `size` grows that disk with its data kept, and a block removed **deletes that disk with its data** (the plan warns which). A disk can't shrink, change datastore or be renamed (refused at plan time). A block with a `name` is that disk wherever it is listed; one without is the disk at its position, so to remove a disk from the middle of the list, give the disks names. The root disk is `root_volume_size`. (see [below for nested schema](#nestedblock--data_volume))
+- `datastore` (String) Datastore of the root volume, by name, for example `__DEFAULT__` (the `mtncloud_datastores` data source lists them). Left out, the project's default. Set at create: MTN Cloud can't change it, so a change is refused at plan time.
 - `description` (String) Description of the instance.
-- `domain` (String) Network domain the instance joins, by name, for example `example.com`. Left out, MTN Cloud may apply the network's domain, shown here. Changing it replaces the instance.
-- `env_vars` (Map of String, Sensitive) Environment variables for the instance's automation, name to value. Sensitive: values are hidden in plans, but stored in state. The variables MTN Cloud adds itself (address, host, ports) are not shown. Changing them replaces the instance.
+- `domain` (String) Network domain the instance joins, by name, for example `example.com`. Left out, MTN Cloud may apply the network's domain, shown here. Set at create: MTN Cloud can't change it, so a change is refused at plan time.
+- `env_vars` (Map of String, Sensitive) Environment variables for the instance's automation, name to value. Sensitive: values are hidden in plans, but stored in state. The variables MTN Cloud adds itself (address, host, ports) are not shown. Set at create: a change is refused at plan time.
 - `environment` (String) Environment, by name or code, for example `Production`. Changed in place.
 - `expire_days` (Number) Delete the instance this many days after it is created. Set at create only: afterwards extend or cancel the expiry in the console (a change here is refused at plan time).
 - `floating_ip_pool` (String) Give the instance a floating (public) IP from this pool, for example `public-network-02` (the `mtncloud_external_networks` data source lists the names). It is attached once the VM is running, and works only when the instance's network is on an MTN Router with an external network. Changed in place: the old address is released and a new one attached. Apply waits until the instance shows the address (in `public_ip`), and fails if it doesn't.
-- `group` (String) Group the instance is provisioned into, by name, for example `MTNNG_CLOUD_AZ_1`. Defaults to the provider's `group`. Changing it, or that default when you rely on it, replaces the instance.
-- `hostname` (String) Hostname set inside the VM. Left out, MTN Cloud derives it from the name or your hostname template. Changing it replaces the instance.
-- `install_agent` (Boolean) Install the MTN Cloud agent, for monitoring, logs and automation. The agent needs the primary network to be on an MTN Router with an external network, so it can reach MTN Cloud: without one, the VM stays "provisioning" (finalizing) until the create timeout. Left out, it is `true` when the primary network is on such a router and `false` otherwise, decided when the instance is created (the plan shows it as known after apply) and kept after. Changing it replaces the instance.
+- `group` (String) Group the instance is provisioned into, by name, for example `MTNNG_CLOUD_AZ_1`. Defaults to the provider's `group`. Set at create: changing it, or that default when you rely on it, is refused at plan time.
+- `hostname` (String) Hostname set inside the VM. Left out, MTN Cloud derives it from the name or your hostname template. Set at create: MTN Cloud can't change it, so a change is refused at plan time.
+- `install_agent` (Boolean) Install the MTN Cloud agent, for monitoring, logs and automation. The agent needs the primary network to be on an MTN Router with an external network, so it can reach MTN Cloud: without one, the VM stays "provisioning" (finalizing) until the create timeout. Left out, it is `true` when the primary network is on such a router and `false` otherwise, decided when the instance is created (the plan shows it as known after apply) and kept after. Set at create: MTN Cloud can't change it, so a change is refused at plan time.
 - `labels` (Set of String) Labels (keywords). Changed in place.
 - `name` (String) Name of the instance. Leave it out to use your tenant's naming template (for example `<initials>-<account>-MTN-CLOUD-<type>-<n>`); the generated name is then shown here. Renaming is done in place.
 - `power_state` (String) `running`, `stopped` or `suspended`. Set it to power the VM on, off, or suspend it, in place: stopping shuts the server down and keeps its disks and addresses. When set, a VM started or stopped in the console is put back by the next apply. Left out, the VM's power isn't managed and this shows its state. A plan change or added volume restarts the VM, then it is put back in this state. Leave it out on a VM on a power schedule (`mtncloud_instance_power_schedule`), or each apply undoes the schedule. **`suspended` doesn't work on MTN Cloud's images so far** (tried on Ubuntu 24.04 and Debian 12): MTN Cloud accepts it but the VM keeps running, and the apply fails after 2 minutes. Use `stopped`.
-- `project` (String) Project the instance runs in, by name (for example `web-prod`; the full name with the tenant suffix also works). Defaults to the provider's `project`. Changing it to another project, or that default when you rely on it, replaces the instance.
+- `project` (String) Project the instance runs in, by name (for example `web-prod`; the full name with the tenant suffix also works). Defaults to the provider's `project`. Set at create: moving to another project, or changing that default when you rely on it, is refused at plan time.
 - `restart_trigger` (String) Any value; changing it to a new value restarts the VM (server reboot) in place on the next apply, for example `restart_trigger = timestamp()` or a version string. Nothing happens at create, when it is removed, or while `power_state` is `stopped` or `suspended`.
 - `scale` (Attributes) Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and removes one below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. Changed in place; removing it turns scaling off. (see [below for nested schema](#nestedatt--scale))
 - `scale_factor` (Number) Number of VMs (servers) in the instance. Defaults to 1. **Changed in place**: raising it adds servers, a few minutes each, and gives each a floating IP when `floating_ip_pool` is set; lowering it **deletes the newest servers and their disks**. A server added or removed in the console is put back by the next apply. With `scale`, MTN Cloud changes the number itself: this then isn't read back, and changing it scales to the new number once. For several separate instances use `count` or `for_each`.
@@ -136,12 +136,12 @@ resource "mtncloud_instance" "worker" {
 
 Required:
 
-- `size` (Number) Size in GB.
+- `size` (Number) Size in GB. A larger size grows the disk in place; it can't shrink.
 
 Optional:
 
 - `datastore` (String) Datastore, by name. Left out, the project's default.
-- `name` (String) Volume name.
+- `name` (String) Disk name. Left out, the next free `data-<n>`. It is how the disk is told apart from the others, and can't change once the disk exists.
 
 
 <a id="nestedatt--scale"></a>
@@ -226,11 +226,38 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
   change the VM doesn't start within 2 minutes fails the apply (MTN Cloud accepts a suspend some VMs
   don't support); use `stopped` for those.
 - **Changes in place:** `name`, `description`, `environment`, `labels`, `tags`, `security_groups`, `scale`,
-  `floating_ip_pool`, `power_state`, `restart_trigger`,
-  `plan`, and volumes added at the end of `data_volume`.
-- **Replaces the instance:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`,
-  `env_vars`, `install_agent`, `create_user`, `scale_factor`, any change to `networks`, and
-  removing, reordering or changing existing data volumes.
+  `floating_ip_pool`, `power_state`, `restart_trigger`, `plan`, `scale_factor`, network cards and data
+  disks (below).
+- **Set at create:** `group`, `project`, `image`, `hostname`, `datastore`, `domain`, `env_vars`,
+  `install_agent`, `create_user`, `root_volume_size`, and the first network in `networks` (the primary
+  card). MTN Cloud can't change these, so a change is refused at plan time and nothing is deleted. To
+  start again with other values, remove the instance from the configuration (which deletes it) and add
+  a new one, or run `terraform apply -replace=<address>` with the values unchanged.
+- **Network cards and disks.** Add a network to `networks` and it gets a new card, in place, after the
+  existing ones. Remove any network but the first and its card goes, in place, and its address is
+  released. A network moved within the list loses its card and gets a new one at the end. On an
+  instance with several servers (`scale_factor` above 1), a change to `networks` is refused: bring `scale_factor` to 1 first.
+- **Data disks change in place, and none is deleted to make a change.** A `data_volume` block added
+  attaches a new disk; a larger `size` grows that disk with its data kept. A block removed **deletes
+  that disk with its data**: the plan warns which. A block with a `name` is the disk with that name;
+  one without is the disk at its position, so to remove a disk from the middle of the list, name the
+  disks. Every disk has a name: left out, a new one gets the next free `data-<n>`. Refused at plan
+  time, deleting nothing: a smaller size, a new datastore, a new name for a disk (MTN Cloud can't
+  rename one), and disks listed out of the order they were made. The root disk is
+  `root_volume_size` and is never removed.
+
+  ```terraform
+  networks = [mtncloud_network.app.id, mtncloud_network.backup.id] # eth0 stays; eth1 added in place
+
+  data_volume {
+    name = "data-1"
+    size = 80 # was 50: grown in place, data kept
+  }
+  data_volume {
+    name = "logs" # added in place; delete this block and the disk is deleted
+    size = 100
+  }
+  ```
 - **Set at create only:** `expire_days` and `shutdown_days`. Changing them later is refused at plan
   time; extend or cancel an expiry in the console. `expire_date` and `shutdown_date` show the dates,
   including ones a policy sets.
@@ -252,8 +279,9 @@ plan after import is empty. `create_user` can't be read back and is taken as `tr
   marks the instance tainted, so the next apply replaces it; run `terraform untaint` to keep the VM
   and try the attach again. It needs the instance's network to be on an `mtncloud_router` with an
   `external_network`; reference the router (for example in `depends_on`) so it exists first. The plan
-  checks this: a router on another external network is an error naming the pool to use, and no router
-  at all is a warning (the router may come in the same apply).
+  checks this: a router on another external network, or no router at all, is a warning naming the pool
+  to use (the router may be made, or changed, in the same apply). If the address really can't come, the
+  apply fails once the VM is running.
   Changing the pool releases the old address and attaches a new one, waiting for each. An address
   released in the console is attached again by the next apply. A floating IP attached in the console,
   with no `floating_ip_pool` set, shows in `public_ip` and is left alone; setting `floating_ip_pool`

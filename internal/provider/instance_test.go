@@ -48,6 +48,7 @@ type instStore struct {
 	creates        int
 	lastCreate     map[string]any
 	resizes        []map[string]any
+	nicSends       [][]any  // the networkInterfaces of each resize that sent them
 	powers         []string // power actions, in order
 	powerErr       bool     // power actions answer 400
 	resizeIgnored  bool     // a resize answers 200 but changes nothing
@@ -186,24 +187,47 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.resizes = append(s.resizes, body)
 		plan := body["instance"].(map[string]any)["plan"].(map[string]any)["id"].(float64)
 		in["plan"] = map[string]any{"id": plan, "name": fakePlans[plan]}
-		vols := in["volumes"].([]any)
-		for _, v := range body["volumes"].([]any) {
-			if v.(map[string]any)["id"] == -1.0 {
-				vols = append(vols, s.volume(id, len(vols), v.(map[string]any)))
+		// The full lists, as the platform takes them (live QA 2026-10-31): kept ones by ID, new ones
+		// added after them, and ones left out removed (a removed volume is deleted).
+		// A disk added by a resize takes the name sent, and has none if none was (live QA
+		// 2026-10-31). A kept disk takes the size sent: a larger one grows it in place.
+		in["volumes"] = s.reconfigured(in["volumes"].([]any), body["volumes"].([]any), func(v map[string]any) bool { return v["id"] == -1.0 },
+			func(i int, v map[string]any) map[string]any {
+				d := s.volume(id, i, v)
+				if v["name"] == nil || v["name"] == "" {
+					d["name"] = nil
+				}
+				return d
+			})
+		for _, x := range body["volumes"].([]any) {
+			for _, c := range in["volumes"].([]any) {
+				if m, k := x.(map[string]any), c.(map[string]any); m["id"] != -1.0 && fmt.Sprint(m["id"]) == fmt.Sprint(k["id"]) {
+					k["size"] = m["size"]
+				}
 			}
 		}
-		in["volumes"] = vols
-		nics := in["interfaces"].([]any)
-		sent, _ := body["networkInterfaces"].([]any)
-		for _, n := range sent {
-			if _, ok := n.(map[string]any)["id"]; !ok {
-				nics = append(nics, s.nic(id, len(nics), n.(map[string]any)))
-			}
+		if sent, ok := body["networkInterfaces"].([]any); ok {
+			s.nicSends = append(s.nicSends, sent)
+			in["interfaces"] = s.reconfigured(in["interfaces"].([]any), sent, func(n map[string]any) bool { _, ok := n["id"]; return !ok },
+				func(i int, n map[string]any) map[string]any { return s.nic(id, i, n) })
 		}
-		in["interfaces"] = nics
 		in["status"] = "running" // a reconfigure restarts the VM
 		s.pending[id] = true
 		reply(http.StatusOK, map[string]any{"success": true})
+	case r.Method == http.MethodGet && r.URL.Query().Get("details") == "true":
+		v := s.view(id)
+		var cards []any
+		for i, n := range in["interfaces"].([]any) {
+			m := n.(map[string]any)
+			cid, _ := strconv.ParseInt(fmt.Sprint(m["id"]), 10, 64)
+			cards = append(cards, map[string]any{"id": cid, "name": fmt.Sprintf("eth%d", i), "network": m["network"], "primaryInterface": m["primaryInterface"]})
+		}
+		var details []any
+		for _, c := range in["containers"].([]any) {
+			details = append(details, map[string]any{"id": c, "server": map[string]any{"id": c, "interfaces": cards}})
+		}
+		v["containerDetails"] = details
+		reply(http.StatusOK, map[string]any{"instance": v})
 	case r.Method == http.MethodGet:
 		reply(http.StatusOK, map[string]any{"instance": s.view(id)})
 	case r.Method == http.MethodPut:
@@ -215,6 +239,38 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		delete(s.insts, id)
 		reply(http.StatusOK, map[string]any{"success": true})
 	}
+}
+
+// reconfigured is a resized list: the items sent with an ID that exists are kept, in their order,
+// and new ones are added after them with IDs not used before on this instance.
+func (s *instStore) reconfigured(cur, sent []any, isNew func(map[string]any) bool, add func(int, map[string]any) map[string]any) []any {
+	byID := map[string]any{}
+	for _, c := range cur {
+		byID[fmt.Sprint(c.(map[string]any)["id"])] = c
+	}
+	var out, fresh []any
+	for _, c := range cur { // kept ones stay in the platform's order
+		for _, x := range sent {
+			if m := x.(map[string]any); !isNew(m) && fmt.Sprint(m["id"]) == fmt.Sprint(c.(map[string]any)["id"]) {
+				out = append(out, c)
+			}
+		}
+	}
+	for _, x := range sent {
+		if m := x.(map[string]any); isNew(m) {
+			fresh = append(fresh, m)
+		}
+	}
+	next := len(cur)
+	for _, m := range fresh {
+		for byID[fmt.Sprint(add(next, m.(map[string]any))["id"])] != nil {
+			next++
+		}
+		n := add(next, m.(map[string]any))
+		byID[fmt.Sprint(n["id"])] = n
+		out = append(out, n)
+	}
+	return out
 }
 
 func (s *instStore) volume(id int64, i int, v map[string]any) map[string]any {
@@ -446,27 +502,20 @@ resource "mtncloud_instance" "app" {
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
 			},
 			{
-				// A network added to a running instance replaces it: MTN Cloud doesn't report card IDs.
+				// Dropping env_vars is refused: they are set at create, and nothing is replaced to change
+				// them. (Networks and disks change in place: TestInstance_CardsAndDisksInPlace.)
 				Config: instConfig(f, `  name = "app-1"
   plan = "G2S4"
   networks = ["9301", "9303"]`),
-				ConfigPlanChecks: instPlan(plancheck.ResourceActionDestroyBeforeCreate),
+				ExpectError: regexp.MustCompile(`env_vars can't change`),
 			},
 			{
-				// A new primary network can't be set in place.
-				Config: instConfig(f, `  name = "app-1"
-  plan = "G2S4"
-  networks = ["9303"]`),
-				ConfigPlanChecks: instPlan(plancheck.ResourceActionDestroyBeforeCreate),
-			},
-			{
-				// Deleted outside Terraform: planned again.
+				// Deleted outside Terraform: made again, here with other create-time values.
 				PreConfig: lock(func() { clear(s.insts) }),
 				Config: instConfig(f, `  name = "app-1"
   plan = "G2S4"
   networks = ["9303"]`),
-				PlanOnly:           true,
-				ExpectNonEmptyPlan: true,
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionCreate),
 			},
 			{Config: f.providerConfig()},
 		},
@@ -611,14 +660,15 @@ func TestInstance_UpdateEdges(t *testing.T) {
 				},
 			},
 			{
-				// A project known only at apply is assumed to be another one: replace, never an update.
+				// A project known only at apply is checked when Terraform plans again at apply: the same
+				// project, so an update in place, never a replace.
 				Config: strings.Replace(strings.Replace(small, `"G1S1"`, `"G2S4"`, 1), `project  = "web-prod"`,
 					`project  = terraform_data.p.output`, 1) + `
 resource "terraform_data" "p" {
   input = "web-prod"
 }
 `,
-				ConfigPlanChecks: instPlan(plancheck.ResourceActionDestroyBeforeCreate),
+				ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate),
 			},
 			{Config: f.providerConfig()},
 		},
@@ -746,12 +796,6 @@ func TestInstance_ScaleAndLifecycle(t *testing.T) {
 				Config:      strings.Replace(cfg(""), "expire_days = 30", "expire_days = 60", 1),
 				PlanOnly:    true,
 				ExpectError: regexp.MustCompile(`(?s)Set at create only.*set\s+expire_days\s+back\s+to\s+30`),
-			},
-			{
-				// A replacing change takes the new days with it: no refusal.
-				Config: strings.Replace(strings.Replace(cfg(""), "expire_days = 30", "expire_days = 60", 1),
-					`networks = ["9301"]`, `networks = ["9303"]`, 1),
-				PlanOnly: true, ExpectNonEmptyPlan: true, // no "Set at create only" error
 			},
 			{
 				// Scaling changed in the console: the plan puts it back.
@@ -1057,8 +1101,8 @@ func TestInstance_PoolCheckedAgainstRouter(t *testing.T) {
 `)
 	}
 	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: []resource.TestStep{
-		{Config: cfg("public-network-01"), PlanOnly: true,
-			ExpectError: regexp.MustCompile(`(?s)Floating IP pool doesn't match the router.*edge \(external network public-network-02\)`)},
+		// Another pool than the router's is a warning, not an error: the router may change in this apply (B-020).
+		{Config: cfg("public-network-01"), PlanOnly: true, ExpectNonEmptyPlan: true},
 		{Config: cfg("public-network-02"), PlanOnly: true, ExpectNonEmptyPlan: true},
 	}})
 	if n := s.count(); n != 0 {
@@ -1353,8 +1397,9 @@ resource "mtncloud_instance" "app" {
 			// The same group and project set on the instance: no change.
 			{Config: cfg(both, `  group = "MTNNG_CLOUD_AZ_1"
   project = "web-prod"`), ConfigPlanChecks: instPlan(plancheck.ResourceActionNoop)},
-			{Config: toData(cfg(both, `  project = "data"`)), ConfigPlanChecks: instPlan(plancheck.ResourceActionReplace),
-				ConfigStateChecks: []statecheck.StateCheck{check("project", "data")}},
+			// A move to another project is refused, never a replace: MTN Cloud can't move an instance (it
+			// would need a network of that project, and the primary network can't change either).
+			{Config: toData(cfg(both, `  project = "data"`)), ExpectError: regexp.MustCompile(`The first network can't change`)},
 		},
 	})
 }
@@ -1415,9 +1460,8 @@ func TestInstance_AgentFollowsRouter(t *testing.T) {
 			Config:           cfg(""),
 			ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
 		},
-		{Config: cfg("  install_agent = true\n"), PlanOnly: true, ExpectNonEmptyPlan: true,
-			ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{
-				plancheck.ExpectResourceAction("mtncloud_instance.app", plancheck.ResourceActionReplace)}}},
+		// Asking for the agent afterwards is refused: it is set at create, and nothing is replaced for it.
+		{Config: cfg("  install_agent = true\n"), PlanOnly: true, ExpectError: regexp.MustCompile(`install_agent can't change`)},
 	}})
 }
 
@@ -1627,4 +1671,165 @@ func TestInstance_ScaleFactorWithAutoscaling(t *testing.T) {
 		{Config: plain, ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate)},
 		{Config: plain, ConfigPlanChecks: empty},
 	}})
+}
+
+// Cards and disks are added and removed in place (owner, 2026-10-31): the primary card and the root
+// disk stay, kept ones are sent with their IDs, and the disk the plan names is the one deleted.
+func TestInstance_CardsAndDisksInPlace(t *testing.T) {
+	f, s := newInstFakes(t)
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	// cfg takes disks as "size" (unnamed) or "name:size".
+	cfg := func(nets string, disks ...string) string {
+		body := "  plan = \"G1S1\"\n  networks = " + nets
+		for _, d := range disks {
+			name, size, ok := strings.Cut(d, ":")
+			if !ok {
+				body += fmt.Sprintf("\n  data_volume {\n    size = %s\n  }", name)
+				continue
+			}
+			if !strings.HasPrefix(name, "terraform_data.") {
+				name = strconv.Quote(name)
+			}
+			body += fmt.Sprintf("\n  data_volume {\n    name = %s\n    size = %s\n  }", name, size)
+		}
+		return instConfig(f, body)
+	}
+	disks := func(want ...string) []statecheck.StateCheck {
+		var checks []knownvalue.Check
+		for _, d := range want {
+			name, size, _ := strings.Cut(d, ":")
+			gb, _ := strconv.ParseInt(size, 10, 64)
+			checks = append(checks, knownvalue.ObjectPartial(map[string]knownvalue.Check{
+				"name": knownvalue.StringExact(name), "size": knownvalue.Int64Exact(gb)}))
+		}
+		return []statecheck.StateCheck{statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("data_volume"), knownvalue.ListExact(checks))}
+	}
+	var id, added string
+	keepID := statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("id"), knownvalue.StringFunc(func(v string) error {
+		if id != "" && v != id {
+			return fmt.Errorf("instance %s replaced by %s", id, v)
+		}
+		id = v
+		return nil
+	}))
+	vol := func(i int) map[string]any { return s.insts[s.nextID]["volumes"].([]any)[i].(map[string]any) }
+	lastSent := func() []any { return s.resizes[len(s.resizes)-1]["volumes"].([]any) }
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg(`["9301"]`, "10", "20", "30"), ConfigStateChecks: append(disks("data-1:10", "data-2:20", "data-3:30"), keepID)},
+			{
+				// A card added, and the middle disk removed by naming the others: in place, and data-2
+				// is the one deleted.
+				Config:            cfg(`["9301", "9303"]`, "data-1:10", "data-3:30"),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: append(disks("data-1:10", "data-3:30"), keepID),
+			},
+			{
+				PreConfig: lock(func() {
+					var vols []string
+					for _, v := range lastSent() {
+						vols = append(vols, fmt.Sprint(v.(map[string]any)["id"]))
+					}
+					if want := fmt.Sprintf("[%d %d %d]", s.nextID*10, s.nextID*10+1, s.nextID*10+3); fmt.Sprint(vols) != want {
+						t.Errorf("volumes sent %v, want root, data-1 and data-3 by ID %s", vols, want)
+					}
+					sent := s.nicSends[len(s.nicSends)-1]
+					eth0 := sent[0].(map[string]any)
+					if len(sent) != 2 || fmt.Sprint(eth0["id"]) != fmt.Sprint(s.nextID*100) || sent[1].(map[string]any)["id"] != nil {
+						t.Errorf("cards sent %v, want eth0 by its ID and a new one without", sent)
+					}
+					if n := len(s.insts[s.nextID]["interfaces"].([]any)); n != 2 {
+						t.Errorf("%d cards, want 2", n)
+					}
+				}),
+				// The second card removed, and an unnamed disk added at the end: the provider names it
+				// with the next free data-<n>, as MTN Cloud leaves a disk a resize added unnamed.
+				Config:            cfg(`["9301"]`, "data-1:10", "data-3:30", "5"),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: append(disks("data-1:10", "data-3:30", "data-2:5"), keepID),
+			},
+			{
+				PreConfig: lock(func() {
+					sent := s.nicSends[len(s.nicSends)-1]
+					if len(sent) != 1 || fmt.Sprint(sent[0].(map[string]any)["id"]) != fmt.Sprint(s.nextID*100) {
+						t.Errorf("cards sent %v, want eth0 alone", sent)
+					}
+					if n := len(s.insts[s.nextID]["interfaces"].([]any)); n != 1 {
+						t.Errorf("%d cards, want eth0 alone", n)
+					}
+					if got := lastSent()[3].(map[string]any)["name"]; got != "data-2" {
+						t.Errorf("the new disk was sent named %v, want data-2", got)
+					}
+					added = fmt.Sprint(vol(3)["id"])
+				}),
+				// A disk removed from the middle, with nothing else: no card is sent, and the disk
+				// added last is kept, not deleted and made again (live QA 2026-10-31: it was).
+				Config:            cfg(`["9301"]`, "data-1:10", "data-2:5"),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: append(disks("data-1:10", "data-2:5"), keepID),
+			},
+			{
+				PreConfig: lock(func() {
+					if n := len(s.nicSends); n != 2 {
+						t.Errorf("cards sent in %d resizes, want 2 (only when the networks change)", n)
+					}
+					if got := fmt.Sprint(vol(2)["id"]); got != added {
+						t.Errorf("data-2 is now volume %s, was %s: it was deleted and made again", got, added)
+					}
+				}),
+				// Unnamed blocks are the disks at their positions: the second grows in place.
+				Config:            cfg(`["9301"]`, "10", "8"),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: append(disks("data-1:10", "data-2:8"), keepID),
+			},
+			{
+				PreConfig: lock(func() {
+					v := lastSent()
+					if len(v) != 3 || fmt.Sprint(v[2].(map[string]any)["id"]) != added || v[2].(map[string]any)["size"] != 8.0 {
+						t.Errorf("volumes sent %v, want data-2 (%s) by its ID at 8 GB", v, added)
+					}
+					if got := fmt.Sprint(vol(2)["id"]); got != added {
+						t.Errorf("data-2 is now volume %s, was %s: the grow replaced it", got, added)
+					}
+				}),
+				Config:      cfg(`["9301"]`, "10", "6"),
+				ExpectError: regexp.MustCompile(`A disk can't shrink`),
+			},
+			{
+				Config:      cfg(`["9301"]`, "10", "logs:8"),
+				ExpectError: regexp.MustCompile(`A disk can't be renamed`),
+			},
+			{
+				Config:      cfg(`["9301"]`, "data-2:8", "data-1:10"),
+				ExpectError: regexp.MustCompile(`Disks keep their order`),
+			},
+			{
+				// A size known only at apply still grows the disk the block names, in place.
+				Config: `resource "terraform_data" "size" {
+  input = 9
+}
+` + cfg(`["9301"]`, "data-1:10", "data-2:terraform_data.size.output"),
+				ConfigPlanChecks:  instPlan(plancheck.ResourceActionUpdate),
+				ConfigStateChecks: append(disks("data-1:10", "data-2:9"), keepID),
+			},
+			{
+				Config:      cfg(`["9301"]`, "new:5", "data-1:10", "data-2:9"),
+				ExpectError: regexp.MustCompile(`New disks go last`),
+			},
+			{
+				// A disk whose name is known only at apply: refused, never a replace.
+				Config: `resource "terraform_data" "name" {
+  input = "logs"
+}
+` + cfg(`["9301"]`, "data-1:10", "data-2:9", "terraform_data.name.output:3"),
+				ExpectError: regexp.MustCompile(`Disk must be known at plan time`),
+			},
+			{
+				// MTN Cloud can't move the primary card: refused, never a replace.
+				Config:      cfg(`["9303"]`, "10", "9"),
+				ExpectError: regexp.MustCompile(`The first network can't change`),
+			},
+		},
+	})
 }

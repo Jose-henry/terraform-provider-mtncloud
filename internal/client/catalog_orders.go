@@ -17,6 +17,7 @@ type OrderedItem struct {
 	TypeName      string // the catalog item type, for example "Create Project"
 	Status        string // the item's own status, for example "ORDERED"; it doesn't follow the execution
 	StatusMessage string
+	RefType       string // "Workflow" for a workflow item
 	Execution     *Execution
 }
 
@@ -34,6 +35,7 @@ type wireOrderedItem struct {
 	} `json:"type"`
 	Status        string  `json:"status"`
 	StatusMessage *string `json:"statusMessage"`
+	RefType       string  `json:"refType"`
 	Execution     *struct {
 		ID     int64  `json:"id"`
 		Status string `json:"status"`
@@ -41,7 +43,7 @@ type wireOrderedItem struct {
 }
 
 func (w wireOrderedItem) item() *OrderedItem {
-	it := &OrderedItem{ID: w.ID, TypeID: w.Type.ID, TypeName: w.Type.Name, Status: w.Status, StatusMessage: deref(w.StatusMessage)}
+	it := &OrderedItem{ID: w.ID, TypeID: w.Type.ID, TypeName: w.Type.Name, Status: w.Status, StatusMessage: deref(w.StatusMessage), RefType: w.RefType}
 	if w.Execution != nil {
 		it.Execution = &Execution{ID: w.Execution.ID, Status: w.Execution.Status}
 	}

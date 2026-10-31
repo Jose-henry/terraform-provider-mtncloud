@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -52,7 +53,7 @@ func dataSourceServiceNowWorkflowRead(ctx context.Context, d *schema.ResourceDat
 		QueryParams: map[string]string{},
 	})
 	if err != nil {
-		log.Println("API ERROR: ", err)
+		return diag.Errorf("listing the integration's ServiceNow workflows: %s", err)
 	}
 	log.Println("API RESPONSE:", resp)
 
@@ -60,15 +61,18 @@ func dataSourceServiceNowWorkflowRead(ctx context.Context, d *schema.ResourceDat
 	if err := json.Unmarshal(resp.Body, &itemResponsePayload); err != nil {
 		return diag.Errorf("reading the ServiceNow workflows: %s", err)
 	}
-	foundWorkflow := false
+	objs := make([]namedObject, 0, len(itemResponsePayload.Data))
+	var match []namedObject
 	for _, v := range itemResponsePayload.Data {
-		if v.Name == name {
-			foundWorkflow = true
-			d.SetId(intToString(v.Value))
+		o := namedObject{ID: int64(v.Value), Name: v.Name}
+		objs = append(objs, o)
+		if strings.EqualFold(v.Name, name) { // as the API matches names elsewhere
+			match = append(match, o)
 		}
 	}
-	if !foundWorkflow {
-		return diag.Errorf("Workflow named %s not found", name) // should not happen
+	if len(match) != 1 {
+		return diag.Errorf("%s", nameLookupMessage("ServiceNow workflow", name, objs, true))
 	}
+	d.SetId(int64ToString(match[0].ID))
 	return diags
 }

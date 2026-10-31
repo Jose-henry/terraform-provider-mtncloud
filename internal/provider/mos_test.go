@@ -535,14 +535,14 @@ resource "mtncloud_mos_bucket" "b" {
 			},
 			{Config: cfg("tf-acc-mos-p-"), ConfigPlanChecks: empty},
 			{
-				Config: cfg("tf-acc-mos-q-"),
-				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-					plancheck.ExpectResourceAction("mtncloud_mos_bucket.b", plancheck.ResourceActionDestroyBeforeCreate)}},
+				// Another prefix would be another bucket: refused, never replaced (owner, 2026-10-31).
+				Config:      cfg("tf-acc-mos-q-"),
+				ExpectError: regexp.MustCompile(`name_prefix can't change`),
 			},
 			{Config: forget(f, "mtncloud_mos_bucket.b")},
 			{
 				// Imported by name, with a prefix its name starts with: kept, not replaced.
-				Config: cfg("tf-acc-mos-q"), ResourceName: "mtncloud_mos_bucket.b", ImportState: true, ImportStatePersist: true,
+				Config: cfg("tf-acc-mos-p"), ResourceName: "mtncloud_mos_bucket.b", ImportState: true, ImportStatePersist: true,
 				ImportStateIdFunc: func(*terraform.State) (string, error) {
 					m.mu.Lock()
 					defer m.mu.Unlock()
@@ -553,16 +553,16 @@ resource "mtncloud_mos_bucket" "b" {
 				},
 			},
 			{
-				Config: cfg("tf-acc-mos-q"),
+				Config: cfg("tf-acc-mos-p"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
 					plancheck.ExpectResourceAction("mtncloud_mos_bucket.b", plancheck.ResourceActionUpdate)}},
 			},
-			{Config: cfg("tf-acc-mos-q"), ConfigPlanChecks: empty},
+			{Config: cfg("tf-acc-mos-p"), ConfigPlanChecks: empty},
 		},
 	})
 }
 
-// Switching an existing bucket from name to a prefix its name starts with keeps it; a different name replaces it.
+// Switching an existing bucket from name to a prefix its name starts with keeps it; a different name is refused.
 func TestMOSBucket_NameToPrefixAndBack(t *testing.T) {
 	f := newFakeAPI(t)
 	m := newMOSFake(t, f)
@@ -583,7 +583,9 @@ func TestMOSBucket_NameToPrefixAndBack(t *testing.T) {
 			{Config: cfg(`name_prefix = "tf-acc-mos-n"`), ConfigPlanChecks: empty},
 			{Config: cfg(`name = "tf-acc-mos-n1"`), ConfigPlanChecks: action(plancheck.ResourceActionUpdate)},
 			{Config: cfg(`name = "tf-acc-mos-n1"`), ConfigPlanChecks: empty},
-			{Config: cfg(`name = "tf-acc-mos-n2"`), ConfigPlanChecks: action(plancheck.ResourceActionDestroyBeforeCreate)},
+			// A bucket can't be renamed: refused, never replaced (owner, 2026-10-31).
+			{Config: cfg(`name = "tf-acc-mos-n2"`), ExpectError: regexp.MustCompile(`name can't change`)},
+			{Config: cfg(`name = "tf-acc-mos-n1"`), ConfigPlanChecks: empty},
 		},
 	})
 }

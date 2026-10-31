@@ -23,11 +23,11 @@ resource "mtncloud_cypher_uuid" "mac" {
 
 ### Required
 
-- `name` (String) Key name, without the `uuid/` mount, for example `db-admin`. Changing it makes a new UUID.
+- `name` (String) Key name, without the `uuid/` mount, for example `db-admin`. Set at create: a change is refused at plan time (run terraform apply -replace for a new UUID).
 
 ### Optional
 
-- `ttl` (String) Lease: how long the UUID lives before MTN Cloud deletes it, in seconds or as `15m`, `8h`, `7d`. Leave it out, or `0`, to keep it for good. Changing it makes a new UUID.
+- `ttl` (String) Lease: how long the UUID lives before MTN Cloud deletes it, in seconds or as `15m`, `8h`, `7d`. Leave it out, or `0`, to keep it for good. Set at create: a change is refused at plan time.
 
 ### Read-Only
 

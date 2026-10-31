@@ -64,8 +64,9 @@ func (b *base) tenant(ctx context.Context, diags *diag.Diagnostics) string {
 
 // planProject handles the "project" attribute of a resource that lives in one project. On create
 // it checks the name at plan time (rule 17). On update, "web-prod" and "web-prod-AcmeCorp" are the
-// same project: only a move to another project replaces the resource.
-func (b *base) planProject(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+// same project. A move to another project is refused: MTN Cloud can't move a network, router or
+// security group, and nothing is deleted to make one (owner, 2026-10-31).
+func (b *base) planProject(ctx context.Context, kind string, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	at := path.Root("project")
 	var plan, state types.String
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, at, &plan)...)
@@ -87,8 +88,7 @@ func (b *base) planProject(ctx context.Context, req resource.ModifyPlanRequest, 
 		return
 	}
 	if plan.IsUnknown() {
-		resp.RequiresReplace.Append(at)
-		return
+		return // checked when Terraform plans again at apply
 	}
 	from, errFrom := b.client.ProjectByName(ctx, state.ValueString())
 	to, errTo := b.client.ProjectByName(ctx, plan.ValueString())
@@ -97,7 +97,7 @@ func (b *base) planProject(ctx context.Context, req resource.ModifyPlanRequest, 
 		return
 	}
 	if errFrom != nil || from.ID != to.ID {
-		resp.RequiresReplace.Append(at)
+		planmodifiers.RefuseChange(&resp.Diagnostics, at, kind, state)
 		return
 	}
 	// The same project spelled another way ("web-prod" vs "web-prod-Acme", or a provider default):

@@ -38,7 +38,7 @@ resource "mtncloud_load_balancer_pool" "web" {
 - `algorithm` (String) How a member is picked: `ROUND_ROBIN`, `LEAST_CONNECTIONS`, `SOURCE_IP` or `SOURCE_IP_PORT`.
 - `load_balancer_id` (String) ID of the load balancer, for example `mtncloud_load_balancer.web.id`. Changing it replaces the resource.
 - `network_id` (Number) ID of the MTN Network the load balancer is on, for example `mtncloud_network.app.id`. Your tenant must own it: a network shared with you is read-only. Changing it replaces the resource.
-- `protocol` (String) How the load balancer talks to the members: `HTTP`, `HTTPS`, `PROXY`, `PROXYV2`, `TCP`, `UDP` or `SCTP`. Changing it replaces the pool.
+- `protocol` (String) How the load balancer talks to the members: `HTTP`, `HTTPS`, `PROXY`, `PROXYV2`, `TCP`, `UDP` or `SCTP`. Set at create: the cloud can't change it, so a change is refused at plan time.
 
 ### Optional
 

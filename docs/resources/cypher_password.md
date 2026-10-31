@@ -29,12 +29,12 @@ output "db_admin_password" {
 
 ### Required
 
-- `name` (String) Key name, without the `password/` mount, for example `db-admin`. Changing it makes a new password.
+- `name` (String) Key name, without the `password/` mount, for example `db-admin`. Set at create: a change is refused at plan time (run terraform apply -replace for a new password).
 
 ### Optional
 
-- `length` (Number) Number of characters, with symbols, digits, upper and lower case letters. Defaults to 15. Changing it makes a new password.
-- `ttl` (String) Lease: how long the password lives before MTN Cloud deletes it, in seconds or as `15m`, `8h`, `7d`. Leave it out, or `0`, to keep it for good. Changing it makes a new password.
+- `length` (Number) Number of characters, with symbols, digits, upper and lower case letters. Defaults to 15. Set at create: a change is refused at plan time.
+- `ttl` (String) Lease: how long the password lives before MTN Cloud deletes it, in seconds or as `15m`, `8h`, `7d`. Leave it out, or `0`, to keep it for good. Set at create: a change is refused at plan time.
 
 ### Read-Only
 

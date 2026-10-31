@@ -55,7 +55,7 @@ resource "mtncloud_app_instance" "web" {
 
 - `description` (String) Description, changed in place.
 - `environment` (String) Environment by name or code, for example `Production`. Changed in place.
-- `group` (String) Group, by name, for example `MTNNG_CLOUD_AZ_1`. Defaults to the provider's `group`. Changing it replaces the app.
+- `group` (String) Group, by name, for example `MTNNG_CLOUD_AZ_1`. Defaults to the provider's `group`. Set at create: MTN Cloud can't move an app, so a change is refused at plan time.
 - `labels` (Set of String) Labels, changed in place; `[]` clears them.
 
 ### Read-Only

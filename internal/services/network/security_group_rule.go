@@ -81,7 +81,10 @@ func (r *securityGroupRuleResource) Schema(_ context.Context, _ resource.SchemaR
 	resp.Schema = schema.Schema{
 		Description: "One rule of a security group, for rules managed apart from the group (for example from another module). " +
 			"Leave `rules` unset on that `mtncloud_security_group`: using both on one group makes them undo each other. " +
-			"Every change replaces the rule.",
+			"Every change replaces the rule: the cloud can't change a firewall rule, only add and delete one. The console's " +
+			"edit changes its own record but not the rule the cloud enforces (live check, 2026-10-31), so the provider " +
+			"never uses it. Add `lifecycle { create_before_destroy = true }` to add the new rule before the old one goes, " +
+			"so traffic is never cut.",
 		Attributes: attrs,
 	}
 }

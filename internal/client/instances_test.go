@@ -223,7 +223,7 @@ func TestResizeInstance_KeepsExistingAndAddsNew(t *testing.T) {
 		t.Errorf("volumes %v", vols)
 	}
 	nics := body["networkInterfaces"].([]any)
-	if nics[0].(map[string]any)["id"] != "9820" || nics[1].(map[string]any)["id"] != nil {
+	if nics[0].(map[string]any)["id"] != 9820.0 || nics[1].(map[string]any)["id"] != nil {
 		t.Errorf("nics %v", nics)
 	}
 }

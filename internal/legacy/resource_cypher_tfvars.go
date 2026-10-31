@@ -19,8 +19,10 @@ func resourceCypherTFVars() *schema.Resource {
 		Description:   "Provides an MTN Cloud Cypher tfvars secret resource: Terraform variable values stored in Cypher under `tfvars/`, for Terraform blueprints.",
 		CreateContext: resourceCypherTFVarsCreate,
 		ReadContext:   resourceCypherTFVarsRead,
+		UpdateContext: resourceCypherTFVarsUpdate,
 		DeleteContext: resourceCypherTFVarsDelete,
 
+		CustomizeDiff: setAtCreate("Cypher tfvars secret", "key"),
 		Schema: map[string]*schema.Schema{
 			"id": {
 				Type:        schema.TypeString,
@@ -31,21 +33,18 @@ func resourceCypherTFVars() *schema.Resource {
 				Type:        schema.TypeString,
 				Description: "The path of the cypher tfvars secret, excluding the secret prefix",
 				Required:    true,
-				ForceNew:    true,
 			},
 			"value": {
 				Type:        schema.TypeString,
 				Description: "The value of the cypher tfvars secret",
 				Required:    true,
 				Sensitive:   true,
-				ForceNew:    true,
 			},
 			"ttl": {
 				Type:        schema.TypeInt,
 				Description: "The time to live of the cypher tfvars secret",
 				Optional:    true,
 				Computed:    true,
-				ForceNew:    true,
 			},
 		},
 		Importer: &schema.ResourceImporter{
@@ -156,4 +155,10 @@ func resourceCypherTFVarsDelete(ctx context.Context, d *schema.ResourceData, met
 	log.Printf("API RESPONSE: %s", resp)
 	d.SetId("")
 	return diags
+}
+
+// resourceCypherTFVarsUpdate writes the key again with the new value and lease: Cypher overwrites a key in place,
+// so a new value never means a new secret (owner, 2026-10-31).
+func resourceCypherTFVarsUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	return resourceCypherTFVarsCreate(ctx, d, meta)
 }
