@@ -102,7 +102,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [ ] **Instance (B-013).**
   - Do the name and hostname policies keep, refuse or ignore what's sent?
   - Resize bodies.
-  - Do empty labels or tags clear?
+  - Do empty labels or tags clear? **Yes** (live 2026-10-31, t103, Debian 12): `labels = []` and `tags = {}` cleared both, read back empty by CLI, `No changes.` after.
   - Delete policies.
   - Floating IP:
     - with `scale_factor` above 1: **works** (live 2026-10-31, t102): one address per server, two distinct, `public_ips` lists both, `No changes.` after;
@@ -110,13 +110,13 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
     - is the address released on detach: detached from both servers (each server's container shows none); whether it goes back to the pool is still unchecked;
     - the error when the network has no router.
   - The availability zone list.
-  - The default `domain`.
+  - The default `domain`: none is set (the instance reads back no domain, t103).
   - Masking of `evars`.
-  - The `expireDays` echo.
-  - The threshold `PUT`.
+  - The `expireDays` echo: **echoes back** (t103).
+  - The threshold `PUT`: reads back clean, `No changes.` after (t103).
   - Status words.
 - [ ] **Project order (B-015).** Needs one real order. Does it get an `execution`? Does the response carry `order.items[0].id`? Group and cloud are sent as IDs.
-- [ ] **Power suspend (B-018 #1).** The VM stayed running. Retest on another image, or document suspend as unsupported.
+- [x] **Power suspend (B-018 #1).** Done 2026-10-31: retested on Debian 12 (t103) after Ubuntu 24.04; MTN Cloud accepts the suspend and the VM keeps running on both. Documented in `power_state` as not working on MTN Cloud's images so far; use `stopped`. Reopen if MTN enables it.
 - [ ] **Managed order destroy (B-018 #2).** Confirm the app and node names that D-029 assumes.
 - [ ] **QA second pass (B-018 #6).**
   - Tasks and a job run.

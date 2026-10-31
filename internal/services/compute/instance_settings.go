@@ -103,7 +103,7 @@ func (r *instanceSettingsResource) Schema(ctx context.Context, _ resource.Schema
 				PlanModifiers: []planmodifier.Map{mapplanmodifier.UseStateForUnknown()}},
 			"power_state": schema.StringAttribute{Optional: true, Computed: true,
 				Description: "`running`, `stopped` or `suspended`. Set, the VM is powered to it in place, and put back by the " +
-					"next apply when changed in the console. A plan change restarts the VM, then it is put back in this state.",
+					"next apply when changed in the console. A plan change restarts the VM, then it is put back in this state. " + suspendNote,
 				Validators: []validator.String{stringvalidator.OneOf(powerStates...)}},
 			"restart_trigger": schema.StringAttribute{Optional: true,
 				Description: "Any value. Changing it restarts a running VM in place, for example after a config change. " +

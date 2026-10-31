@@ -4,6 +4,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+- Docs: `power_state = "suspended"` doesn't work on MTN Cloud's images so far (Ubuntu 24.04, Debian 12; B-018 #1): MTN Cloud accepts it but the VM keeps running, so the apply fails after 2 minutes. Use `stopped`.
 - New: `public_ips` on `mtncloud_instance` and `mtncloud_instance_settings`, the floating IP of each server (B-013). With `scale_factor` above 1, a floating IP is attached to every server, and a server whose address was released in the console gets one again on the next apply, without a second for the others.
 - **Changed: an order whose workflow fails after making its VM keeps that VM in state** (SOPHOS QA, 2026-10-31). The apply fails with the workflow's message and the resource is tainted, so the next apply deletes the VM and orders again, and `terraform destroy` deletes it. A refresh of a failed order that left instances keeps it too and plans a replace; one that left nothing is still dropped.
 - Fixed: an imported managed-service order doesn't take instances added to its app later (with `mtncloud_app_instance` or in the console) for its own: destroy takes them out of the app and leaves them running. Its own VMs are the members with MTN's template name.

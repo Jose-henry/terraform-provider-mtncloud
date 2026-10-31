@@ -295,7 +295,7 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Description: "`running`, `stopped` or `suspended`. Set it to power the VM on, off, or suspend it, in place: " +
 					"stopping shuts the server down and keeps its disks and addresses. When set, a VM started or stopped in " +
 					"the console is put back by the next apply. Left out, the VM's power isn't managed and this shows its " +
-					"state. A plan change or added volume restarts the VM, then it is put back in this state.",
+					"state. A plan change or added volume restarts the VM, then it is put back in this state. " + suspendNote,
 				Validators:    []validator.String{stringvalidator.OneOf(powerStates...)},
 				PlanModifiers: keep,
 			},
@@ -910,6 +910,11 @@ func (r *instanceResource) Create(ctx context.Context, req resource.CreateReques
 
 // powerStates are the values of power_state, each the instance status it ends in.
 var powerStates = []string{"running", "stopped", "suspended"}
+
+// suspendNote: MTN Cloud accepts a suspend but the VM keeps running, on every image tried (Ubuntu
+// 24.04 on 2026-10-28, Debian 12 on 2026-10-31, B-018 #1), so the apply fails after 2 minutes.
+const suspendNote = "**`suspended` doesn't work on MTN Cloud's images so far** (tried on Ubuntu 24.04 and Debian " +
+	"12): MTN Cloud accepts it but the VM keeps running, and the apply fails after 2 minutes. Use `stopped`."
 
 // powerActions turns a wanted power_state into the call that reaches it.
 var powerActions = map[string]string{"running": client.PowerStart, "stopped": client.PowerStop, "suspended": client.PowerSuspend}
