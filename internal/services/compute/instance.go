@@ -2,6 +2,7 @@ package compute
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -24,6 +25,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -89,6 +91,7 @@ type instanceModel struct {
 	Status         types.String   `tfsdk:"status"`
 	PrivateIP      types.String   `tfsdk:"private_ip"`
 	PublicIP       types.String   `tfsdk:"public_ip"`
+	PublicIPs      types.List     `tfsdk:"public_ips"`
 	Timeouts       timeouts.Value `tfsdk:"timeouts"`
 }
 
@@ -305,6 +308,9 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			"status":     schema.StringAttribute{Computed: true, Description: "Status, for example `running`.", PlanModifiers: keep},
 			"private_ip": schema.StringAttribute{Computed: true, Description: "Private IP address on the primary network.", PlanModifiers: keep},
 			"public_ip":  schema.StringAttribute{Computed: true, Description: "Floating (public) IP address, when the instance has one.", PlanModifiers: keep},
+			"public_ips": schema.ListAttribute{Computed: true, ElementType: types.StringType,
+				PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()},
+				Description:   publicIPsDescription},
 		},
 		Blocks: map[string]schema.Block{
 			"data_volume": schema.ListNestedBlock{
@@ -498,6 +504,7 @@ func (r *instanceResource) planComputed(ctx context.Context, req resource.Modify
 	}
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("status"), types.StringUnknown())...)
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("public_ip"), types.StringUnknown())...)
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("public_ips"), types.ListUnknown(types.StringType))...)
 	// Unmanaged power can change with the update (a reconfigure starts a stopped VM).
 	var power types.String
 	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("power_state"), &power)...)
@@ -997,6 +1004,9 @@ func unknownToNull(ctx context.Context, m *instanceModel) {
 	if m.RootVolumeSize.IsUnknown() {
 		m.RootVolumeSize = types.Int64Null()
 	}
+	if m.PublicIPs.IsUnknown() {
+		m.PublicIPs = types.ListNull(types.StringType)
+	}
 	if m.DataVolumes.IsUnknown() {
 		m.DataVolumes = types.ListNull(dataVolumeType)
 		return
@@ -1038,14 +1048,19 @@ func (r *instanceResource) Read(ctx context.Context, req resource.ReadRequest, r
 	pending, d := req.Private.GetKey(ctx, fipUnconfirmedKey)
 	resp.Diagnostics.Append(d...)
 	switch {
-	case inst.PublicIP != "" && pending != nil:
+	case !inst.MissingPublicIP() && pending != nil:
 		resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipUnconfirmedKey, nil)...)
-	case inst.PublicIP == "" && pending != nil && !state.FloatingIPPool.IsNull():
+	case inst.MissingPublicIP() && pending != nil && !state.FloatingIPPool.IsNull():
 		resp.Diagnostics.AddAttributeWarning(path.Root("floating_ip_pool"), "Floating IP not attached yet",
 			fmt.Sprintf("A floating IP from %s was asked for but hasn't shown on instance %s. It isn't asked for again, "+
 				"so no second address is attached. If it never appears, remove floating_ip_pool, apply, then add it back.",
 				state.FloatingIPPool.ValueString(), state.ID.ValueString()))
-	case inst.PublicIP == "" && !state.FloatingIPPool.IsUnknown():
+	case inst.MissingPublicIP() && !state.FloatingIPPool.IsUnknown():
+		// With several servers, one that lost its address is enough: the next apply attaches it one.
+		// The pool the others are on is kept aside, so a pool change in that apply moves them too.
+		if !state.FloatingIPPool.IsNull() && !inst.NoPublicIP() {
+			rememberPartial(ctx, resp.Private, state.FloatingIPPool, &resp.Diagnostics)
+		}
 		state.FloatingIPPool = types.StringNull()
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -1139,8 +1154,9 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 		if err != nil {
 			plan.FloatingIPPool = state.FloatingIPPool // not changed: the next apply tries again
 		} else {
-			got, done, ferr := r.setFloatingIP(ctx, inst, state.FloatingIPPool, plan.FloatingIPPool)
+			got, done, ferr := r.setFloatingIP(ctx, inst, fromPool(ctx, req.Private, state.FloatingIPPool, plan.FloatingIPPool, &resp.Diagnostics), plan.FloatingIPPool)
 			if ferr != nil {
+				resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("public_ips"), types.ListValueMust(types.StringType, nil))...)
 				resp.Diagnostics.AddAttributeError(path.Root("floating_ip_pool"), "Unable to change the floating IP", ferr.Error())
 				switch {
 				case done.unconfirmed:
@@ -1158,6 +1174,7 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 			}
 			inst = got
 			resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipUnconfirmedKey, nil)...)
+			resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipPartialKey, nil)...)
 		}
 	}
 	if err == nil && !client.InstanceFailed(inst.Status) {
@@ -1218,6 +1235,7 @@ func (r *instanceResource) refresh(ctx context.Context, m *instanceModel, in *cl
 		m.PowerState = types.StringValue(p)
 	}
 	m.PrivateIP = optional(in.PrivateIP)
+	m.PublicIPs = serverIPs(ctx, r.client, in, diags) // may set in.PublicIP from a server
 	m.PublicIP = optional(in.PublicIP)
 	m.InstallAgent = types.BoolValue(!in.NoAgent)
 	m.ScaleFactor = types.Int64Value(in.LayoutSize)
@@ -1604,7 +1622,12 @@ type fipChange struct {
 // the instance already has with no pool recorded (import, or attached in the console) is adopted.
 func (r *instanceResource) setFloatingIP(ctx context.Context, inst *client.Instance, from, to types.String) (*client.Instance, fipChange, error) {
 	var done fipChange
-	if from.IsNull() && inst.PublicIP != "" {
+	if len(inst.PublicIPs) != len(inst.ContainerIDs) {
+		if err := r.client.FillServerIPs(ctx, inst); err != nil {
+			return inst, done, fmt.Errorf("reading the instance's servers: %w", err)
+		}
+	}
+	if from.IsNull() && !inst.MissingPublicIP() {
 		return inst, done, nil
 	}
 	if len(inst.ContainerIDs) == 0 {
@@ -1627,6 +1650,9 @@ func (r *instanceResource) setFloatingIP(ctx context.Context, inst *client.Insta
 		return inst, done, nil
 	}
 	for i, c := range inst.ContainerIDs {
+		if !done.released && i < len(inst.PublicIPs) && inst.PublicIPs[i] != "" {
+			continue // this server has one already (another was released in the console)
+		}
 		pool, err := r.client.FloatingIPPoolByName(ctx, c, to.ValueString())
 		if err != nil {
 			return inst, done, err
@@ -1689,4 +1715,62 @@ func (r *instanceResource) agentByRouter(ctx context.Context, plan instanceModel
 		return true, true
 	}
 	return on, true
+}
+
+const publicIPsDescription = "The floating IP of each server that has one, in server order (several with " +
+	"`scale_factor` above 1). With one server, the same as `public_ip`. A server without one (released in the " +
+	"console, or added by autoscaling) gets one on the next apply while `floating_ip_pool` is set."
+
+// serverIPs is public_ips: each server's floating IP, read from its server when there are several.
+func serverIPs(ctx context.Context, c *client.Client, in *client.Instance, diags *diag.Diagnostics) types.List {
+	if in.PublicIPs == nil && len(in.ContainerIDs) > 1 {
+		if err := c.FillServerIPs(ctx, in); err != nil {
+			diags.AddWarning("Unable to read the instance's servers", "Their floating IPs aren't shown: "+err.Error())
+		}
+	}
+	ips := []string{}
+	for _, ip := range in.PublicIPs {
+		if ip != "" {
+			ips = append(ips, ip)
+		}
+	}
+	if len(in.PublicIPs) == 0 && in.PublicIP != "" {
+		ips = append(ips, in.PublicIP)
+	}
+	out, d := types.ListValueFrom(ctx, types.StringType, ips)
+	diags.Append(d...)
+	return out
+}
+
+// fipPartialKey keeps, in private state, the pool a Read set aside when only some servers lost
+// their floating IP: the others still have addresses from it.
+const fipPartialKey = "floating_ip_partial_pool"
+
+type privateState interface {
+	GetKey(context.Context, string) ([]byte, diag.Diagnostics)
+}
+
+type privateSetter interface {
+	SetKey(context.Context, string, []byte) diag.Diagnostics
+}
+
+func rememberPartial(ctx context.Context, priv privateSetter, pool types.String, diags *diag.Diagnostics) {
+	b, _ := json.Marshal(pool.ValueString())
+	diags.Append(priv.SetKey(ctx, fipPartialKey, b)...)
+}
+
+// fromPool is the pool an attach moves away from: state's, or, when a Read set it aside because only
+// some servers lost their address, that pool if the configuration now asks for another, so the
+// servers that kept theirs move too. Null means only servers without an address get one.
+func fromPool(ctx context.Context, priv privateState, state, to types.String, diags *diag.Diagnostics) types.String {
+	if !state.IsNull() {
+		return state
+	}
+	b, d := priv.GetKey(ctx, fipPartialKey)
+	diags.Append(d...)
+	var was string
+	if len(b) == 0 || json.Unmarshal(b, &was) != nil || was == "" || sameName(types.StringValue(was), to) {
+		return state
+	}
+	return types.StringValue(was)
 }

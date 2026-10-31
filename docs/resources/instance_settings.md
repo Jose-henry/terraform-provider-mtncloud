@@ -85,6 +85,7 @@ resource "mtncloud_instance_settings" "db" {
 - `name` (String) The instance's name, read only.
 - `private_ip` (String) The instance's private address.
 - `public_ip` (String) The instance's floating IP, when it has one.
+- `public_ips` (List of String) The floating IP of each server that has one, in server order (several with `scale_factor` above 1). With one server, the same as `public_ip`. A server without one (released in the console, or added by autoscaling) gets one on the next apply while `floating_ip_pool` is set.
 - `status` (String) The instance's status, for example `running`.
 
 <a id="nestedblock--data_volume"></a>

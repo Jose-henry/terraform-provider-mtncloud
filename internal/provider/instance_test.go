@@ -35,6 +35,8 @@ type instStore struct {
 	detachStuck   bool // detach answers 200 but the address stays
 	attachCalls   int
 	attached      []int64
+	serverIP      map[int64]string // each server's floating IP, by container ID (several servers)
+	silentServer  int64            // an attach to this container answers 200 but never shows
 	pending       map[int64]bool
 	fail          string // the next create ends in this status
 	stuck         bool   // instances never leave "provisioning"
@@ -249,7 +251,7 @@ func (s *instStore) create(body map[string]any, reply func(int, any)) {
 		"plan":         map[string]any{"id": plan, "name": fakePlans[plan]},
 		"config":       map[string]any{"resourcePoolId": cfg["resourcePoolId"], "noAgent": cfg["noAgent"], "createUser": cfg["createUser"], "layoutSize": body["layoutSize"]},
 		"evars":        evars, "connectionInfo": []any{map[string]any{"ip": ip, "port": 22, "name": "SSH"}},
-		"containers": []any{id*10 + 7},
+		"containers": servers(id, body["layoutSize"]),
 	}
 	if days, ok := req["expireDays"].(float64); ok {
 		in["expireDays"], in["expireDate"] = days, "2026-11-26T09:00:00Z"
@@ -962,7 +964,7 @@ func (s *instStore) floating(w http.ResponseWriter, r *http.Request, reply func(
 	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/containers/"), "/"), "/")
 	cid, _ := strconv.ParseInt(parts[0], 10, 64)
 	in := s.insts[(cid-7)/10]
-	if in == nil || len(parts) != 2 {
+	if in == nil || len(parts) > 2 || (len(parts) == 1 && r.Method != http.MethodGet) {
 		reply(http.StatusNotFound, map[string]any{"success": false, "msg": "Container not found"})
 		return
 	}
@@ -972,6 +974,17 @@ func (s *instStore) floating(w http.ResponseWriter, r *http.Request, reply func(
 			private = ev["value"]
 		}
 	}
+	if s.serverIP == nil {
+		s.serverIP = map[int64]string{}
+	}
+	if len(parts) == 1 {
+		ip, ok := s.serverIP[cid]
+		if !ok {
+			ip, _ = private.(string)
+		}
+		reply(http.StatusOK, map[string]any{"container": map[string]any{"id": cid, "ip": ip, "internalIp": private}})
+		return
+	}
 	switch parts[1] {
 	case "attach-floating-ip":
 		s.attachCalls++
@@ -979,10 +992,11 @@ func (s *instStore) floating(w http.ResponseWriter, r *http.Request, reply func(
 			reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "No router with an external gateway for this network"})
 			return
 		}
-		if s.fipSilent {
+		if s.fipSilent || cid == s.silentServer {
 			break
 		}
 		in["connectionInfo"] = []any{map[string]any{"ip": fmt.Sprintf("203.0.113.%d", cid%200), "port": 22, "name": "SSH"}}
+		s.serverIP[cid] = fmt.Sprintf("203.0.113.%d", cid%200)
 		s.attached = append(s.attached, cid)
 		if s.fip504 {
 			reply(http.StatusGatewayTimeout, map[string]any{"success": false, "msg": "Gateway Timeout"})
@@ -990,6 +1004,7 @@ func (s *instStore) floating(w http.ResponseWriter, r *http.Request, reply func(
 		}
 	case "detach-floating-ip":
 		if !s.detachStuck {
+			delete(s.serverIP, cid)
 			in["connectionInfo"] = []any{map[string]any{"ip": private, "port": 22, "name": "SSH"}}
 		}
 	}
@@ -1371,6 +1386,72 @@ func TestInstance_ResizeNotApplied(t *testing.T) {
 				ExpectError: regexp.MustCompile(`(?s)Resize not applied.*still on plan "G1S1".*asked for "G2S4"`)},
 			{Config: cfg("G2S4"), PlanOnly: true, ExpectNonEmptyPlan: true},
 			{PreConfig: func() { s.mu.Lock(); s.resizeIgnored = false; s.mu.Unlock() }, Config: cfg("G2S4")},
+		},
+	})
+}
+
+// servers are the container IDs of an instance with layoutSize servers: id*10+7, id*10+8, ...
+func servers(id int64, layoutSize any) []any {
+	n, _ := layoutSize.(float64)
+	out := []any{id*10 + 7}
+	for i := int64(1); i < int64(n); i++ {
+		out = append(out, id*10+7+i)
+	}
+	return out
+}
+
+// Two servers: each gets a floating IP; one released in the console gets one again, alone; a pool
+// change in that same apply moves the other server too (B-013).
+func TestInstance_FloatingIPSeveralServers(t *testing.T) {
+	f, s := newInstFakes(t)
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	cfg := func(pool string) string {
+		return instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  scale_factor = 2
+  networks = ["9301"]
+  floating_ip_pool = "`+pool+`"`)
+	}
+	ips := func(n int) []statecheck.StateCheck {
+		return []statecheck.StateCheck{statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("public_ips"), knownvalue.ListSizeExact(n))}
+	}
+	empty := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	var attaches int
+	var first int64
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("public-network-02"), ConfigStateChecks: ips(2), Check: func(*terraform.State) error {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				if len(s.attached) != 2 {
+					t.Errorf("attached to %v, want both servers", s.attached)
+				}
+				first = s.attached[0]
+				return nil
+			}},
+			{Config: cfg("public-network-02"), ConfigPlanChecks: empty},
+			{PreConfig: lock(func() { delete(s.serverIP, first+1); attaches = len(s.attached) }),
+				Config: cfg("public-network-02"), ConfigStateChecks: ips(2), Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if got := s.attached[attaches:]; len(got) != 1 || got[0] != first+1 {
+						t.Errorf("attached to %v, want only the server that lost its address", got)
+					}
+					return nil
+				}},
+			{Config: cfg("public-network-02"), ConfigPlanChecks: empty},
+			// Released again, and the pool changed: both servers move to the new pool.
+			{PreConfig: lock(func() { delete(s.serverIP, first+1); attaches = len(s.attached) }),
+				Config: cfg("public-network-01"), ConfigStateChecks: ips(2), Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if got := s.attached[attaches:]; len(got) != 2 {
+						t.Errorf("attached to %v, want both servers on the new pool", got)
+					}
+					return nil
+				}},
+			{Config: cfg("public-network-01"), ConfigPlanChecks: empty},
 		},
 	})
 }

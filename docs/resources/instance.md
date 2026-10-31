@@ -127,6 +127,7 @@ resource "mtncloud_instance" "worker" {
 - `id` (String) Instance ID.
 - `private_ip` (String) Private IP address on the primary network.
 - `public_ip` (String) Floating (public) IP address, when the instance has one.
+- `public_ips` (List of String) The floating IP of each server that has one, in server order (several with `scale_factor` above 1). With one server, the same as `public_ip`. A server without one (released in the console, or added by autoscaling) gets one on the next apply while `floating_ip_pool` is set.
 - `shutdown_date` (String) When the VM will be stopped, if a shutdown is set.
 - `status` (String) Status, for example `running`.
 

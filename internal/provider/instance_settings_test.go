@@ -327,3 +327,78 @@ func TestInstanceSettings_ResizeFailed(t *testing.T) {
 		},
 	})
 }
+
+// Several servers: a floating IP is attached to each, public_ips lists them, and a server that
+// lost its address in the console gets one again, without a second for the other (B-013).
+func TestInstanceSettings_SeveralServers(t *testing.T) {
+	f, s := newInstFakes(t)
+	seedOrderVM(s, 9750)
+	s.mu.Lock()
+	s.insts[9750]["containers"] = []any{97507, 97508}
+	s.insts[9750]["config"].(map[string]any)["layoutSize"] = 2
+	s.mu.Unlock()
+	cfg := settingsConfig(f, `  floating_ip_pool = "public-network-02"`)
+	empty := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	attached := func() []int64 { s.mu.Lock(); defer s.mu.Unlock(); return append([]int64{}, s.attached...) }
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg, ConfigStateChecks: []statecheck.StateCheck{
+				settingsAttr("public_ips", knownvalue.ListExact([]knownvalue.Check{
+					knownvalue.StringExact("203.0.113.107"), knownvalue.StringExact("203.0.113.108")})),
+			}, Check: func(*terraform.State) error {
+				if a := attached(); len(a) != 2 {
+					t.Errorf("attached to %v, want both servers", a)
+				}
+				return nil
+			}},
+			{Config: cfg, ConfigPlanChecks: empty},
+			// The second server's address released in the console: only it gets one again.
+			{PreConfig: func() { s.mu.Lock(); delete(s.serverIP, 97508); s.mu.Unlock() }, Config: cfg,
+				ConfigStateChecks: []statecheck.StateCheck{settingsAttr("public_ips", knownvalue.ListSizeExact(2))},
+				Check: func(*terraform.State) error {
+					if a := attached(); len(a) != 3 || a[2] != 97508 {
+						t.Errorf("attached to %v, want the second server once more", a)
+					}
+					return nil
+				}},
+			{Config: cfg, ConfigPlanChecks: empty},
+		},
+	})
+}
+
+// Two servers, one attach seen and the other never: the address still on its way isn't asked for
+// again, even after an apply that changes something else (one server's address isn't all of them).
+func TestInstanceSettings_SeveralServersUnconfirmed(t *testing.T) {
+	f, s := newInstFakes(t)
+	seedOrderVM(s, 9750)
+	s.mu.Lock()
+	s.insts[9750]["containers"] = []any{97507, 97508}
+	s.mu.Unlock()
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	body := `  floating_ip_pool = "public-network-02"
+  timeouts {
+    update = "3s"
+    create = "3s"
+  }`
+	var calls int
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: settingsConfig(f, "")},
+			{PreConfig: lock(func() { s.silentServer = 97508 }), Config: settingsConfig(f, body),
+				ExpectError: regexp.MustCompile(`Floating IP not confirmed`)},
+			{PreConfig: lock(func() { calls = s.attachCalls }),
+				Config: settingsConfig(f, `  labels = ["order", "web"]
+`+body)},
+			{Config: settingsConfig(f, `  labels = ["order", "web"]
+`+body), PlanOnly: true},
+			{PreConfig: lock(func() {
+				if s.attachCalls != calls {
+					t.Errorf("attach sent %d more times while one was on its way, want 0", s.attachCalls-calls)
+				}
+				s.silentServer = 0
+			}), Config: settingsConfig(f, "")},
+		},
+	})
+}

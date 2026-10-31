@@ -48,7 +48,9 @@ type Instance struct {
 	// ContainerIDs are the instance's VMs (one per scale_factor); floating IPs attach to these.
 	ContainerIDs []int64
 	PrivateIP    string
-	PublicIP     string
+	PublicIP     string // the instance's one floating IP (a server's, with several)
+	// PublicIPs are each server's floating IP ("" for none), set by FillServerIPs.
+	PublicIPs []string
 
 	// Lifecycle: the days set at create (0 for none) and the dates they lead to ("" for none).
 	ExpireDays, ShutdownDays int64
@@ -880,14 +882,22 @@ func (c *Client) DetachFloatingIP(ctx context.Context, containerID int64) error 
 	return c.do(ctx, http.MethodPut, "/api/containers/"+itoa(containerID)+"/detach-floating-ip", nil, map[string]any{}, nil)
 }
 
-// WaitForPublicIP polls until the instance shows a floating IP (want) or none (!want), so an attach
-// or detach is known to have worked before the apply ends.
+// WaitForPublicIP polls until every server of the instance shows a floating IP (want) or none
+// (!want), so an attach or detach is known to have worked before the apply ends.
 func (c *Client) WaitForPublicIP(ctx context.Context, id int64, want bool) (*Instance, error) {
-	return poll(ctx, c, func(ctx context.Context) (*Instance, error) { return c.GetInstance(ctx, id) },
-		func(in *Instance, err error) (bool, error) {
-			if err != nil {
-				return false, err
-			}
-			return (in.PublicIP != "") == want, nil
-		})
+	return poll(ctx, c, func(ctx context.Context) (*Instance, error) {
+		in, err := c.GetInstance(ctx, id)
+		if err == nil {
+			err = c.FillServerIPs(ctx, in)
+		}
+		return in, err
+	}, func(in *Instance, err error) (bool, error) {
+		if err != nil {
+			return false, err
+		}
+		if want {
+			return !in.MissingPublicIP(), nil
+		}
+		return in.NoPublicIP(), nil
+	})
 }

@@ -53,6 +53,7 @@ type instanceSettingsModel struct {
 	Status         types.String   `tfsdk:"status"`
 	PrivateIP      types.String   `tfsdk:"private_ip"`
 	PublicIP       types.String   `tfsdk:"public_ip"`
+	PublicIPs      types.List     `tfsdk:"public_ips"`
 	FloatingIPPool types.String   `tfsdk:"floating_ip_pool"`
 	Scale          types.Object   `tfsdk:"scale"`
 	ExpireDate     types.String   `tfsdk:"expire_date"`
@@ -110,6 +111,7 @@ func (r *instanceSettingsResource) Schema(ctx context.Context, _ resource.Schema
 			"status":     schema.StringAttribute{Computed: true, Description: "The instance's status, for example `running`."},
 			"private_ip": schema.StringAttribute{Computed: true, Description: "The instance's private address."},
 			"public_ip":  schema.StringAttribute{Computed: true, Description: "The instance's floating IP, when it has one."},
+			"public_ips": schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: publicIPsDescription},
 			// Optional, not Computed: a customer can't read which pool an address came from, so it is kept
 			// as configured while the instance has an address.
 			"floating_ip_pool": schema.StringAttribute{Optional: true,
@@ -167,7 +169,7 @@ func (r *instanceSettingsResource) Create(ctx context.Context, req resource.Crea
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	unconfirmed := r.apply(ctx, &plan, current, inst, false, &resp.Diagnostics)
+	unconfirmed := r.apply(ctx, &plan, current, inst, false, types.StringNull(), &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	if unconfirmed {
 		recordUnconfirmed(ctx, resp.Private, &resp.Diagnostics)
@@ -201,15 +203,20 @@ func (r *instanceSettingsResource) Read(ctx context.Context, req resource.ReadRe
 	pending, d := req.Private.GetKey(ctx, fipUnconfirmedKey)
 	resp.Diagnostics.Append(d...)
 	switch {
-	case inst.PublicIP != "" && pending != nil:
+	case !inst.MissingPublicIP() && pending != nil:
 		resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipUnconfirmedKey, nil)...)
-	case inst.PublicIP == "" && pending != nil && !state.FloatingIPPool.IsNull():
+	case inst.MissingPublicIP() && pending != nil && !state.FloatingIPPool.IsNull():
 		resp.Diagnostics.AddAttributeWarning(path.Root("floating_ip_pool"), "Floating IP not attached yet",
 			fmt.Sprintf("A floating IP from %s was asked for but hasn't shown on instance %s. It isn't asked for again, "+
 				"so no second address is attached. If it never appears, remove floating_ip_pool, apply, then add it back.",
 				state.FloatingIPPool.ValueString(), state.ID.ValueString()))
-	case inst.PublicIP == "" && !state.FloatingIPPool.IsNull():
-		state.FloatingIPPool = types.StringNull() // released in the console: the plan attaches one again
+	case inst.MissingPublicIP() && !state.FloatingIPPool.IsNull():
+		// Released in the console (on any server): attached again. With others still on the pool, it
+		// is kept aside, so a pool change in that apply moves them too.
+		if !inst.NoPublicIP() {
+			rememberPartial(ctx, resp.Private, state.FloatingIPPool, &resp.Diagnostics)
+		}
+		state.FloatingIPPool = types.StringNull()
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -302,13 +309,19 @@ func (r *instanceSettingsResource) Update(ctx context.Context, req resource.Upda
 	plan.ID = state.ID
 	pending, d := req.Private.GetKey(ctx, fipUnconfirmedKey)
 	resp.Diagnostics.Append(d...)
-	unconfirmed := r.apply(ctx, &plan, state, inst, pending != nil, &resp.Diagnostics)
+	partial := fromPool(ctx, req.Private, state.FloatingIPPool, plan.FloatingIPPool, &resp.Diagnostics)
+	unconfirmed := r.apply(ctx, &plan, state, inst, pending != nil, partial, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	// Every server has its address (not just one of them): nothing is still on its way.
+	complete := plan.PublicIP.ValueString() != "" && len(plan.PublicIPs.Elements()) >= len(inst.ContainerIDs)
 	switch {
 	case unconfirmed:
 		recordUnconfirmed(ctx, resp.Private, &resp.Diagnostics)
-	case plan.PublicIP.ValueString() != "" || plan.FloatingIPPool.IsNull():
+	case complete || plan.FloatingIPPool.IsNull():
 		resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipUnconfirmedKey, nil)...)
+	}
+	if complete && !resp.Diagnostics.HasError() {
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, fipPartialKey, nil)...)
 	}
 }
 
@@ -318,7 +331,7 @@ func (r *instanceSettingsResource) Update(ctx context.Context, req resource.Upda
 //
 // restart_trigger and floating_ip_pool are only what the configuration asked for (refresh never
 // reads them), so when apply stops before their step, they keep was: the next apply tries again.
-func (r *instanceSettingsResource) apply(ctx context.Context, plan *instanceSettingsModel, was instanceSettingsModel, inst *client.Instance, pending bool, diags *diag.Diagnostics) (unconfirmed bool) {
+func (r *instanceSettingsResource) apply(ctx context.Context, plan *instanceSettingsModel, was instanceSettingsModel, inst *client.Instance, pending bool, partial types.String, diags *diag.Diagnostics) (unconfirmed bool) {
 	restarted, attached := false, false
 	defer func() {
 		if !restarted {
@@ -458,13 +471,16 @@ func (r *instanceSettingsResource) apply(ctx context.Context, plan *instanceSett
 	}
 	switch {
 	case werr != nil || diags.HasError():
-	case !known(plan.FloatingIPPool) || (sameName(plan.FloatingIPPool, was.FloatingIPPool) && (inst.PublicIP != "" || pending)):
+	case !known(plan.FloatingIPPool) || (sameName(plan.FloatingIPPool, was.FloatingIPPool) && (!inst.MissingPublicIP() || pending)):
 		// Unchanged, and the address is there, or an earlier attach may yet bring it: nothing sent.
 		attached = true
 	default:
 		from := was.FloatingIPPool
-		if inst.PublicIP == "" {
-			from = types.StringNull() // nothing to release
+		if inst.NoPublicIP() || inst.MissingPublicIP() && sameName(plan.FloatingIPPool, was.FloatingIPPool) {
+			from = types.StringNull() // nothing to release, or only servers that lost theirs to attach
+		}
+		if from.IsNull() && known(partial) {
+			from = partial // the servers that kept an address are on another pool: they move too
 		}
 		got, done, err := (&instanceResource{r.base}).setFloatingIP(ctx, inst, from, plan.FloatingIPPool)
 		if got != nil {
@@ -536,6 +552,7 @@ func (r *instanceSettingsResource) refresh(ctx context.Context, m *instanceSetti
 	} else if m.PowerState.IsUnknown() {
 		m.PowerState = types.StringNull()
 	}
+	m.PublicIPs = serverIPs(ctx, r.client, in, diags) // may set in.PublicIP from a server
 	m.PrivateIP, m.PublicIP = optional(in.PrivateIP), optional(in.PublicIP)
 	m.ExpireDate = optional(in.ExpireDate)
 	if m.DataVolumes.IsUnknown() || len(m.DataVolumes.Elements()) > 0 { // managed: show the disks as they are
