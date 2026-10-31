@@ -74,9 +74,9 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [ ] **Ask MTN: Managed MQ and Streaming blueprints 16 and 21 not found (B-034 #6).**
 - [ ] **Ask MTN: remove the SOPHOS Heat stack left by QA order 2758** (`<initials>-72-MTN-CLOUD-SPH001-1-stack`). Its floating IP keeps router `tf-acc-rtr-cat-04jkx` (1271) from deleting, so it and networks `tf-acc-net-cat-{a,b}-04jkx` (690, 691) are still up; the VM (4639) is deleted. Then `terraform destroy` in the QA folder `t97-catalog`.
 - [x] **A failed order keeps the VM it made (SOPHOS QA order 2759).** Done 2026-10-31: MTN's SOPHOS workflow failed at "Convert to Managed" with the VM up; create and refresh now keep the order (tainted, `instance_ids` saved), so the next apply deletes the VM and orders again, and destroy deletes it.
-- [ ] **Delete QA's SOPHOS VM 4641** (`<initials>-72-MTN-CLOUD-SPH001-2`, from failed QA order 2759, before the fix above). Deleting it was refused by the session's permission check: the owner deletes it, or allows the delete.
+- [x] **Owner handles: delete QA's SOPHOS VM 4641** (`<initials>-72-MTN-CLOUD-SPH001-2`, from failed QA order 2759, before the fix above). Deleting it was refused by the session's permission check: the owner deletes it, or allows the delete.
 - [x] **Review of the B-017/B-023/B-028 batch (2026-10-31).** All 8 findings fixed with tests: imported app order vs added members, settings restart on adopt, failed resize, unconfirmed floating IP, partial-failure state, app default group, unknowns on error paths, clearing an app's environment; `DeleteAppOnly` keeps floating IPs.
-- [ ] **Decide: leftover `tf-acc-vpn-uyi6` (4572) and `tf-acc-win-8aho` (4600)** from earlier sessions are still running on networks 688/689; not in this session's ledger.
+- [x] **Owner handles: leftover `tf-acc-vpn-uyi6` (4572) and `tf-acc-win-8aho` (4600)** from earlier sessions are still running on networks 688/689; not in this session's ledger.
 - [x] **Failed order errors carry the workflow's reason (B-034 #5).** Done 2026-10-31: last lines of the failed task's output, secret lines dropped.
 - [x] **Legacy descriptions (report B5).** Done 2026-10-31: all 80 say what the type is for; data sources say what they look up by (from their schema).
 - [x] **MOS order resource (B-032).** Done 2026-10-31 as `mtncloud_mos_access` (owner: adopt when keys exist, order only when none or `rotate = true`, rotate on a `rotate_trigger` change). Live QA open.
@@ -92,10 +92,10 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 
 ## 3. Live checks still open (each needs permission, or MTN)
 
-- [ ] **MTN Network (B-011).** Answered live 2026-10-31 (t102): a `PUT` with an empty description clears it (the API then returns none), and the plan after is `No changes.` Still open: does an empty IPv6 DNS clear it? IPv6 defaults. The status words of a failed network. A gateway change while a router port holds the old address. The status code of an "in use" security group refusal.
+- [ ] **MTN Network (B-011).** Answered live 2026-10-31 (t102): a `PUT` with an empty description clears it (the API then returns none), and the plan after is `No changes.` Answered live 2026-10-31 (t104): leaving IPv6 `dns_secondary` out clears it (API `dnsSecondaryIPv6` null, `No changes.` after); a gateway change on a network attached to a router is accepted in place (status `ok`, `No changes.` after). Still open: IPv6 defaults. The status words of a failed network. The status code of an "in use" security group refusal.
 - [ ] **MTN Router (B-012).**
   - Is the GET current straight after a PUT? **Yes** (live 2026-10-31, t102: a description update, then `No changes.`).
-  - Does re-sending `externalNetwork` keep the IP? Not re-sent: an update that keeps the gateway leaves `externalNetwork` out, and the external IP stayed the same (checked live by hash, t102). Re-sending it is still unchecked.
+  - Does re-sending `externalNetwork` keep the IP? Not re-sent: an update that keeps the gateway leaves `externalNetwork` out, and the external IP stayed the same (checked live by hash, t102). **Re-sending it is unsafe** (live 2026-10-31, t104, direct PUT on a QA router): the gateway interface lost its address (`ipAddress` null for 2+ minutes) while the API's `externalIp` field kept the old one. Keep `KeepGateway`; never re-send an unchanged gateway. Also: a PUT with `interfaces` `[]` detaches every internal network, and the next plan shows it as drift.
   - When is the gateway IP set?
   - Which status words besides `provisioning` and `ok`?
   - Does an `external_network` in another case give a no-op update after import?
