@@ -147,7 +147,7 @@ One poller in `internal/client` with exponential backoff and jitter, honouring `
 `ctx`. To confirm before building: the item status values and where a workflow item exposes its
 execution (a read of `/api/catalog/items` on an existing order, as a customer).
 
-## D-021 Public registry address `jose-henry/mtncloud` (2026-10-27)
+## D-021 Public registry address `jose-henry/mtncloud` (2026-10-27, superseded by D-037)
 Supersedes the registry part of D-003. The owner chose the public Terraform Registry, where the
 namespace is the GitHub owner of the repository (`github.com/Jose-henry/terraform-provider-mtncloud`).
 Users write `source = "jose-henry/mtncloud"`; `main.go` serves `registry.terraform.io/jose-henry/mtncloud`.
@@ -457,6 +457,15 @@ run would make the result differ from the plan ("inconsistent result"). The know
 `No changes.`": after an apply that changes a library threshold, the next plan updates the schedules that
 copy it, unless they use `replace_triggered_by` (the documented way). Create adopts an existing schedule
 only when times, zone and copied values all match, so it never takes over another config's schedule.
+
+## D-037 Registry address `mtncloud-mcs/mtncloud` (2026-10-31)
+Supersedes D-021. The owner moved the repository to the `mtncloud-mcs` GitHub organisation
+(`github.com/mtncloud-mcs/terraform-provider-mtncloud`) to make the provider official. `main.go` serves
+`registry.terraform.io/mtncloud-mcs/mtncloud`, and the docs and examples use that source. The address
+in `main.go` only matters in debug mode, and moved state matches any `*/mtncloud` source, so a release
+works under either namespace. Publishing under `mtncloud-mcs` waits for the owner: the org's GPG key,
+the registry listing, and HashiCorp's answer on the old `jose-henry/mtncloud` listing. The Go module
+path stays `github.com/mtn/terraform-provider-mtncloud` (internal).
 
 ## D-036 Power schedules: a schedule resource plus a per-instance attachment (owner, 2026-10-31)
 The owner asked for power scheduling to be finished: only a data source existed. Built from the API

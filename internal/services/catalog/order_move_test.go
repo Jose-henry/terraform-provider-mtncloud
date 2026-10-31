@@ -71,6 +71,7 @@ func TestSelfManagedKubernetes_MoveState(t *testing.T) {
 		moved           bool
 	}{
 		{"old name", "mtncloud_managed_kubernetes", "registry.terraform.io/jose-henry/mtncloud", true},
+		{"new namespace", "mtncloud_managed_kubernetes", "registry.terraform.io/mtncloud-mcs/mtncloud", true},
 		{"other type", "mtncloud_mysql", "registry.terraform.io/jose-henry/mtncloud", false},
 		{"other provider", "mtncloud_managed_kubernetes", "registry.terraform.io/acme/other", false},
 	} {

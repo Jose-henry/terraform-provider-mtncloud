@@ -4,6 +4,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+- **Changed: the provider address is now `mtncloud-mcs/mtncloud`**, as the repository moved to the `mtncloud-mcs` GitHub organisation (D-037). Until it is published there, keep `source = "jose-henry/mtncloud"`. To switch later, change `source` to `"mtncloud-mcs/mtncloud"`, then run `terraform init` and `terraform state replace-provider jose-henry/mtncloud mtncloud-mcs/mtncloud`. Nothing in the state or the cloud changes.
 - **New: `mtncloud_power_schedule` and `mtncloud_instance_power_schedule`.** A weekly power schedule (on and off times per day, a time zone, or stop only), and an attachment that puts a VM on it; MTN Cloud then stops and starts the VM at those times. Days left out run all day. Times are checked at plan time.
 - Fixed: destroying a managed service or Kubernetes order no longer claims a VM named `<order name>-<number>` in the project (for example your own `db-2` next to an order named `db`). The order's VMs are found through its app, as MTN Cloud names them from its own template.
 - **New: `mtncloud_instance_scale_schedule`** applies a library `mtncloud_scale_threshold` to a VM for part of the week (`start_day`/`start_time` to `end_day`/`end_time`, in a time zone) or between two dates. MTN Cloud copies the threshold's values into the schedule; when the threshold changes, the next plan copies it again (or in the same apply, with `replace_triggered_by`).

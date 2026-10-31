@@ -60,7 +60,7 @@ project.
 terraform {
   required_providers {
     mtncloud = {
-      source  = "jose-henry/mtncloud"
+      source  = "mtncloud-mcs/mtncloud"
       version = "~> 0.7"
     }
   }
