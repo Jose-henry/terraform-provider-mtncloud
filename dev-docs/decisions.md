@@ -457,3 +457,27 @@ run would make the result differ from the plan ("inconsistent result"). The know
 `No changes.`": after an apply that changes a library threshold, the next plan updates the schedules that
 copy it, unless they use `replace_triggered_by` (the documented way). Create adopts an existing schedule
 only when times, zone and copied values all match, so it never takes over another config's schedule.
+
+## D-036 Power schedules: a schedule resource plus a per-instance attachment (owner, 2026-10-31)
+The owner asked for power scheduling to be finished: only a data source existed. Built from the API
+reference (Context7: `POST/PUT/DELETE /api/power-schedules`, `PUT /api/instances/{id}` with
+`powerScheduleType`, `add-instances`/`remove-instances`) and live probes (t114, schedule 5 on QA VM 4652):
+- `mtncloud_power_schedule` holds the weekly hours. Each day is an optional `{ on, off }`; a day left out
+  runs all day (00:00-24:00, the API's and console's default) and reads back as left out, so there is no
+  churn. Off all day is 00:00-00:00. The provider sends every day on every write, because the API's PUT
+  keeps fields it isn't sent. `stop_only` maps `scheduleType` `power off`.
+- `mtncloud_instance_power_schedule` (ID = instance ID) attaches one VM with `PUT /api/instances/{id}`
+  `{instance: {powerScheduleType: <id>|null}}`: only that field is sent, and an instance update without
+  it keeps the schedule (live). It is read back from the instance's `powerSchedule.type.id`. A separate
+  resource, like D-035, so `mtncloud_instance` and its schedule don't fight, and it works on VMs from orders.
+- Live facts: minutes are kept; off before on is refused (400), so it is checked at plan time; the time
+  zone is stored as sent (read keeps the config's spelling when only case differs); an empty description
+  clears it; a schedule in use can't be deleted (400 "currently in use"), and Terraform's dependency order
+  removes attachments first.
+- The customer role has `scheduling-power: full`.
+- Review (2026-10-31): no adoption. Names aren't unique and identical settings don't prove ownership (two
+  configs with one standard schedule would share an ID), so Create refuses a name that exists and gives the
+  import command. The attachment keeps the schedule it set in private state, so destroying it after the VM was
+  moved to another schedule in the console leaves that one alone. `description = ""` is refused (leave it
+  out), `time_zone` is checked against the IANA names, and a day known only after apply is checked by MTN Cloud.
+

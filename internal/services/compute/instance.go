@@ -292,7 +292,8 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Description: "`running`, `stopped` or `suspended`. Set it to power the VM on, off, or suspend it, in place: " +
 					"stopping shuts the server down and keeps its disks and addresses. When set, a VM started or stopped in " +
 					"the console is put back by the next apply. Left out, the VM's power isn't managed and this shows its " +
-					"state. A plan change or added volume restarts the VM, then it is put back in this state. " + suspendNote,
+					"state. A plan change or added volume restarts the VM, then it is put back in this state. Leave it out on a VM " +
+					"on a power schedule (`mtncloud_instance_power_schedule`), or each apply undoes the schedule. " + suspendNote,
 				Validators:    []validator.String{stringvalidator.OneOf(powerStates...)},
 				PlanModifiers: keep,
 			},

@@ -1,0 +1,32 @@
+---
+page_title: "mtncloud_instance_power_schedule Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_instance_power_schedule
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_instance_power_schedule/resource.tf"}}
+
+## Notes
+
+- **One schedule per instance.** Creating this replaces any schedule the instance was on. Use one of these per
+  instance, for example with `for_each` over a set of instance IDs.
+- **Stopped instances stay stopped** when this is destroyed: it only takes the instance off the schedule.
+- **Taken off out of band:** when the instance is taken off its schedule in the console, the next plan puts it
+  back. When it was moved to another schedule, the plan moves it back to this one.
+- **Works on any instance you can edit,** including the VMs of catalog orders (`instance_ids` on the order).
+- **`power_state` on `mtncloud_instance`** also starts and stops the VM: don't use both on one instance.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_instance_power_schedule/import.sh" }}

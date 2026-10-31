@@ -1,0 +1,37 @@
+---
+page_title: "mtncloud_power_schedule Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_power_schedule
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_power_schedule/resource.tf"}}
+
+## Notes
+
+- **Days you leave out run all day** (00:00 to 24:00), as in the console. To keep instances off for a whole
+  day, give `{ on = "00:00", off = "00:00" }`. Writing `{ on = "00:00", off = "24:00" }` is refused: leave the day out.
+- **Times** are 24-hour `HH:MM` in `time_zone`; minutes are kept. `off` can't be before `on` (checked at plan time).
+- **`stop_only = true`** only stops instances at the off times; nothing starts them at the on times.
+- **Deleting a schedule an instance is on is refused** by MTN Cloud. Terraform destroys the
+  `mtncloud_instance_power_schedule` attachments first when they reference the schedule; one made in the console
+  must be removed there first.
+- **Names must be new.** Schedule names aren't unique on MTN Cloud, so a create that finds one with the same name
+  stops and gives its ID: import it to manage it here, or choose another name. A create retried after a timeout
+  says the same, with the ID it made.
+- **`time_zone`** is checked at plan time against the IANA names (case matters), since MTN Cloud stores any text.
+- To look up a schedule made in the console, use the `mtncloud_power_schedule` data source.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_power_schedule/import.sh" }}
