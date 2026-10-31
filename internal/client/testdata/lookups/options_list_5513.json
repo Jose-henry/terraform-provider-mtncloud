@@ -1,0 +1,13 @@
+{
+ "success": true,
+ "data": [
+  {
+   "name": "1 GB",
+   "value": "1"
+  },
+  {
+   "name": "2 GB",
+   "value": "2"
+  }
+ ]
+}

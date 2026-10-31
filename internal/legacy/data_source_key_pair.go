@@ -10,7 +10,7 @@ import (
 
 func dataSourceKeyPair() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud key pair data source.",
+		Description: "Provides an MTN Cloud key pair data source: looks up an SSH key pair by name or ID.",
 		ReadContext: dataSourceMorphesKeyPairRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

@@ -2,12 +2,12 @@
 page_title: "mtncloud_scale_threshold Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud scale threshold resource.
+  Provides an MTN Cloud scale threshold resource: the CPU, memory or disk levels at which an instance scales out or in.
 ---
 
 # mtncloud_scale_threshold
 
-Provides a MTN Cloud scale threshold resource.
+Provides an MTN Cloud scale threshold resource: the CPU, memory or disk levels at which an instance scales out or in.
 
 ## Example Usage
 

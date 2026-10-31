@@ -15,7 +15,7 @@ import (
 
 func resourceKeyPair() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud key pair resource.",
+		Description:   "Provides an MTN Cloud key pair resource: an SSH public key that VMs can be created with.",
 		CreateContext: resourceKeyPairCreate,
 		ReadContext:   resourceKeyPairRead,
 		DeleteContext: resourceKeyPairDelete,

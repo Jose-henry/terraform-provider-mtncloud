@@ -2,12 +2,12 @@
 page_title: "mtncloud_chef_bootstrap_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud chef bootstrap task resource
+  Provides an MTN Cloud Chef bootstrap task resource: a task that bootstraps a VM onto a Chef server.
 ---
 
 # mtncloud_chef_bootstrap_task
 
-Provides a MTN Cloud chef bootstrap task resource
+Provides an MTN Cloud Chef bootstrap task resource: a task that bootstraps a VM onto a Chef server.
 
 ## Example Usage
 

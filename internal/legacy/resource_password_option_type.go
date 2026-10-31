@@ -12,7 +12,7 @@ import (
 
 func resourcePasswordOptionType() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud password option type resource",
+		Description:   "Provides an MTN Cloud password option type resource: a masked input for catalog and workflow forms.",
 		CreateContext: resourcePasswordOptionTypeCreate,
 		ReadContext:   resourcePasswordOptionTypeRead,
 		UpdateContext: resourcePasswordOptionTypeUpdate,

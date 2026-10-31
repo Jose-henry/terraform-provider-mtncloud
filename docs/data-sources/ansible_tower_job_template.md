@@ -2,12 +2,12 @@
 page_title: "mtncloud_ansible_tower_job_template Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud ansible tower job template data source.
+  Provides an MTN Cloud Ansible Tower job template data source: looks up a job template of an Ansible Tower integration by name or ID.
 ---
 
 # mtncloud_ansible_tower_job_template (Data Source)
 
-Provides a MTN Cloud ansible tower job template data source.
+Provides an MTN Cloud Ansible Tower job template data source: looks up a job template of an Ansible Tower integration by name or ID.
 
 ## Example Usage
 

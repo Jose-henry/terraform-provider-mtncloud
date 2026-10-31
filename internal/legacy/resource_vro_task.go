@@ -14,7 +14,7 @@ import (
 
 func resourceVrealizeOrchestratorTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud vRealize Orchestrator (vRO) task resource",
+		Description:   "Provides an MTN Cloud vRealize Orchestrator (vRO) task resource: a task that runs a workflow from a vRO integration.",
 		CreateContext: resourceVrealizeOrchestratorTaskCreate,
 		ReadContext:   resourceVrealizeOrchestratorTaskRead,
 		UpdateContext: resourceVrealizeOrchestratorTaskUpdate,

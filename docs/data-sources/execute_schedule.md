@@ -2,12 +2,12 @@
 page_title: "mtncloud_execute_schedule Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud execute schedule data source.
+  Provides an MTN Cloud execution schedule data source: looks up an execution schedule by name or ID.
 ---
 
 # mtncloud_execute_schedule (Data Source)
 
-Provides a MTN Cloud execute schedule data source.
+Provides an MTN Cloud execution schedule data source: looks up an execution schedule by name or ID.
 
 ## Example Usage
 

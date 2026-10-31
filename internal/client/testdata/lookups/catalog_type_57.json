@@ -1,0 +1,131 @@
+{
+ "catalogItemType": {
+  "id": 57,
+  "name": "MTN Managed Streaming",
+  "type": "workflow",
+  "context": "appliance",
+  "optionTypes": [],
+  "form": {
+   "options": [
+    {
+     "id": 1,
+     "fieldName": "group-vpn",
+     "type": "group",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 2,
+     "fieldName": "cloud",
+     "type": "cloud",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 4,
+     "fieldName": "environment",
+     "type": "environment",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 6,
+     "fieldName": "resourcepool",
+     "type": "resourcePool",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 3,
+     "fieldName": "name",
+     "type": "text",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 5,
+     "fieldName": "labels",
+     "type": "textArray",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 7,
+     "fieldName": "plan",
+     "type": "select",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 8,
+     "fieldName": "volumes",
+     "type": "diskManager",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 9,
+     "fieldName": "networks",
+     "type": "networkManager",
+     "required": true,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 10,
+     "fieldName": "securitygroups",
+     "type": "secGroup",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 11,
+     "fieldName": "floatingip",
+     "type": "select",
+     "required": false,
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 5701,
+     "fieldName": "kafkaVersion",
+     "type": "select",
+     "required": false,
+     "noBlank": true,
+     "fieldLabel": "KAFKA VERSION",
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 5702,
+     "fieldName": "adminUsername",
+     "type": "text",
+     "required": true,
+     "defaultValue": "admin",
+     "fieldLabel": "Admin Username",
+     "fieldContext": "config.customOptions",
+     "config": {}
+    },
+    {
+     "id": 5703,
+     "fieldName": "adminPassword",
+     "type": "password",
+     "required": true,
+     "fieldLabel": "Admin Password",
+     "fieldContext": "config.customOptions",
+     "config": {}
+    }
+   ],
+   "fieldGroups": []
+  }
+ }
+}

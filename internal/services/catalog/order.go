@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -132,7 +131,7 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 		switch f.kind {
 		case kVolumes:
 			attrs[f.attr+"root_volume_size"] = schema.Int64Attribute{Optional: !f.required, Required: f.required,
-				Description: "Root disk size in GB.", Validators: []validator.Int64{int64validator.AtLeast(1)}}
+				Description: r.rootDiskDescription(), Validators: []validator.Int64{int64validator.AtLeast(1)}}
 			attrs[f.attr+"datastore"] = schema.StringAttribute{Optional: true,
 				Description: "Datastore (volume type) of the root disk, by name. Left out, the project's default."}
 			blocks[f.attr+"data_volume"] = schema.ListNestedBlock{
@@ -146,6 +145,7 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 			attrs[f.attr] = r.attribute(f)
 		}
 	}
+	desc += r.formSummary()
 	resp.Schema = schema.Schema{Description: desc, Attributes: attrs, Blocks: blocks}
 	if r.spec.deprecated != "" {
 		resp.Schema.DeprecationMessage = "Renamed to mtncloud_" + r.spec.deprecated + ". Rename the resource in your " +
@@ -197,7 +197,12 @@ func (r *orderResource) MoveState(ctx context.Context) []resource.StateMover {
 }
 
 func (r *orderResource) attribute(f field) schema.Attribute {
-	d := f.desc
+	desc := f.desc
+	if f.attr == "name" && r.spec.app {
+		desc = "Name of the app the order creates, shown under Apps. It must be unique among your apps: the provider " +
+			"finds the app, and the VMs in it, by this name (MTN names the VMs itself)."
+	}
+	d := desc + snapshotFor(r.spec.typeName).field(f.key).facts()
 	if f.def != "" && !strings.Contains(d, "Defaults") {
 		d += " Defaults to `" + f.def + "`."
 	}
@@ -272,7 +277,16 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 			var before, after attr.Value
 			resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(name), &before)...)
 			resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, path.Root(name), &after)...)
-			if adopting || after == nil || sameInput(before, after) {
+			if adopting || after == nil {
+				continue
+			}
+			switch inputChange(name, before, after) {
+			case noChange:
+				continue
+			case recorded:
+				resp.Diagnostics.AddAttributeWarning(path.Root(name), "Root disk size recorded",
+					"This order was placed without root_volume_size. The size is recorded in state; the disk isn't changed "+
+						"or checked. Set it to the size the order was placed with.")
 				continue
 			}
 			resp.RequiresReplace.Append(path.Root(name))
@@ -469,7 +483,9 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 				v = []string{f.def}
 			}
 			if len(v) > 0 {
-				out[f.key] = strings.Join(v, "\n")
+				// Comma-separated, as the form's help and pattern ask ("10.60.50.0/24, 10.60.40.0/24"):
+				// one per line failed its pattern (review, 2026-10-31).
+				out[f.key] = strings.Join(v, ", ")
 			}
 		case kEnvironment:
 			if v := str(p, f.attr); v != "" {
@@ -509,16 +525,7 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 				fail(f.attr, fmt.Errorf("the %s order form has no plan list %q any more; update the provider", r.spec.item, f.key))
 				continue
 			}
-			fv := url.Values{"catalogItemTypeId": {strconv.FormatInt(form.ItemID, 10)}}
-			for k, x := range out {
-				if s, isStr := x.(string); isStr && (k == "cloud" || k == "resourcepool" || strings.HasPrefix(k, "group")) {
-					fv.Set(k, s)
-				}
-			}
-			if pool, ok := out["resourcepool"].(string); ok {
-				fv.Set("config.customOptions.resourcepool", pool)
-			}
-			c, err := r.client.FormChoiceIn(ctx, ff, fv, "plan", v)
+			c, err := r.client.FormChoiceIn(ctx, ff, formValues(form, out), "plan", v)
 			if err != nil {
 				fail(f.attr, err)
 				continue
@@ -646,6 +653,7 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	var item *client.OrderedItem
+	var before map[int64]bool // apps with the order's name before it was placed
 	if r.spec.target {
 		var target types.String
 		resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("instance_id"), &target)...)
@@ -656,6 +664,12 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 		}
 		item, err = r.client.OrderForInstance(ctx, itemName, id, config)
 	} else {
+		if r.spec.app {
+			var ok bool
+			if before, ok = r.appsBefore(ctx, req.Plan, &resp.Diagnostics); !ok {
+				return
+			}
+		}
 		item, err = r.client.OrderWorkflow(ctx, itemName, config)
 	}
 	if err != nil {
@@ -682,9 +696,15 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 	done, ok := client.ExecutionDone(item.Execution)
 	switch {
 	case done && !ok, strings.EqualFold(item.Status, "failed"):
+		why := message(item)
+		if item.Execution != nil {
+			if f := r.client.ExecutionFailure(ctx, item.Execution.ID, r.secretValues(ctx, req.Plan, config)); f != "" {
+				why += ". The workflow says: " + strings.TrimRight(f, ". ")
+			}
+		}
 		resp.Diagnostics.AddError(r.spec.item+" order failed",
 			fmt.Sprintf("Order %d ended with %q%s. Check it under Catalog > Inventory, and delete anything it left in the "+
-				"console before applying again (the next apply orders again).", item.ID, executionStatus(item), message(item)))
+				"console before applying again (the next apply orders again).", item.ID, executionStatus(item), why))
 		resp.State.RemoveResource(ctx)
 		return
 	case err != nil:
@@ -700,6 +720,9 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	if r.spec.target {
+		return
+	}
+	if r.spec.app && !r.appReady(ctx, req.Plan, item.ID, before, &resp.Diagnostics) {
 		return
 	}
 	ids := r.findInstances(ctx, req.Plan, &resp.Diagnostics)
@@ -768,12 +791,102 @@ func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *dia
 		return nil, fmt.Errorf("the project couldn't be read: %w", err)
 	}
 	var ids []int64
+	inProject := map[int64]bool{}
 	for _, in := range all {
+		inProject[in.ID] = in.ProjectID == pr.ID
 		if in.ProjectID == pr.ID && madeBy(in.Name, name.ValueString(), r.spec.app) {
 			ids = append(ids, in.ID)
 		}
 	}
+	if r.spec.app {
+		// The app's VMs are named from MTN's template ("<initials>-<account>-MTN-CLOUD-MYSQL-1"),
+		// so they are those of the app named after the order, in its project: app names repeat
+		// across projects (review, 2026-10-31).
+		apps, err := r.client.ListApps(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("the apps couldn't be listed: %w", err)
+		}
+		for _, a := range client.AppsNamed(apps, name.ValueString()) {
+			for _, id := range a.InstanceIDs {
+				if inProject[id] && !slices.Contains(ids, id) {
+					ids = append(ids, id)
+				}
+			}
+		}
+	}
 	return ids, nil
+}
+
+// appsBefore notes the apps with the order's name before it is placed, so the wait never takes
+// one of them for the new app. One already in the order's project stops the order: its VMs would
+// be taken for this order's, and deleted with it.
+func (r *orderResource) appsBefore(ctx context.Context, p source, diags *diag.Diagnostics) (map[int64]bool, bool) {
+	var name types.String
+	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
+	if ids, err := r.instancesNamed(ctx, p, diags); err != nil {
+		diags.AddError("Unable to check the name", err.Error()+". Nothing was ordered; apply again.")
+		return nil, false
+	} else if len(ids) > 0 {
+		diags.AddAttributeError(path.Root("name"), "Name already in use",
+			fmt.Sprintf("An app or instance named %q is already in the project (instance %d). Nothing was ordered: choose "+
+				"another name, or import the order that made it (terraform import <address> <order id>).", name.ValueString(), ids[0]))
+		return nil, false
+	}
+	apps, err := r.client.ListApps(ctx)
+	if err != nil {
+		diags.AddError("Unable to list the apps", err.Error()+". Nothing was ordered; apply again.")
+		return nil, false
+	}
+	before := map[int64]bool{}
+	for _, a := range client.AppsNamed(apps, name.ValueString()) {
+		before[a.ID] = true
+	}
+	return before, true
+}
+
+// secretValues are the order's secret values, masked in anything shown from its workflow:
+// write-only arguments and extra_inputs (a form field there can be a password).
+func (r *orderResource) secretValues(ctx context.Context, p source, config map[string]any) []string {
+	var out []string
+	for _, f := range r.spec.fields {
+		if s, ok := config[f.key].(string); ok && f.kind == kSecret {
+			out = append(out, s)
+		}
+	}
+	var extra map[string]string
+	p.GetAttribute(ctx, path.Root("extra_inputs"), &extra)
+	for _, v := range extra {
+		if len(v) >= 4 {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// appReady waits for the app an order's workflow started to finish provisioning: the workflow
+// ends once it has asked for the app. False, with an error, when it didn't come up running.
+func (r *orderResource) appReady(ctx context.Context, p source, orderID int64, before map[int64]bool, diags *diag.Diagnostics) bool {
+	var name types.String
+	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
+	a, err := r.client.WaitForApp(ctx, name.ValueString(), before)
+	switch {
+	case err != nil && a == nil && errors.Is(err, context.DeadlineExceeded):
+		diags.AddError(r.spec.item+" app not found",
+			fmt.Sprintf("Order %d's workflow succeeded, but no app named %q appeared before the create timeout. Check Apps "+
+				"in the console; the next apply deletes the order and orders it again.", orderID, name.ValueString()))
+		return false
+	case err != nil:
+		diags.AddError(r.spec.item+" app not ready",
+			fmt.Sprintf("App %q from order %d didn't finish provisioning: %s. The next apply deletes the order with what it "+
+				"made and orders it again; raise timeouts.create if it is only slow.", name.ValueString(), orderID, err))
+		return false
+	case !client.AppRunning(a):
+		diags.AddError(r.spec.item+" app failed",
+			fmt.Sprintf("App %q (%d) from order %d is %q. The order's workflow succeeded, but what it made didn't. Check it "+
+				"under Apps; the next apply deletes the order with what it made and orders it again.", a.Name, a.ID, orderID, a.Status))
+		return false
+	}
+	return true
 }
 
 // madeBy reports whether an instance is named after an order: exactly "<name>", or "<name>-<n>"
@@ -1112,4 +1225,39 @@ func (r *orderResource) findNetwork(ctx context.Context, ref string, projectID i
 func networkID(ref string) (int64, bool) {
 	id, err := strconv.ParseInt(ref, 10, 64)
 	return id, err == nil && id > 0
+}
+
+// rootDiskDescription states the form's own disk rules: its minimum, a data disk MTN Cloud adds,
+// and the form's help text, which usually says both.
+func (r *orderResource) rootDiskDescription() string {
+	d := "Root disk size in GB."
+	if n := r.spec.rules.minRootGB; n > 0 {
+		d += fmt.Sprintf(" At least %d GB (the order form's minimum).", n)
+	}
+	facts := snapshotFor(r.spec.typeName).field("volumes").facts()
+	if n := r.spec.rules.dataDiskGB; n > 0 && !strings.Contains(facts, "data disk") {
+		d += fmt.Sprintf(" MTN Cloud also adds a required %d GB data disk itself.", n)
+	}
+	return d + facts
+}
+
+type change int
+
+const (
+	noChange change = iota
+	recorded        // taken into state without ordering again
+	reorder         // the order is placed again
+)
+
+// inputChange is what a change to one input means for an order that exists.
+func inputChange(name string, before, after attr.Value) change {
+	if sameInput(before, after) {
+		return noChange
+	}
+	// root_volume_size is required since 2026-10-31: an order placed before without one records the
+	// size the configuration now states, rather than ordering again.
+	if name == "root_volume_size" && before != nil && before.IsNull() {
+		return recorded
+	}
+	return reorder
 }

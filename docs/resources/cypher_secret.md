@@ -2,12 +2,12 @@
 page_title: "mtncloud_cypher_secret Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud cypher secret resource.
+  Provides an MTN Cloud Cypher secret resource: a value stored under secret/ in Cypher, the tenant's secrets store.
 ---
 
 # mtncloud_cypher_secret
 
-Provides a MTN Cloud cypher secret resource.
+Provides an MTN Cloud Cypher secret resource: a value stored under `secret/` in Cypher, the tenant's secrets store.
 
 ## Example Usage
 

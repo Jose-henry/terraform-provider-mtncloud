@@ -12,7 +12,7 @@ import (
 
 func resourceAnsiblePlaybookTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud ansible playbook task resource",
+		Description:   "Provides an MTN Cloud Ansible playbook task resource: a task that runs a playbook from an Ansible integration's Git repository.",
 		CreateContext: resourceAnsiblePlaybookTaskCreate,
 		ReadContext:   resourceAnsiblePlaybookTaskRead,
 		UpdateContext: resourceAnsiblePlaybookTaskUpdate,

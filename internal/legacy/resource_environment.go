@@ -12,7 +12,7 @@ import (
 
 func resourceEnvironment() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud environment resource",
+		Description:   "Provides an MTN Cloud environment resource: a label such as Production or Development that orders and instances can carry.",
 		CreateContext: resourceEnvironmentCreate,
 		ReadContext:   resourceEnvironmentRead,
 		UpdateContext: resourceEnvironmentUpdate,

@@ -2,12 +2,12 @@
 page_title: "mtncloud_ansible_tower_inventory Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud ansible tower inventory data source.
+  Provides an MTN Cloud Ansible Tower inventory data source: looks up an inventory of an Ansible Tower integration by name or ID.
 ---
 
 # mtncloud_ansible_tower_inventory (Data Source)
 
-Provides a MTN Cloud ansible tower inventory data source.
+Provides an MTN Cloud Ansible Tower inventory data source: looks up an inventory of an Ansible Tower integration by name or ID.
 
 ## Example Usage
 

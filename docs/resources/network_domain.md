@@ -2,12 +2,12 @@
 page_title: "mtncloud_network_domain Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud network domain resource.
+  Provides an MTN Cloud network domain resource: a DNS domain that instances can be named in.
 ---
 
 # mtncloud_network_domain
 
-Provides a MTN Cloud network domain resource.
+Provides an MTN Cloud network domain resource: a DNS domain that instances can be named in.
 
 ## Example Usage
 

@@ -12,7 +12,7 @@ import (
 
 func resourceNumberOptionType() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud number option type resource",
+		Description:   "Provides an MTN Cloud number option type resource: a numeric input for catalog and workflow forms.",
 		CreateContext: resourceNumberOptionTypeCreate,
 		ReadContext:   resourceNumberOptionTypeRead,
 		UpdateContext: resourceNumberOptionTypeUpdate,

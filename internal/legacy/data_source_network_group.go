@@ -11,7 +11,7 @@ import (
 
 func dataSourceNetworkGroup() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud network group data source.",
+		Description: "Provides an MTN Cloud network group data source: looks up a group of networks by name or ID.",
 		ReadContext: dataSourceNetworkGroupRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

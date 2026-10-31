@@ -38,7 +38,7 @@ terraform import mtncloud_self_managed_kubernetes.k8s <order id>
 - `master_plan` (String) Plan (size) of the master nodes, by name.
 - `master_root_volume_size` (Number) Root disk size in GB.
 - `master_security_groups` (Set of String) Security groups of the master nodes, by name, in addition to the project's default group, which is always applied.
-- `name` (String) Cluster name. Its VMs are named after it.
+- `name` (String) Name of the app the order creates, shown under Apps. It must be unique among your apps: the provider finds the app, and the VMs in it, by this name (MTN names the VMs itself).
 
 ### Optional
 

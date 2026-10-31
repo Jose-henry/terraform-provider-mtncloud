@@ -11,7 +11,7 @@ import (
 
 func dataSourceTask() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud task data source.",
+		Description: "Provides an MTN Cloud task data source: looks up a task by name or ID.",
 		ReadContext: dataSourceTaskRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

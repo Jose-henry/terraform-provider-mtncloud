@@ -2,12 +2,12 @@
 page_title: "mtncloud_key_pair Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud key pair data source.
+  Provides an MTN Cloud key pair data source: looks up an SSH key pair by name or ID.
 ---
 
 # mtncloud_key_pair (Data Source)
 
-Provides a MTN Cloud key pair data source.
+Provides an MTN Cloud key pair data source: looks up an SSH key pair by name or ID.
 
 ## Example Usage
 

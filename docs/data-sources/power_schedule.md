@@ -2,12 +2,12 @@
 page_title: "mtncloud_power_schedule Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud power schedule data source.
+  Provides an MTN Cloud power schedule data source: looks up a schedule that powers instances on and off by name or ID.
 ---
 
 # mtncloud_power_schedule (Data Source)
 
-Provides a MTN Cloud power schedule data source.
+Provides an MTN Cloud power schedule data source: looks up a schedule that powers instances on and off by name or ID.
 
 ## Example Usage
 

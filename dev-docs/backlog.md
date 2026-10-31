@@ -507,3 +507,31 @@ Owner to decide: build it, and whether adopting with no order is the right defau
 2. (Fixed 2026-10-31: the router waits for the subnet within its timeout.) **A router made right after its networks fails**: "Network ... has no subnet yet, so a router
    can't attach to it. Try again in a minute." Rule 13 (eventual consistency): the router create (or
    the network create) should wait for the subnet, with the create timeout, instead of failing.
+3. (Fixed 2026-10-31.) **App orders reported success with nothing running.** Managed Database's
+   workflow ended in 6 s after asking for app `tf-acc-mdb-*` (status `pending`); its VM is named
+   from MTN's template (`<initials>-<account>-MTN-CLOUD-MYSQL-1`), so the name match found nothing
+   and destroy would have refused ("Nothing it made was found"). Now: wait for the app named after
+   the order (`client.WaitForApp`, settled when its status leaves pending/provisioning), take the
+   app's instances (`instancesNamed`), and `deletePlan` deletes the app.
+4. (Fixed 2026-10-31.) **Managed MQ and Streaming workflows failed** at once: "Invalid msg_engine
+   value 'null'. Expected 'rabbit' or 'active'." and "kafkaVersion must be 4.3.1 or 4.2.1 (got:
+   'null'). Nothing was provisioned." The forms mark them optional but `noBlank`: the console opens
+   them on their first choice. `applyForm` now sends a never-blank list's first choice (two passes,
+   for a list shown only for another's choice). Managed Database also sent `MYSQL_VERSION null`.
+   Their `dependsOnCode` (`msg_engine:rabbit`) is only the show condition; the lists are the same
+   with or without the parent value (probed live).
+5. (Fixed 2026-10-31.) **The failure gave no reason**: the order's `statusMessage` is null on a
+   workflow failure; the reason is in `/api/job-executions/{id}` `process.events[].output` of the
+   failed task. `client.ExecutionFailure` adds its last lines, dropping any that mention a secret.
+6. (MTN side, open.) **Managed MQ and Managed Streaming can't be ordered on the test tenant**: with
+   the inputs fixed, their workflows fail with "Blueprint not found for id '16'" (MQ) and "'21'"
+   (Streaming): the app blueprints they provision are missing or not shared with the tenant. Ask
+   MTN. Managed Database (blueprint 14) works.
+7. (Fixed 2026-10-31, before release.) **The new locked check refused PfSense** ("locks VOLUME"): it
+   compared the hidden disk list the form fills with its JSON default. Only plain, shown values are
+   compared now.
+8. (Checked.) **A locked name template doesn't rename the VM**: WireGuard's form locks `name` at
+   `${userInitials}-${accountId}-MTN-CLOUD-${type}-...`, but the VM took the name sent, and the
+   order found it. Only app orders (managed services) get template-named VMs.
+9. (Fixed 2026-10-31, review.) **`allowed_cidrs` was sent one per line**; the form's pattern and help
+   ask for commas. Sent `a, b` now.

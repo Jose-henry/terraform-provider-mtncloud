@@ -2,12 +2,12 @@
 page_title: "mtncloud_credential Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud credential resource.
+  Provides an MTN Cloud credential resource: a stored user name and password, key or token that integrations and tasks use by reference.
 ---
 
 # mtncloud_credential
 
-Provides a MTN Cloud credential resource.
+Provides an MTN Cloud credential resource: a stored user name and password, key or token that integrations and tasks use by reference.
 
 ## Example Usage
 

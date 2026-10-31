@@ -13,7 +13,7 @@ import (
 
 func resourceEmailTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud email task resource",
+		Description:   "Provides an MTN Cloud email task resource: a task that sends an email.",
 		CreateContext: resourceEmailTaskCreate,
 		ReadContext:   resourceEmailTaskRead,
 		UpdateContext: resourceEmailTaskUpdate,

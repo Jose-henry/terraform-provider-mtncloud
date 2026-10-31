@@ -15,7 +15,7 @@ import (
 
 func resourceCypherSecret() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud cypher secret resource.",
+		Description:   "Provides an MTN Cloud Cypher secret resource: a value stored under `secret/` in Cypher, the tenant's secrets store.",
 		CreateContext: resourceCypherSecretCreate,
 		ReadContext:   resourceCypherSecretRead,
 		DeleteContext: resourceCypherSecretDelete,

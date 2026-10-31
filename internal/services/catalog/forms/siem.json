@@ -1,0 +1,110 @@
+{
+  "item": "MTN SIEM Service",
+  "code": "WZH01",
+  "read": "2026-10-31",
+  "fields": [
+    {
+      "name": "cloud",
+      "label": "CLOUD",
+      "type": "cloud",
+      "required": true
+    },
+    {
+      "name": "enableLogall",
+      "label": "Event Archiving",
+      "type": "select",
+      "required": true,
+      "choices": [
+        "yes",
+        "no"
+      ]
+    },
+    {
+      "name": "environment",
+      "label": "ENVIRONMENT",
+      "type": "environment"
+    },
+    {
+      "name": "floatingip",
+      "label": "FLOATING IP",
+      "type": "select",
+      "choices": [
+        "public-network-01",
+        "public-network-02",
+        "public-network-03",
+        "public-network-04"
+      ]
+    },
+    {
+      "name": "group-vpn",
+      "label": "GROUP",
+      "type": "group",
+      "required": true
+    },
+    {
+      "name": "labels",
+      "label": "LABELS",
+      "type": "textArray",
+      "help": "Enter a comma-separated list of labels to group and categorise items for easier filtering in list views."
+    },
+    {
+      "name": "name",
+      "label": "NAME",
+      "type": "text",
+      "required": true,
+      "hidden": true,
+      "default": "${userInitials}-${accountId}-MTN-CLOUD-${type}-${sequence+0}"
+    },
+    {
+      "name": "networks",
+      "label": "NETWORKS",
+      "type": "networkManager",
+      "required": true
+    },
+    {
+      "name": "plan",
+      "label": "PLAN",
+      "type": "select",
+      "required": true,
+      "help": "Note: G4S8 (recommended)"
+    },
+    {
+      "name": "resourcepool",
+      "label": "RESOURCE POOL",
+      "type": "resourcePool"
+    },
+    {
+      "name": "securitygroups",
+      "label": "SECURITY GROUP(s)",
+      "type": "secGroup",
+      "required": true
+    },
+    {
+      "name": "volumes",
+      "label": "VOLUMES",
+      "type": "diskManager",
+      "required": true,
+      "default": "[disk or network list]",
+      "help": "Minimum 100 GB. A required 60 GB data disk is added automatically from the backend, for 160 GB total."
+    },
+    {
+      "name": "wazuhAdminPassword",
+      "label": "ADMIN PASSWORD",
+      "type": "password",
+      "required": true,
+      "pattern": "^[A-Za-z0-9.*+?-]{12,64}$",
+      "example": "********",
+      "help": "Password for the global administrator. Recoomended: 12-64 char. '.', '*', '+', '?' are allowed special characters."
+    },
+    {
+      "name": "wazuhVersion",
+      "label": "Wazuh Version",
+      "type": "select",
+      "required": true,
+      "choices": [
+        "4.14.6 (recommended)",
+        "4.14.4"
+      ]
+    }
+  ]
+}

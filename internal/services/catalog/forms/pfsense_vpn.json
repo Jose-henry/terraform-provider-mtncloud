@@ -1,0 +1,91 @@
+{
+  "item": "MTN PfSense VPN",
+  "code": "MVPNSV02",
+  "read": "2026-10-31",
+  "fields": [
+    {
+      "name": "cloud",
+      "label": "CLOUD",
+      "type": "cloud",
+      "required": true
+    },
+    {
+      "name": "environment",
+      "label": "ENVIRONMENT",
+      "type": "environment"
+    },
+    {
+      "name": "floatingip",
+      "label": "FLOATING IP",
+      "type": "select",
+      "required": true,
+      "choices": [
+        "public-network-01",
+        "public-network-02",
+        "public-network-03",
+        "public-network-04"
+      ]
+    },
+    {
+      "name": "group-vpn",
+      "label": "GROUP",
+      "type": "group",
+      "required": true
+    },
+    {
+      "name": "label",
+      "label": "LABELS",
+      "type": "textArray"
+    },
+    {
+      "name": "name",
+      "label": "NAME",
+      "type": "text",
+      "required": true,
+      "hidden": true,
+      "locked": true,
+      "default": "${userInitials}-${accountId}-MTN-CLOUD-${type}-${sequence+0}"
+    },
+    {
+      "name": "networks",
+      "label": "NETWORKS",
+      "type": "networkManager",
+      "required": true,
+      "help": "Note: Service requires at least 2 interfaces with the same floating IPs selected (two internal/ one internal, one external)"
+    },
+    {
+      "name": "plan",
+      "label": "PLAN",
+      "type": "select",
+      "required": true
+    },
+    {
+      "name": "resourcepool",
+      "label": "RESOURCE POOL",
+      "type": "resourcePool",
+      "required": true
+    },
+    {
+      "name": "securitygroups",
+      "label": "SECURITY GROUP(s)",
+      "type": "secGroup"
+    },
+    {
+      "name": "volume",
+      "label": "VOLUMES",
+      "type": "byteSize",
+      "locked": true,
+      "default": "53687091200",
+      "example": "50"
+    },
+    {
+      "name": "volumes",
+      "label": "VOLUME",
+      "type": "diskManager",
+      "hidden": true,
+      "locked": true,
+      "default": "[disk or network list]",
+      "example": "50"
+    }
+  ]
+}

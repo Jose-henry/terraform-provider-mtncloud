@@ -18,6 +18,13 @@ type CatalogInput struct {
 	Default      string
 	Help         string
 	DisplayOrder int64
+	// The console's rules for the input, as FormField has them: hidden or locked (the console sends
+	// Default), not blank, required or shown only while another input has a value, a pattern for a
+	// typed value, number bounds, and the example it shows.
+	Hidden, Locked, NoBlank bool
+	RequireOn, VisibleOn    string
+	Pattern, Placeholder    string
+	Min, Max                *int64
 }
 
 type wireInput struct {
@@ -28,6 +35,18 @@ type wireInput struct {
 	DefaultValue any    `json:"defaultValue"`
 	HelpBlock    string `json:"helpBlock"`
 	DisplayOrder int64  `json:"displayOrder"`
+	IsHidden     bool   `json:"isHidden"`
+	IsLocked     bool   `json:"isLocked"`
+	NoBlank      bool   `json:"noBlank"`
+	RequireOn    string `json:"requireOnCode"`
+	VisibleOn    string `json:"visibleOnCode"`
+	Pattern      string `json:"verifyPattern"`
+	Placeholder  string `json:"placeHolder"`
+	MinVal       any    `json:"minVal"`
+	MaxVal       any    `json:"maxVal"`
+	Config       struct {
+		DefaultValue any `json:"defaultValue"` // a disk or network manager's default
+	} `json:"config"`
 }
 
 // CatalogItemInputs reads the inputs of one catalog item, in the order the console shows them.
@@ -62,10 +81,22 @@ func (c *Client) CatalogItemInputs(ctx context.Context, id int64) ([]CatalogInpu
 		if w.DefaultValue != nil {
 			def = fmt.Sprint(w.DefaultValue)
 		}
-		out = append(out, CatalogInput{
+		if d := w.Config.DefaultValue; d != nil && d != "" {
+			def = fmt.Sprint(d)
+		}
+		in := CatalogInput{
 			Name: w.FieldName, Label: w.FieldLabel, Type: w.Type, Required: w.Required,
 			Default: def, Help: w.HelpBlock, DisplayOrder: w.DisplayOrder,
-		})
+			Hidden: w.IsHidden, Locked: w.IsLocked, NoBlank: w.NoBlank, RequireOn: w.RequireOn, VisibleOn: w.VisibleOn,
+			Pattern: w.Pattern, Placeholder: w.Placeholder,
+		}
+		if n, ok := asInt64(w.MinVal); ok {
+			in.Min = &n
+		}
+		if n, ok := asInt64(w.MaxVal); ok {
+			in.Max = &n
+		}
+		out = append(out, in)
 	}
 	slices.SortStableFunc(out, func(a, b CatalogInput) int {
 		return cmp.Or(cmp.Compare(a.DisplayOrder, b.DisplayOrder), cmp.Compare(a.Name, b.Name))

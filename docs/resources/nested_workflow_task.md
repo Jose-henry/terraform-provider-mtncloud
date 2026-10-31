@@ -3,12 +3,12 @@
 page_title: "mtncloud_nested_workflow_task Resource - mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud nested workflow task resource
+  Provides an MTN Cloud nested workflow task resource: a task that runs another workflow.
 ---
 
 # mtncloud_nested_workflow_task (Resource)
 
-Provides a MTN Cloud nested workflow task resource
+Provides an MTN Cloud nested workflow task resource: a task that runs another workflow.
 
 ## Example Usage
 

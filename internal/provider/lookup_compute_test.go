@@ -419,13 +419,25 @@ func TestCatalogItem_DataSource(t *testing.T) {
 	// The form's own inputs and its field groups', in display order.
 	form := []statecheck.StateCheck{
 		check(tfjsonpath.New("id"), knownvalue.Int64Exact(22)),
-		check(tfjsonpath.New("inputs"), knownvalue.ListSizeExact(4)),
+		check(tfjsonpath.New("inputs"), knownvalue.ListSizeExact(5)),
 		check(in(0, "name"), knownvalue.StringExact("groupName")),
 		check(in(1, "name"), knownvalue.StringExact("cloud")),
 		check(in(1, "default"), knownvalue.StringExact("4")),
 		check(in(2, "name"), knownvalue.StringExact("instanceName")),
 		check(in(2, "help"), knownvalue.StringExact("Lower case and dashes.")),
 		check(in(3, "required"), knownvalue.Bool(false)),
+		// The form's rules for each input.
+		check(in(1, "hidden"), knownvalue.Bool(true)),
+		check(in(1, "locked"), knownvalue.Bool(true)),
+		check(in(2, "no_blank"), knownvalue.Bool(true)),
+		check(in(2, "pattern"), knownvalue.StringExact("^[a-z-]+$")),
+		check(in(2, "example"), knownvalue.StringExact("web-1")),
+		check(in(2, "min"), knownvalue.Null()),
+		check(in(4, "required_when"), knownvalue.StringExact("backup")),
+		check(in(4, "shown_when"), knownvalue.StringExact("backup")),
+		check(in(4, "min"), knownvalue.Int64Exact(1)),
+		check(in(4, "max"), knownvalue.Int64Exact(30)),
+		check(in(4, "locked"), knownvalue.Bool(false)),
 	}
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),

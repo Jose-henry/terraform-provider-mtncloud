@@ -12,7 +12,7 @@ import (
 
 func resourceNetworkDomain() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud network domain resource.",
+		Description:   "Provides an MTN Cloud network domain resource: a DNS domain that instances can be named in.",
 		CreateContext: resourceNetworkDomainCreate,
 		ReadContext:   resourceNetworkDomainRead,
 		UpdateContext: resourceNetworkDomainUpdate,

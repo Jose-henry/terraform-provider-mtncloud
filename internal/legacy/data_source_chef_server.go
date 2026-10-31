@@ -12,7 +12,7 @@ import (
 
 func dataSourceChefServer() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud chef server data source.",
+		Description: "Provides an MTN Cloud Chef server data source: looks up a Chef server integration by name or ID.",
 		ReadContext: dataSourceChefServerRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

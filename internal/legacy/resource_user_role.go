@@ -14,7 +14,7 @@ import (
 
 func resourceUserRole() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides an MTN Cloud user role resource.",
+		Description:   "Provides an MTN Cloud user role resource: a set of permissions that users are given.",
 		CreateContext: resourceUserRoleCreate,
 		ReadContext:   resourceUserRoleRead,
 		UpdateContext: resourceUserRoleUpdate,

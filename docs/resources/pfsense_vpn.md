@@ -2,12 +2,12 @@
 page_title: "mtncloud_pfsense_vpn Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk). Ordered from MTN Cloud's catalog (MTN PfSense VPN). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+  A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk). Ordered from MTN Cloud's catalog (MTN PfSense VPN). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN PfSense VPN order form requires and allows (read 2026-10-31); every plan checks the live form. The form fills volumes itself, and they are sent as it fills them. Its other fields, which no argument sets, go in extra_inputs: volume.
 ---
 
 # mtncloud_pfsense_vpn
 
-A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk). Ordered from MTN Cloud's catalog (MTN PfSense VPN). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk). Ordered from MTN Cloud's catalog (MTN PfSense VPN). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN PfSense VPN order form requires and allows (read 2026-10-31); every plan checks the live form. The form fills `volumes` itself, and they are sent as it fills them. Its other fields, which no argument sets, go in `extra_inputs`: `volume`.
 
 ## Example Usage
 
@@ -33,10 +33,10 @@ resource "mtncloud_pfsense_vpn" "this" {
 
 ### Required
 
-- `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`.
-- `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it.
-- `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists.
-- `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices.
+- `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`. Order form: required; choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
+- `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it. Order form: required; locked (not editable).
+- `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists. Order form: required. It says: "Note: Service requires at least 2 interfaces with the same floating IPs selected (two internal/ one internal, one external)."
+- `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices. Order form: required.
 
 ### Optional
 

@@ -34,6 +34,9 @@ type orderStore struct {
 	// apps maps an app ID to its instance IDs; deleting one (removeInstances=on) deletes them from
 	// insts. deleted lists the inventory records and apps deleted, in order ("item 9801", "app 9901").
 	apps    map[int64][]int64
+	appName map[int64]string   // an app's name, "app-<id>" when not set
+	appStep map[int64][]string // an app's status on each list, the last kept; "running" when not set
+	failure string             // the failed task's output in every execution, when set
 	insts   *instStore
 	deleted []string
 }
@@ -88,6 +91,14 @@ func (s *orderStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.serveApps(r, reply)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/job-executions/") {
+		ev := []any{map[string]any{"status": "complete", "output": "Validating"}}
+		if s.failure != "" {
+			ev = append(ev, map[string]any{"status": "failed", "output": s.failure})
+		}
+		reply(http.StatusOK, map[string]any{"jobExecution": map[string]any{"process": map[string]any{"events": ev}}})
+		return
+	}
 	id, _ := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, "/api/catalog/items/"), 10, 64)
 	if r.Method == http.MethodDelete {
 		if _, ok := s.items[id]; !ok {
@@ -125,7 +136,17 @@ func (s *orderStore) serveApps(r *http.Request, reply func(int, any)) {
 			for _, i := range held {
 				insts = append(insts, map[string]any{"id": i, "name": fmt.Sprint("node-", i)})
 			}
-			list = append(list, map[string]any{"id": id, "name": fmt.Sprint("app-", id), "instances": insts})
+			name, status := fmt.Sprint("app-", id), "running"
+			if n, ok := s.appName[id]; ok {
+				name = n
+			}
+			if st := s.appStep[id]; len(st) > 0 {
+				status = st[0]
+				if len(st) > 1 {
+					s.appStep[id] = st[1:]
+				}
+			}
+			list = append(list, map[string]any{"id": id, "name": name, "status": status, "instances": insts})
 		}
 		reply(http.StatusOK, map[string]any{"apps": list, "meta": map[string]any{"total": len(list)}})
 		return

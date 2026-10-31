@@ -11,7 +11,7 @@ import (
 
 func dataSourceContact() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud contact data source.",
+		Description: "Provides an MTN Cloud contact data source: looks up a contact to notify by name or ID.",
 		ReadContext: dataSourceContactRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

@@ -2,12 +2,12 @@
 page_title: "mtncloud_manual_option_list Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud manual option list resource.
+  Provides an MTN Cloud manual option list resource: a fixed list of choices for form inputs.
 ---
 
 # mtncloud_manual_option_list
 
-Provides a MTN Cloud manual option list resource.
+Provides an MTN Cloud manual option list resource: a fixed list of choices for form inputs.
 
 ## Example Usage
 

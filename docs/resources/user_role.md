@@ -3,12 +3,12 @@
 page_title: "mtncloud_user_role Resource - mtncloud"
 subcategory: ""
 description: |-
-  Provides an MTN Cloud user role resource.
+  Provides an MTN Cloud user role resource: a set of permissions that users are given.
 ---
 
 # mtncloud_user_role (Resource)
 
-Provides an MTN Cloud user role resource.
+Provides an MTN Cloud user role resource: a set of permissions that users are given.
 
 ## Example Usage
 

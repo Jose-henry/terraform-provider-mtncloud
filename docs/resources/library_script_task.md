@@ -2,12 +2,12 @@
 page_title: "mtncloud_library_script_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud library script task resource
+  Provides an MTN Cloud library script task resource: a task that runs a script template from the library.
 ---
 
 # mtncloud_library_script_task
 
-Provides a MTN Cloud library script task resource
+Provides an MTN Cloud library script task resource: a task that runs a script template from the library.
 
 ## Example Usage
 

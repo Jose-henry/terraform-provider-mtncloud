@@ -13,7 +13,7 @@ import (
 
 func resourceRestOptionList() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud rest option list resource.",
+		Description:   "Provides an MTN Cloud REST option list resource: a list of choices for form inputs, read from a REST endpoint.",
 		CreateContext: resourceRestOptionListCreate,
 		ReadContext:   resourceRestOptionListRead,
 		UpdateContext: resourceRestOptionListUpdate,

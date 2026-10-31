@@ -12,7 +12,7 @@ import (
 
 func resourceRestartTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud restart task resource",
+		Description:   "Provides an MTN Cloud restart task resource: a task that restarts a VM, for use in workflows.",
 		CreateContext: resourceRestartTaskCreate,
 		ReadContext:   resourceRestartTaskRead,
 		UpdateContext: resourceRestartTaskUpdate,

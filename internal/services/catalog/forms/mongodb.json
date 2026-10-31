@@ -1,0 +1,225 @@
+{
+  "item": "MTN MongoDB",
+  "code": "MongoDBINST01",
+  "read": "2026-10-31",
+  "fields": [
+    {
+      "name": "adminPassword",
+      "label": "ADMIN PASSWORD",
+      "type": "password",
+      "required": true,
+      "required_when": "enableAuth",
+      "shown_when": "enableAuth",
+      "example": "********",
+      "help": "Password for the global administrator. Required if enableAuth is checked."
+    },
+    {
+      "name": "adminUsername",
+      "label": "ADMIN USERNAME",
+      "type": "text",
+      "required": true,
+      "default": "Admin",
+      "pattern": "(?i)^[a-z_][a-z0-9_\\$]{0,62}$",
+      "example": "Admin",
+      "help": "Username for the global administrator"
+    },
+    {
+      "name": "autoSecurityUpdates",
+      "label": "AUTO SECURITY UPDATES",
+      "type": "checkbox"
+    },
+    {
+      "name": "cloud",
+      "label": "CLOUD",
+      "type": "cloud",
+      "required": true
+    },
+    {
+      "name": "dbName",
+      "label": "DATABASE NAME",
+      "type": "text",
+      "pattern": "(?i)^[a-z_][a-z0-9_\\$]{0,62}$",
+      "example": "mydb"
+    },
+    {
+      "name": "dbPassword",
+      "label": "DB PASSWORD",
+      "type": "password",
+      "example": "root123"
+    },
+    {
+      "name": "dbUsername",
+      "label": "DB USERNAME",
+      "type": "text",
+      "pattern": "(?i)^[a-z_][a-z0-9_\\$]{0,62}$",
+      "example": "dbuser"
+    },
+    {
+      "name": "enableAuth",
+      "label": "ENABLE AUTH",
+      "type": "checkbox",
+      "default": "on"
+    },
+    {
+      "name": "environment",
+      "label": "ENVIRONMENT",
+      "type": "environment"
+    },
+    {
+      "name": "floatingip",
+      "label": "FLOATING IP",
+      "type": "select",
+      "choices": [
+        "public-network-01",
+        "public-network-02",
+        "public-network-03",
+        "public-network-04"
+      ]
+    },
+    {
+      "name": "group-vpn",
+      "label": "GROUP",
+      "type": "group",
+      "required": true
+    },
+    {
+      "name": "hostCIDRs",
+      "label": "ALLOWABLE HOST CIDR",
+      "type": "textarea",
+      "required": true,
+      "default": "0.0.0.0/0",
+      "pattern": "^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9])(,\\s*((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9]))*$",
+      "example": "10.60.50.0/24, 10.60.40.0/24",
+      "help": "Comma seperated list of clients that can connect with the DB"
+    },
+    {
+      "name": "initReplicaSet",
+      "label": "INITIALIZE REPLICA SET",
+      "type": "checkbox"
+    },
+    {
+      "name": "installAtlasCLI",
+      "label": "INSTALL ATLAS CLI",
+      "type": "checkbox"
+    },
+    {
+      "name": "installBIConnector",
+      "label": "INSTALL BI-CONNECTOR (Warning: EOL Sept 2026)",
+      "type": "checkbox"
+    },
+    {
+      "name": "installDatabaseTools",
+      "label": "INSTALL DATABASE TOOLS",
+      "type": "checkbox",
+      "default": "on"
+    },
+    {
+      "name": "installMCPServer",
+      "label": "INSTALL MCP",
+      "type": "checkbox"
+    },
+    {
+      "name": "installMongosh",
+      "label": "Install Mongosh",
+      "type": "checkbox",
+      "default": "on"
+    },
+    {
+      "name": "installMongosync",
+      "label": "INSTALL MONGOSYNC",
+      "type": "checkbox"
+    },
+    {
+      "name": "labels",
+      "label": "LABELS",
+      "type": "textArray",
+      "help": "Enter a comma-separated list of labels to group and categorise items for easier filtering in list views."
+    },
+    {
+      "name": "mongoUserRole",
+      "label": "MONGODB USER ROLE",
+      "type": "select",
+      "no_blank": true,
+      "default": "Read \u0026 Write",
+      "help": "readWrite : read/write on named DB only (default, safe) dbOwner : full owner of named DB (create indexes, etc.) dbAdmin : admin (no data read/write, only admin tasks)",
+      "choices": [
+        "Read \u0026 Write",
+        "Read",
+        "DB Admin",
+        "DB Owner"
+      ]
+    },
+    {
+      "name": "mongodbVersion",
+      "label": "MONGODB VERSION",
+      "type": "select",
+      "required": true,
+      "no_blank": true,
+      "default": "8.2",
+      "choices": [
+        "6.0 (Legacy)",
+        "7.0",
+        "8.0",
+        "8.2 (Recommended)"
+      ]
+    },
+    {
+      "name": "name",
+      "label": "NAME",
+      "type": "text",
+      "required": true,
+      "default": "${userInitials}-${accountId}-MTN-CLOUD-${type}-${sequence+0}"
+    },
+    {
+      "name": "networks",
+      "label": "NETWORKS",
+      "type": "networkManager",
+      "required": true
+    },
+    {
+      "name": "plan",
+      "label": "PLAN",
+      "type": "select",
+      "required": true
+    },
+    {
+      "name": "replicaSetName",
+      "label": "REPLICA SET NAME",
+      "type": "text",
+      "shown_when": "initReplicaSet",
+      "default": "rs0",
+      "example": "rs0",
+      "help": "The name of the replica set if init-Replica-Set is on."
+    },
+    {
+      "name": "requireSSL",
+      "label": "REQUIRE SSL FOR CONNECTIONS?",
+      "type": "checkbox"
+    },
+    {
+      "name": "resourcepool",
+      "label": "RESOURCE POOL",
+      "type": "resourcePool",
+      "required": true
+    },
+    {
+      "name": "securitygroups",
+      "label": "SECURITY GROUP(s)",
+      "type": "secGroup"
+    },
+    {
+      "name": "volumes",
+      "label": "VOLUMES",
+      "type": "diskManager",
+      "required": true
+    },
+    {
+      "name": "wiredTigerCacheGB",
+      "label": "WIRED TIGER CACHE (GB)",
+      "type": "number",
+      "default": "0",
+      "example": "0",
+      "help": "Default \"0\" (lets MongoDB manage automatically). Sets the wired tiger cache size in GB."
+    }
+  ]
+}

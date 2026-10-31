@@ -12,7 +12,7 @@ import (
 
 func resourceRadioListOptionType() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud radio list option type resource",
+		Description:   "Provides an MTN Cloud radio list option type resource: a one-of-several input for forms, with its choices from an option list.",
 		CreateContext: resourceRadioListOptionTypeCreate,
 		ReadContext:   resourceRadioListOptionTypeRead,
 		UpdateContext: resourceRadioListOptionTypeUpdate,

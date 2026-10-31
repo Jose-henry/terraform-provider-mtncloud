@@ -2,12 +2,12 @@
 page_title: "mtncloud_environment Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud environment resource
+  Provides an MTN Cloud environment resource: a label such as Production or Development that orders and instances can carry.
 ---
 
 # mtncloud_environment
 
-Provides a MTN Cloud environment resource
+Provides an MTN Cloud environment resource: a label such as Production or Development that orders and instances can carry.
 
 ## Example Usage
 

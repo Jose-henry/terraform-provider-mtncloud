@@ -13,7 +13,7 @@ import (
 
 func resourceWikiPage() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud wiki page resource",
+		Description:   "Provides an MTN Cloud wiki page resource: a page in the tenant's wiki.",
 		CreateContext: resourceWikiPageCreate,
 		ReadContext:   resourceWikiPageRead,
 		UpdateContext: resourceWikiPageUpdate,

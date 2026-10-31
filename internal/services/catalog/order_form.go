@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
@@ -58,6 +59,28 @@ func (r *orderResource) applyForm(ctx context.Context, form *client.CatalogForm,
 		}
 	}
 
+	// A list that can't be blank opens on its first choice in the console, which sends it: MTN's
+	// workflows fail without it (msg_engine, kafkaVersion: QA, 2026-10-31). Two passes, so a list
+	// shown only for another list's choice (rabbitmqVersion for msg_engine) is filled too.
+	for range 2 {
+		for _, key := range sortedKeys(form.Fields) {
+			ff := form.Fields[key]
+			if _, set := out[key]; set || !ff.NoBlank || ff.Hidden || ff.Default != nil || ff.ID == 0 ||
+				(ff.Type != "select" && ff.Type != "radio") || !conditionMet(ff.VisibleOn, out) {
+				continue
+			}
+			opts, err := r.client.FormOptionsIn(ctx, ff.ID, formValues(form, out))
+			if err != nil {
+				diags.AddAttributeError(r.formPath(key), "Cannot read the form's choices",
+					fmt.Sprintf("Reading the choices of %s on the %s form failed: %s. Set it to skip the lookup.", label(ff), r.spec.item, err))
+				return
+			}
+			if len(opts) > 0 {
+				out[key] = opts[0].Value
+			}
+		}
+	}
+
 	// A field shown only for another field's value isn't sent otherwise, as in the console.
 	for key, ff := range form.Fields {
 		if _, set := out[key]; !set || ff.VisibleOn == "" || conditionMet(ff.VisibleOn, out) {
@@ -73,11 +96,7 @@ func (r *orderResource) applyForm(ctx context.Context, form *client.CatalogForm,
 		return
 	}
 
-	keys := make([]string, 0, len(form.Fields))
-	for k := range form.Fields {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
+	keys := sortedKeys(form.Fields)
 	for _, key := range keys {
 		ff := form.Fields[key]
 		if _, set := out[key]; set || ff.Hidden || !conditionMet(ff.VisibleOn, out) {
@@ -96,7 +115,110 @@ func (r *orderResource) applyForm(ctx context.Context, form *client.CatalogForm,
 		}
 		diags.AddAttributeError(r.formPath(key), "Missing required input", msg+"."+helpOf(ff))
 	}
+	for _, key := range keys {
+		if v, set := out[key]; set {
+			r.checkField(form.Fields[key], v, diags)
+		}
+	}
 	r.checkRules(form, out, planNames, diags)
+}
+
+// formValues are the form values a list may be built for, as the console sends them: the item, its
+// cloud, group and project.
+func formValues(form *client.CatalogForm, out map[string]any) url.Values {
+	fv := url.Values{"catalogItemTypeId": {strconv.FormatInt(form.ItemID, 10)}}
+	for k, x := range out {
+		if s, isStr := x.(string); isStr && (k == "cloud" || k == "resourcepool" || strings.HasPrefix(k, "group")) {
+			fv.Set(k, s)
+		}
+	}
+	if pool, ok := out["resourcepool"].(string); ok {
+		fv.Set("config.customOptions.resourcepool", pool)
+	}
+	return fv
+}
+
+// sortedKeys is the form's field names in order, so checks and choices run the same way each plan.
+func sortedKeys(fields map[string]client.FormField) []string {
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// checkField checks a value against the console's own rules for the field: locked, not blank, its
+// pattern and its number limits. The order would be refused, or the workflow fail, otherwise.
+func (r *orderResource) checkField(ff client.FormField, v any, diags *diag.Diagnostics) {
+	at, what := r.formPath(ff.Name), label(ff)
+	// The name is locked on some forms (the console names the VM itself); the order still sends it,
+	// as orders are found by it.
+	// A hidden field, or a disk or network list, is what the form itself fills (PfSense's fixed
+	// disks, QA 2026-10-31): only a plain value a user gives is compared.
+	if ff.Locked && ff.Name != "name" && !ff.Hidden && scalarField(ff.Type) && ff.Default != nil && !sameValue(v, ff.Default) {
+		diags.AddAttributeError(at, "Input locked by the form",
+			fmt.Sprintf("The %s form locks %s at %v: it can't be changed. Leave it out.%s", r.spec.item, what, ff.Default, helpOf(ff)))
+		return
+	}
+	switch x := v.(type) {
+	case string:
+		if ff.NoBlank && strings.TrimSpace(x) == "" {
+			diags.AddAttributeError(at, "Empty input", fmt.Sprintf("The %s form needs a value for %s.%s", r.spec.item, what, helpOf(ff)))
+			return
+		}
+		if ff.Pattern == "" || x == "" {
+			return
+		}
+		re, err := regexp.Compile(ff.Pattern)
+		if err != nil {
+			return // a pattern Go can't run (look-ahead): the console checks it
+		}
+		if !re.MatchString(x) {
+			example := ""
+			if ff.Placeholder != "" && ff.Type != "password" {
+				example = fmt.Sprintf(" For example %q.", ff.Placeholder)
+			}
+			msg := fmt.Sprintf("The %s form doesn't accept %s for %s: it must match %s.%s%s", r.spec.item, shownValue(ff, x), what, ff.Pattern, example, helpOf(ff))
+			diags.AddAttributeError(at, "Invalid "+ff.Name, msg)
+		}
+	case int64, float64:
+		n := toInt(x)
+		if ff.Min != nil && n < *ff.Min || ff.Max != nil && n > *ff.Max {
+			diags.AddAttributeError(at, "Out of range",
+				fmt.Sprintf("The %s form takes %s from %s to %s; %d is set.%s", r.spec.item, what, bound(ff.Min, "any"), bound(ff.Max, "any"), n, helpOf(ff)))
+		}
+	}
+}
+
+// shownValue hides a secret in an error.
+func shownValue(ff client.FormField, v string) string {
+	if ff.Type == "password" {
+		return "that password"
+	}
+	return fmt.Sprintf("%q", v)
+}
+
+func toInt(v any) int64 {
+	switch n := v.(type) {
+	case int64:
+		return n
+	case float64:
+		return int64(n)
+	}
+	return 0
+}
+
+func bound(n *int64, none string) string {
+	if n == nil {
+		return none
+	}
+	return strconv.FormatInt(*n, 10)
+}
+
+// sameValue compares a value with a form default, which the form may give as text ("true", "1").
+func sameValue(v, def any) bool {
+	return strings.EqualFold(fmt.Sprint(v), strings.Trim(fmt.Sprint(def), "'"))
 }
 
 // extraInputs adds extra_inputs to the order: each a field of the form, a choice by name or value.
@@ -166,11 +288,6 @@ func (r *orderResource) extraInputs(ctx context.Context, form *client.CatalogFor
 func (r *orderResource) checkRules(form *client.CatalogForm, out map[string]any, planNames map[string]string, diags *diag.Diagnostics) {
 	rl := r.spec.rules
 	help := func(key string) string { return helpOf(form.Fields[key]) }
-	if _, set := out["volumes"]; !set && rl.minRootGB > 0 {
-		diags.AddAttributeError(r.formPath("volumes"), "Missing root disk size",
-			fmt.Sprintf("%s needs a root disk of at least %d GB: set root_volume_size. The form's own default is "+
-				"smaller.%s", r.spec.item, rl.minRootGB, help("volumes")))
-	}
 	if vols, ok := out["volumes"].([]any); ok && rl.minRootGB > 0 && len(vols) > 0 {
 		if v, ok := vols[0].(map[string]any); ok {
 			if n, ok := v["size"].(int64); ok && n < rl.minRootGB {

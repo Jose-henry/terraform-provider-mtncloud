@@ -2,12 +2,12 @@
 page_title: "mtncloud_restart_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud restart task resource
+  Provides an MTN Cloud restart task resource: a task that restarts a VM, for use in workflows.
 ---
 
 # mtncloud_restart_task
 
-Provides a MTN Cloud restart task resource
+Provides an MTN Cloud restart task resource: a task that restarts a VM, for use in workflows.
 
 ## Example Usage
 

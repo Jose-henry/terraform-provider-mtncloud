@@ -2,12 +2,12 @@
 page_title: "mtncloud_user_group Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud user group data source.
+  Provides an MTN Cloud user group data source: looks up a user group by name or ID.
 ---
 
 # mtncloud_user_group (Data Source)
 
-Provides a MTN Cloud user group data source.
+Provides an MTN Cloud user group data source: looks up a user group by name or ID.
 
 ## Example Usage
 

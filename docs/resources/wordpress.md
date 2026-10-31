@@ -2,12 +2,12 @@
 page_title: "mtncloud_wordpress Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  WordPress with its web server and MySQL on one VM. Ordered from MTN Cloud's catalog (MTN WordPress). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+  WordPress with its web server and MySQL on one VM. Ordered from MTN Cloud's catalog (MTN WordPress). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN WordPress order form requires and allows (read 2026-10-31); every plan checks the live form.
 ---
 
 # mtncloud_wordpress
 
-WordPress with its web server and MySQL on one VM. Ordered from MTN Cloud's catalog (MTN WordPress). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+WordPress with its web server and MySQL on one VM. Ordered from MTN Cloud's catalog (MTN WordPress). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN WordPress order form requires and allows (read 2026-10-31); every plan checks the live form.
 
 ## Example Usage
 
@@ -40,35 +40,35 @@ resource "mtncloud_wordpress" "this" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
-- `database_name` (String) WordPress database.
-- `database_password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) That user's password. Write-only: sent with the order, never stored in state.
-- `database_user` (String) WordPress database user.
-- `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`.
-- `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it.
-- `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists.
-- `php_upload_max` (String) Largest upload PHP accepts, for example `64M`.
-- `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices.
-- `root_volume_size` (Number) Root disk size in GB.
-- `web_server` (String) `Apache` or `Nginx`.
+- `database_name` (String) WordPress database. Order form: required; must match `(?i)^[a-z_][a-z0-9_\$]{0,62}$`; for example `mydb`.
+- `database_password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) That user's password. Order form: required; for example `root123`. Write-only: sent with the order, never stored in state.
+- `database_user` (String) WordPress database user. Order form: required; must match `(?i)^[a-z_][a-z0-9_\$]{0,62}$`; for example `dbuser`.
+- `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`. Order form: required; choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
+- `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it. Order form: required.
+- `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists. Order form: required.
+- `php_upload_max` (String) Largest upload PHP accepts, for example `64M`. Order form: required; never blank: left out, its first choice is sent, as the console shows it; choices: `32M`, `64M (Recommended)`, `128M`. It says: "Sets the maximum file size for uploads (Critical for CMS)."
+- `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices. Order form: required.
+- `root_volume_size` (Number) Root disk size in GB. Order form: required.
+- `web_server` (String) `Apache` or `Nginx`. Order form: required; never blank: left out, its first choice is sent, as the console shows it; choices: `Apache`, `Nginx`.
 
 ### Optional
 
-- `allowed_cidrs` (List of String) Networks that may reach the database, as CIDRs. Defaults to `["0.0.0.0/0"]`.
+- `allowed_cidrs` (List of String) Networks that may reach the database, as CIDRs. Defaults to `["0.0.0.0/0"]`. Order form: required; pre-filled with `0.0.0.0/0`; must match `^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9])(,\s*((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9]))*$`; for example `10.60.50.0/24, 10.60.40.0/24`. It says: "Comma seperated list of clients that can connect with the DB."
 - `auto_security_updates` (Boolean) Install security updates automatically.
 - `data_volume` (Block List) Extra disks, in order. (see [below for nested schema](#nestedblock--data_volume))
 - `datastore` (String) Datastore (volume type) of the root disk, by name. Left out, the project's default.
 - `environment` (String) Environment, by name or code, for example `Production`.
 - `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
-- `labels` (Set of String) Labels on the instance.
-- `mysql_version` (String) MySQL version, as the form lists it.
-- `php_memory_limit` (String) PHP memory limit, for example `256M`. Defaults to `512M (Recommended)`.
-- `php_version` (String) PHP version. Defaults to `8.3 (Recommended)`.
+- `labels` (Set of String) Labels on the instance. It says: "Enter a comma-separated list of labels to group and categorise items for easier filtering in list views."
+- `mysql_version` (String) MySQL version, as the form lists it. Order form: never blank: left out, its first choice is sent, as the console shows it; choices: `8.4 LTS`, `8.0`.
+- `php_memory_limit` (String) PHP memory limit, for example `256M`. Order form: required; not blank; pre-filled with `512M (Recommended)`; choices: `128M`, `256M`, `512M (Recommended)`, `1G`. It says: "Limits how much RAM a single script can consume." Defaults to `512M (Recommended)`.
+- `php_version` (String) PHP version. Order form: required; not blank; pre-filled with `8.3 (Recommended)`; choices: `8.3 (Recommended)`, `8.4`. Defaults to `8.3 (Recommended)`.
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
 - `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `user_owns_database` (Boolean) Make the user the database's owner. Defaults to true.
-- `web_server_port` (Number) Port the web server listens on.
+- `user_owns_database` (Boolean) Make the user the database's owner. Locked on by the order form: leave it out, or set `true`. Order form: required; locked (not editable); pre-filled with `true`. Defaults to `true`.
+- `web_server_port` (Number) Port the web server listens on. Order form: for example `80`. It says: "Site will be reachable on your specified port, 80 is default."
 
 ### Read-Only
 

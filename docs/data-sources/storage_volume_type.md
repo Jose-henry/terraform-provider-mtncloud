@@ -2,12 +2,12 @@
 page_title: "mtncloud_storage_volume_type Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud storage volume type data source.
+  Provides an MTN Cloud storage volume type data source: looks up a type of storage volume by name or ID.
 ---
 
 # mtncloud_storage_volume_type (Data Source)
 
-Provides a MTN Cloud storage volume type data source.
+Provides an MTN Cloud storage volume type data source: looks up a type of storage volume by name or ID.
 
 ## Example Usage
 

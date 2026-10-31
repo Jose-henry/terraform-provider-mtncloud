@@ -2,12 +2,12 @@
 page_title: "mtncloud_form Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud form resource
+  Provides an MTN Cloud form resource: a reusable input form for catalog items and workflows, built from option types.
 ---
 
 # mtncloud_form
 
-Provides a MTN Cloud form resource
+Provides an MTN Cloud form resource: a reusable input form for catalog items and workflows, built from option types.
 
 !> **Note:** Existing inputs or option types are not supported 
 and all inputs or option types must be defined in the form.

@@ -2,12 +2,12 @@
 page_title: "mtncloud_environments Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud environments data source.
+  Provides an MTN Cloud environments data source: lists the environments you can use.
 ---
 
 # mtncloud_environments (Data Source)
 
-Provides a MTN Cloud environments data source.
+Provides an MTN Cloud environments data source: lists the environments you can use.
 
 ## Example Usage
 

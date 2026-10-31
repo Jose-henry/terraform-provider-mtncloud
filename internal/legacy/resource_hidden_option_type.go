@@ -12,7 +12,7 @@ import (
 
 func resourceHiddenOptionType() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud hidden option type resource",
+		Description:   "Provides an MTN Cloud hidden option type resource: a form input the user doesn't see, sent with its default value.",
 		CreateContext: resourceHiddenOptionTypeCreate,
 		ReadContext:   resourceHiddenOptionTypeRead,
 		UpdateContext: resourceHiddenOptionTypeUpdate,

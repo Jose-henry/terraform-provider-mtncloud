@@ -1,12 +1,15 @@
 {"catalogItemType": {"id": 22, "name": "Create Instance", "type": "workflow", "formType": "form", "optionTypes": [],
  "form": {"id": 7, "name": "Create Instance",
   "options": [
-   {"fieldName": "instanceName", "fieldLabel": "Instance Name", "type": "text", "required": true, "displayOrder": 2, "helpBlock": "Lower case and dashes."},
+   {"fieldName": "instanceName", "fieldLabel": "Instance Name", "type": "text", "required": true, "displayOrder": 2, "helpBlock": "Lower case and dashes.",
+    "noBlank": true, "verifyPattern": "^[a-z-]+$", "placeHolder": "web-1"},
    {"fieldName": "groupName", "fieldLabel": "Group", "type": "group", "required": true, "displayOrder": 0}
   ],
   "fieldGroups": [
    {"name": "Sizing", "options": [
-    {"fieldName": "cloud", "fieldLabel": "Cloud", "type": "cloud", "required": true, "defaultValue": 4, "displayOrder": 1},
-    {"fieldName": "backup", "fieldLabel": "Backup", "type": "checkbox", "required": false, "defaultValue": "off", "displayOrder": 3}
+    {"fieldName": "cloud", "fieldLabel": "Cloud", "type": "cloud", "required": true, "defaultValue": 4, "displayOrder": 1, "isHidden": true, "isLocked": true},
+    {"fieldName": "backup", "fieldLabel": "Backup", "type": "checkbox", "required": false, "defaultValue": "off", "displayOrder": 3},
+    {"fieldName": "backupDays", "fieldLabel": "Backup Days", "type": "number", "displayOrder": 4, "minVal": "1", "maxVal": 30,
+     "requireOnCode": "backup", "visibleOnCode": "backup"}
    ]}
   ]}}}

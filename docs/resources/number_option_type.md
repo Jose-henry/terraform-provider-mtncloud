@@ -2,12 +2,12 @@
 page_title: "mtncloud_number_option_type Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud number option type resource
+  Provides an MTN Cloud number option type resource: a numeric input for catalog and workflow forms.
 ---
 
 # mtncloud_number_option_type
 
-Provides a MTN Cloud number option type resource
+Provides an MTN Cloud number option type resource: a numeric input for catalog and workflow forms.
 
 ## Example Usage
 

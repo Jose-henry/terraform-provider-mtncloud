@@ -11,7 +11,7 @@ import (
 
 func dataSourceStorageVolumeType() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud storage volume type data source.",
+		Description: "Provides an MTN Cloud storage volume type data source: looks up a type of storage volume by name or ID.",
 		ReadContext: dataSourceStorageTypeRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

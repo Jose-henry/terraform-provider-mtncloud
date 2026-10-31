@@ -2,12 +2,12 @@
 page_title: "mtncloud_email_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud email task resource
+  Provides an MTN Cloud email task resource: a task that sends an email.
 ---
 
 # mtncloud_email_task
 
-Provides a MTN Cloud email task resource
+Provides an MTN Cloud email task resource: a task that sends an email.
 
 ## Example Usage
 

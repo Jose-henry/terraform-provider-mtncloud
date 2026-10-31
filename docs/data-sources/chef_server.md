@@ -2,12 +2,12 @@
 page_title: "mtncloud_chef_server Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud chef server data source.
+  Provides an MTN Cloud Chef server data source: looks up a Chef server integration by name or ID.
 ---
 
 # mtncloud_chef_server (Data Source)
 
-Provides a MTN Cloud chef server data source.
+Provides an MTN Cloud Chef server data source: looks up a Chef server integration by name or ID.
 
 ## Example Usage
 

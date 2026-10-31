@@ -2,12 +2,12 @@
 page_title: "mtncloud_group Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud group resource.
+  Provides an MTN Cloud group resource: a group of clouds that instances and orders are placed in.
 ---
 
 # mtncloud_group
 
-Provides a MTN Cloud group resource.
+Provides an MTN Cloud group resource: a group of clouds that instances and orders are placed in.
 
 ## Example Usage
 

@@ -2,12 +2,12 @@
 page_title: "mtncloud_hidden_option_type Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud hidden option type resource
+  Provides an MTN Cloud hidden option type resource: a form input the user doesn't see, sent with its default value.
 ---
 
 # mtncloud_hidden_option_type
 
-Provides a MTN Cloud hidden option type resource
+Provides an MTN Cloud hidden option type resource: a form input the user doesn't see, sent with its default value.
 
 ## Example Usage
 

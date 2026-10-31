@@ -117,6 +117,7 @@ resource "mtncloud_mongodb" "db" {
 				// isn't sent (a warning says so).
 				Config: cfg(`  enable_auth      = false
   replica_set_name = "rs9"
+  allowed_cidrs    = ["10.0.0.0/8", "172.16.0.0/12"]
   extra_inputs     = { newField = "x" }
 `),
 				Check: func(*terraform.State) error {
@@ -131,6 +132,18 @@ resource "mtncloud_mongodb" "db" {
 					}
 					if _, sent := c["adminPassword"]; sent {
 						t.Error("adminPassword sent")
+					}
+					// Lists that can't be blank send their first choice, as the console shows them,
+					// also one shown only for that choice; one shown for another choice isn't sent.
+					// Several CIDRs go comma-separated, as the form's pattern asks.
+					if c["hostCIDRs"] != "10.0.0.0/8, 172.16.0.0/12" {
+						t.Errorf("hostCIDRs %q", c["hostCIDRs"])
+					}
+					if c["storageEngine"] != "wiredTiger" || c["cacheSizeGB"] != "1" {
+						t.Errorf("storageEngine %v, cacheSizeGB %v: want the first choices", c["storageEngine"], c["cacheSizeGB"])
+					}
+					if _, sent := c["journalMode"]; sent {
+						t.Error("journalMode sent for another storage engine")
 					}
 					return nil
 				},
@@ -211,3 +224,109 @@ resource "mtncloud_mysql" "db" {
 
 // wrapped lets a pattern's spaces match Terraform's line wrapping of error text.
 func wrapped(pattern string) string { return strings.ReplaceAll(pattern, " ", `\s+`) }
+
+// An app order (managed services): the workflow ends once it has asked for the app, whose VMs are
+// named from MTN's template, not after the order (QA, 2026-10-31). The apply waits for the app and
+// takes its VMs; a failed workflow's own reason is in the error; destroy deletes the app.
+func TestAppOrder(t *testing.T) {
+	f, s, insts := orderFakes(t)
+	s.apps, s.appName, s.appStep = map[int64][]int64{}, map[int64]string{}, map[int64][]string{}
+	s.insts = insts
+	// Another project's app with the same name: never taken for this order's, never deleted.
+	insts.insts[9690] = map[string]any{"id": 9690, "name": "ab-42-MTN-CLOUD-KAFKA-7", "status": "running",
+		"config": map[string]any{"resourcePoolId": "pool-9999"}}
+	s.apps[9900], s.appName[9900] = []int64{9690}, "kafka-1"
+	s.made = func(item map[string]any) {
+		cfg, _ := item["config"].(map[string]any)
+		insts.mu.Lock()
+		defer insts.mu.Unlock()
+		insts.nextID++
+		insts.insts[insts.nextID] = map[string]any{"id": insts.nextID, "name": "ab-42-MTN-CLOUD-KAFKA-1", "status": "running",
+			"config": map[string]any{"resourcePoolId": cfg["resourcepool"]}}
+		s.apps[9901] = []int64{insts.nextID}
+		s.appName[9901], s.appStep[9901] = "kafka-1", []string{"pending", "pending", "running"}
+	}
+	cfg := f.providerConfig() + `
+resource "mtncloud_managed_streaming" "k" {
+  name             = "kafka-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 100
+  networks         = ["app-net"]
+  security_groups  = ["web"]
+  admin_password   = "s3cret-value"
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				PreConfig: func() {
+					s.result = "error"
+					s.failure = "Validating inputs\nError: kafkaVersion must be 4.3.1 or 4.2.1 (got: 'null').\nNothing was provisioned."
+				},
+				Config:      cfg,
+				ExpectError: regexp.MustCompile(wrapped(`(?s)order failed.*The workflow says: .*kafkaVersion must be 4.3.1 or 4.2.1 \(got: 'null'\). Nothing was provisioned. Check it`)),
+			},
+			{
+				PreConfig: func() { s.result, s.failure = "success", "" },
+				Config:    cfg,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_managed_streaming.k", tfjsonpath.New("instance_statuses"),
+						knownvalue.MapExact(map[string]knownvalue.Check{"9701": knownvalue.StringExact("running")})),
+				},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					// A list that can't be blank sends its first choice, as the console does.
+					if c, _ := s.sent[9802]["config"].(map[string]any); c["kafkaVersion"] != "4.3.1" {
+						t.Errorf("kafkaVersion %v, want the form's first choice", c["kafkaVersion"])
+					}
+					if len(s.appStep[9901]) != 1 {
+						t.Errorf("app statuses left %v: the apply didn't wait for it", s.appStep[9901])
+					}
+					return nil
+				},
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+	if d := strings.Join(s.deleted, ","); !strings.Contains(d, "app 9901") || strings.Contains(d, "app 9900") {
+		t.Errorf("destroy deleted %v: want this order's app 9901, never the other project's 9900", s.deleted)
+	}
+}
+
+// An app that settles in any state but running fails the apply, so the next apply orders again.
+func TestAppOrder_AppFails(t *testing.T) {
+	f, s, insts := orderFakes(t)
+	s.apps, s.appName, s.appStep = map[int64][]int64{}, map[int64]string{}, map[int64][]string{}
+	s.insts = insts
+	s.made = func(item map[string]any) {
+		cfg, _ := item["config"].(map[string]any)
+		insts.mu.Lock()
+		defer insts.mu.Unlock()
+		insts.nextID++
+		insts.insts[insts.nextID] = map[string]any{"id": insts.nextID, "name": "ab-42-MTN-CLOUD-KAFKA-1", "status": "failed",
+			"config": map[string]any{"resourcePoolId": cfg["resourcepool"]}}
+		s.apps[9901], s.appName[9901], s.appStep[9901] = []int64{insts.nextID}, "kafka-1", []string{"pending", "error"}
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{
+			Config: f.providerConfig() + `
+resource "mtncloud_managed_streaming" "k" {
+  name             = "kafka-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 100
+  networks         = ["app-net"]
+  security_groups  = ["web"]
+  admin_password   = "s3cret-value"
+}
+`,
+			ExpectError: regexp.MustCompile(wrapped(`(?s)app failed.*App "kafka-1" \(9901\) from order 9801 is "error"`)),
+		}},
+	})
+}

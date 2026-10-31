@@ -11,7 +11,7 @@ import (
 
 func dataSourceBudget() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud budget data source.",
+		Description: "Provides an MTN Cloud budget data source: looks up a spending budget by name or ID.",
 		ReadContext: dataSourceBudgetRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

@@ -12,7 +12,7 @@ import (
 
 func resourceScaleThreshold() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud scale threshold resource.",
+		Description:   "Provides an MTN Cloud scale threshold resource: the CPU, memory or disk levels at which an instance scales out or in.",
 		CreateContext: resourceScaleThresholdCreate,
 		ReadContext:   resourceScaleThresholdRead,
 		UpdateContext: resourceScaleThresholdUpdate,

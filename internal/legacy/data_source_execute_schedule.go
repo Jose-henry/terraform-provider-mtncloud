@@ -11,7 +11,7 @@ import (
 
 func dataSourceExecuteSchedule() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud execute schedule data source.",
+		Description: "Provides an MTN Cloud execution schedule data source: looks up an execution schedule by name or ID.",
 		ReadContext: dataSourceExecuteScheduleRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

@@ -2,12 +2,12 @@
 page_title: "mtncloud_ipv4_ip_pool Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud IPv4 ip pool resource
+  Provides an MTN Cloud IPv4 IP pool resource: a range of IPv4 addresses that instances get static addresses from.
 ---
 
 # mtncloud_ipv4_ip_pool
 
-Provides a MTN Cloud IPv4 ip pool resource
+Provides an MTN Cloud IPv4 IP pool resource: a range of IPv4 addresses that instances get static addresses from.
 
 ## Example Usage
 

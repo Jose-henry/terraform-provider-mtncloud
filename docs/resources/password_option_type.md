@@ -2,12 +2,12 @@
 page_title: "mtncloud_password_option_type Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud password option type resource
+  Provides an MTN Cloud password option type resource: a masked input for catalog and workflow forms.
 ---
 
 # mtncloud_password_option_type
 
-Provides a MTN Cloud password option type resource
+Provides an MTN Cloud password option type resource: a masked input for catalog and workflow forms.
 
 ## Example Usage
 

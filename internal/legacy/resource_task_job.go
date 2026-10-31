@@ -16,7 +16,7 @@ import (
 
 func resourceTaskJob() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a task job resource",
+		Description:   "Provides an MTN Cloud task job resource: runs a task on a schedule or once, against instances or servers.",
 		CreateContext: resourceTaskJobCreate,
 		ReadContext:   resourceTaskJobRead,
 		UpdateContext: resourceTaskJobUpdate,

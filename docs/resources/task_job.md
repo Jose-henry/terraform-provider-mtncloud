@@ -2,12 +2,12 @@
 page_title: "mtncloud_task_job Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a task job resource
+  Provides an MTN Cloud task job resource: runs a task on a schedule or once, against instances or servers.
 ---
 
 # mtncloud_task_job
 
-Provides a task job resource
+Provides an MTN Cloud task job resource: runs a task on a schedule or once, against instances or servers.
 
 ## Example Usage
 

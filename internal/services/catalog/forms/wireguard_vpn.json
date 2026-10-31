@@ -1,0 +1,79 @@
+{
+  "item": "MTN WireGuard SSL VPN",
+  "code": "WGVPN001",
+  "read": "2026-10-31",
+  "fields": [
+    {
+      "name": "cloud",
+      "label": "CLOUD",
+      "type": "cloud",
+      "required": true
+    },
+    {
+      "name": "environment",
+      "label": "ENVIRONMENT",
+      "type": "environment"
+    },
+    {
+      "name": "floatingip",
+      "label": "FLOATING IP",
+      "type": "select",
+      "required": true,
+      "choices": [
+        "public-network-01",
+        "public-network-02",
+        "public-network-03",
+        "public-network-04"
+      ]
+    },
+    {
+      "name": "group-vpn",
+      "label": "GROUP",
+      "type": "group",
+      "required": true
+    },
+    {
+      "name": "labels",
+      "label": "LABELS",
+      "type": "textArray",
+      "help": "Enter a comma-separated list of labels to group and categorise items for easier filtering in list views."
+    },
+    {
+      "name": "name",
+      "label": "NAME",
+      "type": "text",
+      "required": true,
+      "locked": true,
+      "default": "${userInitials}-${accountId}-MTN-CLOUD-${type}-${sequence+0}"
+    },
+    {
+      "name": "networks",
+      "label": "NETWORKS",
+      "type": "networkManager",
+      "required": true
+    },
+    {
+      "name": "plan",
+      "label": "PLAN",
+      "type": "select",
+      "required": true
+    },
+    {
+      "name": "resourcepool",
+      "label": "RESOURCE POOL",
+      "type": "resourcePool",
+      "required": true
+    },
+    {
+      "name": "securitygroups",
+      "label": "SECURITY GROUP(s)",
+      "type": "secGroup"
+    },
+    {
+      "name": "volumes",
+      "label": "VOLUMES",
+      "type": "diskManager",
+      "required": true
+    }
+  ]
+}

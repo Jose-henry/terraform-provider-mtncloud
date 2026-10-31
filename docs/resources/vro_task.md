@@ -2,12 +2,12 @@
 page_title: "mtncloud_vro_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud vRealize Orchestrator (vRO) task resource
+  Provides an MTN Cloud vRealize Orchestrator (vRO) task resource: a task that runs a workflow from a vRO integration.
 ---
 
 # mtncloud_vro_task
 
-Provides a MTN Cloud vRealize Orchestrator (vRO) task resource
+Provides an MTN Cloud vRealize Orchestrator (vRO) task resource: a task that runs a workflow from a vRO integration.
 
 ## Example Usage
 

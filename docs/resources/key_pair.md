@@ -2,12 +2,12 @@
 page_title: "mtncloud_key_pair Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud key pair resource.
+  Provides an MTN Cloud key pair resource: an SSH public key that VMs can be created with.
 ---
 
 # mtncloud_license
 
-Provides a MTN Cloud key pair resource.
+Provides an MTN Cloud key pair resource: an SSH public key that VMs can be created with.
 
 ## Example Usage
 

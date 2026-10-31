@@ -2,12 +2,12 @@
 page_title: "mtncloud_library_template_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud library template task resource
+  Provides an MTN Cloud library template task resource: a task that writes a file template from the library onto a VM.
 ---
 
 # mtncloud_library_template_task
 
-Provides a MTN Cloud library template task resource
+Provides an MTN Cloud library template task resource: a task that writes a file template from the library onto a VM.
 
 ## Example Usage
 

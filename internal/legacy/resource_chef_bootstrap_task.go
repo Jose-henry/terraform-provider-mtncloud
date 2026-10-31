@@ -17,7 +17,7 @@ import (
 
 func resourceChefBootstrapTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud chef bootstrap task resource",
+		Description:   "Provides an MTN Cloud Chef bootstrap task resource: a task that bootstraps a VM onto a Chef server.",
 		CreateContext: resourceChefBootstrapTaskCreate,
 		ReadContext:   resourceChefBootstrapTaskRead,
 		UpdateContext: resourceChefBootstrapTaskUpdate,

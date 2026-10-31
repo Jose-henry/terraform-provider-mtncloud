@@ -2,12 +2,12 @@
 page_title: "mtncloud_typeahead_option_type Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud typeahead option type resource
+  Provides an MTN Cloud typeahead option type resource: a searchable input for forms, with its choices from an option list.
 ---
 
 # mtncloud_typeahead_option_type
 
-Provides a MTN Cloud typeahead option type resource
+Provides an MTN Cloud typeahead option type resource: a searchable input for forms, with its choices from an option list.
 
 ## Example Usage
 

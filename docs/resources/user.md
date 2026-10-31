@@ -2,12 +2,12 @@
 page_title: "mtncloud_user Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud user resource.
+  Provides an MTN Cloud user resource: a user of the tenant, with its roles.
 ---
 
 # mtncloud_user
 
-Provides a MTN Cloud user resource.
+Provides an MTN Cloud user resource: a user of the tenant, with its roles.
 
 ## Example Usage
 

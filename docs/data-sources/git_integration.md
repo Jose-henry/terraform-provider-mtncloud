@@ -2,12 +2,12 @@
 page_title: "mtncloud_git_integration Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud git integration data source.
+  Provides an MTN Cloud Git integration data source: looks up a Git integration by name or ID.
 ---
 
 # mtncloud_git_integration (Data Source)
 
-Provides a MTN Cloud git integration data source.
+Provides an MTN Cloud Git integration data source: looks up a Git integration by name or ID.
 
 ## Example Usage
 

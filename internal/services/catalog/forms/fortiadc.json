@@ -1,0 +1,84 @@
+{
+  "item": "MTN FortiADC (BYOL)",
+  "code": "FADC003",
+  "read": "2026-10-31",
+  "fields": [
+    {
+      "name": "cloud",
+      "label": "CLOUD",
+      "type": "cloud",
+      "required": true
+    },
+    {
+      "name": "environment",
+      "label": "ENVIRONMENT",
+      "type": "environment"
+    },
+    {
+      "name": "floatingip",
+      "label": "FLOATING IP",
+      "type": "select",
+      "required": true,
+      "choices": [
+        "public-network-01",
+        "public-network-02",
+        "public-network-03",
+        "public-network-04"
+      ]
+    },
+    {
+      "name": "group-vpn",
+      "label": "GROUP",
+      "type": "group",
+      "required": true
+    },
+    {
+      "name": "label",
+      "label": "LABELS",
+      "type": "textArray"
+    },
+    {
+      "name": "name",
+      "label": "NAME",
+      "type": "text",
+      "required": true,
+      "hidden": true,
+      "locked": true,
+      "default": "${userInitials}-${accountId}-MTN-CLOUD-${type}-${sequence+0}"
+    },
+    {
+      "name": "networks",
+      "label": "NETWORKS",
+      "type": "networkManager",
+      "required": true,
+      "default": "[disk or network list]",
+      "help": "Note: Service requires at least 1 interface \u0026 at most 2 interfaces"
+    },
+    {
+      "name": "plan",
+      "label": "PLAN",
+      "type": "select",
+      "required": true,
+      "help": "Minimum: 4VCPU \u0026 16GB"
+    },
+    {
+      "name": "resourcepool",
+      "label": "RESOURCE POOL",
+      "type": "resourcePool",
+      "required": true
+    },
+    {
+      "name": "securitygroups",
+      "label": "SECURITY GROUP(s)",
+      "type": "secGroup"
+    },
+    {
+      "name": "volumes",
+      "label": "VOLUME",
+      "type": "diskManager",
+      "default": "[disk or network list]",
+      "example": "10",
+      "help": "Minimum 30 GB. A required 30 GB data disk is added automatically from the backend, for 60 GB total."
+    }
+  ]
+}

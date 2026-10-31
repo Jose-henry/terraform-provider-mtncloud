@@ -14,7 +14,7 @@ import (
 
 func resourceWorkflowJob() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a workflow job resource",
+		Description:   "Provides an MTN Cloud workflow job resource: runs a workflow on a schedule or once, against instances or servers.",
 		CreateContext: resourceWorkflowJobCreate,
 		ReadContext:   resourceWorkflowJobRead,
 		UpdateContext: resourceWorkflowJobUpdate,

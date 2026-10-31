@@ -11,7 +11,7 @@ import (
 
 func resourceGroup() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud group resource.",
+		Description:   "Provides an MTN Cloud group resource: a group of clouds that instances and orders are placed in.",
 		CreateContext: resourceGroupCreate,
 		ReadContext:   resourceGroupRead,
 		UpdateContext: resourceGroupUpdate,

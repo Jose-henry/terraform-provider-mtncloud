@@ -2,12 +2,12 @@
 page_title: "mtncloud_workflow_job Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a workflow job resource
+  Provides an MTN Cloud workflow job resource: runs a workflow on a schedule or once, against instances or servers.
 ---
 
 # mtncloud_workflow_job
 
-Provides a workflow job resource
+Provides an MTN Cloud workflow job resource: runs a workflow on a schedule or once, against instances or servers.
 
 ## Example Usage
 

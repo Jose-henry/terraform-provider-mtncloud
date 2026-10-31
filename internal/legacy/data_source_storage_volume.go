@@ -11,7 +11,7 @@ import (
 
 func dataSourceStorageVolume() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud storage volume data source.",
+		Description: "Provides an MTN Cloud storage volume data source: looks up a storage volume.",
 		ReadContext: dataSourceStorageVolumeRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

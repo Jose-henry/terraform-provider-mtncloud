@@ -2,12 +2,12 @@
 page_title: "mtncloud_tasks Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud tasks data source.
+  Provides an MTN Cloud tasks data source: lists the tasks you can see.
 ---
 
 # mtncloud_tasks (Data Source)
 
-Provides a MTN Cloud tasks data source.
+Provides an MTN Cloud tasks data source: lists the tasks you can see.
 
 ## Example Usage
 

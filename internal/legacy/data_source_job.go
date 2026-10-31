@@ -11,7 +11,7 @@ import (
 
 func dataSourceJob() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud job data source.",
+		Description: "Provides an MTN Cloud job data source: looks up a task or workflow job by name or ID.",
 		ReadContext: dataSourceJobRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

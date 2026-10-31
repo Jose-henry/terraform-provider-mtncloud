@@ -2,12 +2,12 @@
 page_title: "mtncloud_option_list Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud option list data source.
+  Provides an MTN Cloud option list data source: looks up a list of choices for form inputs by name or ID.
 ---
 
 # mtncloud_option_list (Data Source)
 
-Provides a MTN Cloud option list data source.
+Provides an MTN Cloud option list data source: looks up a list of choices for form inputs by name or ID.
 
 ## Example Usage
 

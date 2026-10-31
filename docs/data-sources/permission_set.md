@@ -2,12 +2,12 @@
 page_title: "mtncloud_permission_set Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud permission set data source.
+  Provides an MTN Cloud permission set data source: reads the permissions a role grants.
 ---
 
 # mtncloud_permission_set (Data Source)
 
-Provides a MTN Cloud permission set data source.
+Provides an MTN Cloud permission set data source: reads the permissions a role grants.
 
 ## Example Usage
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -123,6 +124,7 @@ func (c *Client) DeleteOrderedItem(ctx context.Context, id int64) error {
 type App struct {
 	ID          int64
 	Name        string
+	Status      string // "pending" while it provisions, then "running", "warning", "failed"...
 	InstanceIDs []int64
 }
 
@@ -131,6 +133,7 @@ func (c *Client) ListApps(ctx context.Context) ([]App, error) {
 	type wireApp struct {
 		ID        int64  `json:"id"`
 		Name      string `json:"name"`
+		Status    string `json:"status"`
 		Instances []struct {
 			ID int64 `json:"id"`
 		} `json:"instances"`
@@ -141,7 +144,7 @@ func (c *Client) ListApps(ctx context.Context) ([]App, error) {
 	}
 	out := make([]App, len(apps))
 	for i, a := range apps {
-		out[i] = App{ID: a.ID, Name: a.Name}
+		out[i] = App{ID: a.ID, Name: a.Name, Status: a.Status}
 		for _, in := range a.Instances {
 			out[i].InstanceIDs = append(out[i].InstanceIDs, in.ID)
 		}
@@ -149,9 +152,116 @@ func (c *Client) ListApps(ctx context.Context) ([]App, error) {
 	return out, nil
 }
 
+// AppsNamed is every app with this name (case ignored): names aren't unique across projects.
+func AppsNamed(apps []App, name string) []App {
+	var out []App
+	for _, a := range apps {
+		if strings.EqualFold(a.Name, name) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// AppRunning reports whether a settled app came up: for a new app, any other status (failed,
+// error, warning, canceled...) is a failure.
+func AppRunning(a *App) bool { return strings.EqualFold(a.Status, "running") }
+
+// AppSettled reports whether an app has finished provisioning, successfully or not.
+func AppSettled(a *App) bool {
+	switch strings.ToLower(a.Status) {
+	case "", "pending", "provisioning", "deploying":
+		return false
+	}
+	return true
+}
+
+// WaitForApp waits for the app an order's workflow started, named after the order, to finish
+// provisioning. The workflow ends as soon as it asks for the app (managed services, QA
+// 2026-10-31), and its VMs are named from MTN's template, not after the order. An app in before
+// (one with the name that was there before the order) is never taken; of new ones, the newest.
+func (c *Client) WaitForApp(ctx context.Context, name string, before map[int64]bool) (*App, error) {
+	return poll(ctx, c, func(ctx context.Context) (*App, error) {
+		apps, err := c.ListApps(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var got *App
+		for _, a := range AppsNamed(apps, name) {
+			if !before[a.ID] && (got == nil || a.ID > got.ID) {
+				got = &a
+			}
+		}
+		return got, nil
+	}, func(a *App, err error) (bool, error) {
+		if err != nil {
+			return false, err
+		}
+		return a != nil && AppSettled(a), nil
+	})
+}
+
 // DeleteApp deletes an app with its instances, their disks and floating IPs. One already gone
 // counts as deleted.
 func (c *Client) DeleteApp(ctx context.Context, id int64) error {
 	q := url.Values{"removeInstances": {"on"}, "releaseFloatingIps": {"on"}}
 	return ignoreNotFound(c.do(ctx, http.MethodDelete, "/api/apps/"+itoa(id), q, nil, nil))
+}
+
+// ExecutionFailure is what a failed workflow run says about why: the last lines of its failed
+// task's output, for example "Error: kafkaVersion must be 4.3.1 or 4.2.1 (got: 'null')." (QA,
+// 2026-10-31). The order's own secret values are masked first, and a line that mentions a secret
+// is left out. Empty when there is nothing to show or the run can't be read.
+func (c *Client) ExecutionFailure(ctx context.Context, executionID int64, secrets []string) string {
+	var resp struct {
+		Execution struct {
+			Process struct {
+				Events []struct {
+					Status string `json:"status"`
+					Output string `json:"output"`
+					Error  string `json:"error"`
+				} `json:"events"`
+			} `json:"process"`
+		} `json:"jobExecution"`
+	}
+	if executionID == 0 || c.get(ctx, "/api/job-executions/"+itoa(executionID), nil, &resp) != nil {
+		return ""
+	}
+	for _, e := range resp.Execution.Process.Events {
+		if !strings.EqualFold(e.Status, "failed") && !strings.EqualFold(e.Status, "error") {
+			continue
+		}
+		text := e.Error + "\n" + e.Output
+		for _, v := range secrets {
+			if v != "" {
+				text = strings.ReplaceAll(text, v, "***")
+			}
+		}
+		// A task set can fail with no output of its own: its failed task has the reason.
+		if out := lastLines(text, 3); out != "" {
+			return out
+		}
+	}
+	return ""
+}
+
+// secretWord marks an output line that may carry a secret: a word for one, a masked value, or a
+// password flag ("mysql -pS3cret").
+var secretWord = regexp.MustCompile(`(?i)pass|pwd|secret|token|key|credential|auth|private|\*\*\*|\s-p\S`)
+
+// lastLines is the last n non-empty lines of s that don't mention a secret, joined, at most 500
+// characters.
+func lastLines(s string, n int) string {
+	var keep []string
+	lines := strings.Split(s, "\n")
+	for i := len(lines) - 1; i >= 0 && len(keep) < n; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" && !secretWord.MatchString(l) {
+			keep = append([]string{l}, keep...)
+		}
+	}
+	out := strings.Join(keep, " ")
+	if len(out) > 500 {
+		out = "..." + out[len(out)-497:]
+	}
+	return out
 }

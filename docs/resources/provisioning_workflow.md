@@ -2,12 +2,12 @@
 page_title: "mtncloud_provisioning_workflow Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud provisioning workflow resource.
+  Provides an MTN Cloud provisioning workflow resource: tasks run at set phases of an instance's life, such as after provisioning.
 ---
 
 # mtncloud_provisioning_workflow
 
-Provides a MTN Cloud provisioning workflow resource.
+Provides an MTN Cloud provisioning workflow resource: tasks run at set phases of an instance's life, such as after provisioning.
 
 ## Example Usage
 

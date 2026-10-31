@@ -2,12 +2,12 @@
 page_title: "mtncloud_virtual_image Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud virtual image data source.
+  Provides an MTN Cloud virtual image data source: looks up a VM image by name or ID.
 ---
 
 # mtncloud_virtual_image (Data Source)
 
-Provides a MTN Cloud virtual image data source.
+Provides an MTN Cloud virtual image data source: looks up a VM image by name or ID.
 
 ## Example Usage
 

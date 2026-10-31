@@ -12,7 +12,7 @@ import (
 
 func resourceUserGroup() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud user group resource",
+		Description:   "Provides an MTN Cloud user group resource: a set of users that get the same server access (SSH and sudo) on VMs.",
 		CreateContext: resourceUserGroupCreate,
 		ReadContext:   resourceUserGroupRead,
 		UpdateContext: resourceUserGroupUpdate,

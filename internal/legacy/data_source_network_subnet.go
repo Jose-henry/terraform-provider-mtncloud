@@ -11,7 +11,7 @@ import (
 
 func dataSourceNetworkSubnet() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud network subnet data source.",
+		Description: "Provides an MTN Cloud network subnet data source: looks up a subnet of an MTN Network by name or ID.",
 		ReadContext: dataSourceNetworkSubnetRead,
 		Schema: map[string]*schema.Schema{
 			"network_id": {

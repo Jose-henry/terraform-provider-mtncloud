@@ -2,12 +2,12 @@
 page_title: "mtncloud_storage_bucket Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud storage bucket data source.
+  Provides an MTN Cloud storage bucket data source: looks up a storage bucket (for example a MOS bucket) by name or ID.
 ---
 
 # mtncloud_storage_bucket (Data Source)
 
-Provides a MTN Cloud storage bucket data source.
+Provides an MTN Cloud storage bucket data source: looks up a storage bucket (for example a MOS bucket) by name or ID.
 
 ## Example Usage
 

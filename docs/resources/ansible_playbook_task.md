@@ -2,12 +2,12 @@
 page_title: "mtncloud_ansible_playbook_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud ansible playbook task resource
+  Provides an MTN Cloud Ansible playbook task resource: a task that runs a playbook from an Ansible integration's Git repository.
 ---
 
 # mtncloud_ansible_playbook_task
 
-Provides a MTN Cloud ansible playbook task resource
+Provides an MTN Cloud Ansible playbook task resource: a task that runs a playbook from an Ansible integration's Git repository.
 
 ## Example Usage
 

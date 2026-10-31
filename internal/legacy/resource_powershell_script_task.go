@@ -17,7 +17,7 @@ import (
 
 func resourcePowerShellScriptTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud powershell script task resource",
+		Description:   "Provides an MTN Cloud PowerShell script task resource: a task that runs a PowerShell script on a VM or locally.",
 		CreateContext: resourcePowerShellScriptTaskCreate,
 		ReadContext:   resourcePowerShellScriptTaskRead,
 		UpdateContext: resourcePowerShellScriptTaskUpdate,

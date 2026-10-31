@@ -2,12 +2,12 @@
 page_title: "mtncloud_saml_identity_source Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a saml identity source resource
+  Provides an MTN Cloud SAML identity source resource: lets users of the tenant sign in through a SAML identity provider.
 ---
 
 # mtncloud_saml_identity_source
 
-Provides a saml identity source resource
+Provides an MTN Cloud SAML identity source resource: lets users of the tenant sign in through a SAML identity provider.
 
 ## Example Usage
 

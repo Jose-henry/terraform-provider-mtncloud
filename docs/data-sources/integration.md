@@ -2,12 +2,12 @@
 page_title: "mtncloud_integration Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud integration data source.
+  Provides an MTN Cloud integration data source: looks up an integration of any type by name or ID.
 ---
 
 # mtncloud_integration (Data Source)
 
-Provides a MTN Cloud integration data source.
+Provides an MTN Cloud integration data source: looks up an integration of any type by name or ID.
 
 ## Example Usage
 

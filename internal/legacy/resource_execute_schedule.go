@@ -13,7 +13,7 @@ import (
 
 func resourceExecuteSchedule() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides an execution schedule resource",
+		Description:   "Provides an MTN Cloud execution schedule resource: a cron schedule that jobs run on.",
 		CreateContext: resourceExecuteScheduleCreate,
 		ReadContext:   resourceExecuteScheduleRead,
 		UpdateContext: resourceExecuteScheduleUpdate,

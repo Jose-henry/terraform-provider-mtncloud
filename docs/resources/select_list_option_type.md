@@ -2,12 +2,12 @@
 page_title: "mtncloud_select_list_option_type Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud select list option type resource
+  Provides an MTN Cloud select list option type resource: a drop-down input for forms, with its choices from an option list.
 ---
 
 # mtncloud_select_list_option_type
 
-Provides a MTN Cloud select list option type resource
+Provides an MTN Cloud select list option type resource: a drop-down input for forms, with its choices from an option list.
 
 ## Example Usage
 

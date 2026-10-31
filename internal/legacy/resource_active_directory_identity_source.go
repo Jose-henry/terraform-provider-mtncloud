@@ -15,7 +15,7 @@ import (
 
 func resourceActiveDirectoryIdentitySource() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides an active directory identity source resource",
+		Description:   "Provides an MTN Cloud Active Directory identity source resource: lets users of the tenant sign in with their Active Directory accounts, mapping AD groups to roles.",
 		CreateContext: resourceActiveDirectoryIdentitySourceCreate,
 		ReadContext:   resourceActiveDirectoryIdentitySourceRead,
 		UpdateContext: resourceActiveDirectoryIdentitySourceUpdate,

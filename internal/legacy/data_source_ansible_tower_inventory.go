@@ -12,7 +12,7 @@ import (
 
 func dataSourceAnsibleTowerInventory() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud ansible tower inventory data source.",
+		Description: "Provides an MTN Cloud Ansible Tower inventory data source: looks up an inventory of an Ansible Tower integration by name or ID.",
 		ReadContext: dataSourceAnsibleTowerInventoryRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

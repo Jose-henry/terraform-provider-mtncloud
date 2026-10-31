@@ -2,12 +2,12 @@
 page_title: "mtncloud_storage_volume Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud storage volume data source.
+  Provides an MTN Cloud storage volume data source: looks up a storage volume.
 ---
 
 # mtncloud_storage_volume (Data Source)
 
-Provides a MTN Cloud storage volume data source.
+Provides an MTN Cloud storage volume data source: looks up a storage volume.
 
 ## Example Usage
 

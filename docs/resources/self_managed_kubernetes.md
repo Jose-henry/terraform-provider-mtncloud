@@ -2,12 +2,12 @@
 page_title: "mtncloud_self_managed_kubernetes Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+  A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN KUBERNETES (MK8S) order form requires and allows (read 2026-10-31); every plan checks the live form.
 ---
 
 # mtncloud_self_managed_kubernetes
 
-A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN KUBERNETES (MK8S) order form requires and allows (read 2026-10-31); every plan checks the live form.
 
 ## Example Usage
 
@@ -34,33 +34,33 @@ resource "mtncloud_self_managed_kubernetes" "k8s" {
 
 ### Required
 
-- `master_networks` (List of String) Networks of the master nodes, by name; the first is primary.
-- `master_plan` (String) Plan (size) of the master nodes, by name.
+- `master_networks` (List of String) Networks of the master nodes, by name; the first is primary. Order form: required. It says: "If different from worker's network, ensure reachability by appropriate routing of both networks, i.e. two networks on the same router, and ensure security groups for both allows themselves. For availability across availability zones, use 'Network Groups' which uses a 'Round Robin' algorithm."
+- `master_plan` (String) Plan (size) of the master nodes, by name. Order form: required. It says: "Note: MK8S Master Node Instances require at least 2GB of CPU and memory (i.e., at least the G2S2 Plan)."
 - `master_root_volume_size` (Number) Root disk size in GB.
-- `master_security_groups` (Set of String) Security groups of the master nodes, by name, in addition to the project's default group, which is always applied.
-- `name` (String) Cluster name. Its VMs are named after it.
+- `master_security_groups` (Set of String) Security groups of the master nodes, by name, in addition to the project's default group, which is always applied. Order form: required.
+- `name` (String) Name of the app the order creates, shown under Apps. It must be unique among your apps: the provider finds the app, and the VMs in it, by this name (MTN names the VMs itself). Order form: required; for example `K8S Prod Cluster`.
 
 ### Optional
 
-- `api_endpoint` (String) Address the Kubernetes API is published at.
-- `cni` (String) Network plugin: `flannel` or `calico`.
+- `api_endpoint` (String) Address the Kubernetes API is published at. It says: "Virtual IP i.e 192.168.1.100 for your master nodes. Not required for a Single-Master node. Verify that firewalls allow connectivity between the VIP and all nodes."
+- `cni` (String) Network plugin: `flannel` or `calico`. Order form: choices: `Flannel`, `Calico`. It says: "Container Networking Configuration. Defaults to Flannel."
 - `environment` (String) Environment, by name or code.
 - `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
 - `labels` (Set of String) Labels.
-- `master_count` (Number) Number of master nodes. Defaults to 1.
+- `master_count` (Number) Number of master nodes. Defaults to 1. Order form: pre-filled with `1`; from 1 to 5. It says: "Number of Master Nodes. Select 3 or More for HA (Requires VIP)."
 - `master_data_volume` (Block List) Extra disks, in order. (see [below for nested schema](#nestedblock--master_data_volume))
 - `master_datastore` (String) Datastore (volume type) of the root disk, by name. Left out, the project's default.
-- `master_floating_ip_pool` (String) External network for the masters' public IPs, by name.
+- `master_floating_ip_pool` (String) External network for the masters' public IPs, by name. Order form: choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
-- `single_node` (Boolean) Run everything on one node. Defaults to `false`.
+- `single_node` (Boolean) Run everything on one node. Order form: pre-filled with `false`. Defaults to `false`.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `worker_count` (Number) Number of worker nodes. Defaults to 3.
+- `worker_count` (Number) Number of worker nodes. Defaults to 3. Order form: pre-filled with `3`; from 0 to any. It says: "Number of Worker Nodes."
 - `worker_data_volume` (Block List) Extra disks, in order. (see [below for nested schema](#nestedblock--worker_data_volume))
 - `worker_datastore` (String) Datastore (volume type) of the root disk, by name. Left out, the project's default.
-- `worker_floating_ip_pool` (String) External network for the workers' public IPs, by name.
-- `worker_networks` (List of String) Networks of the worker nodes, by name; the first is primary.
-- `worker_plan` (String) Plan (size) of the worker nodes, by name.
+- `worker_floating_ip_pool` (String) External network for the workers' public IPs, by name. Order form: choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
+- `worker_networks` (List of String) Networks of the worker nodes, by name; the first is primary. It says: "If different from master's network, ensure reachability by appropriate routing of both networks, i.e. two networks on the same router, and ensure security groups for both allows themselves. For availability across availability zones, use 'Network Groups' which uses a 'Round Robin' algorithm."
+- `worker_plan` (String) Plan (size) of the worker nodes, by name. It says: "If left unselected, master plan will be inherited."
 - `worker_root_volume_size` (Number) Root disk size in GB.
 - `worker_security_groups` (Set of String) Security groups of the worker nodes, by name, in addition to the project's default group, which is always applied.
 

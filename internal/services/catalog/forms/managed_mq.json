@@ -1,0 +1,127 @@
+{
+  "item": "MTN Managed MQ",
+  "code": "MQS001",
+  "read": "2026-10-31",
+  "fields": [
+    {
+      "name": "adminPassword",
+      "label": "ADMIN PASSWORD",
+      "type": "password",
+      "required": true,
+      "example": "********",
+      "help": "Password for the global administrator."
+    },
+    {
+      "name": "adminUsername",
+      "label": "ADMIN USERNAME",
+      "type": "text",
+      "required": true,
+      "default": "admin",
+      "pattern": "(?i)^[a-z_][a-z0-9_\\$]{0,62}$",
+      "example": "Admin",
+      "help": "Username for the global administrator"
+    },
+    {
+      "name": "cloud",
+      "label": "CLOUD",
+      "type": "cloud",
+      "required": true
+    },
+    {
+      "name": "environment",
+      "label": "ENVIRONMENT",
+      "type": "environment"
+    },
+    {
+      "name": "floatingip",
+      "label": "FLOATING IP",
+      "type": "select",
+      "hidden": true,
+      "choices": [
+        "public-network-01",
+        "public-network-02",
+        "public-network-03",
+        "public-network-04"
+      ]
+    },
+    {
+      "name": "group-vpn",
+      "label": "GROUP",
+      "type": "group",
+      "required": true
+    },
+    {
+      "name": "labels",
+      "label": "LABELS",
+      "type": "textArray"
+    },
+    {
+      "name": "msg_engine",
+      "label": "MESSAGING ENGINE",
+      "type": "select",
+      "no_blank": true,
+      "help": "Select your preferred messaging engine.",
+      "choices": [
+        "RabbitMQ"
+      ]
+    },
+    {
+      "name": "name",
+      "label": "NAME",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "networks",
+      "label": "NETWORKS",
+      "type": "networkManager",
+      "required": true
+    },
+    {
+      "name": "no_nodes",
+      "label": "NO. OF NODES",
+      "type": "number",
+      "required": true,
+      "locked": true,
+      "default": "1",
+      "example": "1",
+      "min": 1,
+      "max": 3
+    },
+    {
+      "name": "plan",
+      "label": "PLAN",
+      "type": "select",
+      "required": true
+    },
+    {
+      "name": "rabbitmqVersion",
+      "label": "RABBITMQ VERSION",
+      "type": "select",
+      "no_blank": true,
+      "shown_when": "msg_engine:rabbit",
+      "choices": [
+        "4.3.2",
+        "3.13.7"
+      ]
+    },
+    {
+      "name": "resourcepool",
+      "label": "RESOURCE POOL",
+      "type": "resourcePool",
+      "required": true
+    },
+    {
+      "name": "securitygroups",
+      "label": "SECURITY GROUP(s)",
+      "type": "secGroup"
+    },
+    {
+      "name": "volumes",
+      "label": "VOLUMES",
+      "type": "diskManager",
+      "required": true,
+      "example": "size"
+    }
+  ]
+}

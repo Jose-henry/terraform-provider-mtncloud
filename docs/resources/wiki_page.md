@@ -2,12 +2,12 @@
 page_title: "mtncloud_wiki_page Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud wiki page resource
+  Provides an MTN Cloud wiki page resource: a page in the tenant's wiki.
 ---
 
 # mtncloud_wiki_page
 
-Provides a MTN Cloud wiki page resource
+Provides an MTN Cloud wiki page resource: a page in the tenant's wiki.
 
 ## Example Usage
 

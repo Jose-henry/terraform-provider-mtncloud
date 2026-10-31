@@ -2,12 +2,12 @@
 page_title: "mtncloud_write_attributes_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud write attributes task resource
+  Provides an MTN Cloud write attributes task resource: a task that saves values for later tasks in the same workflow.
 ---
 
 # mtncloud_write_attributes_task
 
-Provides a MTN Cloud write attributes task resource
+Provides an MTN Cloud write attributes task resource: a task that saves values for later tasks in the same workflow.
 
 ## Example Usage
 

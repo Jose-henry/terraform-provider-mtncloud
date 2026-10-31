@@ -11,7 +11,7 @@ import (
 
 func dataSourceOptionList() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud option list data source.",
+		Description: "Provides an MTN Cloud option list data source: looks up a list of choices for form inputs by name or ID.",
 		ReadContext: dataSourceOptionListRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

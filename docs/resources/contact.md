@@ -2,12 +2,12 @@
 page_title: "mtncloud_contact Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud contact resource.
+  Provides an MTN Cloud contact resource: a person to notify, for example by a monitoring check.
 ---
 
 # mtncloud_contact
 
-Provides a MTN Cloud contact resource.
+Provides an MTN Cloud contact resource: a person to notify, for example by a monitoring check.
 
 ## Example Usage
 

@@ -12,7 +12,7 @@ import (
 
 func resourceContact() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud contact resource.",
+		Description:   "Provides an MTN Cloud contact resource: a person to notify, for example by a monitoring check.",
 		CreateContext: resourceContactCreate,
 		ReadContext:   resourceContactRead,
 		UpdateContext: resourceContactUpdate,

@@ -2,12 +2,12 @@
 page_title: "mtncloud_api_option_list Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud api option list resource.
+  Provides an MTN Cloud API option list resource: a list of choices for form inputs, read from an MTN Cloud API endpoint and optionally reshaped by a translation script.
 ---
 
 # mtncloud_api_option_list
 
-Provides a MTN Cloud api option list resource.
+Provides an MTN Cloud API option list resource: a list of choices for form inputs, read from an MTN Cloud API endpoint and optionally reshaped by a translation script.
 
 ## Example Usage
 

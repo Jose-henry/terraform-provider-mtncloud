@@ -2,12 +2,12 @@
 page_title: "mtncloud_user_group Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud user group resource
+  Provides an MTN Cloud user group resource: a set of users that get the same server access (SSH and sudo) on VMs.
 ---
 
 # mtncloud_user_group
 
-Provides a MTN Cloud user group resource
+Provides an MTN Cloud user group resource: a set of users that get the same server access (SSH and sudo) on VMs.
 
 ## Example Usage
 

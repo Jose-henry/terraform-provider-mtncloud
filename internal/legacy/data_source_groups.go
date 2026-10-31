@@ -14,7 +14,7 @@ import (
 
 func dataSourceGroups() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud groups data source.",
+		Description: "Provides an MTN Cloud groups data source: lists the groups you can see.",
 		ReadContext: dataSourceGroupsRead,
 		Schema: map[string]*schema.Schema{
 			"ids": {

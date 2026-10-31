@@ -2,12 +2,12 @@
 page_title: "mtncloud_operational_workflow Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud operational workflow resource.
+  Provides an MTN Cloud operational workflow resource: a list of tasks run on demand or on a schedule, outside provisioning.
 ---
 
 # mtncloud_operational_workflow
 
-Provides a MTN Cloud operational workflow resource.
+Provides an MTN Cloud operational workflow resource: a list of tasks run on demand or on a schedule, outside provisioning.
 
 ## Example Usage
 

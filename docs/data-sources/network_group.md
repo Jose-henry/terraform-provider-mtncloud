@@ -2,12 +2,12 @@
 page_title: "mtncloud_network_group Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud network group data source.
+  Provides an MTN Cloud network group data source: looks up a group of networks by name or ID.
 ---
 
 # mtncloud_network_group (Data Source)
 
-Provides a MTN Cloud network group data source.
+Provides an MTN Cloud network group data source: looks up a group of networks by name or ID.
 
 ## Example Usage
 

@@ -12,7 +12,7 @@ import (
 
 func resourceCheckboxOptionType() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud checkbox option type resource",
+		Description:   "Provides an MTN Cloud checkbox option type resource: a yes/no input for catalog and workflow forms.",
 		CreateContext: resourceCheckboxOptionTypeCreate,
 		ReadContext:   resourceCheckboxOptionTypeRead,
 		UpdateContext: resourceCheckboxOptionTypeUpdate,

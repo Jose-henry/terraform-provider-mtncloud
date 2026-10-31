@@ -11,7 +11,7 @@ import (
 
 func dataSourcePowerSchedule() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud power schedule data source.",
+		Description: "Provides an MTN Cloud power schedule data source: looks up a schedule that powers instances on and off by name or ID.",
 		ReadContext: dataSourcePowerScheduleRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

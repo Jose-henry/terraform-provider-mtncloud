@@ -2,12 +2,12 @@
 page_title: "mtncloud_execute_schedule Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides an execution schedule resource
+  Provides an MTN Cloud execution schedule resource: a cron schedule that jobs run on.
 ---
 
 # mtncloud_execute_schedule
 
-Provides an execution schedule resource
+Provides an MTN Cloud execution schedule resource: a cron schedule that jobs run on.
 
 ## Example Usage
 

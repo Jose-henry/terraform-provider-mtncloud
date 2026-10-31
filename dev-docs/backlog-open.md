@@ -62,8 +62,11 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [x] **Order networks made in the same apply (B-034 #1).** Done 2026-10-31: networks by ID too.
 - [x] **Router waits for new subnets (B-034 #2).** Done 2026-10-31: a router made in the same apply as its networks waits for their subnets (within its create timeout) instead of failing with "no subnet yet, try again".
 - [ ] **Catalog QA (B-029 #8).** Order every catalog item live (`tf-acc-*` in `admin`): apply, plan `No changes.`, destroy.
-- [ ] **Catalog form snapshot in the docs (B-029 #7, report B6).** Each order page shows the form's help text and requirements.
-- [ ] **Legacy descriptions (report B5).** About 80 one-line legacy descriptions to rewrite in the newer style.
+- [x] **Catalog form snapshot in the docs (B-029 #7, report B6).** Done 2026-10-31: `internal/services/catalog/forms/*.json` (written by `TestAccCatalogForms_Snapshot`, drift-checked by `TestAccCatalogForms_MatchSpecs`) feed each argument's description; the `mtncloud_catalog_item` data source shows each input's rules; locked, not-blank, pattern and range are checked at plan.
+- [x] **App orders wait for the app (B-034 #3).** Done 2026-10-31: managed services' workflows end once they ask for the app, whose VMs MTN names itself. Create waits for the app named after the order and takes its VMs; destroy deletes the app.
+- [x] **Never-blank lists send their first choice (B-034 #4).** Done 2026-10-31: MQ and Streaming workflows failed on `msg_engine`/`kafkaVersion` null.
+- [x] **Failed order errors carry the workflow's reason (B-034 #5).** Done 2026-10-31: last lines of the failed task's output, secret lines dropped.
+- [x] **Legacy descriptions (report B5).** Done 2026-10-31: all 80 say what the type is for; data sources say what they look up by (from their schema).
 - [ ] **MOS order resource (B-032).** Proposal; needs the owner's approval.
 - [ ] **Cluster layouts by code (B-033).** With the cluster work.
 

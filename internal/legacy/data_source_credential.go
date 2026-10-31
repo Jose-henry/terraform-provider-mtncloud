@@ -11,7 +11,7 @@ import (
 
 func dataSourceCredential() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud credential data source.",
+		Description: "Provides an MTN Cloud credential data source: looks up a stored credential by name or ID.",
 		ReadContext: dataSourceCredentialRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

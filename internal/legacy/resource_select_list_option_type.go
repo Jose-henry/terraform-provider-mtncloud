@@ -12,7 +12,7 @@ import (
 
 func resourceSelectListOptionType() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud select list option type resource",
+		Description:   "Provides an MTN Cloud select list option type resource: a drop-down input for forms, with its choices from an option list.",
 		CreateContext: resourceSelectListOptionTypeCreate,
 		ReadContext:   resourceSelectListOptionTypeRead,
 		UpdateContext: resourceSelectListOptionTypeUpdate,

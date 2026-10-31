@@ -14,7 +14,7 @@ import (
 
 func dataSourcePermissionSet() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud permission set data source.",
+		Description: "Provides an MTN Cloud permission set data source: reads the permissions a role grants.",
 		ReadContext: dataSourcePermissionSetRead,
 		Schema: map[string]*schema.Schema{
 			"name": {

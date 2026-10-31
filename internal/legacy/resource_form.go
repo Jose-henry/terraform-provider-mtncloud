@@ -14,7 +14,7 @@ import (
 
 func resourceForm() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud form resource",
+		Description:   "Provides an MTN Cloud form resource: a reusable input form for catalog items and workflows, built from option types.",
 		CreateContext: resourceFormCreate,
 		ReadContext:   resourceFormRead,
 		UpdateContext: resourceFormUpdate,

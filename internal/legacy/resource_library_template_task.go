@@ -12,7 +12,7 @@ import (
 
 func resourceLibraryTemplateTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud library template task resource",
+		Description:   "Provides an MTN Cloud library template task resource: a task that writes a file template from the library onto a VM.",
 		CreateContext: resourceLibraryTemplateTaskCreate,
 		ReadContext:   resourceLibraryTemplateTaskRead,
 		UpdateContext: resourceLibraryTemplateTaskUpdate,

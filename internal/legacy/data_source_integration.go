@@ -11,7 +11,7 @@ import (
 
 func dataSourceIntegration() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud integration data source.",
+		Description: "Provides an MTN Cloud integration data source: looks up an integration of any type by name or ID.",
 		ReadContext: dataSourceMorphesIntegrationRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

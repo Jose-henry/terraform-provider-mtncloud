@@ -2,12 +2,12 @@
 page_title: "mtncloud_network_subnet Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud network subnet data source.
+  Provides an MTN Cloud network subnet data source: looks up a subnet of an MTN Network by name or ID.
 ---
 
 # mtncloud_network_subnet (Data Source)
 
-Provides a MTN Cloud network subnet data source.
+Provides an MTN Cloud network subnet data source: looks up a subnet of an MTN Network by name or ID.
 
 ## Example Usage
 

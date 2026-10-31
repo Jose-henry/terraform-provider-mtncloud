@@ -13,7 +13,7 @@ import (
 
 func resourceWriteAttributesTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud write attributes task resource",
+		Description:   "Provides an MTN Cloud write attributes task resource: a task that saves values for later tasks in the same workflow.",
 		CreateContext: resourceWriteAttributesTaskCreate,
 		ReadContext:   resourceWriteAttributesTaskRead,
 		UpdateContext: resourceWriteAttributesTaskUpdate,

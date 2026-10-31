@@ -2,12 +2,12 @@
 page_title: "mtncloud_rest_option_list Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud rest option list resource.
+  Provides an MTN Cloud REST option list resource: a list of choices for form inputs, read from a REST endpoint.
 ---
 
 # mtncloud_rest_option_list
 
-Provides a MTN Cloud rest option list resource.
+Provides an MTN Cloud REST option list resource: a list of choices for form inputs, read from a REST endpoint.
 
 ## Example Usage
 

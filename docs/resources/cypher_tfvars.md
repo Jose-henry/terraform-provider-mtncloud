@@ -2,12 +2,12 @@
 page_title: "mtncloud_cypher_tfvars Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud cypher tfvars secret resource.
+  Provides an MTN Cloud Cypher tfvars secret resource: Terraform variable values stored in Cypher under tfvars/, for Terraform blueprints.
 ---
 
 # mtncloud_cypher_tfvars
 
-Provides a MTN Cloud cypher tfvars secret resource.
+Provides an MTN Cloud Cypher tfvars secret resource: Terraform variable values stored in Cypher under `tfvars/`, for Terraform blueprints.
 
 ## Example Usage
 

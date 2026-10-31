@@ -2,12 +2,12 @@
 page_title: "mtncloud_checkbox_option_type Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud checkbox option type resource
+  Provides an MTN Cloud checkbox option type resource: a yes/no input for catalog and workflow forms.
 ---
 
 # mtncloud_checkbox_option_type
 
-Provides a MTN Cloud checkbox option type resource
+Provides an MTN Cloud checkbox option type resource: a yes/no input for catalog and workflow forms.
 
 ## Example Usage
 

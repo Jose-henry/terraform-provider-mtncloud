@@ -12,7 +12,7 @@ import (
 
 func dataSourceAnsibleTowerJobTemplate() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud ansible tower job template data source.",
+		Description: "Provides an MTN Cloud Ansible Tower job template data source: looks up a job template of an Ansible Tower integration by name or ID.",
 		ReadContext: dataSourceAnsibleTowerJobTemplateRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

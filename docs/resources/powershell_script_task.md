@@ -2,12 +2,12 @@
 page_title: "mtncloud_powershell_script_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud powershell script task resource
+  Provides an MTN Cloud PowerShell script task resource: a task that runs a PowerShell script on a VM or locally.
 ---
 
 # mtncloud_powershell_script_task
 
-Provides a MTN Cloud powershell script task resource
+Provides an MTN Cloud PowerShell script task resource: a task that runs a PowerShell script on a VM or locally.
 
 ## Example Usage
 

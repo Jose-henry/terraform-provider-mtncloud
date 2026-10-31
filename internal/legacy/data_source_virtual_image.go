@@ -11,7 +11,7 @@ import (
 
 func dataSourceVirtualImage() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud virtual image data source.",
+		Description: "Provides an MTN Cloud virtual image data source: looks up a VM image by name or ID.",
 		ReadContext: dataSourceVirtualImageRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

@@ -2,12 +2,12 @@
 page_title: "mtncloud_letsencrypt_certificate Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Changing an input orders it again. terraform destroy deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning.
+  Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Changing an input orders it again. terraform destroy deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning. Each argument says what the MTN Let's Encrypt SSL order form requires and allows (read 2026-10-31); every plan checks the live form.
 ---
 
 # mtncloud_letsencrypt_certificate
 
-Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Changing an input orders it again. `terraform destroy` deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning.
+Installs a free Let's Encrypt TLS certificate on an existing instance. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Changing an input orders it again. `terraform destroy` deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning. Each argument says what the MTN Let's Encrypt SSL order form requires and allows (read 2026-10-31); every plan checks the live form.
 
 ## Example Usage
 
@@ -24,12 +24,12 @@ resource "mtncloud_letsencrypt_certificate" "shop" {
 
 ### Required
 
-- `domain_name` (String) Domain the certificate is for. It must already point at the instance.
+- `domain_name` (String) Domain the certificate is for. It must already point at the instance. Order form: required; for example `example.com`. It says: "Enter one or more domains, separated by commas or spaces."
 - `instance_id` (String) ID of the instance to install the certificate on, for example `mtncloud_instance.web.id`.
 
 ### Optional
 
-- `admin_email` (String) Email Let's Encrypt sends expiry notices to.
+- `admin_email` (String) Email Let's Encrypt sends expiry notices to. Order form: for example `name@example.com`. It says: "(optional) Get email alerts if the auto-renewal fails in the future."
 - `staging` (Boolean) Use Let's Encrypt's staging service (a test certificate, no rate limits).
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 

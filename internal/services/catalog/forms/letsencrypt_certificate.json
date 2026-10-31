@@ -1,0 +1,27 @@
+{
+  "item": "MTN Let's Encrypt SSL",
+  "code": "letsencrypt010",
+  "read": "2026-10-31",
+  "fields": [
+    {
+      "name": "sslAdminEmail",
+      "label": "Admin Email",
+      "type": "text",
+      "example": "name@example.com",
+      "help": "(optional) Get email alerts if the auto-renewal fails in the future."
+    },
+    {
+      "name": "sslDomainName",
+      "label": "Domain Name",
+      "type": "text",
+      "required": true,
+      "example": "example.com",
+      "help": "Enter one or more domains, separated by commas or spaces."
+    },
+    {
+      "name": "sslStaging",
+      "label": "ENABLE STAGING CERTIFICATE",
+      "type": "checkbox"
+    }
+  ]
+}

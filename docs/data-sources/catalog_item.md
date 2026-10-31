@@ -3,12 +3,12 @@
 page_title: "mtncloud_catalog_item Data Source - mtncloud"
 subcategory: ""
 description: |-
-  Looks up one service you can order from the MTN Cloud catalog, by ID or by the name shown in the catalog, with the inputs its order form asks for. To list the catalog, use mtncloud_catalog_items; to see what you have ordered, mtncloud_catalog_orders.
+  Looks up one service you can order from the MTN Cloud catalog, by ID or by the name shown in the catalog, with the inputs its order form asks for and the form's rules for each: required (or required only while another input has a value), shown only while another has a value, hidden, locked, a pattern, number bounds, an example and the help text. To list the catalog, use mtncloud_catalog_items; to see what you have ordered, mtncloud_catalog_orders.
 ---
 
 # mtncloud_catalog_item (Data Source)
 
-Looks up one service you can order from the MTN Cloud catalog, by ID or by the name shown in the catalog, with the inputs its order form asks for. To list the catalog, use `mtncloud_catalog_items`; to see what you have ordered, `mtncloud_catalog_orders`.
+Looks up one service you can order from the MTN Cloud catalog, by ID or by the name shown in the catalog, with the inputs its order form asks for and the form's rules for each: required (or required only while another input has a value), shown only while another has a value, hidden, locked, a pattern, number bounds, an example and the help text. To list the catalog, use `mtncloud_catalog_items`; to see what you have ordered, `mtncloud_catalog_orders`.
 
 ## Example Usage
 
@@ -43,9 +43,18 @@ output "required_inputs" {
 
 Read-Only:
 
-- `default` (String) Default value, or empty.
-- `help` (String) Help text shown on the form, or empty.
+- `default` (String) Value the form pre-fills, or empty.
+- `example` (String) Example value the form shows, or empty.
+- `help` (String) Help text shown on the form, or empty. It often states minimums, for example a disk size.
+- `hidden` (Boolean) Not shown on the form: the form sends `default` itself.
 - `label` (String) Label shown on the form.
+- `locked` (Boolean) Shown but not editable: an order sends `default`.
+- `max` (Number) Largest number allowed, or null for no limit.
+- `min` (Number) Smallest number allowed, or null for no limit.
 - `name` (String) Input name: the key to give it a value when ordering.
-- `required` (Boolean) Whether an order must give it.
+- `no_blank` (Boolean) A value given must not be empty.
+- `pattern` (String) Regular expression a typed value must match, or empty.
+- `required` (Boolean) Whether an order must give it. See also `required_when`.
+- `required_when` (String) Required only while another input has a value, for example `enableAuth` (while it is on) or `db_engine:mysql`; empty when it doesn't depend on one.
+- `shown_when` (String) Shown, and used, only while another input has a value, in the same form as `required_when`; empty when always shown.
 - `type` (String) Input type, for example `text`, `select` or `checkbox`.

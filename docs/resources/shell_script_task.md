@@ -2,12 +2,12 @@
 page_title: "mtncloud_shell_script_task Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud shell script task resource
+  Provides an MTN Cloud shell script task resource: a task that runs a shell script on a VM or locally.
 ---
 
 # mtncloud_shell_script_task
 
-Provides a MTN Cloud shell script task resource
+Provides an MTN Cloud shell script task resource: a task that runs a shell script on a VM or locally.
 
 ## Example Usage
 

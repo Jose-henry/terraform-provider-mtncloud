@@ -2,12 +2,12 @@
 page_title: "mtncloud_contact Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud contact data source.
+  Provides an MTN Cloud contact data source: looks up a contact to notify by name or ID.
 ---
 
 # mtncloud_contact (Data Source)
 
-Provides a MTN Cloud contact data source.
+Provides an MTN Cloud contact data source: looks up a contact to notify by name or ID.
 
 ## Example Usage
 

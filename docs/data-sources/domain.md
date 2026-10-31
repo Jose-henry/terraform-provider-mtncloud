@@ -2,12 +2,12 @@
 page_title: "mtncloud_domain Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud domain data source.
+  Provides an MTN Cloud domain data source: looks up a network domain by name or ID.
 ---
 
 # mtncloud_domain (Data Source)
 
-Provides a MTN Cloud domain data source.
+Provides an MTN Cloud domain data source: looks up a network domain by name or ID.
 
 ## Example Usage
 

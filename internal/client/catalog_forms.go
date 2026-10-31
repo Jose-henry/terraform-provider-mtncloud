@@ -25,6 +25,14 @@ type FormField struct {
 	// required (or shown) only while another field has that value. Empty: always.
 	RequireOn, VisibleOn string
 	Help                 string // the console's help text under the field
+	// Locked: shown but not editable in the console, which sends Default. NoBlank: a value must not
+	// be empty. Pattern: the console's check on a typed value (a regular expression, as the form
+	// gives it). Min and Max bound a number, when the form sets them. Placeholder is the example the
+	// console shows. DependsOn: the field's choices are listed for another field's value.
+	Locked, NoBlank      bool
+	Pattern, Placeholder string
+	Min, Max             *int64
+	DependsOn            string
 }
 
 // CatalogItemRef names a catalog item by its code, which MTN keeps when it renames an item, and by
@@ -184,6 +192,17 @@ func collectFields(v any, out map[string]FormField) {
 			f.RequireOn, _ = x["requireOnCode"].(string)
 			f.VisibleOn, _ = x["visibleOnCode"].(string)
 			f.Help, _ = x["helpBlock"].(string)
+			f.Locked, _ = x["isLocked"].(bool)
+			f.NoBlank, _ = x["noBlank"].(bool)
+			f.Pattern, _ = x["verifyPattern"].(string)
+			f.Placeholder, _ = x["placeHolder"].(string)
+			f.DependsOn, _ = x["dependsOnCode"].(string)
+			if n, ok := asInt64(x["minVal"]); ok {
+				f.Min = &n
+			}
+			if n, ok := asInt64(x["maxVal"]); ok {
+				f.Max = &n
+			}
 			f.Default = x["defaultValue"]
 			if cfg, ok := x["config"].(map[string]any); ok {
 				f.LayoutID, _ = asInt64(cfg["layoutId"])

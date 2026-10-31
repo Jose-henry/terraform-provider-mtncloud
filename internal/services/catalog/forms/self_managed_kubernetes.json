@@ -1,0 +1,153 @@
+{
+  "item": "MTN KUBERNETES (MK8S)",
+  "code": "K8S",
+  "read": "2026-10-31",
+  "fields": [
+    {
+      "name": "cloud",
+      "label": "CLOUD",
+      "type": "cloud",
+      "required": true
+    },
+    {
+      "name": "cni_provider",
+      "label": "CONTAINER NETWORK INTERFACE PROVIDER",
+      "type": "select",
+      "help": "Container Networking Configuration. Defaults to Flannel.",
+      "choices": [
+        "Flannel",
+        "Calico"
+      ]
+    },
+    {
+      "name": "environment",
+      "label": "ENVIRONMENT",
+      "type": "environment"
+    },
+    {
+      "name": "group-vpn",
+      "label": "GROUP",
+      "type": "group",
+      "required": true
+    },
+    {
+      "name": "k8s_api_endpoint",
+      "label": "VIRTUAL IP",
+      "type": "text",
+      "help": "Virtual IP i.e 192.168.1.100 for your master nodes. Not required for a Single-Master node. Verify that firewalls allow connectivity between the VIP and all nodes."
+    },
+    {
+      "name": "k8s_master_count",
+      "label": "MASTER NODE COUNT",
+      "type": "number",
+      "default": "1",
+      "min": 1,
+      "max": 5,
+      "help": "Number of Master Nodes. Select 3 or More for HA (Requires VIP)."
+    },
+    {
+      "name": "k8s_worker_count",
+      "label": "WORKER NODE COUNT",
+      "type": "number",
+      "default": "3",
+      "min": 0,
+      "help": "Number of Worker Nodes."
+    },
+    {
+      "name": "labels",
+      "label": "LABELS",
+      "type": "textArray"
+    },
+    {
+      "name": "master_floatingip",
+      "label": "MASTER FLOATING IP",
+      "type": "select",
+      "choices": [
+        "public-network-01",
+        "public-network-02",
+        "public-network-03",
+        "public-network-04"
+      ]
+    },
+    {
+      "name": "master_network",
+      "label": "MASTER NETWORK",
+      "type": "networkManager",
+      "required": true,
+      "help": "If different from worker's network, ensure reachability by appropriate routing of both networks, i.e. two networks on the same router, and ensure security groups for both allows themselves. For availability across availability zones, use 'Network Groups' which uses a 'Round Robin' algorithm."
+    },
+    {
+      "name": "master_plan",
+      "label": "MASTER PLAN",
+      "type": "select",
+      "required": true,
+      "help": "Note: MK8S Master Node Instances require at least 2GB of CPU and memory (i.e., at least the G2S2 Plan)"
+    },
+    {
+      "name": "master_securitygroups",
+      "label": "MASTER SECURITY GROUP(s)",
+      "type": "secGroup",
+      "required": true
+    },
+    {
+      "name": "master_volumes",
+      "label": "MASTER VOLUMES",
+      "type": "diskManager",
+      "required": true
+    },
+    {
+      "name": "name",
+      "label": "CLUSTER NAME",
+      "type": "text",
+      "required": true,
+      "example": "K8S Prod Cluster"
+    },
+    {
+      "name": "resourcepool",
+      "label": "RESOURCE POOL",
+      "type": "resourcePool",
+      "required": true
+    },
+    {
+      "name": "single_node_cluster",
+      "label": "SINGLE NODE CLUSTER? IF CHECKED, MASTER TAINT IS REMOVED \u0026 WORKER NODE WILL NOT PROVISION.",
+      "type": "checkbox",
+      "default": "false"
+    },
+    {
+      "name": "worker_floatingip",
+      "label": "WORKER FLOATING IP",
+      "type": "select",
+      "hidden": true,
+      "choices": [
+        "public-network-01",
+        "public-network-02",
+        "public-network-03",
+        "public-network-04"
+      ]
+    },
+    {
+      "name": "worker_network",
+      "label": "WORKER NETWORK",
+      "type": "networkManager",
+      "help": "If different from master's network, ensure reachability by appropriate routing of both networks, i.e. two networks on the same router, and ensure security groups for both allows themselves. For availability across availability zones, use 'Network Groups' which uses a 'Round Robin' algorithm."
+    },
+    {
+      "name": "worker_plan",
+      "label": "WORKER PLAN",
+      "type": "select",
+      "help": "If left unselected, master plan will be inherited"
+    },
+    {
+      "name": "worker_securitygroups",
+      "label": "WORKER SECURITY GROUP(S)",
+      "type": "secGroup"
+    },
+    {
+      "name": "worker_volumes",
+      "label": "WORKER VOLUMES",
+      "type": "diskManager",
+      "help": "If left unselected, master volume will be inherited"
+    }
+  ]
+}

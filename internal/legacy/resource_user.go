@@ -12,7 +12,7 @@ import (
 
 func resourceUser() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud user resource.",
+		Description:   "Provides an MTN Cloud user resource: a user of the tenant, with its roles.",
 		CreateContext: resourceUserCreate,
 		ReadContext:   resourceUserRead,
 		UpdateContext: resourceUserUpdate,

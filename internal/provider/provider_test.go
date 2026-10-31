@@ -80,6 +80,7 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		"/api/catalog/types/73":                             "catalog_type_73.json",
 		"/api/catalog/types/53":                             "catalog_type_53.json",
 		"/api/catalog/types/55":                             "catalog_type_55.json",
+		"/api/catalog/types/57":                             "catalog_type_57.json",
 		"/api/instance-types":                               "instance_types.json",
 		"/api/network-router-types":                         "router_types.json",
 		"/api/options/environments":                         "options_environments.json",
@@ -111,7 +112,7 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 			return
 		}
 		if order != nil && (r.URL.Path == "/api/catalog/orders" || strings.HasPrefix(r.URL.Path, "/api/catalog/items/") ||
-			strings.HasPrefix(r.URL.Path, "/api/apps")) &&
+			strings.HasPrefix(r.URL.Path, "/api/apps") || strings.HasPrefix(r.URL.Path, "/api/job-executions/")) &&
 			r.Header.Get("Authorization") == "Bearer test-token" {
 			order.ServeHTTP(w, r)
 			return

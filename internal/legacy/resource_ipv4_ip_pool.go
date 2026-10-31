@@ -13,7 +13,7 @@ import (
 
 func resourceIPv4IPPool() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud IPv4 ip pool resource",
+		Description:   "Provides an MTN Cloud IPv4 IP pool resource: a range of IPv4 addresses that instances get static addresses from.",
 		CreateContext: resourceIPv4IPPoolCreate,
 		ReadContext:   resourceIPv4IPPoolRead,
 		UpdateContext: resourceIPv4IPPoolUpdate,

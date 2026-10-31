@@ -1,0 +1,192 @@
+{
+  "item": "MTN LEMP (PHP)",
+  "code": "Lemp01",
+  "read": "2026-10-31",
+  "fields": [
+    {
+      "name": "autoSecurityUpdates",
+      "label": "AUTO SECURITY UPDATES",
+      "type": "checkbox"
+    },
+    {
+      "name": "cloud",
+      "label": "CLOUD",
+      "type": "cloud",
+      "required": true
+    },
+    {
+      "name": "dbName",
+      "label": "DATABASE NAME",
+      "type": "text",
+      "pattern": "(?i)^[a-z_][a-z0-9_\\$]{0,62}$",
+      "example": "mydb"
+    },
+    {
+      "name": "dbPassword",
+      "label": "DB PASSWORD",
+      "type": "password",
+      "example": "root123"
+    },
+    {
+      "name": "dbUsername",
+      "label": "DB USERNAME",
+      "type": "text",
+      "pattern": "(?i)^[a-z_][a-z0-9_\\$]{0,62}$",
+      "example": "dbuser"
+    },
+    {
+      "name": "environment",
+      "label": "ENVIRONMENT",
+      "type": "environment"
+    },
+    {
+      "name": "floatingip",
+      "label": "FLOATING IP",
+      "type": "select",
+      "required": true,
+      "choices": [
+        "public-network-01",
+        "public-network-02",
+        "public-network-03",
+        "public-network-04"
+      ]
+    },
+    {
+      "name": "group-vpn",
+      "label": "GROUP",
+      "type": "group",
+      "required": true
+    },
+    {
+      "name": "hostCIDRs",
+      "label": "ALLOWABLE HOST CIDR",
+      "type": "textarea",
+      "required": true,
+      "default": "0.0.0.0/0",
+      "pattern": "^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9])(,\\s*((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9]))*$",
+      "example": "10.60.50.0/24, 10.60.40.0/24",
+      "help": "Comma seperated list of clients that can connect with the DB"
+    },
+    {
+      "name": "label",
+      "label": "LABELS",
+      "type": "textArray",
+      "help": "Enter a comma-separated list of labels to group and categorise items for easier filtering in list views."
+    },
+    {
+      "name": "makeUserDbOwner",
+      "label": "MAKE DB OWNER? If checked, user created will be DB Owner.",
+      "type": "checkbox",
+      "default": "false"
+    },
+    {
+      "name": "mysqlVersion",
+      "label": "MYSQL VERSION",
+      "type": "select",
+      "no_blank": true,
+      "default": "8.0",
+      "choices": [
+        "8.4 LTS",
+        "8.0"
+      ]
+    },
+    {
+      "name": "name",
+      "label": "NAME",
+      "type": "text",
+      "required": true,
+      "default": "${userInitials}-${accountId}-MTN-CLOUD-${type}-${sequence+0}"
+    },
+    {
+      "name": "networks",
+      "label": "NETWORKS",
+      "type": "networkManager",
+      "required": true
+    },
+    {
+      "name": "passwordExpiryDays",
+      "label": "PASSWORD EXPIRY DAYS",
+      "type": "number",
+      "example": "1"
+    },
+    {
+      "name": "php_memory_limit",
+      "label": "PHP Memory Limit",
+      "type": "select",
+      "default": "256M",
+      "help": "Limits how much RAM a single script can consume.",
+      "choices": [
+        "128M",
+        "256M",
+        "512M",
+        "1G"
+      ]
+    },
+    {
+      "name": "php_upload_max",
+      "label": "Max Upload Size",
+      "type": "select",
+      "default": "64M",
+      "help": "Sets the maximum file size for uploads (Critical for CMS).",
+      "choices": [
+        "2M",
+        "10M",
+        "32M",
+        "64M",
+        "128M"
+      ]
+    },
+    {
+      "name": "php_version",
+      "label": "PHP VERSION",
+      "type": "select",
+      "no_blank": true,
+      "default": "8.4",
+      "choices": [
+        "8.3",
+        "8.4",
+        "8.5"
+      ]
+    },
+    {
+      "name": "plan",
+      "label": "PLAN",
+      "type": "select",
+      "required": true
+    },
+    {
+      "name": "requireSSL",
+      "label": "REQUIRE SSL FOR CONNECTIONS?",
+      "type": "checkbox"
+    },
+    {
+      "name": "resourcepool",
+      "label": "RESOURCE POOL",
+      "type": "resourcePool",
+      "required": true
+    },
+    {
+      "name": "securitygroups",
+      "label": "SECURITY GROUP(s)",
+      "type": "secGroup"
+    },
+    {
+      "name": "useHostSSL",
+      "label": "USE HOSTSSL? If checked host cirds will be inputed as 'hostssl'",
+      "type": "checkbox"
+    },
+    {
+      "name": "volumes",
+      "label": "VOLUMES",
+      "type": "diskManager",
+      "required": true
+    },
+    {
+      "name": "webServerPort",
+      "label": "Web Server Port",
+      "type": "number",
+      "example": "80",
+      "help": "Site will be reachable on your specified port, 80 is default"
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "item": "MTN Managed Streaming",
+  "code": "kaf01",
+  "read": "2026-10-31",
+  "fields": [
+    {
+      "name": "adminPassword",
+      "label": "ADMIN PASSWORD",
+      "type": "password",
+      "required": true,
+      "example": "********",
+      "help": "Password for the global administrator."
+    },
+    {
+      "name": "adminUsername",
+      "label": "ADMIN USERNAME",
+      "type": "text",
+      "required": true,
+      "default": "admin",
+      "pattern": "(?i)^[a-z_][a-z0-9_\\$]{0,62}$",
+      "example": "admin",
+      "help": "Username for the global administrator"
+    },
+    {
+      "name": "cloud",
+      "label": "CLOUD",
+      "type": "cloud",
+      "required": true
+    },
+    {
+      "name": "environment",
+      "label": "ENVIRONMENT",
+      "type": "environment"
+    },
+    {
+      "name": "floatingip",
+      "label": "FLOATING IP",
+      "type": "select",
+      "choices": [
+        "public-network-01",
+        "public-network-02",
+        "public-network-03",
+        "public-network-04"
+      ]
+    },
+    {
+      "name": "group-vpn",
+      "label": "GROUP",
+      "type": "group",
+      "required": true
+    },
+    {
+      "name": "kafkaVersion",
+      "label": "KAFKA VERSION",
+      "type": "select",
+      "no_blank": true,
+      "choices": [
+        "4.3.1 (Recommended)",
+        "4.2.1"
+      ]
+    },
+    {
+      "name": "labels",
+      "label": "LABELS",
+      "type": "textArray",
+      "help": "Enter a comma-separated list of labels to group and categorise items for easier filtering in list views."
+    },
+    {
+      "name": "name",
+      "label": "NAME",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "networks",
+      "label": "NETWORKS",
+      "type": "networkManager",
+      "required": true
+    },
+    {
+      "name": "plan",
+      "label": "PLAN",
+      "type": "select",
+      "required": true,
+      "help": "Note: G4S8 (recommended)"
+    },
+    {
+      "name": "resourcepool",
+      "label": "RESOURCE POOL",
+      "type": "resourcePool"
+    },
+    {
+      "name": "securitygroups",
+      "label": "SECURITY GROUP(s)",
+      "type": "secGroup",
+      "required": true
+    },
+    {
+      "name": "volumes",
+      "label": "VOLUMES",
+      "type": "diskManager",
+      "required": true,
+      "default": "[disk or network list]",
+      "help": "Minimum 100 GB. A required 60 GB data disk is added automatically from the backend, for 160 GB total."
+    }
+  ]
+}

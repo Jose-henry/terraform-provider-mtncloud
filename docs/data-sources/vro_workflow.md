@@ -2,12 +2,12 @@
 page_title: "mtncloud_vro_workflow Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud vRO workflow data source.
+  Provides an MTN Cloud vRO workflow data source: looks up a workflow of a vRO integration by name.
 ---
 
 # mtncloud_vro_workflow (Data Source)
 
-Provides a MTN Cloud vRO workflow data source.
+Provides an MTN Cloud vRO workflow data source: looks up a workflow of a vRO integration by name.
 
 ## Example Usage
 

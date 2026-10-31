@@ -2,12 +2,12 @@
 page_title: "mtncloud_job Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud job data source.
+  Provides an MTN Cloud job data source: looks up a task or workflow job by name or ID.
 ---
 
 # mtncloud_job (Data Source)
 
-Provides a MTN Cloud job data source.
+Provides an MTN Cloud job data source: looks up a task or workflow job by name or ID.
 
 ## Example Usage
 

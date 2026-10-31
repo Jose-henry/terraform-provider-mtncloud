@@ -12,7 +12,7 @@ import (
 
 func resourceTypeAheadOptionType() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud typeahead option type resource",
+		Description:   "Provides an MTN Cloud typeahead option type resource: a searchable input for forms, with its choices from an option list.",
 		CreateContext: resourceTypeAheadOptionTypeCreate,
 		ReadContext:   resourceTypeAheadOptionTypeRead,
 		UpdateContext: resourceTypeAheadOptionTypeUpdate,

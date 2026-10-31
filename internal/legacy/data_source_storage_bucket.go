@@ -11,7 +11,7 @@ import (
 
 func dataSourceStorageBucket() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud storage bucket data source.",
+		Description: "Provides an MTN Cloud storage bucket data source: looks up a storage bucket (for example a MOS bucket) by name or ID.",
 		ReadContext: dataSourceStorageBucketRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

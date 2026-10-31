@@ -1,6 +1,8 @@
 package catalog
 
 import (
+	"slices"
+
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
 )
 
@@ -16,7 +18,7 @@ const (
 	kFlag
 	kSecret      // write-only: sent with the order, never stored
 	kList        // textArray: sent comma-separated
-	kLines       // textarea: sent one per line
+	kLines       // textarea: sent comma-separated, as its form asks
 	kSelect      // a choice of the form's list, by value or shown name
 	kBytes       // given in GB, sent in bytes
 	kGroup       // group name: sent as its ID
@@ -61,6 +63,7 @@ type orderSpec struct {
 // is no limit.
 type rules struct {
 	minRootGB, minNetworks, maxNetworks int64
+	dataDiskGB                          int64   // a data disk MTN Cloud adds itself (the form's help text)
 	minCPU, minMemoryGB                 int64   // from the plan's size code, G<cpu>S<memory>
 	badNodes                            []int64 // node counts the form says aren't supported
 }
@@ -165,13 +168,11 @@ func orderSpecs() []orderSpec {
 		return orderSpec{typeName: typeName, item: item, code: itemCodes[item], about: about,
 			fields: with(vm("labels", "resourcepool", "plan", "volumes", "networks"), dbFields(vKey, vList, vDef, vReq)...)}
 	}
-	// An appliance's disks are optional on its form, but the form pre-fills a 10 GB root disk: where its
-	// help text states a larger minimum, the size is required here, or the order fails after it is placed.
+	// An appliance's disks are optional on its form, which pre-fills a 10 GB root disk, smaller than
+	// every minimum its help text states: the size is required here (owner, 2026-10-31). An order
+	// placed without one before keeps working: setting it then is recorded, not ordered again.
 	appliance := func(item, typeName, about string, r rules) orderSpec {
-		// The root disk isn't Required in the schema even with a minimum: orders placed before the
-		// minimum was known have none in state, and requiring it would replace them. A new order
-		// without one is refused at plan (checkRules).
-		req := applianceBase
+		req := append(slices.Clone(applianceBase), "volumes")
 		return orderSpec{typeName: typeName, item: item, code: itemCodes[item], about: about, fields: vm("label", req...), rules: r}
 	}
 	return []orderSpec{
@@ -216,7 +217,7 @@ func orderSpecs() []orderSpec {
 				field{attr: "database_name", key: "dbName", kind: kText, required: true, desc: "WordPress database."},
 				field{attr: "database_user", key: "dbUsername", kind: kText, required: true, desc: "WordPress database user."},
 				field{attr: "database_password", key: "dbPassword", kind: kSecret, required: true, desc: "That user's password."},
-				field{attr: "user_owns_database", key: "makeUserDbOwner", kind: kFlag, def: "true", desc: "Make the user the database's owner. Defaults to true."},
+				field{attr: "user_owns_database", key: "makeUserDbOwner", kind: kFlag, def: "true", desc: "Make the user the database's owner. Locked on by the order form: leave it out, or set `true`."},
 				field{attr: "allowed_cidrs", key: "hostCIDRs", kind: kLines, def: "0.0.0.0/0", desc: "Networks that may reach the database, as CIDRs. Defaults to `[\"0.0.0.0/0\"]`."},
 				field{attr: "auto_security_updates", key: "autoSecurityUpdates", kind: kFlag, desc: "Install security updates automatically."},
 			), phpFields("8.3 (Recommended)", "512M (Recommended)", "", true)...)},
@@ -237,20 +238,20 @@ func orderSpecs() []orderSpec {
 			fields: with(with(vm("labels", "resourcepool", "plan", "volumes", "networks"),
 				field{attr: "engine", key: "msg_engine", kind: kSelect, desc: "Messaging engine, for example `rabbit`."},
 				field{attr: "rabbitmq_version", key: "rabbitmqVersion", kind: kSelect, desc: "RabbitMQ version, when `engine` is `rabbit`."},
-				field{attr: "node_count", key: "no_nodes", kind: kNumber, required: true, def: "1", desc: "Number of nodes."},
+				field{attr: "node_count", key: "no_nodes", kind: kNumber, def: "1", desc: "Number of nodes. Locked at 1 by the order form: leave it out, or set `1`."},
 			), adminFields()...)},
 		{typeName: "managed_streaming", item: "MTN Managed Streaming", code: "kaf01", app: true, about: "A managed event streaming (Kafka) service.",
 			fields: with(with(vm("labels", "plan", "volumes", "networks", "securitygroups"),
 				field{attr: "kafka_version", key: "kafkaVersion", kind: kSelect, desc: "Kafka version, as the form lists it."},
-			), adminFields()...), rules: rules{minRootGB: 100}},
+			), adminFields()...), rules: rules{minRootGB: 100, dataDiskGB: 60}},
 		{typeName: "siem", item: "MTN SIEM Service", code: "WZH01", about: "A security information and event management (SIEM) server.",
 			fields: with(vm("labels", "plan", "volumes", "networks", "securitygroups"),
 				field{attr: "version", key: "wazuhVersion", kind: kSelect, required: true, desc: "SIEM version, as the form lists it."},
 				field{attr: "archive_events", key: "enableLogall", kind: kSelect, required: true, desc: "Keep every event, `Yes` or `No`."},
 				field{attr: "admin_password", key: "wazuhAdminPassword", kind: kSecret, required: true, desc: "Administrator password."},
-			), rules: rules{minRootGB: 100}},
+			), rules: rules{minRootGB: 100, dataDiskGB: 60}},
 		{typeName: "bastion_host", item: "Warpgate Bastion Host", code: "bastion987", about: "A bastion host for SSH, HTTPS and database access.",
-			fields: with(vm("labels", "plan", "resourcepool", "networks", "floatingip"),
+			fields: with(vm("labels", "plan", "resourcepool", "volumes", "networks", "floatingip"),
 				field{attr: "admin_password", key: "warpgateAdminPassword", kind: kSecret, required: true, desc: "Administrator password."})},
 		{typeName: "pfsense_vpn", movedFrom: "vpn_service", item: "MTN PfSense VPN", code: "MVPNSV02", aliases: []string{"MTN VPN Service"},
 			about: "A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk).",
@@ -262,17 +263,17 @@ func orderSpecs() []orderSpec {
 		{typeName: "wireguard_vpn", item: "MTN WireGuard SSL VPN", code: "WGVPN001", about: "A WireGuard VPN server.",
 			fields: vm("labels", append(applianceBase, "volumes")...)},
 		appliance("MTN SOPHOS Firewall (BYOL)", "sophos_firewall", "A SOPHOS firewall. Bring your own license.",
-			rules{minRootGB: 80, minNetworks: 2, minCPU: 2, minMemoryGB: 4}),
+			rules{minRootGB: 80, dataDiskGB: 40, minNetworks: 2, minCPU: 2, minMemoryGB: 4}),
 		appliance("MTN Fortinet Firewall (BYOL)", "fortinet_firewall", "A Fortinet firewall. Bring your own license.",
 			rules{minRootGB: 40, minNetworks: 1, maxNetworks: 2}),
 		appliance("MTN FortiWeb (BYOL)", "fortiweb", "A FortiWeb web application firewall. Bring your own license.",
-			rules{minNetworks: 1, maxNetworks: 2}),
+			rules{minRootGB: 70, minNetworks: 1, maxNetworks: 2, minCPU: 2, minMemoryGB: 8}),
 		appliance("MTN FortiADC (BYOL)", "fortiadc", "A FortiADC application delivery controller. Bring your own license.",
-			rules{minRootGB: 30, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 16}),
+			rules{minRootGB: 30, dataDiskGB: 30, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 16}),
 		appliance("MTN FortiManager (BYOL)", "fortimanager", "A FortiManager. Bring your own license.",
 			rules{minRootGB: 500, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 8}),
 		appliance("MTN FortiAnalyzer (BYOL)", "fortianalyzer", "A FortiAnalyzer. Bring your own license.",
-			rules{minRootGB: 250, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 8}),
+			rules{minRootGB: 250, dataDiskGB: 250, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 8}),
 		{typeName: "self_managed_kubernetes", movedFrom: "managed_kubernetes", item: "MTN KUBERNETES (MK8S)", code: "K8S", app: true,
 			about: "A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it.",
 			fields: []field{

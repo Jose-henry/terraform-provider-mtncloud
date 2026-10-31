@@ -2,12 +2,12 @@
 page_title: "mtncloud_fortianalyzer Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A FortiAnalyzer. Bring your own license. Ordered from MTN Cloud's catalog (MTN FortiAnalyzer (BYOL)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+  A FortiAnalyzer. Bring your own license. Ordered from MTN Cloud's catalog (MTN FortiAnalyzer (BYOL)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN FortiAnalyzer (BYOL) order form requires and allows (read 2026-10-31); every plan checks the live form.
 ---
 
 # mtncloud_fortianalyzer
 
-A FortiAnalyzer. Bring your own license. Ordered from MTN Cloud's catalog (MTN FortiAnalyzer (BYOL)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored.
+A FortiAnalyzer. Bring your own license. Ordered from MTN Cloud's catalog (MTN FortiAnalyzer (BYOL)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN FortiAnalyzer (BYOL) order form requires and allows (read 2026-10-31); every plan checks the live form.
 
 ## Example Usage
 
@@ -28,10 +28,11 @@ resource "mtncloud_fortianalyzer" "this" {
 
 ### Required
 
-- `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`.
-- `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it.
-- `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists.
-- `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices.
+- `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`. Order form: required; choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
+- `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it. Order form: required; locked (not editable).
+- `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists. Order form: required. It says: "Note: Service requires at least 1 interface & at most 2 interfaces."
+- `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices. Order form: required. It says: "Minimum: 4VCPU & 8GB."
+- `root_volume_size` (Number) Root disk size in GB. At least 250 GB (the order form's minimum). It says: "Minimum 250 GB. A required 250 GB data disk is added automatically from the backend, for 500 GB total."
 
 ### Optional
 
@@ -42,7 +43,6 @@ resource "mtncloud_fortianalyzer" "this" {
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
 - `labels` (Set of String) Labels on the instance.
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
-- `root_volume_size` (Number) Root disk size in GB.
 - `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 

@@ -14,7 +14,7 @@ import (
 
 func resourceProvisioningWorkflow() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud provisioning workflow resource.",
+		Description:   "Provides an MTN Cloud provisioning workflow resource: tasks run at set phases of an instance's life, such as after provisioning.",
 		CreateContext: resourceProvisioningWorkflowCreate,
 		ReadContext:   resourceProvisioningWorkflowRead,
 		UpdateContext: resourceProvisioningWorkflowUpdate,

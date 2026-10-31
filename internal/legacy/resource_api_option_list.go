@@ -13,7 +13,7 @@ import (
 
 func resourceApiOptionList() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud api option list resource.",
+		Description:   "Provides an MTN Cloud API option list resource: a list of choices for form inputs, read from an MTN Cloud API endpoint and optionally reshaped by a translation script.",
 		CreateContext: resourceApiOptionListCreate,
 		ReadContext:   resourceApiOptionListRead,
 		UpdateContext: resourceApiOptionListUpdate,

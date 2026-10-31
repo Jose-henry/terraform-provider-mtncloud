@@ -11,7 +11,7 @@ import (
 
 func dataSourceEnvironments() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud environments data source.",
+		Description: "Provides an MTN Cloud environments data source: lists the environments you can use.",
 		ReadContext: dataSourceEnvironmentsRead,
 		Schema: map[string]*schema.Schema{
 			"ids": {

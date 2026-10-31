@@ -16,7 +16,7 @@ import (
 
 func resourceShellScriptTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud shell script task resource",
+		Description:   "Provides an MTN Cloud shell script task resource: a task that runs a shell script on a VM or locally.",
 		CreateContext: resourceShellScriptTaskCreate,
 		ReadContext:   resourceShellScriptTaskRead,
 		UpdateContext: resourceShellScriptTaskUpdate,

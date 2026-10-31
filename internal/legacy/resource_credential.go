@@ -16,7 +16,7 @@ import (
 
 func resourceCredential() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud credential resource.",
+		Description:   "Provides an MTN Cloud credential resource: a stored user name and password, key or token that integrations and tasks use by reference.",
 		CreateContext: resourceCredentialCreate,
 		ReadContext:   resourceCredentialRead,
 		UpdateContext: resourceCredentialUpdate,

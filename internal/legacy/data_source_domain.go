@@ -11,7 +11,7 @@ import (
 
 func dataSourceDomain() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud domain data source.",
+		Description: "Provides an MTN Cloud domain data source: looks up a network domain by name or ID.",
 		ReadContext: dataSourceDomainRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

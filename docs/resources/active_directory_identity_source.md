@@ -2,12 +2,12 @@
 page_title: "mtncloud_active_directory_identity_source Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides an active directory identity source resource
+  Provides an MTN Cloud Active Directory identity source resource: lets users of the tenant sign in with their Active Directory accounts, mapping AD groups to roles.
 ---
 
 # mtncloud_active_directory_identity_source
 
-Provides an active directory identity source resource
+Provides an MTN Cloud Active Directory identity source resource: lets users of the tenant sign in with their Active Directory accounts, mapping AD groups to roles.
 
 ## Example Usage
 

@@ -11,7 +11,7 @@ import (
 
 func dataSourceUserGroup() *schema.Resource {
 	return &schema.Resource{
-		Description: "Provides a MTN Cloud user group data source.",
+		Description: "Provides an MTN Cloud user group data source: looks up a user group by name or ID.",
 		ReadContext: dataSourceUserGroupRead,
 		Schema: map[string]*schema.Schema{
 			"id": {

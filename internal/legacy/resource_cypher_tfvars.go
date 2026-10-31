@@ -15,7 +15,7 @@ import (
 
 func resourceCypherTFVars() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud cypher tfvars secret resource.",
+		Description:   "Provides an MTN Cloud Cypher tfvars secret resource: Terraform variable values stored in Cypher under `tfvars/`, for Terraform blueprints.",
 		CreateContext: resourceCypherTFVarsCreate,
 		ReadContext:   resourceCypherTFVarsRead,
 		DeleteContext: resourceCypherTFVarsDelete,

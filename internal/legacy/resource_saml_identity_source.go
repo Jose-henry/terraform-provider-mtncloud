@@ -13,7 +13,7 @@ import (
 
 func resourceSAMLIdentitySource() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a saml identity source resource",
+		Description:   "Provides an MTN Cloud SAML identity source resource: lets users of the tenant sign in through a SAML identity provider.",
 		CreateContext: resourceSAMLIdentitySourceCreate,
 		ReadContext:   resourceSAMLIdentitySourceRead,
 		UpdateContext: resourceSAMLIdentitySourceUpdate,

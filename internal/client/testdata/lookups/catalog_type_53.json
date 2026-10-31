@@ -76,7 +76,8 @@
       "defaultValue": "[{\"rootVolume\":true,\"name\":\"root\",\"size\":50}]"
      },
      "isHidden": true,
-     "fieldLabel": "VOLUMES"
+     "fieldLabel": "VOLUMES",
+     "isLocked": true
     },
     {
      "id": 5302,
@@ -86,7 +87,8 @@
      "fieldContext": "config.customOptions",
      "config": {},
      "fieldLabel": "VOLUMES",
-     "defaultValue": 53687091200
+     "defaultValue": 53687091200,
+     "isLocked": true
     },
     {
      "id": 9,

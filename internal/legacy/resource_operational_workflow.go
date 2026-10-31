@@ -12,7 +12,7 @@ import (
 
 func resourceOperationalWorkflow() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud operational workflow resource.",
+		Description:   "Provides an MTN Cloud operational workflow resource: a list of tasks run on demand or on a schedule, outside provisioning.",
 		CreateContext: resourceOperationalWorkflowCreate,
 		ReadContext:   resourceOperationalWorkflowRead,
 		UpdateContext: resourceOperationalWorkflowUpdate,

@@ -12,7 +12,7 @@ import (
 
 func resourceNestedWorkflowTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud nested workflow task resource",
+		Description:   "Provides an MTN Cloud nested workflow task resource: a task that runs another workflow.",
 		CreateContext: resourceNestedWorkflowTaskCreate,
 		ReadContext:   resourceNestedWorkflowTaskRead,
 		UpdateContext: resourceNestedWorkflowTaskUpdate,

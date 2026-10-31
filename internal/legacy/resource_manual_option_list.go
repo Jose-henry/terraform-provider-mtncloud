@@ -14,7 +14,7 @@ import (
 
 func resourceManualOptionList() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud manual option list resource.",
+		Description:   "Provides an MTN Cloud manual option list resource: a fixed list of choices for form inputs.",
 		CreateContext: resourceManualOptionListCreate,
 		ReadContext:   resourceManualOptionListRead,
 		UpdateContext: resourceManualOptionListUpdate,

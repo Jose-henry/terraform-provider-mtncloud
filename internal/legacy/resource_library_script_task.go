@@ -12,7 +12,7 @@ import (
 
 func resourceLibraryScriptTask() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides a MTN Cloud library script task resource",
+		Description:   "Provides an MTN Cloud library script task resource: a task that runs a script template from the library.",
 		CreateContext: resourceLibraryScriptTaskCreate,
 		ReadContext:   resourceLibraryScriptTaskRead,
 		UpdateContext: resourceLibraryScriptTaskUpdate,

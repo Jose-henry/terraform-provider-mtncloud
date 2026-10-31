@@ -2,12 +2,12 @@
 page_title: "mtncloud_text_option_type Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud text option type resource
+  Provides an MTN Cloud text option type resource: a one-line text input for catalog and workflow forms.
 ---
 
 # mtncloud_text_option_type
 
-Provides a MTN Cloud text option type resource
+Provides an MTN Cloud text option type resource: a one-line text input for catalog and workflow forms.
 
 ## Example Usage
 

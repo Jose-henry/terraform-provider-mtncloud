@@ -2,12 +2,12 @@
 page_title: "mtncloud_credential Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides a MTN Cloud credential data source.
+  Provides an MTN Cloud credential data source: looks up a stored credential by name or ID.
 ---
 
 # mtncloud_credential (Data Source)
 
-Provides a MTN Cloud credential data source.
+Provides an MTN Cloud credential data source: looks up a stored credential by name or ID.
 
 ## Example Usage
 
