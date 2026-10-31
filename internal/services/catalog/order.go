@@ -879,7 +879,7 @@ func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *dia
 	inProject := map[int64]bool{}
 	for _, in := range all {
 		inProject[in.ID] = in.ProjectID == pr.ID
-		if in.ProjectID == pr.ID && madeBy(in.Name, name.ValueString(), r.spec.app) {
+		if in.ProjectID == pr.ID && madeBy(in.Name, name.ValueString()) {
 			ids = append(ids, in.ID)
 		}
 	}
@@ -1069,27 +1069,12 @@ func (r *orderResource) appReady(ctx context.Context, p source, orderID int64, b
 	return a, true
 }
 
-// madeBy reports whether an instance is named after an order: exactly "<name>", or "<name>-<n>"
-// for the nodes of a multi-node app (managed services, self-managed Kubernetes). A single-VM order never claims "<name>-2", which
-// may be another order's or the user's own (destroy deletes what this matches). Case is ignored.
-func madeBy(instance, order string, nodes bool) bool {
-	got, n := strings.ToLower(instance), strings.ToLower(order)
-	if got == n {
-		return true
-	}
-	if !nodes {
-		return false
-	}
-	rest, ok := strings.CutPrefix(got, n+"-")
-	if !ok || rest == "" {
-		return false
-	}
-	for _, c := range rest {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
+// madeBy reports whether an instance is named after an order: exactly "<name>", case ignored. A
+// multi-node app's VMs are named from MTN's template instead ("<prefix>-MTN-CLOUD-MK8S-M-2", live QA
+// 2026-10-31, B-018 #2) and are found through the app. "<name>-2" is never claimed: it may be another
+// order's VM or the user's own, and destroy deletes what this matches.
+func madeBy(instance, order string) bool {
+	return strings.EqualFold(instance, order)
 }
 
 func idList(ids []int64) types.List {

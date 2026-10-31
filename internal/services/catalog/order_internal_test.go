@@ -10,23 +10,20 @@ import (
 func TestMadeBy(t *testing.T) {
 	for _, c := range []struct {
 		instance, order string
-		nodes, want     bool
+		want            bool
 	}{
-		{"web", "web", false, true},
-		{"WEB", "web", false, true},
-		{"web-1", "web", true, true},
-		{"web-12", "web", true, true},
-		// A single-VM order never claims "web-2": another order's, or the user's own.
-		{"web-2", "web", false, false},
-		{"web-db", "web", true, false},
-		{"web_1", "web", true, false},
-		{"web-", "web", true, false},
-		{"web-1a", "web", true, false},
-		{"webx", "web", true, false},
-		{"we", "web", true, false},
+		{"web", "web", true},
+		{"WEB", "web", true},
+		// Never "web-2" or "web-1": another order's, or the user's own. An app's nodes are named from
+		// MTN's template and found through the app (B-018 #2).
+		{"web-2", "web", false},
+		{"web-1", "web", false},
+		{"web-db", "web", false},
+		{"webx", "web", false},
+		{"we", "web", false},
 	} {
-		if got := madeBy(c.instance, c.order, c.nodes); got != c.want {
-			t.Errorf("madeBy(%q, %q, %v) = %v, want %v", c.instance, c.order, c.nodes, got, c.want)
+		if got := madeBy(c.instance, c.order); got != c.want {
+			t.Errorf("madeBy(%q, %q) = %v, want %v", c.instance, c.order, got, c.want)
 		}
 	}
 }

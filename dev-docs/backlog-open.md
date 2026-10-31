@@ -120,7 +120,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
   - Status words.
 - [ ] **Project order (B-015).** Needs one real order. Does it get an `execution`? Does the response carry `order.items[0].id`? Group and cloud are sent as IDs.
 - [x] **Power suspend (B-018 #1).** Done 2026-10-31: retested on Debian 12 (t103) after Ubuntu 24.04; MTN Cloud accepts the suspend and the VM keeps running on both. Documented in `power_state` as not working on MTN Cloud's images so far; use `stopped`. Reopen if MTN enables it.
-- [ ] **Managed order destroy (B-018 #2).** Confirm the app and node names that D-029 assumes.
+- [x] **Managed order destroy (B-018 #2).** Done 2026-10-31: the app is named after the order (Managed Database app 368, two-tier K8s app 371), and destroy went through it (API 404 checked). Nodes are named from MTN's template, not `<name>-<n>`, so that match was removed (D-029).
 - [ ] **QA second pass (B-018 #6).**
   - Tasks and a job run.
   - Workflows.

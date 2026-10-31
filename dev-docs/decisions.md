@@ -273,8 +273,9 @@ other six are Trouble Ticketing, Create Project, MOS, SMB, NFS and Let's Encrypt
   named after the order and holding at least one of its instances is deleted with
   `removeInstances=on` (a name alone could be another project's app). Any other app is deleted only when
   every instance in it is the order's; a shared app is kept and only the order's instances go.
-- Matching by name is exact for a single-VM order; `<name>-<n>` only for managed services' nodes,
-  so `db` never claims a sibling order's or the user's `db-2` (review, 2026-10-28).
+- Matching by name is exact: `<name>` only. (It also matched `<name>-<n>` for managed services'
+  nodes until live QA showed MTN names them from its template, `<prefix>-MTN-CLOUD-MK8S-M-2`, and they
+  are found through the app; the `<n>` match could only claim a user's own `db-2`. B-018 #2, 2026-10-31.)
   Destroy deletes only instances that match now: saved `instance_ids` narrow the name match, so a
   renamed VM, or one an older version claimed, is left alone.
 - Destroy refuses, deleting nothing, rather than guess: a lookup that fails, a workflow still
