@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -31,10 +32,13 @@ type Config struct {
 
 	// Either Token, or Username and Password (plus Tenant, the subdomain or account ID, for
 	// sub-tenant users).
-	Token    string
-	Username string
-	Password string
-	Tenant   string
+	Token string
+	// TokenFile holds the token instead (Token empty): read at the first call, and again when the
+	// API rejects the token, so a token refreshed in the file mid-run is picked up.
+	TokenFile string
+	Username  string
+	Password  string
+	Tenant    string
 
 	// Defaults from the provider block or MTNCLOUD_GROUP, MTNCLOUD_CLOUD, MTNCLOUD_PROJECT: the group
 	// and cloud picked when the account has several, and the project used when a resource names none.
@@ -108,8 +112,8 @@ func New(cfg Config) (*Client, error) {
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return nil, fmt.Errorf("invalid MTN Cloud URL %q: use the full console address, for example https://console.cloud.mtn.ng", cfg.URL)
 	}
-	if cfg.Token == "" && (cfg.Username == "" || cfg.Password == "") {
-		return nil, errors.New("no MTN Cloud credentials: set access_token (MTNCLOUD_API_TOKEN), or username and password (MTNCLOUD_API_USERNAME, MTNCLOUD_API_PASSWORD)")
+	if cfg.Token == "" && cfg.TokenFile == "" && (cfg.Username == "" || cfg.Password == "") {
+		return nil, errors.New("no MTN Cloud credentials: set access_token (MTNCLOUD_API_TOKEN), access_token_file (MTNCLOUD_API_TOKEN_FILE), or username and password (MTNCLOUD_API_USERNAME, MTNCLOUD_API_PASSWORD)")
 	}
 	if cfg.MaxAttempts <= 0 {
 		cfg.MaxAttempts = 5
@@ -326,9 +330,34 @@ func (c *Client) relogin(ctx context.Context, rejected string) (string, error) {
 	return c.loginLocked(ctx)
 }
 
-// loginLocked runs the OAuth password grant. Sub-tenant users log in as <tenant>\username, where
+// readTokenFile reads the token file: the token, or an error that says why there is none.
+func (c *Client) readTokenFile() (string, error) {
+	b, err := os.ReadFile(c.cfg.TokenFile)
+	if err != nil {
+		return "", fmt.Errorf("reading the access token file: %w", err)
+	}
+	t := strings.TrimSpace(string(b))
+	if t == "" {
+		return "", fmt.Errorf("the access token file %s is empty", c.cfg.TokenFile)
+	}
+	return t, nil
+}
+
+// loginLocked reads the token file, when there is one, or runs the OAuth password grant. Sub-tenant users log in as <tenant>\username, where
 // <tenant> is the subdomain or the numeric account ID (both checked live, 2026-10-29).
 func (c *Client) loginLocked(ctx context.Context) (string, error) {
+	if c.cfg.TokenFile != "" {
+		t, err := c.readTokenFile()
+		if err != nil {
+			return "", err
+		}
+		if t == c.token {
+			return "", fmt.Errorf("MTN Cloud refused the access token in %s (expired or revoked): put a valid token in the "+
+				"file; one refreshed there during a run is picked up", c.cfg.TokenFile)
+		}
+		c.token = t
+		return t, nil
+	}
 	username := c.cfg.Username
 	if c.cfg.Tenant != "" {
 		username = c.cfg.Tenant + `\` + c.cfg.Username

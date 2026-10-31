@@ -3,7 +3,9 @@ package legacy
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
+	"strings"
 
 	"log"
 
@@ -70,7 +72,9 @@ func resourceUserRoleCreate(ctx context.Context, d *schema.ResourceData, meta in
 	var diags diag.Diagnostics
 
 	data := PermissionSet{}
-	json.Unmarshal([]byte(d.Get("permission_set").(string)), &data)
+	if err := permissionSetJSON(d, &data); err != nil {
+		return diag.FromErr(err)
+	}
 
 	var roleDefinition RolePermissionPayload
 	roleDefinition.Name = d.Get("name").(string)
@@ -115,7 +119,9 @@ func resourceUserRoleCreate(ctx context.Context, d *schema.ResourceData, meta in
 	log.Printf("API RESPONSE: %s", resp)
 
 	var role CreateRoleResult
-	json.Unmarshal(resp.Body, &role)
+	if err := json.Unmarshal(resp.Body, &role); err != nil {
+		return diag.Errorf("reading the new role: %s", err)
+	}
 
 	// Successfully created resource, now set id
 	d.SetId(int64ToString(role.Role.ID))
@@ -168,7 +174,9 @@ func resourceUserRoleRead(ctx context.Context, d *schema.ResourceData, meta inte
 
 	// Convert the MTN Cloud API response into the permission set JSON format for comparison
 	data := PermissionSet{}
-	json.Unmarshal([]byte(d.Get("permission_set").(string)), &data)
+	if err := permissionSetJSON(d, &data); err != nil {
+		return diag.FromErr(err)
+	}
 
 	var featureList []string
 	for _, feature := range data.FeaturePermissions {
@@ -388,7 +396,9 @@ func resourceUserRoleUpdate(ctx context.Context, d *schema.ResourceData, meta in
 	id := d.Id()
 
 	data := PermissionSet{}
-	json.Unmarshal([]byte(d.Get("permission_set").(string)), &data)
+	if err := permissionSetJSON(d, &data); err != nil {
+		return diag.FromErr(err)
+	}
 
 	var roleDefinition RolePermissionPayload
 	roleDefinition.Name = d.Get("name").(string)
@@ -429,7 +439,9 @@ func resourceUserRoleUpdate(ctx context.Context, d *schema.ResourceData, meta in
 	}
 	log.Printf("API RESPONSE: %s", resp)
 	var role CreateRoleResult
-	json.Unmarshal(resp.Body, &role)
+	if err := json.Unmarshal(resp.Body, &role); err != nil {
+		return diag.Errorf("reading role %s: %s", id, err)
+	}
 
 	// Successfully updated resource, now set id
 	// err, it should not have changed though..
@@ -516,4 +528,16 @@ type RolePermissionPayload struct {
 	VdiPoolPermissions          []vdiPoolPermission         `json:"vdiPools"`
 	Tasks                       []taskPermission            `json:"tasks"`
 	Workflows                   []workflowPermission        `json:"taskSets"`
+}
+
+// permissionSetJSON reads permission_set into data. Left out (or empty), it is no change.
+func permissionSetJSON(d *schema.ResourceData, data *PermissionSet) error {
+	raw, _ := d.Get("permission_set").(string)
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	if err := json.Unmarshal([]byte(raw), data); err != nil {
+		return fmt.Errorf("permission_set isn't valid JSON: %w", err)
+	}
+	return nil
 }

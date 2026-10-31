@@ -34,6 +34,7 @@ resource "mtncloud_instance" "web" {
   project          = "web-prod"
   image            = "MTN Ubuntu Server 24.04.3LTS"
   plan             = "G2S4"
+  root_volume_size = 20
   networks         = [mtncloud_network.app.id]
   security_groups  = [mtncloud_security_group.web.name]
   floating_ip_pool = "public-network-02"

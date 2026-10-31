@@ -1,4 +1,4 @@
-// Package compute holds the instance resource. It doesn't import other service packages: a network
+// Package compute holds the instance resources. It doesn't import other service packages: a network
 // is referenced by its ID, which any configuration can take from mtncloud_network.
 package compute
 
@@ -15,7 +15,7 @@ import (
 
 // Resources lists every resource in this package, for the provider to register.
 func Resources() []func() resource.Resource {
-	return []func() resource.Resource{newInstance}
+	return []func() resource.Resource{newInstance, newInstanceSettings, newApp, newAppSettings, newAppInstance}
 }
 
 // base gives every resource its client.

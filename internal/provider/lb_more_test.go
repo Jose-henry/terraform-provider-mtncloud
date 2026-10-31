@@ -389,3 +389,140 @@ resource "mtncloud_load_balancer_floating_ip" "pub" {
 		},
 	})
 }
+
+// clearLB removes every L7 policy (listeners) or member (pools) of the fake's load balancers, as
+// a delete in the console does.
+func clearLB(p *lbPlugin, kind, key string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, lb := range p.lbs {
+		for _, x := range list(lb, kind) {
+			x.(map[string]any)[key] = []any{}
+		}
+	}
+}
+
+// An L7 policy deleted outside Terraform plans a new one (rule 8).
+func TestLoadBalancerL7Policy_Disappears(t *testing.T) {
+	f := newFakeAPI(t)
+	plugin := newLBPlugin()
+	f.lb = plugin
+	cfg := lbBase(f) + `
+resource "mtncloud_load_balancer_l7_policy" "api" {
+  network_id       = 114
+  load_balancer_id = mtncloud_load_balancer.web.id
+  listener_id      = mtncloud_load_balancer_listener.http.id
+  name             = "api"
+  position         = 1
+  action           = "REJECT"
+  rules            = [{ type = "PATH", compare_type = "STARTS_WITH", value = "/admin" }]
+}
+`
+	res := "mtncloud_load_balancer_l7_policy.api"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg},
+			{PreConfig: func() { clearLB(plugin, "listeners", "l7policies_expanded") }, Config: cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(res, plancheck.ResourceActionCreate)}}},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+// An instance member whose addresses were all removed outside Terraform plans adding them again.
+func TestLoadBalancerInstanceMember_Disappears(t *testing.T) {
+	f := newFakeAPI(t)
+	plugin := newLBPlugin()
+	f.lb = plugin
+	cfg := lbBase(f) + `
+resource "mtncloud_load_balancer_instance_member" "app" {
+  network_id       = 114
+  load_balancer_id = mtncloud_load_balancer.web.id
+  pool_id          = mtncloud_load_balancer_pool.web.id
+  instance_id      = 301
+  port             = 8080
+}
+`
+	res := "mtncloud_load_balancer_instance_member.app"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg},
+			{PreConfig: func() { clearLB(plugin, "pools", "members") }, Config: cfg,
+				ConfigPlanChecks:  resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(res, plancheck.ResourceActionCreate)}},
+				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectKnownValue(res, tfjsonpath.New("members"), knownvalue.ListSizeExact(2))}},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+// One pinned node: only that address is added, as an ordinary member; the whole instance can join
+// the same pool beside it, and destroy removes the pinned node by its member ID only (B-023).
+func TestLoadBalancerInstanceMember_Pinned(t *testing.T) {
+	f := newFakeAPI(t)
+	plugin := newLBPlugin()
+	f.lb = plugin
+	pinned := `
+resource "mtncloud_load_balancer_instance_member" "pin" {
+  network_id       = 114
+  load_balancer_id = mtncloud_load_balancer.web.id
+  pool_id          = mtncloud_load_balancer_pool.web.id
+  instance_id      = 301
+  pin_address      = "10.0.0.32"
+  port             = 9090
+}
+`
+	whole := `
+resource "mtncloud_load_balancer_instance_member" "all" {
+  network_id       = 114
+  load_balancer_id = mtncloud_load_balancer.web.id
+  pool_id          = mtncloud_load_balancer_pool.web.id
+  instance_id      = 301
+  port             = 8080
+}
+`
+	res := "mtncloud_load_balancer_instance_member.pin"
+	members := func(want int) resource.TestCheckFunc {
+		return func(*terraform.State) error {
+			plugin.mu.Lock()
+			defer plugin.mu.Unlock()
+			for _, lb := range plugin.lbs {
+				for _, x := range list(lb, "pools") {
+					if x.(map[string]any)["name"] != "web" {
+						continue
+					}
+					if n := len(list(x.(map[string]any), "members")); n != want {
+						return fmt.Errorf("%d members in pool %v, want %d", n, x.(map[string]any)["name"], want)
+					}
+				}
+			}
+			return nil
+		}
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: lbBase(f) + pinned, Check: members(1), ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue(res, tfjsonpath.New("id"), knownvalue.StringExact("301@10.0.0.32")),
+				statecheck.ExpectKnownValue(res, tfjsonpath.New("members"), knownvalue.ListSizeExact(1)),
+				statecheck.ExpectKnownValue(res, tfjsonpath.New("members").AtSliceIndex(0).AtMapKey("address"), knownvalue.StringExact("10.0.0.32")),
+			}},
+			{Config: lbBase(f) + pinned, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{ResourceName: res, ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"timeouts"},
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					a := s.RootModule().Resources[res].Primary.Attributes
+					return fmt.Sprintf("114/%s/%s/301@10.0.0.32", a["load_balancer_id"], a["pool_id"]), nil
+				}},
+			// The whole instance on another port beside the pinned node: neither takes the other's members.
+			{Config: lbBase(f) + pinned + whole, Check: members(3), ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue(res, tfjsonpath.New("members"), knownvalue.ListSizeExact(1)),
+				statecheck.ExpectKnownValue("mtncloud_load_balancer_instance_member.all", tfjsonpath.New("members"), knownvalue.ListSizeExact(2)),
+			}},
+			{Config: lbBase(f) + pinned + whole, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// Removing the pinned node leaves the instance's group.
+			{Config: lbBase(f) + whole, Check: members(2)},
+			{Config: lbBase(f) + strings.Replace(pinned, "10.0.0.32", "10.0.0.99", 1), ExpectError: regexp.MustCompile(`not an address of instance`)},
+		},
+	})
+}

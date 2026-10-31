@@ -4,10 +4,10 @@
 
 | # | Question | Blocks |
 |---|---|---|
-| Q1 | Authoritative list of master-tenant-only features | D-004 gating |
+| ~~Q1~~ | ~~Authoritative list of master-tenant-only features~~ resolved by D-024: every master-only type was removed | |
 | ~~Q2~~ | ~~Confirm Plugin Framework + mux (D-005)~~ resolved: confirmed and built | |
-| Q3 | Load balancer API (instance type 70 "LoadBalancer", Octavia, no layouts: custom API?) | `mtncloud_load_balancer` (**on hold**, D-013) |
-| Q4 | Payloads P1–P7 in [api-research.md](api-research.md) and P8–P10 in [prerequisites.md](prerequisites.md) | network, router, SG, instance, MOS |
+| ~~Q3~~ | ~~Load balancer API~~ answered by D-031: the console task `lboperate.terraform`; built | |
+| ~~Q4~~ | ~~Payloads P1–P10~~ resolved: network, router, security group, instance and MOS were built and tested live from real payloads ([api-research.md](api-research.md)) | |
 | ~~Q5~~ | Answered (D-021): public registry, `jose-henry/mtncloud` | |
 | Q6 | Test tenant + credentials for acceptance tests (isolated, disposable) | acceptance CI |
 
@@ -16,21 +16,23 @@
 1. ~~`internal/client`~~ done.
 2. ~~Catalog data sources~~ done: projects, images, plans, datastores, security groups, external networks, catalog items;
    then routers, instances and instance (2026-10-27).
-3. `mtncloud_security_group` (+ rule)
-4. `mtncloud_network` (MTN Network)
-5. `mtncloud_router` (MTN Router)
-6. ~~`mtncloud_instance` (OpenStack)~~ core slice done; floating IP, availability zone, workflow,
-   lifecycle, scaling and deployments still to come
-7. `mtncloud_project`
-8. `mtncloud_catalog_order`
-9. `mtncloud_object_storage` (MOS)
-10. `mtncloud_app`, `mtncloud_ssl_certificate`, `mtncloud_cluster`, `mtncloud_datastore`,
-    `mtncloud_load_balancer` (D-023)
+3. ~~`mtncloud_security_group` (+ rule)~~ done.
+4. ~~`mtncloud_network` (MTN Network)~~ done.
+5. ~~`mtncloud_router` (MTN Router)~~ done.
+6. ~~`mtncloud_instance`~~ done, with floating IP and scaling. Availability zone is open (B-013);
+   workflows and deployments are deferred (B-014).
+7. ~~`mtncloud_project`~~ done.
+8. ~~Catalog orders~~ done, one resource per catalog item.
+9. ~~MOS~~ done (buckets, archives, `mtncloud_mos_access`).
+10. ~~`mtncloud_ssl_certificate`~~, ~~`mtncloud_load_balancer`~~ (D-031) and ~~day-2 settings~~ (B-028) done;
+    `mtncloud_app` (B-017) and `mtncloud_cluster` (B-016) are open. `mtncloud_datastore` was dropped:
+    customers pick datastores by name (`mtncloud_datastores`).
 
-## B-001 Real bugs inherited in legacy
-- 32 `json.Unmarshal` calls whose error is dropped: a bad API response becomes an empty struct, and
-  Terraform then plans a recreate. Fix when each resource is migrated.
-- 2 unchecked `UpdateInstanceTypeLogo` / `UpdateCatalogItemLogo` calls: the logo upload fails silently.
+## B-001 Real bugs inherited in legacy (done)
+Done 2026-10-31. Of the 32 `json.Unmarshal` calls whose error was dropped, 22 went with types removed
+by D-024/D-025; the other 10 now fail with the reason (a `permission_set` left out is still no
+change), and one redundant one was removed. The 2 logo uploads went with the instance type and catalog
+item resources (D-025).
 
 ## B-002 Legacy lint debt (baseline 2026-10-26, only shrinks)
 1439 unchecked `d.Set`, 60 QF1008, 1 SA6005, 2 unused funcs. These are excluded for
@@ -41,11 +43,12 @@
 role examples, `message_type` on motd, `visibility` on the terraform blueprint, a typo
 `default_chedefault_checked` on form, and the plan data source missing `provision_type`). They are
 listed in `scripts/examples-known-defects.txt`. `scripts/validate-examples.sh` fails if the list
-grows or if a listed file becomes clean.
+grows or if a listed file becomes clean. Done 2026-10-31: the last one (the form's typo) is fixed and
+the list is empty.
 
 ## B-004 Quickstart `terraform.tfvars` (local only)
 The local, git-ignored file still has `username`/`password`/`tenant_subdomain` keys that the
-quickstart no longer declares (Terraform warns). Remove them locally.
+quickstart no longer declares (Terraform warns). Remove them locally. Done 2026-10-31.
 
 ## B-005 TLS verification was off by default (resolved, D-014)
 Now on by default in both halves; `secure = false` opts out with a warning.
@@ -88,7 +91,9 @@ and need an acceptance run, or a read of a real group that has such rules:
 - Tests still missing: a failure partway through Update, the rule resource's disappears and
   drift steps, and the acceptance set (`_basic`, `_update`, `_import`, `_disappears`, `_drift`).
 
-## B-010 MTN Network DHCP allocation and host routes
+## B-010 MTN Network DHCP allocation and host routes — done 2026-10-31
+Done: the formats were proved live on a QA network (owner: "test it out with cli"), see
+[api-research](api-research.md#network-dhcp-range-and-host-routes-b-010). Kept below for history.
 The network type offers `config.dhcpRange` ("DHCP Allocation") and `config.hostRoutes`, and MTN's
 doc lists both as optional, but no network in the probed tenant sets them and no document gives the
 format. Add `dhcp_range` and `host_routes` to `mtncloud_network` once a real value is captured
@@ -313,8 +318,10 @@ source that `depends_on` the resource reads the load balancer as it was before t
 - Done 2026-10-29: `mtncloud_load_balancer_l7_policy` (+ `_l7_policies`, `_l7_policy` data sources),
   `mtncloud_load_balancer_instance_member`, `mtncloud_load_balancer_floating_ip`, and the
   `mtncloud_load_balancer_member` data source (D-033).
-- Not exposed yet: cluster-group members (`clusterGroup`) and pinning one node of an instance
-  (`pinAddress`).
+- Done 2026-10-31: pinning one node (`pin_address` on `mtncloud_load_balancer_instance_member`). The
+  plugin adds it as an ordinary member without the group tag (`LbTopology`, `resolveInstanceMembers`),
+  so it is read by address and port and removed by member ID. Not exposed yet: cluster-group members
+  (`clusterGroup`, `cluster:<id>:<role>`), with the cluster work.
 
 ## B-024 Archive follow-ups (from the 2026-10-29 review) — done 2026-10-30
 - Client contract tests for `archives.go` (`testdata/archives/`, built from the documented answer
@@ -481,7 +488,11 @@ attached yet when the instance is created: the agent is then off (set `install_a
 - Clusters (owner): Kubernetes goes through the cluster API, not the catalog. Two cluster types:
   managed Kubernetes and Docker, layouts starting with "MTN". Later.
 
-## B-032 A MOS order resource (owner asked 2026-10-31) — proposal, needs approval
+## B-032 A MOS order resource (owner asked 2026-10-31) — done 2026-10-31
+Approved ("only adopt or rotate when the rotate conditions are set, and create when nothing
+exist") and built as `mtncloud_mos_access`. After review: only a change of `rotate_trigger` from one
+value to another rotates (setting it after an import, or removing it, doesn't); an unknown trigger
+plans the rotation's changes; an order that doesn't finish in time is saved, not ordered again.
 Today MOS keys are adopted, never ordered (D-007): ordering catalog item `s32311` rotates the
 tenant-wide key, which breaks every other user of MOS in the tenant. Proposal: `mtncloud_mos_access`
 - Create adopts the keys already in Cypher; it orders only when the tenant has none, or when

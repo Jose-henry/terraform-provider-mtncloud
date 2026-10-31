@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -208,6 +209,14 @@ func (c *Client) DeleteApp(ctx context.Context, id int64) error {
 	return ignoreNotFound(c.do(ctx, http.MethodDelete, "/api/apps/"+itoa(id), q, nil, nil))
 }
 
+// RemoveAppInstance takes an instance out of an app and leaves it running
+// (POST /api/apps/{id}/remove-instance, body {"instanceId": N}; CLI `apps remove-instance -d`,
+// 2026-10-31). An app or instance already gone counts as done.
+func (c *Client) RemoveAppInstance(ctx context.Context, appID, instanceID int64) error {
+	body := map[string]any{"instanceId": instanceID}
+	return ignoreNotFound(c.do(ctx, http.MethodPost, "/api/apps/"+itoa(appID)+"/remove-instance", nil, body, nil))
+}
+
 // ExecutionFailure is what a failed workflow run says about why: the last lines of its failed
 // task's output, for example "Error: kafkaVersion must be 4.3.1 or 4.2.1 (got: 'null')." (QA,
 // 2026-10-31). The order's own secret values are masked first, and a line that mentions a secret
@@ -243,6 +252,47 @@ func (c *Client) ExecutionFailure(ctx context.Context, executionID int64, secret
 		}
 	}
 	return ""
+}
+
+// ExecutionOutput is everything a workflow execution's tasks printed, in order.
+func (c *Client) ExecutionOutput(ctx context.Context, executionID int64) (string, error) {
+	var resp struct {
+		Execution struct {
+			Process struct {
+				Events []struct {
+					Output string `json:"output"`
+				} `json:"events"`
+			} `json:"process"`
+		} `json:"jobExecution"`
+	}
+	if err := c.get(ctx, "/api/job-executions/"+itoa(executionID), nil, &resp); err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	for _, e := range resp.Execution.Process.Events {
+		b.WriteString(e.Output)
+		b.WriteString("\n")
+	}
+	return b.String(), nil
+}
+
+var (
+	reportedID   = regexp.MustCompile(`/provisioning/instances/(\d+)`)
+	reportedName = regexp.MustCompile(`(?m)^\s*Instance name\s*:\s*(\S+)\s*$`)
+)
+
+// WorkflowInstance is the VM a workflow that names it itself reports in its output: its ID, from
+// the console link it prints last, and its name (MTN's SOPHOS script, `Sophos/sophosheat.sh`:
+// " Instance name : <name>", and the instance's console link "<url>/provisioning/instances/<id>"). Zero and ""
+// when it printed neither.
+func WorkflowInstance(output string) (id int64, name string) {
+	if m := reportedID.FindAllStringSubmatch(output, -1); len(m) > 0 {
+		id, _ = strconv.ParseInt(m[len(m)-1][1], 10, 64)
+	}
+	if m := reportedName.FindAllStringSubmatch(output, -1); len(m) > 0 {
+		name = m[len(m)-1][1]
+	}
+	return id, name
 }
 
 // secretWord marks an output line that may carry a secret: a word for one, a masked value, or a

@@ -23,28 +23,30 @@ import (
 // new instance reads "provisioning" once before "running"; the naming template names an instance
 // sent without a name; the platform adds its own <PREFIX>_* variables; groups are kept per instance.
 type instStore struct {
-	mu           sync.Mutex
-	nextID, seq  int64
-	insts        map[int64]map[string]any
-	sgs          map[int64][]int64
-	thresholds   map[int64]map[string]any
-	thresholdErr bool // PUT /threshold answers 400
-	fipErr       bool // attach answers 400, as for a network with no router
-	fip504       bool // attach is applied but answers 504, so only the wait can tell
-	fipSilent    bool // attach answers 200 but no address ever shows
-	detachStuck  bool // detach answers 200 but the address stays
-	attachCalls  int
-	attached     []int64
-	pending      map[int64]bool
-	fail         string // the next create ends in this status
-	stuck        bool   // instances never leave "provisioning"
-	sgsDenied    int64  // reading this instance's security groups answers 403
-	lostReplies  int    // the next creates are applied but answer 502
-	creates      int
-	lastCreate   map[string]any
-	resizes      []map[string]any
-	powers       []string // power actions, in order
-	powerErr     bool     // power actions answer 400
+	mu            sync.Mutex
+	nextID, seq   int64
+	insts         map[int64]map[string]any
+	sgs           map[int64][]int64
+	thresholds    map[int64]map[string]any
+	thresholdErr  bool // PUT /threshold answers 400
+	fipErr        bool // attach answers 400, as for a network with no router
+	fip504        bool // attach is applied but answers 504, so only the wait can tell
+	fipSilent     bool // attach answers 200 but no address ever shows
+	detachStuck   bool // detach answers 200 but the address stays
+	attachCalls   int
+	attached      []int64
+	pending       map[int64]bool
+	fail          string // the next create ends in this status
+	stuck         bool   // instances never leave "provisioning"
+	sgsDenied     int64  // reading this instance's security groups answers 403
+	lostReplies   int    // the next creates are applied but answer 502
+	creates       int
+	lastCreate    map[string]any
+	resizes       []map[string]any
+	powers        []string // power actions, in order
+	powerErr      bool     // power actions answer 400
+	resizeIgnored bool     // a resize answers 200 but changes nothing
+	resizeFails   bool     // a resize answers 200, then the instance goes to failed
 }
 
 func newInstStore() *instStore {
@@ -153,6 +155,13 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ids = append(ids, int64(v.(float64)))
 		}
 		s.sgs[id] = ids
+		reply(http.StatusOK, map[string]any{"success": true})
+	case len(parts) == 2 && parts[1] == "resize" && s.resizeFails:
+		s.resizes = append(s.resizes, body)
+		in["status"], in["statusMessage"] = "failed", "No valid host was found"
+		reply(http.StatusOK, map[string]any{"success": true})
+	case len(parts) == 2 && parts[1] == "resize" && s.resizeIgnored:
+		s.resizes = append(s.resizes, body)
 		reply(http.StatusOK, map[string]any{"success": true})
 	case len(parts) == 2 && parts[1] == "resize":
 		s.resizes = append(s.resizes, body)
@@ -275,6 +284,9 @@ func (s *instStore) create(body map[string]any, reply func(int, any)) {
 }
 
 func instConfig(f *fakeAPI, attrs string) string {
+	if !strings.Contains(attrs, "root_volume_size") {
+		attrs += "\n  root_volume_size = 10"
+	}
 	return f.providerConfig() + `
 resource "mtncloud_instance" "app" {
   group    = "MTNNG_CLOUD_AZ_1"
@@ -397,6 +409,7 @@ resource "mtncloud_instance" "app" {
   name     = "app-1"
   plan     = "g2s4"
   networks = ["9301"]
+  root_volume_size = 10
   environment = "dev"
   labels   = ["blue", "web"]
   tags     = { team = "payments", tier = "1" }
@@ -479,6 +492,7 @@ resource "mtncloud_instance" "twin" {
   name     = mtncloud_instance.app.name
   plan     = "G1S1"
   networks = ["9301"]
+  root_volume_size = 20
 }
 `,
 				ExpectError: regexp.MustCompile(`Instance already exists`),
@@ -1246,6 +1260,7 @@ resource "mtncloud_instance" "app" {
   image    = "MTN Ubuntu Server 24.04.3LTS"
   plan     = "G1S1"
   networks = ["9301"]
+  root_volume_size = 10
 ` + attrs + `
 }
 `
@@ -1334,4 +1349,28 @@ func TestInstance_AgentFollowsRouter(t *testing.T) {
 			ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{
 				plancheck.ExpectResourceAction("mtncloud_instance.app", plancheck.ResourceActionReplace)}}},
 	}})
+}
+
+// A resize MTN Cloud accepts but never applies says where the instance was left, and state keeps
+// the plan it is really on, so the next plan shows the resize again (B-016).
+func TestInstance_ResizeNotApplied(t *testing.T) {
+	f, s := newInstFakes(t)
+	cfg := func(plan string) string {
+		return instConfig(f, `  name     = "app-1"
+  plan     = "`+plan+`"
+  networks = ["9301"]
+  timeouts {
+    update = "3s"
+  }`)
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("G1S1")},
+			{PreConfig: func() { s.mu.Lock(); s.resizeIgnored = true; s.mu.Unlock() }, Config: cfg("G2S4"),
+				ExpectError: regexp.MustCompile(`(?s)Resize not applied.*still on plan "G1S1".*asked for "G2S4"`)},
+			{Config: cfg("G2S4"), PlanOnly: true, ExpectNonEmptyPlan: true},
+			{PreConfig: func() { s.mu.Lock(); s.resizeIgnored = false; s.mu.Unlock() }, Config: cfg("G2S4")},
+		},
+	})
 }

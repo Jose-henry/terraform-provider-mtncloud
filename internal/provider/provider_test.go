@@ -35,6 +35,8 @@ type fakeAPI struct {
 	clu    http.Handler    // /api/clusters, a stateful fake (cluster_test.go), when set
 	lb     http.Handler    // /api/tasks and /api/job-executions, the load balancer task (loadbalancer_test.go), when set
 	mos    http.Handler    // /api/storage-buckets and /api/archives, console bucket records (mos_test.go), when set
+	cypher http.Handler    // /api/cypher, a stateful fake (mos_access_test.go), when set
+	app    http.Handler    // /api/apps/{id} and /api/users, one app's settings (app_settings_test.go), when set
 	denied map[string]bool // paths answered with 403 (not retried), set by a test step
 }
 
@@ -81,6 +83,7 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		"/api/catalog/types/53":                             "catalog_type_53.json",
 		"/api/catalog/types/55":                             "catalog_type_55.json",
 		"/api/catalog/types/57":                             "catalog_type_57.json",
+		"/api/catalog/types/74":                             "catalog_type_74.json",
 		"/api/instance-types":                               "instance_types.json",
 		"/api/network-router-types":                         "router_types.json",
 		"/api/options/environments":                         "options_environments.json",
@@ -98,8 +101,16 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.calls[r.URL.Path]++
-		sg, net, router, inst, order, clu, lb, mos := f.sg, f.net, f.router, f.inst, f.order, f.clu, f.lb, f.mos
+		sg, net, router, inst, order, clu, lb, mos, cy, app := f.sg, f.net, f.router, f.inst, f.order, f.clu, f.lb, f.mos, f.cypher, f.app
 		f.mu.Unlock()
+		if app != nil && (strings.HasPrefix(r.URL.Path, "/api/apps") || r.URL.Path == "/api/users") && r.Header.Get("Authorization") == "Bearer test-token" {
+			app.ServeHTTP(w, r)
+			return
+		}
+		if cy != nil && strings.HasPrefix(r.URL.Path, "/api/cypher") && r.Header.Get("Authorization") == "Bearer test-token" {
+			cy.ServeHTTP(w, r)
+			return
+		}
 		lbPath := strings.HasPrefix(r.URL.Path, "/api/tasks") || strings.HasPrefix(r.URL.Path, "/api/job-executions/") ||
 			strings.HasPrefix(r.URL.Path, "/api/subnets/") || (net == nil && r.URL.Path == "/api/networks/114")
 		if lb != nil && lbPath &&

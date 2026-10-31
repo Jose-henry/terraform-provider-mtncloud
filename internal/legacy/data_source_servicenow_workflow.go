@@ -57,7 +57,9 @@ func dataSourceServiceNowWorkflowRead(ctx context.Context, d *schema.ResourceDat
 	log.Println("API RESPONSE:", resp)
 
 	var itemResponsePayload CodeRepositories
-	json.Unmarshal(resp.Body, &itemResponsePayload)
+	if err := json.Unmarshal(resp.Body, &itemResponsePayload); err != nil {
+		return diag.Errorf("reading the ServiceNow workflows: %s", err)
+	}
 	foundWorkflow := false
 	for _, v := range itemResponsePayload.Data {
 		if v.Name == name {

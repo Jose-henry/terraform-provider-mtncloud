@@ -217,8 +217,24 @@ func bound(n *int64, none string) string {
 }
 
 // sameValue compares a value with a form default, which the form may give as text ("true", "1").
+// A checkbox is sent as "on"/"off", and its default may be "true": those match.
 func sameValue(v, def any) bool {
-	return strings.EqualFold(fmt.Sprint(v), strings.Trim(fmt.Sprint(def), "'"))
+	return sameWord(fmt.Sprint(v), strings.Trim(fmt.Sprint(def), "'"))
+}
+
+// sameWord compares two form values, case ignored, with on/true/yes/1 and off/false/no/0 alike.
+func sameWord(a, b string) bool {
+	return strings.EqualFold(checkboxWord(a), checkboxWord(b))
+}
+
+func checkboxWord(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "on", "true", "yes", "1":
+		return "on"
+	case "off", "false", "no", "0":
+		return "off"
+	}
+	return s
 }
 
 // extraInputs adds extra_inputs to the order: each a field of the form, a choice by name or value.
@@ -332,6 +348,17 @@ func (r *orderResource) replaceFailed(ctx context.Context, req resource.ModifyPl
 			failed = append(failed, id)
 		}
 	}
+	var status types.String
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("status"), &status)...)
+	if orderFailed(status.ValueString()) && len(statuses) > 0 {
+		// The order itself failed but left instances (kept by Read): delete them and order again.
+		at := path.Root("status")
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, at, types.StringUnknown())...)
+		resp.RequiresReplace.Append(at)
+		resp.Diagnostics.AddAttributeWarning(at, "Failed order: placed again",
+			fmt.Sprintf("This %s order ended with %q. The plan deletes what it left and orders it again.", r.spec.item, status.ValueString()))
+		return
+	}
 	if len(failed) == 0 {
 		return
 	}
@@ -359,7 +386,7 @@ func conditionMet(cond string, out map[string]any) bool {
 		}
 		got := strings.Trim(fmt.Sprint(v), "'")
 		if hasValue {
-			if strings.EqualFold(got, strings.Trim(want, "^$'")) {
+			if sameWord(got, strings.Trim(want, "^$'")) {
 				return true
 			}
 			continue
@@ -439,4 +466,13 @@ func planSize(name string) (cpu, mem int64, ok bool) {
 	cpu, _ = strconv.ParseInt(m[1], 10, 64)
 	mem, _ = strconv.ParseInt(m[2], 10, 64)
 	return cpu, mem, true
+}
+
+// orderFailed reports whether an order's status (its workflow's, lower case) is a failure.
+func orderFailed(status string) bool {
+	switch status {
+	case "failed", "error", "cancelled", "canceled": //nolint:misspell // both spellings come back from the API
+		return true
+	}
+	return false
 }

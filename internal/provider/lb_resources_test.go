@@ -327,6 +327,17 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 			if fmt.Sprint(inst) != "301" {
 				return refuse("Instance %v is not one this load balancer can use.", inst)
 			}
+			if pin, has := spec["pinAddress"]; has { // one node, no group: an ordinary member (plugin LbTopology)
+				if pin != "10.0.0.31" && pin != "10.0.0.32" {
+					return refuse("%v is not an address of instance %v on this network.", pin, inst)
+				}
+				m := map[string]any{"id": p.id("m"), "name": "", "address": pin, "protocol_port": spec["port"], "subnet_id": lb["vip_subnet_id"],
+					"weight": spec["weight"], "backup": spec["backup"], "admin_state_up": true, "tags": []any{tag}}
+				pool["members"] = append(list(pool, "members"), m)
+				out := ok(map[string]any{"success": true, "steps": []any{map[string]any{"kind": "members", "applied": true, "count": 1}}})
+				out["piece"] = m
+				return out
+			}
 			group := "morpheus:group:301" // mtncloud:allow-upstream-name (the plugin's tag on the wire)
 			ms := []any{}
 			for _, a := range []string{"10.0.0.31", "10.0.0.32"} {

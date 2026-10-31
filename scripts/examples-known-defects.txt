@@ -1,4 +1,3 @@
 # Upstream example files with schema defects, inherited 2026-10-26 (dev-docs/backlog.md B-003).
 # This list only shrinks: scripts/validate-examples.sh fails if a listed file becomes clean
 # or an unlisted file breaks. Never add new code here.
-examples/resources/mtncloud_form/resource.tf

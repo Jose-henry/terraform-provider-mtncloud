@@ -35,7 +35,7 @@ func TestPlanSize(t *testing.T) {
 }
 
 func TestConditionMet(t *testing.T) {
-	out := map[string]any{"enableAuth": true, "initReplicaSet": false, "db_engine": "mysql", "count": int64(0)}
+	out := map[string]any{"enableAuth": true, "initReplicaSet": false, "db_engine": "mysql", "count": int64(0), "sslOn": "on"}
 	for _, tc := range []struct {
 		cond string
 		want bool
@@ -50,6 +50,8 @@ func TestConditionMet(t *testing.T) {
 		{"db_engine:postgres", false},
 		{"db_engine:postgres|db_engine:mysql", true},
 		{"initReplicaSet, enableAuth", true},
+		{"sslOn:true", true},
+		{"sslOn:false", false},
 	} {
 		if got := conditionMet(tc.cond, out); got != tc.want {
 			t.Errorf("conditionMet(%q) = %v, want %v", tc.cond, got, tc.want)
@@ -141,6 +143,8 @@ func TestCheckField(t *testing.T) {
 		{"locked, as set", client.FormField{Name: "no_nodes", Type: "number", Locked: true, Default: float64(1)}, int64(1), ""},
 		{"locked, changed", client.FormField{Name: "no_nodes", Type: "number", Locked: true, Default: float64(1)}, int64(3), "Input locked by the form"},
 		{"locked flag", client.FormField{Name: "makeUserDbOwner", Type: "checkbox", Locked: true, Default: true}, false, "Input locked by the form"},
+		{"locked flag sent as on", client.FormField{Name: "makeUserDbOwner", Type: "checkbox", Locked: true, Default: "true"}, "on", ""},
+		{"locked flag sent as off", client.FormField{Name: "makeUserDbOwner", Type: "checkbox", Locked: true, Default: "true"}, "off", "Input locked by the form"},
 		{"locked disks the form fills", client.FormField{Name: "volumes", Type: "diskManager", Hidden: true, Locked: true, Default: "[]"}, []any{}, ""},
 		{"locked name is sent", client.FormField{Name: "name", Locked: true, Default: "${userInitials}-x"}, "vpn-1", ""},
 		{"blank", client.FormField{Name: "mysqlVersion", NoBlank: true}, " ", "Empty input"},

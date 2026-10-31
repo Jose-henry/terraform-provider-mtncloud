@@ -40,7 +40,25 @@ flow), the API reference (`createNetworks`), the CLI help for `networks add`, an
 | `GET /api/networks/{id}` | Echoes `zone {id,name}` (not `networkServer`), `group`, `zonePool {id,name}`, `config {dhcpRange: "", hostRoutes: ""}`, `status`, and one implicit subnet in `subnets[]` named `<network> subnet` with the same CIDR. A router attaches that subnet, so its ID is exposed. |
 
 No network in the tenant uses `dhcpRange` or `hostRoutes`, and no document gives their format.
-They are left out until a real value is seen (backlog B-010).
+They were proved live instead (below).
+
+### Network DHCP range and host routes (B-010)
+
+Probed live 2026-10-31 on a QA network (`tf-acc-net-*`, project admin, `PUT /api/networks/{id}`
+with `config`, then a read), and left with both empty and status `ok`:
+
+| Sent | Result |
+|---|---|
+| `dhcpRange: "<start>,<end>"`, inside the CIDR | Kept; status stays `ok`. The network type's placeholder is `x.x.x.x,x.x.x.x`. |
+| Two ranges | Answered `success`, then the network turns `failed`. |
+| A range outside the CIDR | Answered `success`, then `failed` (seconds later). Clearing it makes it `ok` again. |
+| `hostRoutes: "<dest CIDR>,<next hop>"`, one per line, several | Kept; status `ok`. A next hop outside the subnet is accepted. |
+| `""` for either | Clears it. |
+
+So the provider takes one range (checked at plan: inside the network, a host address, in order,
+not holding the gateway), routes as a set (sent sorted, one per line), watches the status for a
+few reads after a create or an update that sets them, and plans a resend of a network left
+`failed`.
 
 ### Built design (owner's answers, 2026-10-27)
 
@@ -386,6 +404,10 @@ Never paste tokens, secret keys or passwords. `-V` already masks the bearer toke
   every project, which is what the console sends too.
 - `GET /api/containers/{id}` works: `ip` is the floating address, `internalIp` the private one. The
   instance lists its containers in `containers`.
+  Re-checked 2026-10-31 (customer login, CLI `containers get`) on a VM with a floating IP: `ip` differs
+  from `internalIp` and is public; `externalIp` is null. The instance's `connectionInfo` holds the
+  same public address, but only one entry, so with several servers each server's address is read
+  from its own container (B-013).
 - Attach: `PUT /api/containers/{id}/attach-floating-ip {config:{osExternalNetworkId:"pool-<id>"}}`;
   detach: `PUT /api/containers/{id}/detach-floating-ip` (Context7). Not yet sent live.
 - The apply waits for each attach and detach to show on the instance (`connectionInfo`), like a
@@ -528,6 +550,15 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
 - Workers: `GET /api/clusters/{id}/workers`, `POST /api/clusters/{id}/servers` (add), `DELETE .../servers/{id}`.
   Autoscaler: `POST /api/clusters/{id}/configure-autoscaler` with
   `{cluster: {autoScalerEnabled, autoScalerGroups: [{minNodes, maxNodes}]}}`.
+
+### MOS keys in Cypher (read 2026-10-31, `upload-mos-creds-to-cypher.sh`)
+
+MTN's MOS workflow writes `secret/MOS-<tenant>_<user>_{access_key,secret_key,public_endpoint_url,private_endpoint_url}`,
+`<user>` being whoever ordered. Before writing, it looks for an existing `MOS-<tenant>_*_<kind>` entry:
+one under another user's name is deleted after the new one is written, and an entry in the old
+format (`secret/<tenant>_*_<kind>`) is deleted too. So a tenant keeps one prefix, and
+`mtncloud_mos_access` and the MOS resources take the first complete one. The order itself takes
+no form input.
 
 ## MOS (OneFS S3) live capability probe (2026-10-29, dev tenant)
 

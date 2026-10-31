@@ -3,7 +3,9 @@ package loadbalancer
 import (
 	"context"
 	"fmt"
+	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -22,6 +24,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
+	"github.com/mtn/terraform-provider-mtncloud/internal/validators"
 )
 
 var _ resource.ResourceWithImportState = (*instanceMemberResource)(nil)
@@ -36,6 +39,7 @@ type instanceMemberRes struct {
 	LoadBalancerID types.String   `tfsdk:"load_balancer_id"`
 	PoolID         types.String   `tfsdk:"pool_id"`
 	InstanceID     types.Int64    `tfsdk:"instance_id"`
+	PinAddress     types.String   `tfsdk:"pin_address"`
 	Port           types.Int64    `tfsdk:"port"`
 	Weight         types.Int64    `tfsdk:"weight"`
 	Backup         types.Bool     `tfsdk:"backup"`
@@ -58,7 +62,9 @@ func (r *instanceMemberResource) Schema(ctx context.Context, _ resource.SchemaRe
 			"member, as one group. The console keeps the group in step with the instance: when it gains or loses nodes, they are " +
 			"added to or removed from the pool. The instance must be one of yours with an address on the load balancer's network. " +
 			"For a server outside the console, use `mtncloud_load_balancer_member`. One per instance and pool: the cloud adds and " +
-			"removes an instance's members together, so a second port for the same instance needs `mtncloud_load_balancer_member`.",
+			"removes an instance's members together, so a second port for the same instance needs `mtncloud_load_balancer_member`. " +
+			"With `pin_address`, only that one address of the instance is added (\"pin one node\"): the console checks it is your " +
+			"instance's, then never adds to or removes it as the instance scales.",
 		Attributes: map[string]schema.Attribute{
 			"id":               schema.StringAttribute{Computed: true, PlanModifiers: keepStr, Description: "The instance's ID, as a string."},
 			"network_id":       networkAttr(),
@@ -68,6 +74,9 @@ func (r *instanceMemberResource) Schema(ctx context.Context, _ resource.SchemaRe
 			"instance_id": schema.Int64Attribute{Required: true, PlanModifiers: replaceInt,
 				Description: "The instance, for example `mtncloud_instance.web.id`. A new instance can take up to a minute to be accepted. " +
 					"Changing it replaces the members."},
+			"pin_address": schema.StringAttribute{Optional: true, PlanModifiers: replaceStr, Validators: []validator.String{validators.IPv4Address()},
+				Description: "One of the instance's addresses on the load balancer's network, to add only that node. It stays a member " +
+					"when the instance scales, and other nodes aren't added. Leave it out for every node. Changing it replaces the member."},
 			"port": schema.Int64Attribute{Required: true, PlanModifiers: replaceInt, Validators: portValid,
 				Description: "The port the instance listens on. Changing it replaces the members."},
 			// Optional+Computed with a default: most members share traffic equally.
@@ -97,6 +106,12 @@ func (r *instanceMemberResource) fill(m *instanceMemberRes, lb *client.LoadBalan
 		return true
 	}
 	ms := client.InstanceMembers(p, m.InstanceID.ValueInt64())
+	if pin := m.PinAddress.ValueString(); pin != "" {
+		ms = nil
+		if x := client.PinnedMember(p, pin, m.Port.ValueInt64()); x != nil {
+			ms = []client.LBMember{*x}
+		}
+	}
 	if len(ms) == 0 {
 		return true
 	}
@@ -135,19 +150,29 @@ func (r *instanceMemberResource) Create(ctx context.Context, req resource.Create
 	// Members tagged for this instance are already there: removing either resource would remove both,
 	// and each would read the other's port. Adopt them by import instead.
 	if lb, _ := r.readLB(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), &resp.Diagnostics); lb != nil {
-		if p := findPool(lb, plan.PoolID.ValueString()); p != nil && len(client.InstanceMembers(p, plan.InstanceID.ValueInt64())) > 0 {
+		p := findPool(lb, plan.PoolID.ValueString())
+		pin := plan.PinAddress.ValueString()
+		switch {
+		case p == nil:
+		case pin == "" && len(client.InstanceMembers(p, plan.InstanceID.ValueInt64())) > 0:
 			resp.Diagnostics.AddAttributeError(path.Root("instance_id"), "Instance already in the pool",
 				fmt.Sprintf("Instance %d already has members in pool %s, and the cloud removes an instance's members together, so "+
 					"only one resource can own them. To manage them here, import them: terraform import <address> %d/%s/%s/%d. "+
 					"For another port, use mtncloud_load_balancer_member.", plan.InstanceID.ValueInt64(), plan.PoolID.ValueString(),
 					plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(), plan.InstanceID.ValueInt64()))
+		case pin != "" && client.PinnedMember(p, pin, plan.Port.ValueInt64()) != nil:
+			// A pinned node is one member at address:port: adding it again would be refused or doubled.
+			resp.Diagnostics.AddAttributeError(path.Root("pin_address"), "Address already in the pool",
+				fmt.Sprintf("Pool %s already has a member at %s:%d. To manage it here, import it: terraform import <address> %d/%s/%s/%d@%s.",
+					plan.PoolID.ValueString(), pin, plan.Port.ValueInt64(), plan.NetworkID.ValueInt64(),
+					plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(), plan.InstanceID.ValueInt64(), pin))
 		}
 	}
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	err := r.client.AddLBInstanceMembers(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(),
-		client.LBInstanceMemberSpec{InstanceID: plan.InstanceID.ValueInt64(), Port: plan.Port.ValueInt64(), Weight: plan.Weight.ValueInt64(), Backup: plan.Backup.ValueBool()})
+		client.LBInstanceMemberSpec{InstanceID: plan.InstanceID.ValueInt64(), PinAddress: plan.PinAddress.ValueString(), Port: plan.Port.ValueInt64(), Weight: plan.Weight.ValueInt64(), Backup: plan.Backup.ValueBool()})
 	if err != nil {
 		// The group may have been added before the error (the load balancer went to ERROR): keep
 		// it in state when the pool shows it, so the next apply doesn't add it twice.
@@ -156,12 +181,12 @@ func (r *instanceMemberResource) Create(ctx context.Context, req resource.Create
 		rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 		defer rcancel()
 		if lb, _ := r.readLB(rctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), &diag.Diagnostics{}); lb != nil && !r.fill(&plan, lb) {
-			plan.ID = types.StringValue(strconv.FormatInt(plan.InstanceID.ValueInt64(), 10))
+			plan.ID = types.StringValue(instanceMemberID(plan))
 			resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 		}
 		return
 	}
-	plan.ID = types.StringValue(strconv.FormatInt(plan.InstanceID.ValueInt64(), 10))
+	plan.ID = types.StringValue(instanceMemberID(plan))
 	r.refresh(ctx, &plan, &resp.State, &resp.Diagnostics)
 }
 
@@ -209,23 +234,61 @@ func (r *instanceMemberResource) Delete(ctx context.Context, req resource.Delete
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	if state.PinAddress.ValueString() != "" {
+		// A pinned node is an ordinary member: removed by its ID, as read on the last refresh.
+		for _, id := range memberIDs(ctx, state.Members) {
+			if err := r.client.RemoveLBMember(ctx, state.NetworkID.ValueInt64(), state.LoadBalancerID.ValueString(), state.PoolID.ValueString(), id); err != nil {
+				resp.Diagnostics.AddError("Unable to remove the pinned node from the pool", err.Error())
+			}
+		}
+		return
+	}
 	if err := r.client.RemoveLBInstanceMembers(ctx, state.NetworkID.ValueInt64(), state.LoadBalancerID.ValueString(), state.PoolID.ValueString(), state.InstanceID.ValueInt64()); err != nil {
 		resp.Diagnostics.AddError("Unable to remove the instance from the pool", err.Error())
 	}
 }
 
-// ImportState takes <network_id>/<load_balancer_id>/<pool_id>/<instance_id>.
+// ImportState takes <network_id>/<load_balancer_id>/<pool_id>/<instance_id>, or
+// .../<instance_id>@<pin_address> for one pinned node.
 func (r *instanceMemberResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	importIDs(req, resp, "<network_id>/<load_balancer_id>/<pool_id>/<instance_id>", "network_id", "load_balancer_id", "pool_id", "id")
+	importIDs(req, resp, "<network_id>/<load_balancer_id>/<pool_id>/<instance_id>[@<pin_address>]", "network_id", "load_balancer_id", "pool_id", "id")
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	var id types.String
 	resp.Diagnostics.Append(resp.State.GetAttribute(ctx, path.Root("id"), &id)...)
-	inst, err := strconv.ParseInt(id.ValueString(), 10, 64)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid import ID", "The last part must be the instance's numeric ID, got "+strconv.Quote(id.ValueString())+".")
+	last, pin, pinned := strings.Cut(id.ValueString(), "@")
+	inst, err := strconv.ParseInt(last, 10, 64)
+	if err != nil || (pinned && net.ParseIP(pin) == nil) {
+		resp.Diagnostics.AddError("Invalid import ID", "The last part must be the instance's numeric ID, or <instance_id>@<address> for a pinned node, got "+
+			strconv.Quote(id.ValueString())+".")
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_id"), inst)...)
+	if pinned {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("pin_address"), pin)...)
+	}
+}
+
+// instanceMemberID is the instance's ID, with "@<address>" for a pinned node.
+func instanceMemberID(m instanceMemberRes) string {
+	id := strconv.FormatInt(m.InstanceID.ValueInt64(), 10)
+	if pin := m.PinAddress.ValueString(); pin != "" {
+		id += "@" + pin
+	}
+	return id
+}
+
+// memberIDs are the IDs in a members list.
+func memberIDs(ctx context.Context, l types.List) []string {
+	var ms []struct {
+		ID      types.String `tfsdk:"id"`
+		Address types.String `tfsdk:"address"`
+	}
+	_ = l.ElementsAs(ctx, &ms, false)
+	out := make([]string, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, m.ID.ValueString())
+	}
+	return out
 }

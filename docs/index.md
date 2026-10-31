@@ -27,6 +27,15 @@ The provider signs in with a username and password, or an API token:
 
 A customer login also needs your tenant's subdomain or account ID, set with `tenant_subdomain` or `MTNCLOUD_API_TENANT`.
 
+**Long applies.** Some orders take longer than an API token lasts: a SOPHOS firewall about an hour, a
+Kubernetes cluster often more than 25 minutes. A token that expires mid-apply fails it with a 401
+while the order goes on in MTN Cloud. For those applies, sign in with a username and password (the
+provider signs in again when its token expires), use a token that lasts longer than the apply, or use
+`access_token_file` (`MTNCLOUD_API_TOKEN_FILE`): the provider reads the file again when a token is
+refused, so a token refreshed in that file during the apply is picked up. The tenancy, IAM,
+integration, automation, policy and appliance-configuration resources read it once, when the run
+starts: keep long orders and those resources in separate applies.
+
 TLS certificates are verified by default. Set `secure = false` (or `MTNCLOUD_API_SECURE=false`) only
 for a console with a self-signed certificate, never in production.
 
@@ -73,6 +82,7 @@ provider "mtncloud" {
 ### Optional
 
 - `access_token` (String, Sensitive) Access Token of MTN Cloud user. This can be used instead of authenticating with Username and Password.
+- `access_token_file` (String) A file holding the access token, read instead of `access_token`. Most resources and data sources read it again when MTN Cloud rejects the token, so a long apply survives a token refreshed in that file; the tenancy, IAM, integration, automation, policy and appliance-configuration ones read it once, when the run starts. Can also be set with the MTNCLOUD_API_TOKEN_FILE environment variable.
 - `cloud` (String) The cloud to use when your group has several, by name, for example MTNNG_CLOUD_AZ_1. Can also be set with the MTNCLOUD_CLOUD environment variable.
 - `group` (String) Default group, by name, for resources that don't set one, and the group to use when your account has several. Can also be set with the MTNCLOUD_GROUP environment variable.
 - `password` (String, Sensitive) Password of MTN Cloud user for authentication

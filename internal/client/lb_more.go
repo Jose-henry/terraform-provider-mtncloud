@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -196,6 +198,9 @@ func (c *Client) DeleteLBL7Policy(ctx context.Context, networkID int64, lbID, li
 // group the console keeps in step as the instance scales.
 type LBInstanceMemberSpec struct {
 	InstanceID int64
+	// PinAddress, when set, adds only that one address of the instance ("pin one node"): an
+	// ordinary member the console never adds to or removes, removed by its member ID.
+	PinAddress string
 	Port       int64
 	Weight     int64
 	Backup     bool
@@ -203,7 +208,21 @@ type LBInstanceMemberSpec struct {
 
 // instanceGroupTag marks the members of one instance's group; it is the plugin's own tag.
 func instanceGroupTag(instanceID int64) string {
-	return "morpheus:group:" + strconv.FormatInt(instanceID, 10) // mtncloud:allow-upstream-name (the plugin's tag on the wire)
+	return groupTagPrefix + strconv.FormatInt(instanceID, 10)
+}
+
+// groupTagPrefix starts the plugin's tag on every member of an instance's group.
+const groupTagPrefix = "morpheus:group:" // mtncloud:allow-upstream-name (the plugin's tag on the wire)
+
+// PinnedMember is the member at address:port that belongs to no instance's group, as a pinned
+// node is (nil when there is none). Port 0 matches any port: an import knows only the address.
+func PinnedMember(p *LBPool, address string, port int64) *LBMember {
+	for i, m := range p.Members {
+		if m.Address == address && (port == 0 || m.Port == port) && !slices.ContainsFunc(m.Tags, func(t string) bool { return strings.HasPrefix(t, groupTagPrefix) }) {
+			return &p.Members[i]
+		}
+	}
+	return nil
 }
 
 // InstanceMembers are the members of a pool that belong to an instance's group.
@@ -223,6 +242,9 @@ func InstanceMembers(p *LBPool, instanceID int64) []LBMember {
 // network. The members are read back from the load balancer.
 func (c *Client) AddLBInstanceMembers(ctx context.Context, networkID int64, lbID, poolID string, s LBInstanceMemberSpec) error {
 	spec := map[string]any{"instanceId": strconv.FormatInt(s.InstanceID, 10), "port": s.Port, "weight": s.Weight, "backup": s.Backup}
+	if s.PinAddress != "" {
+		spec["pinAddress"] = s.PinAddress
+	}
 	in := map[string]any{"poolId": poolID, "spec": spec, "requestId": newRequestID()}
 	_, err := c.lbWrite(ctx, networkID, lbID, "member-add", in)
 	return err

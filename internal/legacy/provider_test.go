@@ -1,6 +1,7 @@
 package legacy
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -142,6 +143,34 @@ func TestProvider_SecretsAreSensitive(t *testing.T) {
 	for _, attr := range []string{"access_token", "password"} {
 		if !p.Schema[attr].Sensitive {
 			t.Errorf("provider attribute %q must be Sensitive", attr)
+		}
+	}
+}
+
+// The token file is read once here, and a file that can't be read fails configure with its reason,
+// rather than sending no token.
+func TestTokenOrFile(t *testing.T) {
+	dir := t.TempDir()
+	good, empty := dir+"/token", dir+"/empty"
+	if err := os.WriteFile(good, []byte("abc123\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(empty, []byte(" \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MTNCLOUD_API_TOKEN_FILE", "")
+	for _, tc := range []struct {
+		name, token, file, want, err string
+	}{
+		{"token wins", "tok", good, "tok", ""},
+		{"file", "", good, "abc123", ""},
+		{"neither", "", "", "", ""},
+		{"missing file", "", dir + "/nope", "", "reading the access token file"},
+		{"empty file", "", empty, "", "is empty"},
+	} {
+		got, err := tokenOrFile(tc.token, tc.file)
+		if got != tc.want || (tc.err == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), tc.err)) {
+			t.Errorf("%s: got %q, %v; want %q, error %q", tc.name, got, err, tc.want, tc.err)
 		}
 	}
 }

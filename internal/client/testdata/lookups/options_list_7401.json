@@ -1,0 +1,17 @@
+{
+ "success": true,
+ "data": [
+  {
+   "name": "Small (G2S4)",
+   "value": 13107
+  },
+  {
+   "name": "Medium (G4S4)",
+   "value": 4049
+  },
+  {
+   "name": "Large (G4S8)",
+   "value": 13111
+  }
+ ]
+}

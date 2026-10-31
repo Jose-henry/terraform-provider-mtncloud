@@ -1,0 +1,38 @@
+---
+page_title: "mtncloud_instance_settings Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_instance_settings
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_instance_settings/resource.tf"}}
+
+## Notes
+
+- **Ownership.** The order, app or console that made the VM still owns it: destroying that deletes the
+  VM, and these settings leave state on the next refresh. Don't manage one instance with both
+  `mtncloud_instance` and this resource.
+- **Resize restarts.** Changing `plan` restarts the VM. MTN's catalog workflows don't reset a changed
+  plan or other settings.
+- **Settings left out** aren't managed: they show the VM's values, and removing one from the
+  configuration leaves the VM as it is.
+- **Disks.** With `data_volume` blocks, list the VM's data disks first (an order may add its own), then
+  new ones. New disks attach in place; a disk can't be changed or removed here.
+- **Floating IP.** `floating_ip_pool` attaches one address per server. An address released in the console
+  is attached again by the next apply; removing the argument keeps the address.
+- **Scaling.** `scale` is read back only while it is set: removing it leaves the VM's scaling as it is.
+- **Timeouts:** `create` and `update`, 30 minutes by default; a resize waits within them.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_instance_settings/import.sh" }}

@@ -70,7 +70,7 @@ sys.exit(1 if any(x['summary'] in kinds for x in errs) else 0)
 done < <(find "$ROOT/examples/resources" "$ROOT/examples/data-sources" "$ROOT/examples/quickstart" -name '*.tf' -print0 | sort -z)
 
 known_sorted="$WORK/known.txt"
-grep -vE '^\s*(#|$)' "$KNOWN" | sort > "$known_sorted"
+{ grep -vE '^\s*(#|$)' "$KNOWN" || true; } | sort > "$known_sorted" # empty once every defect is fixed
 sort -o "$found" "$found"
 
 new="$(comm -13 "$known_sorted" "$found")"

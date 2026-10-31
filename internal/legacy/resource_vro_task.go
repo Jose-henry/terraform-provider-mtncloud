@@ -2,7 +2,6 @@ package legacy
 
 import (
 	"context"
-	"encoding/json"
 
 	"log"
 
@@ -197,7 +196,6 @@ func resourceVrealizeOrchestratorTaskRead(ctx context.Context, d *schema.Resourc
 	result := resp.Result.(*sdk.GetTaskResult)
 	workflowTask := result.Task
 
-	json.Unmarshal(resp.Body, &workflowTask)
 	d.SetId(int64ToString(workflowTask.ID))
 	d.Set("name", workflowTask.Name)
 	d.Set("code", workflowTask.Code)

@@ -2,6 +2,9 @@ package legacy
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -26,6 +29,14 @@ func Provider() *schema.Provider {
 				Description:   "Access Token of MTN Cloud user. This can be used instead of authenticating with Username and Password.",
 				DefaultFunc:   schema.EnvDefaultFunc("MTNCLOUD_API_TOKEN", nil),
 				ConflictsWith: []string{"username", "password", "tenant_subdomain"},
+			},
+
+			// Read by the Framework half too, which reads the file again on a 401.
+			"access_token_file": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				Description:   "A file holding the access token, read instead of `access_token`. Most resources and data sources read it again when MTN Cloud rejects the token, so a long apply survives a token refreshed in that file; the tenancy, IAM, integration, automation, policy and appliance-configuration ones read it once, when the run starts. Can also be set with the MTNCLOUD_API_TOKEN_FILE environment variable.",
+				ConflictsWith: []string{"access_token", "username", "password", "tenant_subdomain"},
 			},
 
 			"tenant_subdomain": {
@@ -177,9 +188,13 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}
 	if d.Get("url").(string) == "" && urlKnown(d) {
 		return nil, diag.Errorf("the MTN Cloud console URL is not set: set url in the provider block, or MTNCLOUD_API_URL")
 	}
+	token, err := tokenOrFile(d.Get("access_token").(string), d.Get("access_token_file").(string))
+	if err != nil {
+		return nil, diag.FromErr(err)
+	}
 	config := Config{
 		Url:             d.Get("url").(string),
-		AccessToken:     d.Get("access_token").(string),
+		AccessToken:     token,
 		TenantSubdomain: d.Get("tenant_subdomain").(string),
 		Username:        d.Get("username").(string),
 		Password:        d.Get("password").(string),
@@ -187,6 +202,25 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData) (interface{}
 	}
 
 	return config.Client()
+}
+
+// tokenOrFile is the access token, or the one in the token file (or MTNCLOUD_API_TOKEN_FILE). It
+// is read once: the client here has no hook to read it again on a 401.
+func tokenOrFile(token, file string) (string, error) {
+	if file == "" {
+		file = os.Getenv("MTNCLOUD_API_TOKEN_FILE")
+	}
+	if token != "" || file == "" {
+		return token, nil
+	}
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return "", fmt.Errorf("reading the access token file: %w. Check access_token_file (or MTNCLOUD_API_TOKEN_FILE)", err)
+	}
+	if t := strings.TrimSpace(string(b)); t != "" {
+		return t, nil
+	}
+	return "", fmt.Errorf("the access token file %s is empty", file)
 }
 
 func urlKnown(d *schema.ResourceData) bool {

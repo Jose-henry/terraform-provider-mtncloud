@@ -59,6 +59,7 @@ resource "mtncloud_managed_streaming" "this" {
 
 ### Read-Only
 
+- `app_id` (String) ID of the app the order made (under Apps in the console). Destroy deletes this app, even after it is renamed; an instance added to it later is taken out of it first and left running.
 - `id` (String) Order ID (Catalog > Inventory).
 - `instance_ids` (List of String) IDs of the instances the order created, found by name in the project.
 - `instance_statuses` (Map of String) Status of each instance the order created, by instance ID, for example `running`. A `failed` instance plans a replace: the order is deleted and placed again.

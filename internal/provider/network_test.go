@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
@@ -38,6 +39,11 @@ type netStore struct {
 	pending   map[int64]bool
 	stuck     bool
 	slowReply time.Duration // creates are applied at once but answered this late
+	// refuseRoutes fails a network (status "failed", after "success") whose host routes name it,
+	// as the network service does with a value it refuses; puts records each PUT's config.
+	refuseRoutes string
+	puts         []any
+	failLater    map[int64]bool // created "ok" with refused routes: failed after its first GET
 }
 
 func newNetStore() *netStore {
@@ -114,6 +120,12 @@ func (s *netStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"allowStaticOverride", "ipv6Enabled", "cidrIPv6", "gatewayIPv6", "dnsPrimaryIPv6", "dnsSecondaryIPv6", "dhcpServerIPv6"} {
 				n[k] = in[k]
 			}
+			if c, ok := in["config"]; ok {
+				n["config"] = c
+				if s.refuseRoutes != "" && strings.Contains(fmt.Sprint(c.(map[string]any)["hostRoutes"]), s.refuseRoutes) {
+					s.failLater = map[int64]bool{id: true}
+				}
+			}
 			if s.status != "" {
 				n["status"] = s.status
 			}
@@ -153,10 +165,21 @@ func (s *netStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		reply(http.StatusOK, map[string]any{"network": view(id)})
+		v := view(id)
+		reply(http.StatusOK, map[string]any{"network": v})
+		if s.failLater[id] && v["status"] == "ok" { // read "ok" once, then failed
+			delete(s.failLater, id)
+			n["status"] = "failed"
+		}
 	case http.MethodPut:
 		for k, v := range body["network"].(map[string]any) {
 			n[k] = v
+		}
+		s.puts = append(s.puts, body["network"].(map[string]any)["config"])
+		if c, _ := n["config"].(map[string]any); s.refuseRoutes != "" && c != nil && strings.Contains(fmt.Sprint(c["hostRoutes"]), s.refuseRoutes) {
+			n["status"] = "failed"
+		} else if n["status"] == "failed" {
+			n["status"] = "ok" // the network service took the settings sent again
 		}
 		reply(http.StatusOK, map[string]any{"success": true, "network": n})
 	case http.MethodDelete:
@@ -523,4 +546,82 @@ func TestNetwork_FailuresAndIPv6(t *testing.T) {
 	if n := len(store.networks); n != 0 {
 		t.Errorf("%d networks left after destroy", n)
 	}
+}
+
+// DHCP range and host routes: sent as the network type's config strings, read back without a
+// diff, cleared with "" when removed, checked at plan, and a refusal after "success" is an error.
+func TestNetwork_DHCPRangeAndRoutes(t *testing.T) {
+	f := newFakeAPI(t)
+	store := newNetStore()
+	f.net = store
+	both := `  dhcp_range  = { start = "10.20.1.50", end = "10.20.1.99" }
+  host_routes = [
+    { destination = "10.99.0.0/16", next_hop = "10.20.1.5" },
+    { destination = "10.98.0.0/16", next_hop = "10.20.1.5" },
+  ]`
+	config := func() map[string]any {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		c, _ := store.networks[store.nextID]["config"].(map[string]any)
+		return c
+	}
+	refused := netConfig(f, `  project = "web-prod"
+  host_routes = [{ destination = "10.97.0.0/16", next_hop = "10.20.1.5" }]`)
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: netConfig(f, `  project = "web-prod"
+  dhcp_range = { start = "10.20.2.5", end = "10.20.2.9" }`), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`DHCP range outside the network`)},
+			{Config: netConfig(f, `  project = "web-prod"
+  dhcp_range = { start = "10.20.1.99", end = "10.20.1.50" }`), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`DHCP range in the wrong order`)},
+			{Config: netConfig(f, `  project = "web-prod"
+  dhcp_range = { start = "10.20.1.1", end = "10.20.1.50" }`), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`DHCP range holds the gateway`)},
+			{Config: netConfig(f, `  project = "web-prod"
+  host_routes = []`), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)host_routes.*at least 1`)},
+			{Config: netConfig(f, `  project = "web-prod"
+`+both), Check: func(*terraform.State) error {
+				c := config()
+				if c["dhcpRange"] != "10.20.1.50,10.20.1.99" || c["hostRoutes"] != "10.98.0.0/16,10.20.1.5\n10.99.0.0/16,10.20.1.5" {
+					t.Errorf("config sent %v", c)
+				}
+				return nil
+			}},
+			{Config: netConfig(f, `  project = "web-prod"
+`+both), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// Removing both clears them.
+			{Config: netConfig(f, `  project = "web-prod"`), Check: func(*terraform.State) error {
+				if c := config(); c["dhcpRange"] != "" || c["hostRoutes"] != "" {
+					t.Errorf("config after removing both %v, want both cleared", c)
+				}
+				return nil
+			}},
+			{Config: netConfig(f, `  project = "web-prod"`), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{PreConfig: func() { store.refuseRoutes = "10.97.0.0/16" }, Config: refused,
+				ExpectError: regexp.MustCompile(`(?s)Network update refused.*now "failed"`)},
+			// Left failed, the next plan sends the settings again with nothing changed in the
+			// configuration (here the network service now takes them).
+			{PreConfig: func() { store.refuseRoutes = "" }, Config: refused, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+				plancheck.ExpectResourceAction("mtncloud_network.app", plancheck.ResourceActionUpdate)}},
+				ConfigStateChecks: []statecheck.StateCheck{statecheck.ExpectKnownValue("mtncloud_network.app", tfjsonpath.New("status"), knownvalue.StringExact("ok"))}},
+			{Config: refused, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+// A network created with routes the network service refuses reads "ok", then "failed": the create
+// watches it and fails, so the next apply replaces it.
+func TestNetwork_CreateRefused(t *testing.T) {
+	f := newFakeAPI(t)
+	store := newNetStore()
+	f.net = store
+	store.refuseRoutes = "10.97.0.0/16"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{Config: netConfig(f, `  project = "web-prod"
+  host_routes = [{ destination = "10.97.0.0/16", next_hop = "10.20.1.5" }]`),
+			ExpectError: regexp.MustCompile(`(?s)Network creation failed.*"failed"`)}},
+	})
 }

@@ -60,8 +60,11 @@ type networkModel struct {
 	DHCPEnabled     types.Bool     `tfsdk:"dhcp_enabled"`
 	AllowIPOverride types.Bool     `tfsdk:"allow_ip_override"`
 	IPv6            types.Object   `tfsdk:"ipv6"`
+	DHCPRange       types.Object   `tfsdk:"dhcp_range"`
+	HostRoutes      types.Set      `tfsdk:"host_routes"`
 	SubnetID        types.String   `tfsdk:"subnet_id"`
 	ExternalID      types.String   `tfsdk:"external_id"`
+	Status          types.String   `tfsdk:"status"`
 	Timeouts        timeouts.Value `tfsdk:"timeouts"`
 }
 
@@ -181,6 +184,13 @@ func (r *networkResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 					},
 				},
 			},
+			// No UseStateForUnknown: a network the network service refused turns "failed", and the plan
+			// then sends its settings again (ModifyPlan).
+			"status": schema.StringAttribute{
+				Computed: true,
+				Description: "The network's status: `ok`, or `failed` when MTN Cloud's network service refused a setting " +
+					"(for example a DHCP range). A failed network plans an update that sends its settings again.",
+			},
 			"subnet_id": schema.StringAttribute{
 				Computed:      true,
 				Description:   "ID of the subnet created with the network. An MTN Router attaches to it.",
@@ -196,6 +206,9 @@ func (r *networkResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 			"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true}),
 		},
 	}
+	for k, v := range dhcpAttributes() {
+		resp.Schema.Attributes[k] = v
+	}
 }
 
 func (r *networkResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
@@ -205,6 +218,7 @@ func (r *networkResource) ValidateConfig(ctx context.Context, req resource.Valid
 		return
 	}
 	resp.Diagnostics.Append(gatewayInside(m.CIDR, m.Gateway, path.Root("gateway"))...)
+	resp.Diagnostics.Append(checkDHCPRange(ctx, m)...)
 	if m.IPv6.IsNull() || m.IPv6.IsUnknown() {
 		return
 	}
@@ -256,6 +270,13 @@ func (r *networkResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if client.NetworkFailed(state.Status.ValueString()) {
+		// Nothing in the configuration may differ, yet the network is broken: send it all again.
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("status"), types.StringUnknown())...)
+		resp.Diagnostics.AddAttributeWarning(path.Root("status"), "Network failed",
+			fmt.Sprintf("Network %s is %q: MTN Cloud's network service refused one of its settings. This apply sends its "+
+				"settings again; if dhcp_range or host_routes caused it, change or remove them.", state.ID.ValueString(), state.Status.ValueString()))
+	}
 	// IPv6 on, off, or a new IPv6 range: replace, as for the IPv4 range.
 	if plan.IPv6.IsUnknown() || plan.IPv6.IsNull() != state.IPv6.IsNull() {
 		if !plan.IPv6.Equal(state.IPv6) {
@@ -286,6 +307,11 @@ func (r *networkResource) input(ctx context.Context, m networkModel, diags *diag
 			CIDR: v6.CIDR.ValueString(), Gateway: v6.Gateway.ValueString(), DNSPrimary: v6.DNSPrimary.ValueString(),
 			DNSSecondary: v6.DNSSecondary.ValueString(), DHCP: v6.DHCPEnabled.ValueBool(),
 		}
+	}
+	// Both are always sent once either is set, and on every update: "" clears one that was removed.
+	dr, hr := dhcpWire(ctx, m, diags)
+	if dr != "" || hr != "" {
+		in.DHCPRange, in.HostRoutes = &dr, &hr
 	}
 	return in
 }
@@ -344,6 +370,12 @@ func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest
 	// is replaced by the next apply instead of being orphaned.
 	created := n
 	n, err = r.client.WaitForNetwork(ctx, created.ID)
+	if err == nil && !client.NetworkFailed(n.Status) && (!plan.DHCPRange.IsNull() || !plan.HostRoutes.IsNull()) {
+		// A DHCP range or route the network service refuses turns the network "failed" after "ok".
+		if w, werr := r.client.WatchNetwork(ctx, created.ID); werr == nil {
+			n = w
+		}
+	}
 	switch {
 	case err != nil && errors.Is(err, context.DeadlineExceeded):
 		status := created.Status
@@ -358,7 +390,7 @@ func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest
 	case client.NetworkFailed(n.Status):
 		resp.Diagnostics.AddError("Network creation failed",
 			fmt.Sprintf("MTN Cloud created network %d but reports status %q. Check the range, gateway and DNS for clashes "+
-				"with other networks in the project; the next apply replaces it.", n.ID, n.Status))
+				"with other networks in the project, and dhcp_range and host_routes; the next apply replaces it.", n.ID, n.Status))
 	}
 	if n == nil {
 		n = created
@@ -402,15 +434,30 @@ func (r *networkResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if in.DHCPRange == nil {
+		empty := ""
+		in.DHCPRange, in.HostRoutes = &empty, &empty
+	}
 	id, _ := strconv.ParseInt(state.ID.ValueString(), 10, 64)
 	if err := r.client.UpdateNetwork(ctx, id, in); err != nil {
 		resp.Diagnostics.AddError("Unable to update network", err.Error())
 		return
 	}
-	n, err := r.client.GetNetwork(ctx, id)
+	// Only a DHCP or route change can be refused after "success": watch the network then, and when
+	// a failed one is sent again.
+	read := r.client.GetNetwork
+	if !plan.DHCPRange.Equal(state.DHCPRange) || !plan.HostRoutes.Equal(state.HostRoutes) || client.NetworkFailed(state.Status.ValueString()) {
+		read = r.client.WatchNetwork
+	}
+	n, err := read(ctx, id)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read network", err.Error())
 		return
+	}
+	if client.NetworkFailed(n.Status) {
+		resp.Diagnostics.AddError("Network update refused",
+			fmt.Sprintf("MTN Cloud accepted the change to network %d, but its network service refused it: the network is now %q. "+
+				"Check `dhcp_range` and `host_routes`; applying the previous values, or removing them, makes it ok again.", id, n.Status))
 	}
 	resp.Diagnostics.Append(refreshNetwork(ctx, &plan, n, r.tenant(ctx, &resp.Diagnostics))...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -460,6 +507,8 @@ func refreshNetwork(ctx context.Context, m *networkModel, n *client.Network, ten
 	m.DHCPEnabled = types.BoolValue(n.DHCP)
 	m.AllowIPOverride = types.BoolValue(n.AllowIPOverride)
 	m.ExternalID = types.StringValue(n.ExternalID)
+	m.Status = types.StringValue(n.Status)
+	diags.Append(refreshDHCP(ctx, m, n.DHCPRange, n.HostRoutes)...)
 	m.SubnetID = types.StringNull()
 	if n.SubnetID != 0 {
 		m.SubnetID = types.StringValue(strconv.FormatInt(n.SubnetID, 10))

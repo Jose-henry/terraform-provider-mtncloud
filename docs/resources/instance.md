@@ -75,12 +75,13 @@ numbers them, or set it from the key.
 resource "mtncloud_instance" "worker" {
   for_each = toset(["a", "b", "c"])
 
-  name     = "worker-${each.key}"
-  group    = "MTNNG_CLOUD_AZ_1"
-  project  = "web-prod"
-  image    = "MTN-U24.04LTS"
-  plan     = "G1S1"
-  networks = [mtncloud_network.app.id]
+  name             = "worker-${each.key}"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod"
+  image            = "MTN-U24.04LTS"
+  plan             = "G1S1"
+  root_volume_size = 20
+  networks         = [mtncloud_network.app.id]
 }
 ```
 
@@ -92,6 +93,7 @@ resource "mtncloud_instance" "worker" {
 - `image` (String) Operating system image, by name (`MTN Ubuntu Server 24.04.3LTS`) or code (`MTN-U24.04LTS`); the `mtncloud_images` data source lists them. Changing it replaces the instance.
 - `networks` (List of String) IDs of the MTN Networks to connect, for example `[mtncloud_network.app.id]`. The first is the primary network. Any change replaces the instance: MTN Cloud doesn't report an instance's network card IDs, so a network can't be added to a running instance safely. Create the networks first: an ID known at plan time must be a network in the instance's project, or the plan fails.
 - `plan` (String) Size of the VM, for example `G2S4` (the `mtncloud_plans` data source lists a project's sizes). **Changing it restarts the VM**, in place.
+- `root_volume_size` (Number) Root volume size in GB. MTN Cloud can't resize a root volume: add a `data_volume` instead. Windows images need at least 40 GB. Upgrading from 0.7.0, where it was optional, set it to the size the instance has (shown in state): any other size is refused, as a root disk can't be resized.
 
 ### Optional
 
@@ -112,7 +114,6 @@ resource "mtncloud_instance" "worker" {
 - `power_state` (String) `running`, `stopped` or `suspended`. Set it to power the VM on, off, or suspend it, in place: stopping shuts the server down and keeps its disks and addresses. When set, a VM started or stopped in the console is put back by the next apply. Left out, the VM's power isn't managed and this shows its state. A plan change or added volume restarts the VM, then it is put back in this state.
 - `project` (String) Project the instance runs in, by name (for example `web-prod`; the full name with the tenant suffix also works). Defaults to the provider's `project`. Changing it to another project, or that default when you rely on it, replaces the instance.
 - `restart_trigger` (String) Any value; changing it to a new value restarts the VM (server reboot) in place on the next apply, for example `restart_trigger = timestamp()` or a version string. Nothing happens at create, when it is removed, or while `power_state` is `stopped` or `suspended`.
-- `root_volume_size` (Number) Root volume size in GB. Left out, the plan's size applies (10 GB). MTN Cloud can't resize a root volume: add a `data_volume` instead. Windows images need at least 40 GB.
 - `scale` (Attributes) Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and removes one below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. Changed in place; removing it turns scaling off. (see [below for nested schema](#nestedatt--scale))
 - `scale_factor` (Number) Number of VMs in the instance. Defaults to 1. For several separate instances use `count` or `for_each`. Changing it replaces the instance.
 - `security_groups` (Set of String) Security groups to apply, by name, in addition to the project's default group, which is always applied; listing the default too changes nothing. Changed in place. Each group needs the project as a location.

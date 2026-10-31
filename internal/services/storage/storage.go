@@ -26,7 +26,7 @@ import (
 func Resources() []func() resource.Resource {
 	return []func() resource.Resource{
 		newBucket, newBucketACL, newBucketCORS, newBucketLifecycle, newBucketLogging, newBucketObjectLock,
-		newObject, newObjectACL, newArchive, newArchiveFile, newArchiveLink,
+		newObject, newObjectACL, newArchive, newArchiveFile, newArchiveLink, newAccess,
 	}
 }
 

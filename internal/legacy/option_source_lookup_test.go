@@ -33,6 +33,10 @@ func TestFindOptionSourceOption(t *testing.T) {
 		{name: "empty list", data: &[]sdk.OptionSourceOption{}, byName: "alpha", wantErr: "none is available"},
 		{name: "nil list", data: nil, byName: "alpha", wantErr: "none is available"},
 		{name: "neither name nor id", data: &opts, wantErr: "cannot be read without name or id"},
+		// A value that isn't a number is unreadable, not missing (B-016).
+		{name: "named option with a text value", data: &opts, byName: "heading", wantErr: `thing "heading" exists, but its value () isn't a number`},
+		{name: "only unreadable options", data: &[]sdk.OptionSourceOption{{Name: "x", Value: "abc"}}, byName: "alpha",
+			wantErr: "have values that aren't numbers"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

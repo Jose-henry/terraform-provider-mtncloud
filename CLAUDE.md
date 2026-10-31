@@ -39,7 +39,7 @@ Never hand-edit it. Engineering notes go in `dev-docs/`.
 | Provider / type prefix | `mtncloud` / `mtncloud_*` |
 | Registry source | `jose-henry/mtncloud` |
 | Go module | `github.com/mtn/terraform-provider-mtncloud` |
-| Env vars | `MTNCLOUD_API_URL`, `MTNCLOUD_API_TOKEN`, `MTNCLOUD_API_USERNAME`, `MTNCLOUD_API_PASSWORD`, `MTNCLOUD_API_TENANT`, `MTNCLOUD_API_SECURE` |
+| Env vars | `MTNCLOUD_API_URL`, `MTNCLOUD_API_TOKEN`, `MTNCLOUD_API_TOKEN_FILE`, `MTNCLOUD_API_USERNAME`, `MTNCLOUD_API_PASSWORD`, `MTNCLOUD_API_TENANT`, `MTNCLOUD_API_SECURE` |
 | Cloud | OpenStack only (for example `MTNNG_CLOUD_AZ_1`) |
 
 **Naming rule:** the upstream product name must not appear in code, generated docs, examples,

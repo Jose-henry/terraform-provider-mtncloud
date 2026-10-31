@@ -528,7 +528,9 @@ func dataSourcePermissionSetRead(ctx context.Context, d *schema.ResourceData, me
 				continue
 			}
 			overridePayload := &PermissionSet{}
-			json.Unmarshal([]byte(overrideJSON.(string)), overridePayload)
+			if err := json.Unmarshal([]byte(overrideJSON.(string)), overridePayload); err != nil {
+				return diag.Errorf("override_permission_set_json isn't valid JSON: %s", err)
+			}
 			if overridePayload.DefaultCloudPermission != "" {
 				permissionData.DefaultCloudPermission = overridePayload.DefaultCloudPermission
 			}

@@ -27,6 +27,8 @@ type sgStore struct {
 	projects map[int64]string
 	// lostReplies makes the next N creates succeed but answer 502, as when a gateway times out.
 	lostReplies int
+	// refusePort refuses a new rule for this port range with a 400, as the API does a bad rule.
+	refusePort string
 }
 
 func newSGStore() *sgStore {
@@ -129,6 +131,10 @@ func (s *sgStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(http.StatusOK, map[string]any{"success": true})
 	case r.Method == http.MethodPost && len(parts) == 2 && parts[1] == "rules":
 		in := body["rule"].(map[string]any)
+		if s.refusePort != "" && in["portRange"] == s.refusePort {
+			reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "Invalid rule"})
+			return
+		}
 		rule := map[string]any{"id": s.id(), "ruleType": "customRule", "customRule": true, "name": in["name"],
 			"direction": in["direction"], "protocol": in["protocol"], "portRange": in["portRange"],
 			"sourceType": in["sourceType"], "source": in["source"], "sourceGroup": nil,
@@ -417,6 +423,55 @@ resource "mtncloud_security_group" "dup" {
 }`,
 				ExpectError: regexp.MustCompile(`Security group already exists`),
 			},
+		},
+	})
+}
+
+// rulesOf edits a group's rules in the fake, as a change in the console does.
+func (s *sgStore) rulesOf(name string, edit func([]any) []any) {
+	id := s.byName(name)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.groups[id]["rules"] = edit(s.groups[id]["rules"].([]any))
+}
+
+// A rule deleted outside Terraform plans a new one; a rule changed outside Terraform plans the
+// fix; after an update that fails partway (a rule refused), the next apply finishes it, with no
+// rule twice. Whether the failed update saved what it did can't be seen here: every plan refreshes.
+func TestSecurityGroup_DisappearsDriftPartial(t *testing.T) {
+	f := newFakeAPI(t)
+	store := newSGStore()
+	f.sg = store
+	cfg, changed := sgConfig(f, webRules), sgConfig(f, webRulesChanged)
+	expect := func(addr string, a plancheck.ResourceActionType) resource.ConfigPlanChecks {
+		return resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(addr, a)}}
+	}
+	empty := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg},
+			{PreConfig: func() { store.rulesOf("other", func([]any) []any { return []any{} }) },
+				Config: cfg, ConfigPlanChecks: expect("mtncloud_security_group_rule.ping", plancheck.ResourceActionCreate)},
+			{Config: cfg, ConfigPlanChecks: empty},
+			{PreConfig: func() {
+				store.rulesOf("web", func(rules []any) []any {
+					for _, x := range rules {
+						if x.(map[string]any)["source"] == "192.0.2.0/24" {
+							x.(map[string]any)["source"] = "203.0.113.0/24"
+						}
+					}
+					return rules
+				})
+			}, Config: cfg, ConfigPlanChecks: expect("mtncloud_security_group.web", plancheck.ResourceActionUpdate),
+				ConfigStateChecks: []statecheck.StateCheck{allRules(2)}},
+			{Config: cfg, ConfigPlanChecks: empty},
+			{PreConfig: func() { store.mu.Lock(); store.refusePort = "443"; store.mu.Unlock() },
+				Config: changed, ExpectError: regexp.MustCompile(`Invalid rule`)},
+			{PreConfig: func() { store.mu.Lock(); store.refusePort = ""; store.mu.Unlock() },
+				Config: changed, ConfigPlanChecks: expect("mtncloud_security_group.web", plancheck.ResourceActionUpdate),
+				ConfigStateChecks: []statecheck.StateCheck{allRules(2)}},
+			{Config: changed, ConfigPlanChecks: empty},
 		},
 	})
 }

@@ -2,12 +2,12 @@
 page_title: "mtncloud_group Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Provides an MTN Cloud group resource: a group of clouds that instances and orders are placed in.
+  Provides an MTN Cloud group resource: a group of clouds that instances and orders are placed in. Needs a role with full access to groups (Administration > Groups); the default customer role can only read them, and gets a 403 on create. Use the mtncloud_group data source to look one up.
 ---
 
 # mtncloud_group
 
-Provides an MTN Cloud group resource: a group of clouds that instances and orders are placed in.
+Provides an MTN Cloud group resource: a group of clouds that instances and orders are placed in. Needs a role with full access to groups (Administration > Groups); the default customer role can only read them, and gets a 403 on create. Use the `mtncloud_group` data source to look one up.
 
 ## Example Usage
 

@@ -57,8 +57,10 @@ output "app_subnet_id" {
 - `allow_ip_override` (Boolean) Let instances choose a static address on this network instead of DHCP. Defaults to `true`.
 - `description` (String) Description of the network.
 - `dhcp_enabled` (Boolean) Hand out addresses with DHCP. Defaults to `true`.
+- `dhcp_range` (Attributes) The addresses DHCP hands out, one range inside `cidr` that leaves out the gateway, for example `{ start = "10.0.1.50", end = "10.0.1.99" }`. Left out, the whole network. Changed in place; removing it goes back to the whole network. (see [below for nested schema](#nestedatt--dhcp_range))
 - `dns_primary` (String) Primary DNS server. Defaults to MTN's resolver `102.88.134.41`. MTN's resolvers are `102.88.134.41`, `102.90.109.125`, `102.89.90.112` and `120.91.123.54`.
 - `dns_secondary` (String) Secondary DNS server. Defaults to MTN's resolver `102.90.109.125`. Both DNS servers are always set: a network imported without one gets MTN's resolver on the next apply.
+- `host_routes` (Attributes Set) Static routes DHCP gives the instances on this network, for example to reach another network through an instance that isn't the gateway. Changed in place. Leave it out for none. (see [below for nested schema](#nestedatt--host_routes))
 - `ipv6` (Attributes) IPv6 settings. Leave it out to keep IPv6 off (the default). Turning IPv6 on or off, or changing its `cidr`, replaces the network. (see [below for nested schema](#nestedatt--ipv6))
 - `project` (String) Project the network is created in, by name (for example `web-prod`; the full name with the tenant suffix also works). Defaults to the provider's `project`; changing that default later replaces a network that relies on it. Changing it to another project replaces the network.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
@@ -67,7 +69,26 @@ output "app_subnet_id" {
 
 - `external_id` (String) Network ID in the cloud (the external ID).
 - `id` (String) Network ID.
+- `status` (String) The network's status: `ok`, or `failed` when MTN Cloud's network service refused a setting (for example a DHCP range). A failed network plans an update that sends its settings again.
 - `subnet_id` (String) ID of the subnet created with the network. An MTN Router attaches to it.
+
+<a id="nestedatt--dhcp_range"></a>
+### Nested Schema for `dhcp_range`
+
+Required:
+
+- `end` (String) Last address.
+- `start` (String) First address.
+
+
+<a id="nestedatt--host_routes"></a>
+### Nested Schema for `host_routes`
+
+Required:
+
+- `destination` (String) Network the route leads to, for example `10.99.0.0/16`.
+- `next_hop` (String) Address the traffic goes through.
+
 
 <a id="nestedatt--ipv6"></a>
 ### Nested Schema for `ipv6`

@@ -26,13 +26,24 @@ exactly as ordered. The first apply after an import records them, finds the inst
 
 ## Notes
 
-- **Known issue: the apply can't find the firewall's VM yet.** MTN's SOPHOS workflow names the VM
-  itself (`<initials>-<account>-MTN-CLOUD-SPH001-<n>`) instead of with `name`, so the apply waits
-  until its create timeout and then fails, telling you so. The firewall is still made: check
-  Instances in the console, and delete it there if you don't keep it. A fix is planned.
+- **An order takes about an hour.** MTN's SOPHOS workflow builds the VM through a Heat stack, then
+  waits until MTN Cloud's own sync (about every 15 minutes) discovers it. The create timeout defaults
+  to 3 hours. Your login must outlast the apply:
+  - use `username` and `password` (or `MTNCLOUD_API_USERNAME` and `MTNCLOUD_API_PASSWORD`): the
+    provider logs in again when a token expires;
+  - or use an API token that lasts longer than the apply (a short-lived token fails the apply with a
+    401 while it waits, and the order goes on in MTN Cloud: import it afterwards);
+  - or order the firewall in the console.
+- **MTN names the VM, not you.** The workflow ignores `name` and names the VM from MTN's template,
+  `<initials>-<account>-MTN-CLOUD-SPH001-<n>`. It prints the VM it made, and the provider takes
+  `instance_ids` from that report, in the order's project only.
+- **Destroy leaves the Heat stack.** Destroy deletes the VM and its disks, but not the Heat stack
+  (`<vm name>-stack`) the workflow made it with, and a customer login can't delete a stack: its network
+  port and floating IP stay, and they keep the MTN Router from being deleted. Destroy warns with the
+  stack's name; ask MTN to delete it.
 
 - **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
-  finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
+  finish, finds the instance it made (`instance_ids`), and waits until
   they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
   message; the resource is then tainted, so the next apply deletes it and orders again.
 - **A changed input orders again.** An order can't be edited, so changing any input plans a

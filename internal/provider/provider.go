@@ -41,6 +41,7 @@ func New(version string) func() provider.Provider {
 type providerModel struct {
 	URL             types.String `tfsdk:"url"`
 	AccessToken     types.String `tfsdk:"access_token"`
+	AccessTokenFile types.String `tfsdk:"access_token_file"`
 	TenantSubdomain types.String `tfsdk:"tenant_subdomain"`
 	Username        types.String `tfsdk:"username"`
 	Password        types.String `tfsdk:"password"`
@@ -68,6 +69,10 @@ func (p *mtncloudProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 				Optional:    true,
 				Sensitive:   true,
 				Description: "Access Token of MTN Cloud user. This can be used instead of authenticating with Username and Password.",
+			},
+			"access_token_file": schema.StringAttribute{
+				Optional:    true,
+				Description: "A file holding the access token, read instead of `access_token`. Most resources and data sources read it again when MTN Cloud rejects the token, so a long apply survives a token refreshed in that file; the tenancy, IAM, integration, automation, policy and appliance-configuration ones read it once, when the run starts. Can also be set with the MTNCLOUD_API_TOKEN_FILE environment variable.",
 			},
 			"tenant_subdomain": schema.StringAttribute{
 				Optional:    true,
@@ -109,7 +114,7 @@ func (p *mtncloudProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 	unknown := cfg.Secure.IsUnknown() // an unknown "secure" must never fall back to false
-	for _, v := range []types.String{cfg.URL, cfg.AccessToken, cfg.TenantSubdomain, cfg.Username, cfg.Password, cfg.Group, cfg.Cloud, cfg.Project} {
+	for _, v := range []types.String{cfg.URL, cfg.AccessToken, cfg.AccessTokenFile, cfg.TenantSubdomain, cfg.Username, cfg.Password, cfg.Group, cfg.Cloud, cfg.Project} {
 		unknown = unknown || v.IsUnknown()
 	}
 	if unknown {
@@ -140,11 +145,12 @@ func (p *mtncloudProvider) Configure(ctx context.Context, req provider.Configure
 
 	auth := resolveAuth(cfg)
 	c, err := client.New(client.Config{
-		URL:      url,
-		Token:    auth.token,
-		Username: auth.username,
-		Password: auth.password,
-		Tenant:   auth.tenant,
+		URL:       url,
+		Token:     auth.token,
+		TokenFile: auth.tokenFile,
+		Username:  auth.username,
+		Password:  auth.password,
+		Tenant:    auth.tenant,
 		Defaults: client.Defaults{
 			Group:   stringOrEnv(cfg.Group, "MTNCLOUD_GROUP"),
 			Cloud:   stringOrEnv(cfg.Cloud, "MTNCLOUD_CLOUD"),
@@ -164,7 +170,7 @@ func (p *mtncloudProvider) Configure(ctx context.Context, req provider.Configure
 	resp.ResourceData = c
 }
 
-type credentials struct{ token, username, password, tenant string }
+type credentials struct{ token, tokenFile, username, password, tenant string }
 
 // resolveAuth picks credentials exactly as the legacy half does (internal/legacy/config.go), so
 // both halves of the mux always act as the same user: a username, from the block or
@@ -178,7 +184,11 @@ func resolveAuth(cfg providerModel) credentials {
 			tenant:   stringOrEnv(cfg.TenantSubdomain, "MTNCLOUD_API_TENANT"),
 		}
 	}
-	return credentials{token: stringOrEnv(cfg.AccessToken, "MTNCLOUD_API_TOKEN")}
+	creds := credentials{token: stringOrEnv(cfg.AccessToken, "MTNCLOUD_API_TOKEN")}
+	if creds.token == "" {
+		creds.tokenFile = stringOrEnv(cfg.AccessTokenFile, "MTNCLOUD_API_TOKEN_FILE")
+	}
+	return creds
 }
 
 func stringOrEnv(v types.String, env string) string {

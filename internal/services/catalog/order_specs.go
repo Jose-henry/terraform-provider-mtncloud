@@ -50,7 +50,10 @@ type orderSpec struct {
 	about    string
 	app      bool // the order makes an app (under Apps, not Instances), its VMs "<name>-<n>"
 	target   bool // runs against an existing instance (context "instance")
-	fields   []field
+	// heat: the workflow names the VM itself, builds it through a Heat stack that a delete leaves,
+	// and reports the VM in its output (SOPHOS, `Sophos/sophosheat.sh`). It takes about an hour.
+	heat   bool
+	fields []field
 	// movedFrom is a former type name. The old name stays as a deprecated alias, and a `moved {}`
 	// block moves its state here without a replace.
 	movedFrom  string
@@ -175,6 +178,7 @@ func orderSpecs() []orderSpec {
 		req := append(slices.Clone(applianceBase), "volumes")
 		return orderSpec{typeName: typeName, item: item, code: itemCodes[item], about: about, fields: vm("label", req...), rules: r}
 	}
+	heat := func(s orderSpec) orderSpec { s.heat = true; return s }
 	return []orderSpec{
 		db("MTN MySQL", "mysql", "A MySQL server on its own VM.", "mysqlVersion", "MySQL", "", false),
 		db("MTN PostgreSQL", "postgresql", "A PostgreSQL server on its own VM.", "pgVersion", "PostgreSQL", "17", false),
@@ -262,8 +266,8 @@ func orderSpecs() []orderSpec {
 			rules: rules{minNetworks: 2}},
 		{typeName: "wireguard_vpn", item: "MTN WireGuard SSL VPN", code: "WGVPN001", about: "A WireGuard VPN server.",
 			fields: vm("labels", append(applianceBase, "volumes")...)},
-		appliance("MTN SOPHOS Firewall (BYOL)", "sophos_firewall", "A SOPHOS firewall. Bring your own license.",
-			rules{minRootGB: 80, dataDiskGB: 40, minNetworks: 2, minCPU: 2, minMemoryGB: 4}),
+		heat(appliance("MTN SOPHOS Firewall (BYOL)", "sophos_firewall", "A SOPHOS firewall. Bring your own license.",
+			rules{minRootGB: 80, dataDiskGB: 40, minNetworks: 2, minCPU: 2, minMemoryGB: 4})),
 		appliance("MTN Fortinet Firewall (BYOL)", "fortinet_firewall", "A Fortinet firewall. Bring your own license.",
 			rules{minRootGB: 40, minNetworks: 1, maxNetworks: 2}),
 		appliance("MTN FortiWeb (BYOL)", "fortiweb", "A FortiWeb web application firewall. Bring your own license.",

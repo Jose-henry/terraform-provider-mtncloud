@@ -2,12 +2,12 @@
 page_title: "mtncloud_sophos_firewall Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A SOPHOS firewall. Bring your own license. Ordered from MTN Cloud's catalog (MTN SOPHOS Firewall (BYOL)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN SOPHOS Firewall (BYOL) order form requires and allows (read 2026-10-31); every plan checks the live form.
+  A SOPHOS firewall. Bring your own license. Ordered from MTN Cloud's catalog (MTN SOPHOS Firewall (BYOL)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and terraform apply -replace=<address> orders it again. Add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Slow: MTN's workflow builds the VM through a Heat stack, then waits for MTN Cloud to discover it, so an order takes about an hour (the create timeout defaults to 3 hours). Use a login that outlasts the apply: username and password (the provider logs in again when a token expires), or a token that lasts longer than the apply; or order it in the console instead. The workflow names the VM itself (<initials>-<account>-MTN-CLOUD-<type>-<n>) and reports it, so instance_ids is the VM it reported, whatever name says. Destroy deletes that VM, but not its Heat stack, whose port and floating IP stay until MTN removes the stack. Each argument says what the MTN SOPHOS Firewall (BYOL) order form requires and allows (read 2026-10-31); every plan checks the live form.
 ---
 
 # mtncloud_sophos_firewall
 
-A SOPHOS firewall. Bring your own license. Ordered from MTN Cloud's catalog (MTN SOPHOS Firewall (BYOL)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN SOPHOS Firewall (BYOL) order form requires and allows (read 2026-10-31); every plan checks the live form.
+A SOPHOS firewall. Bring your own license. Ordered from MTN Cloud's catalog (MTN SOPHOS Firewall (BYOL)). An order can't be changed once placed: changing any input replaces it (what the old order made is deleted, then a new one is ordered), and `terraform apply -replace=<address>` orders it again. Add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. **Slow:** MTN's workflow builds the VM through a Heat stack, then waits for MTN Cloud to discover it, so an order takes about an hour (the create timeout defaults to 3 hours). Use a login that outlasts the apply: `username` and `password` (the provider logs in again when a token expires), or a token that lasts longer than the apply; or order it in the console instead. The workflow names the VM itself (`<initials>-<account>-MTN-CLOUD-<type>-<n>`) and reports it, so `instance_ids` is the VM it reported, whatever `name` says. Destroy deletes that VM, but not its Heat stack, whose port and floating IP stay until MTN removes the stack. Each argument says what the MTN SOPHOS Firewall (BYOL) order form requires and allows (read 2026-10-31); every plan checks the live form.
 
 ## Example Usage
 
@@ -30,7 +30,6 @@ resource "mtncloud_sophos_firewall" "this" {
 ### Required
 
 - `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`. Order form: required; choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
-- `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it. Order form: required; locked (not editable).
 - `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists. Order form: required. It says: "Note: Service requires at least 2 interfaces."
 - `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices. Order form: required. It says: "Minimum 2VCPU & 4GB."
 - `root_volume_size` (Number) Root disk size in GB. At least 80 GB (the order form's minimum). It says: "Minimum 80 GB. A required 40 GB data disk is added automatically from the backend, for 120 GB total."
@@ -43,6 +42,7 @@ resource "mtncloud_sophos_firewall" "this" {
 - `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
 - `labels` (Set of String) Labels on the instance.
+- `name` (String) Not used: MTN's workflow names the VM itself (`<initials>-<account>-MTN-CLOUD-<type>-<n>`), and the provider finds the VM from the workflow's own report. Optional; kept for configurations that set it. Order form: required; locked (not editable).
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
 - `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
@@ -88,13 +88,24 @@ exactly as ordered. The first apply after an import records them, finds the inst
 
 ## Notes
 
-- **Known issue: the apply can't find the firewall's VM yet.** MTN's SOPHOS workflow names the VM
-  itself (`<initials>-<account>-MTN-CLOUD-SPH001-<n>`) instead of with `name`, so the apply waits
-  until its create timeout and then fails, telling you so. The firewall is still made: check
-  Instances in the console, and delete it there if you don't keep it. A fix is planned.
+- **An order takes about an hour.** MTN's SOPHOS workflow builds the VM through a Heat stack, then
+  waits until MTN Cloud's own sync (about every 15 minutes) discovers it. The create timeout defaults
+  to 3 hours. Your login must outlast the apply:
+  - use `username` and `password` (or `MTNCLOUD_API_USERNAME` and `MTNCLOUD_API_PASSWORD`): the
+    provider logs in again when a token expires;
+  - or use an API token that lasts longer than the apply (a short-lived token fails the apply with a
+    401 while it waits, and the order goes on in MTN Cloud: import it afterwards);
+  - or order the firewall in the console.
+- **MTN names the VM, not you.** The workflow ignores `name` and names the VM from MTN's template,
+  `<initials>-<account>-MTN-CLOUD-SPH001-<n>`. It prints the VM it made, and the provider takes
+  `instance_ids` from that report, in the order's project only.
+- **Destroy leaves the Heat stack.** Destroy deletes the VM and its disks, but not the Heat stack
+  (`<vm name>-stack`) the workflow made it with, and a customer login can't delete a stack: its network
+  port and floating IP stay, and they keep the MTN Router from being deleted. Destroy warns with the
+  stack's name; ask MTN to delete it.
 
 - **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
-  finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
+  finish, finds the instance it made (`instance_ids`), and waits until
   they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
   message; the resource is then tainted, so the next apply deletes it and orders again.
 - **A changed input orders again.** An order can't be edited, so changing any input plans a

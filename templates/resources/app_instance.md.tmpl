@@ -1,0 +1,31 @@
+---
+page_title: "mtncloud_app_instance Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_app_instance
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_app_instance/resource.tf"}}
+
+## Notes
+
+- **Destroy keeps the instance.** It only takes the instance out of the app; the instance keeps running.
+- **Managed services.** Taking a node out of a managed service's app can break the service: only add and
+  remove instances you made yourself.
+- **Order destroy.** Destroying the order that made the app takes instances added this way out of the app
+  first and leaves them running.
+- **Moving tiers.** Changing `tier` takes the instance out and puts it back in the new tier.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_app_instance/import.sh" }}

@@ -98,6 +98,15 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 		"`terraform destroy` deletes what it made, shown under " + where + " in the console, with its disks and floating " +
 		"IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are " +
 		"sent with the order and never stored."
+	if r.spec.heat {
+		desc += " **Slow:** MTN's workflow builds the VM through a Heat stack, then waits for MTN Cloud to discover it, " +
+			"so an order takes about an hour (the create timeout defaults to 3 hours). Use a login that outlasts the apply: " +
+			"`username` and `password` (the provider logs in again when a token expires), or a token that lasts longer " +
+			"than the apply; or order it in the console instead. The workflow names the VM itself " +
+			"(`<initials>-<account>-MTN-CLOUD-<type>-<n>`) and reports it, so `instance_ids` is the VM it reported, " +
+			"whatever `name` says. Destroy deletes that VM, but not its Heat stack, whose port and floating IP stay " +
+			"until MTN removes the stack."
+	}
 	if r.spec.target {
 		desc = r.spec.about + " Ordered from MTN Cloud's catalog (" + r.spec.item + "). Changing an input orders it " +
 			"again. `terraform destroy` deletes nothing: the certificate stays on the instance, and the resource is " +
@@ -116,6 +125,11 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 		attrs["instance_ids"] = schema.ListAttribute{Computed: true, ElementType: types.StringType,
 			Description:   "IDs of the instances the order created, found by name in the project.",
 			PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()}}
+		if r.spec.app {
+			attrs["app_id"] = schema.StringAttribute{Computed: true, PlanModifiers: keep,
+				Description: "ID of the app the order made (under Apps in the console). Destroy deletes this app, even " +
+					"after it is renamed; an instance added to it later is taken out of it first and left running."}
+		}
 		attrs["instance_statuses"] = schema.MapAttribute{Computed: true, ElementType: types.StringType,
 			Description: "Status of each instance the order created, by instance ID, for example `running`. A `failed` " +
 				"instance plans a replace: the order is deleted and placed again.",
@@ -202,12 +216,16 @@ func (r *orderResource) attribute(f field) schema.Attribute {
 		desc = "Name of the app the order creates, shown under Apps. It must be unique among your apps: the provider " +
 			"finds the app, and the VMs in it, by this name (MTN names the VMs itself)."
 	}
+	if f.attr == "name" && r.spec.heat {
+		desc = "Not used: MTN's workflow names the VM itself (`<initials>-<account>-MTN-CLOUD-<type>-<n>`), and the " +
+			"provider finds the VM from the workflow's own report. Optional; kept for configurations that set it."
+	}
 	d := desc + snapshotFor(r.spec.typeName).field(f.key).facts()
 	if f.def != "" && !strings.Contains(d, "Defaults") {
 		d += " Defaults to `" + f.def + "`."
 	}
 	// A required form field with a default is optional here: the default is sent, as the console does.
-	req := f.required && f.def == ""
+	req := f.required && f.def == "" && (f.attr != "name" || !r.spec.heat)
 	opt := !req
 	switch f.kind {
 	case kGroup:
@@ -277,8 +295,8 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 			var before, after attr.Value
 			resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(name), &before)...)
 			resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, path.Root(name), &after)...)
-			if adopting || after == nil {
-				continue
+			if adopting || after == nil || (r.spec.heat && name == "name") {
+				continue // MTN's workflow names a heat order's VM itself: its name is never sent
 			}
 			switch inputChange(name, before, after) {
 			case noChange:
@@ -302,6 +320,9 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 			if len(ids) == 0 {
 				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("instance_ids"), types.ListUnknown(types.StringType))...)
 				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("instance_statuses"), types.MapUnknown(types.StringType))...)
+			}
+			if r.spec.app && r.appIDOf(ctx, req.State, &resp.Diagnostics) == 0 {
+				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("app_id"), types.StringUnknown())...)
 			}
 		}
 		return
@@ -467,11 +488,13 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 		case kFlag:
 			var v types.Bool
 			diags.Append(p.GetAttribute(ctx, path.Root(f.attr), &v)...)
+			// A checkbox is sent as the console sends it, "on" or "off": MTN's scripts test
+			// `== "on"`, and their `?: "on"` defaults turn a false into "on" (2026-10-31).
 			switch {
 			case !v.IsNull():
-				out[f.key] = v.ValueBool()
+				out[f.key] = checkbox(v.ValueBool())
 			case f.def != "":
-				out[f.key] = f.def == "true"
+				out[f.key] = checkbox(f.def == "true" || f.def == "on")
 			}
 		case kList, kLabels:
 			if v := strs(f.attr); len(v) > 0 {
@@ -629,6 +652,13 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 
 // poolNetwork is the primary network a floating IP pool attribute is attached through: the first
 // network of the attribute with the same prefix (worker_floating_ip_pool: worker_networks), or 0.
+func checkbox(on bool) string {
+	if on {
+		return "on"
+	}
+	return "off"
+}
+
 func poolNetwork(attr string, primary map[string]int64) int64 {
 	return primary[strings.TrimSuffix(attr, "floating_ip_pool")]
 }
@@ -639,7 +669,7 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	var to timeouts.Value
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("timeouts"), &to)...)
-	timeout, d := to.Create(ctx, orderTimeout)
+	timeout, d := to.Create(ctx, r.createTimeout())
 	resp.Diagnostics.Append(d...)
 	config := r.build(ctx, req.Plan, req.Config, false, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
@@ -693,6 +723,9 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), types.ListValueMust(types.StringType, nil))...)
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), types.MapValueMust(types.StringType, nil))...)
 	}
+	if r.spec.app {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), types.StringNull())...)
+	}
 	done, ok := client.ExecutionDone(item.Execution)
 	switch {
 	case done && !ok, strings.EqualFold(item.Status, "failed"):
@@ -701,6 +734,16 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 			if f := r.client.ExecutionFailure(ctx, item.Execution.ID, r.secretValues(ctx, req.Plan, config)); f != "" {
 				why += ". The workflow says: " + strings.TrimRight(f, ". ")
 			}
+		}
+		// A workflow can fail after its VM is up (MTN's SOPHOS workflow, QA 2026-10-31): kept in state,
+		// tainted by the error, so the next apply deletes it before ordering again, and destroy deletes it.
+		if left := r.leftovers(ctx, &resp.State, &resp.Diagnostics); len(left) > 0 {
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(left))...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(r.statusesOf(ctx, left)))...)
+			resp.Diagnostics.AddError(r.spec.item+" order failed",
+				fmt.Sprintf("Order %d ended with %q%s. It left instance %s, kept in state: the next apply deletes it and orders "+
+					"again, and terraform destroy deletes it.", item.ID, executionStatus(item), why, joinIDs(left)))
+			return
 		}
 		resp.Diagnostics.AddError(r.spec.item+" order failed",
 			fmt.Sprintf("Order %d ended with %q%s. Check it under Catalog > Inventory, and delete anything it left in the "+
@@ -722,8 +765,14 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if r.spec.target {
 		return
 	}
-	if r.spec.app && !r.appReady(ctx, req.Plan, item.ID, before, &resp.Diagnostics) {
-		return
+	if r.spec.app {
+		a, ok := r.appReady(ctx, req.Plan, item.ID, before, &resp.Diagnostics)
+		if a != nil {
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), strconv.FormatInt(a.ID, 10))...)
+		}
+		if !ok {
+			return
+		}
 	}
 	// Success is what the order made, running (owner, 2026-10-30): wait for its VM, within the
 	// create timeout. A VM can show up after the workflow ends, and some workflows name it
@@ -731,9 +780,16 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 	var ids []int64
 	werr := r.client.Await(ctx, func(ctx context.Context) (bool, error) {
 		var err error
-		ids, err = r.instancesNamed(ctx, req.Plan, &resp.Diagnostics)
+		ids, err = r.instancesNamed(ctx, resp.State, &resp.Diagnostics)
 		return len(ids) > 0, err
 	})
+	if werr != nil && r.spec.heat {
+		resp.Diagnostics.AddError(r.spec.item+" instance not found",
+			fmt.Sprintf("Order %d's workflow succeeded, but the VM it reported isn't in the project (%s). MTN's workflow names "+
+				"the VM itself (<initials>-<account>-MTN-CLOUD-<type>-<n>): check Instances in the console. The next apply "+
+				"orders it again.", item.ID, werr))
+		return
+	}
 	if werr != nil {
 		var name types.String
 		resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("name"), &name)...)
@@ -768,6 +824,15 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(ids))...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(statuses))...)
+}
+
+// createTimeout is the default create timeout: a workflow that builds through a Heat stack waits for
+// MTN's cloud sync, about an hour (SOPHOS script: "EXPECTED_MINUTES" 60, no limit of its own).
+func (r *orderResource) createTimeout() time.Duration {
+	if r.spec.heat {
+		return 3 * time.Hour
+	}
+	return orderTimeout
 }
 
 func statusMap(m map[string]string) types.Map {
@@ -807,6 +872,9 @@ func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *dia
 	if err != nil {
 		return nil, fmt.Errorf("the project couldn't be read: %w", err)
 	}
+	if r.spec.heat {
+		return r.reportedInstance(ctx, p, pr.ID, all, diags)
+	}
 	var ids []int64
 	inProject := map[int64]bool{}
 	for _, in := range all {
@@ -823,15 +891,109 @@ func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *dia
 		if err != nil {
 			return nil, fmt.Errorf("the apps couldn't be listed: %w", err)
 		}
-		for _, a := range client.AppsNamed(apps, name.ValueString()) {
-			for _, id := range a.InstanceIDs {
-				if inProject[id] && !slices.Contains(ids, id) {
-					ids = append(ids, id)
+		// The saved app first: it may have been renamed since (B-028 catch 1).
+		mine := client.AppsNamed(apps, name.ValueString())
+		if appID := r.appIDOf(ctx, p, diags); appID != 0 {
+			mine = nil
+			for _, a := range apps {
+				if a.ID == appID {
+					mine = append(mine, a)
 				}
 			}
 		}
+		// Instances added to the app later (mtncloud_app_instance, the console) aren't the order's: its
+		// own carry MTN's template name or the order's. Only when none does are all members taken, so
+		// the order's VMs are never lost (review, 2026-10-31).
+		names := map[int64]string{}
+		for _, in := range all {
+			names[in.ID] = in.Name
+		}
+		var members, own []int64
+		for _, a := range mine {
+			for _, id := range a.InstanceIDs {
+				if !inProject[id] || slices.Contains(ids, id) || slices.Contains(members, id) {
+					continue
+				}
+				members = append(members, id)
+				if templateNamed(names[id]) {
+					own = append(own, id)
+				}
+			}
+		}
+		if len(own) == 0 && len(ids) == 0 {
+			own = members
+		}
+		ids = append(ids, own...)
 	}
 	return ids, nil
+}
+
+// templateNamed reports whether an instance has the name MTN's order workflows give their VMs,
+// "<initials>-<account>-MTN-CLOUD-<type>-<n>".
+func templateNamed(name string) bool {
+	return strings.Contains(strings.ToUpper(name), "-MTN-CLOUD-")
+}
+
+// appIDOf is the app ID saved in p, 0 when there is none (an older state, or not an app order).
+func (r *orderResource) appIDOf(ctx context.Context, p source, diags *diag.Diagnostics) int64 {
+	if !r.spec.app {
+		return 0
+	}
+	var v types.String
+	diags.Append(p.GetAttribute(ctx, path.Root("app_id"), &v)...)
+	id, _ := strconv.ParseInt(v.ValueString(), 10, 64)
+	return id
+}
+
+// appFor is the order's app, for a state that has none saved (made before app_id, or imported):
+// the app named after the order that holds one of its instances. Null when there is none.
+func (r *orderResource) appFor(ctx context.Context, p source, ids []int64, diags *diag.Diagnostics) types.String {
+	var name types.String
+	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
+	apps, err := r.client.ListApps(ctx)
+	if err != nil || name.IsNull() {
+		return types.StringNull()
+	}
+	for _, a := range client.AppsNamed(apps, name.ValueString()) {
+		for _, id := range a.InstanceIDs {
+			if slices.Contains(ids, id) {
+				return types.StringValue(strconv.FormatInt(a.ID, 10))
+			}
+		}
+	}
+	return types.StringNull()
+}
+
+// reportedInstance is the VM a workflow that names it itself reported (spec heat): by the ID it
+// printed, else by the name, and only in the order's project. Nothing before the order exists.
+func (r *orderResource) reportedInstance(ctx context.Context, p source, projectID int64, all []*client.Instance, diags *diag.Diagnostics) ([]int64, error) {
+	var idv types.String
+	diags.Append(p.GetAttribute(ctx, path.Root("id"), &idv)...)
+	if idv.IsNull() || idv.IsUnknown() {
+		return nil, nil // not ordered yet
+	}
+	orderID, err := strconv.ParseInt(idv.ValueString(), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("%q is not an order ID", idv.ValueString())
+	}
+	item, err := r.client.GetOrderedItem(ctx, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("the order couldn't be read: %w", err)
+	}
+	if item.Execution == nil || item.Execution.ID == 0 {
+		return nil, nil
+	}
+	out, err := r.client.ExecutionOutput(ctx, item.Execution.ID)
+	if err != nil {
+		return nil, fmt.Errorf("the order's workflow output couldn't be read: %w", err)
+	}
+	id, name := client.WorkflowInstance(out)
+	for _, in := range all {
+		if in.ProjectID == projectID && ((id != 0 && in.ID == id) || (id == 0 && name != "" && strings.EqualFold(in.Name, name))) {
+			return []int64{in.ID}, nil
+		}
+	}
+	return nil, nil
 }
 
 // appsBefore notes the apps with the order's name before it is placed, so the wait never takes
@@ -881,8 +1043,9 @@ func (r *orderResource) secretValues(ctx context.Context, p source, config map[s
 }
 
 // appReady waits for the app an order's workflow started to finish provisioning: the workflow
-// ends once it has asked for the app. False, with an error, when it didn't come up running.
-func (r *orderResource) appReady(ctx context.Context, p source, orderID int64, before map[int64]bool, diags *diag.Diagnostics) bool {
+// ends once it has asked for the app. False, with an error, when it didn't come up running; the
+// app, when one appeared, either way (it is the order's, and destroy deletes it).
+func (r *orderResource) appReady(ctx context.Context, p source, orderID int64, before map[int64]bool, diags *diag.Diagnostics) (*client.App, bool) {
 	var name types.String
 	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
 	a, err := r.client.WaitForApp(ctx, name.ValueString(), before)
@@ -891,19 +1054,19 @@ func (r *orderResource) appReady(ctx context.Context, p source, orderID int64, b
 		diags.AddError(r.spec.item+" app not found",
 			fmt.Sprintf("Order %d's workflow succeeded, but no app named %q appeared before the create timeout. Check Apps "+
 				"in the console; the next apply deletes the order and orders it again.", orderID, name.ValueString()))
-		return false
+		return nil, false
 	case err != nil:
 		diags.AddError(r.spec.item+" app not ready",
 			fmt.Sprintf("App %q from order %d didn't finish provisioning: %s. The next apply deletes the order with what it "+
 				"made and orders it again; raise timeouts.create if it is only slow.", name.ValueString(), orderID, err))
-		return false
+		return a, false
 	case !client.AppRunning(a):
 		diags.AddError(r.spec.item+" app failed",
 			fmt.Sprintf("App %q (%d) from order %d is %q. The order's workflow succeeded, but what it made didn't. Check it "+
 				"under Apps; the next apply deletes the order with what it made and orders it again.", a.Name, a.ID, orderID, a.Status))
-		return false
+		return a, false
 	}
-	return true
+	return a, true
 }
 
 // madeBy reports whether an instance is named after an order: exactly "<name>", or "<name>-<n>"
@@ -964,6 +1127,16 @@ func (r *orderResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		return
 	}
 	if done, ok := client.ExecutionDone(item.Execution); (done && !ok) || strings.EqualFold(item.Status, "failed") {
+		if left := r.leftovers(ctx, req.State, &resp.Diagnostics); len(left) > 0 {
+			// It failed after making something: kept, so the next apply deletes it before ordering again.
+			resp.Diagnostics.AddWarning(r.spec.item+" order failed",
+				fmt.Sprintf("Order %d ended with %q%s, and left instance %s. The next apply deletes it and orders again; "+
+					"terraform destroy deletes it.", id, executionStatus(item), message(item), joinIDs(left)))
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("status"), executionStatus(item))...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(left))...)
+			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(r.statusesOf(ctx, left)))...)
+			return
+		}
 		resp.Diagnostics.AddWarning(r.spec.item+" order failed",
 			fmt.Sprintf("Order %d ended with %q%s. The next apply orders it again.", id, executionStatus(item), message(item)))
 		resp.State.RemoveResource(ctx)
@@ -980,7 +1153,7 @@ func (r *orderResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if len(ids) == 0 {
 		var name types.String
 		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("name"), &name)...)
-		if !name.IsNull() {
+		if !name.IsNull() || r.spec.heat {
 			found = r.findInstances(ctx, req.State, &resp.Diagnostics)
 		}
 	} else {
@@ -1006,11 +1179,46 @@ func (r *orderResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if len(ids) == 0 {
 		statuses = r.statusesOf(ctx, found)
 	}
+	if r.spec.app && r.appIDOf(ctx, req.State, &resp.Diagnostics) == 0 && len(found) > 0 {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), r.appFor(ctx, req.State, found, &resp.Diagnostics))...)
+	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(found))...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(statuses))...)
 }
 
 // statusesOf reads each instance's status; one that can't be read is left out.
+// leftovers are the instances a failed order made that still exist: its saved instance_ids, else
+// those named after it (or, for a heat order, the one its workflow reported) in its project. None
+// when they can't be looked up, for example after an import, where the project isn't known yet.
+func (r *orderResource) leftovers(ctx context.Context, st source, diags *diag.Diagnostics) []int64 {
+	if r.spec.target {
+		return nil
+	}
+	var ids []string
+	diags.Append(st.GetAttribute(ctx, path.Root("instance_ids"), &ids)...)
+	var out []int64
+	for _, s := range ids {
+		n, _ := strconv.ParseInt(s, 10, 64)
+		if _, err := r.client.GetInstance(ctx, n); err == nil {
+			out = append(out, n)
+		}
+	}
+	if len(ids) > 0 {
+		return out
+	}
+	var name, project types.String
+	diags.Append(st.GetAttribute(ctx, path.Root("name"), &name)...)
+	diags.Append(st.GetAttribute(ctx, path.Root("project"), &project)...)
+	if project.ValueString() == "" || (name.ValueString() == "" && !r.spec.heat) {
+		return nil
+	}
+	found, err := r.instancesNamed(ctx, st, &diag.Diagnostics{})
+	if err != nil {
+		return nil
+	}
+	return found
+}
+
 func (r *orderResource) statusesOf(ctx context.Context, ids []int64) map[string]string {
 	out := map[string]string{}
 	for _, id := range ids {
@@ -1049,6 +1257,14 @@ func (r *orderResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if r.ready(&resp.Diagnostics) {
 		statuses = r.statusesOf(ctx, found)
 	}
+	if r.spec.app {
+		appID := types.StringNull()
+		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("app_id"), &appID)...)
+		if appID.IsNull() && len(found) > 0 && r.ready(&resp.Diagnostics) {
+			appID = r.appFor(ctx, req.Plan, found, &resp.Diagnostics)
+		}
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), appID)...)
+	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(statuses))...)
 }
 
@@ -1086,7 +1302,7 @@ func (r *orderResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 			why+" Nothing was deleted. To stop managing it without deleting anything, use a removed block "+
 				"(lifecycle { destroy = false }) or terraform state rm.")
 	}
-	if name.IsNull() {
+	if name.IsNull() && !r.spec.heat {
 		refuse("It was imported and not applied since, so the instances it made aren't known yet: run terraform apply first.")
 		return
 	}
@@ -1131,11 +1347,31 @@ func (r *orderResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		refuse("Its apps couldn't be listed: " + err.Error() + ".")
 		return
 	}
-	plan := deletePlan(apps, ids, name.ValueString(), r.spec.app)
+	plan := deletePlan(apps, ids, name.ValueString(), r.spec.app, r.appIDOf(ctx, req.State, &resp.Diagnostics))
+	if len(plan.apps) == 0 && len(plan.instances) == 0 && r.spec.heat {
+		refuse("Nothing it made was found: the VM its workflow reported isn't in its project. Check Instances in the console.")
+		return
+	}
 	if len(plan.apps) == 0 && len(plan.instances) == 0 {
 		refuse(fmt.Sprintf("Nothing it made was found: no instance named %q is in its project%s. Check it in the console.",
 			name.ValueString(), map[bool]string{true: ", and no app has that name", false: ""}[r.spec.app]))
 		return
+	}
+	var stacks []string // a Heat stack's name is its VM's, with "-stack"
+	for _, id := range plan.instances {
+		if in, err := r.client.GetInstance(ctx, id); r.spec.heat && err == nil {
+			stacks = append(stacks, in.Name+"-stack")
+		}
+	}
+	// Instances added to the order's app since are someone else's: out of the app first, left
+	// running (B-028 catch 2, option a).
+	for _, d := range plan.detach {
+		if err := r.client.RemoveAppInstance(ctx, d[0], d[1]); err != nil {
+			resp.Diagnostics.AddError("Unable to take instance "+strconv.FormatInt(d[1], 10)+" out of app "+strconv.FormatInt(d[0], 10),
+				fmt.Sprintf("Order %d's app holds instance %d, which the order didn't make, and it couldn't be taken out: %s. "+
+					"Nothing was deleted. Remove it from the app in the console, then destroy again.", orderID, d[1], err))
+			return
+		}
 	}
 	for _, appID := range plan.apps {
 		if err := r.client.DeleteApp(ctx, appID); err != nil {
@@ -1159,6 +1395,12 @@ func (r *orderResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 			return
 		}
 	}
+	if r.spec.heat {
+		resp.Diagnostics.AddWarning("Heat stack left in MTN Cloud",
+			fmt.Sprintf("Order %d's VM is deleted, but MTN's workflow built it through a Heat stack (%s), which a customer "+
+				"login can't delete: its network port and floating IP stay, and keep the router from being deleted. Ask MTN "+
+				"to delete the stack.", orderID, strings.Join(stacks, ", ")))
+	}
 	if err := r.client.DeleteOrderedItem(ctx, orderID); err != nil {
 		resp.Diagnostics.AddWarning("Order record not deleted",
 			fmt.Sprintf("What order %d made is deleted, but its record in Catalog > Inventory wasn't: %s. Delete the record "+
@@ -1170,13 +1412,15 @@ func (r *orderResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 // their own, and every instance to wait for.
 type orderDeletion struct {
 	apps, instances, gone []int64
+	detach                [][2]int64 // {app, instance}: taken out of the order's app before it is deleted
 }
 
-// deletePlan decides how an order's instances are deleted. An app order's own app (named after
-// the order, and holding at least one of its instances) goes with all its instances. Any other app goes whole only when every instance in it
-// is the order's: an app that also holds someone else's instance is left, and the order's
-// instances in it are deleted one by one.
-func deletePlan(apps []client.App, ids []int64, name string, app bool) orderDeletion {
+// deletePlan decides how an order's instances are deleted. An app order's own app (the saved
+// appID, else named after the order and holding at least one of its instances) is deleted with the
+// order's instances in it; any other instance in it is taken out first and left running. Any other
+// app goes whole only when every instance in it is the order's: an app that also holds someone
+// else's instance is left, and the order's instances in it are deleted one by one.
+func deletePlan(apps []client.App, ids []int64, name string, app bool, appID int64) orderDeletion {
 	var out orderDeletion
 	mine := map[int64]bool{}
 	for _, id := range ids {
@@ -1190,13 +1434,16 @@ func deletePlan(apps []client.App, ids []int64, name string, app bool) orderDele
 			all = all && mine[id]
 		}
 		// The name alone isn't enough: another project, or the user, may have an app of that name.
-		own := app && holds && strings.EqualFold(a.Name, name)
+		own := app && ((appID != 0 && a.ID == appID) || (appID == 0 && holds && strings.EqualFold(a.Name, name)))
 		if !own && (!holds || !all) {
 			continue
 		}
 		out.apps = append(out.apps, a.ID)
 		for _, id := range a.InstanceIDs {
-			if !covered[id] {
+			switch {
+			case !mine[id]:
+				out.detach = append(out.detach, [2]int64{a.ID, id})
+			case !covered[id]:
 				covered[id] = true
 				out.gone = append(out.gone, id)
 			}
@@ -1277,4 +1524,13 @@ func inputChange(name string, before, after attr.Value) change {
 		return recorded
 	}
 	return reorder
+}
+
+// joinIDs is a list of instance IDs for a message, for example "4641, 4642".
+func joinIDs(ids []int64) string {
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = strconv.FormatInt(id, 10)
+	}
+	return strings.Join(out, ", ")
 }

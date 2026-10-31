@@ -1,0 +1,113 @@
+{
+  "catalogItemType": {
+    "id": 74,
+    "name": "MTN SOPHOS Firewall (BYOL)",
+    "type": "workflow",
+    "context": "appliance",
+    "optionTypes": [],
+    "form": {
+      "options": [
+        {
+          "id": 1,
+          "fieldName": "group-vpn",
+          "type": "group",
+          "required": true,
+          "fieldContext": "config.customOptions",
+          "config": {}
+        },
+        {
+          "id": 2,
+          "fieldName": "cloud",
+          "type": "cloud",
+          "required": true,
+          "fieldContext": "config.customOptions",
+          "config": {}
+        },
+        {
+          "id": 4,
+          "fieldName": "environment",
+          "type": "environment",
+          "required": false,
+          "fieldContext": "config.customOptions",
+          "config": {}
+        },
+        {
+          "id": 6,
+          "fieldName": "resourcepool",
+          "type": "resourcePool",
+          "required": true,
+          "fieldContext": "config.customOptions",
+          "config": {}
+        },
+        {
+          "id": 3,
+          "fieldName": "name",
+          "type": "text",
+          "required": true,
+          "fieldContext": "config.customOptions",
+          "config": {},
+          "isHidden": true,
+          "defaultValue": "${userInitials}-${accountId}-MTN-CLOUD-${type}-${sequence+0}",
+          "isLocked": true
+        },
+        {
+          "id": 5,
+          "fieldName": "label",
+          "type": "textArray",
+          "required": false,
+          "fieldContext": "config.customOptions",
+          "config": {}
+        },
+        {
+          "id": 7401,
+          "fieldName": "plan",
+          "type": "select",
+          "required": true,
+          "fieldContext": "config.customOptions",
+          "config": {},
+          "fieldLabel": "PLAN",
+          "helpBlock": "Minimum 2VCPU & 4GB"
+        },
+        {
+          "id": 8,
+          "fieldName": "volumes",
+          "type": "diskManager",
+          "required": false,
+          "fieldContext": "config.customOptions",
+          "config": {},
+          "fieldLabel": "VOLUMES",
+          "helpBlock": "Minimum 80 GB. A required 40 GB data disk is added automatically from the backend, for 120 GB total."
+        },
+        {
+          "id": 9,
+          "fieldName": "networks",
+          "type": "networkManager",
+          "required": true,
+          "fieldContext": "config.customOptions",
+          "config": {},
+          "fieldLabel": "NETWORKS",
+          "helpBlock": "Note: Service requires at least 2 interfaces"
+        },
+        {
+          "id": 10,
+          "fieldName": "securitygroups",
+          "type": "secGroup",
+          "required": false,
+          "fieldContext": "config.customOptions",
+          "config": {}
+        },
+        {
+          "id": 11,
+          "fieldName": "floatingip",
+          "type": "select",
+          "required": true,
+          "fieldContext": "config.customOptions",
+          "config": {},
+          "fieldLabel": "FLOATING IP"
+        }
+      ],
+      "fieldGroups": []
+    },
+    "code": "SPH004"
+  }
+}

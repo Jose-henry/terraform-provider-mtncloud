@@ -82,6 +82,7 @@ user in one tenant, so no subdomain is needed.
 | Setting | Provider block | Environment variable |
 |---|---|---|
 | Access token | `access_token` | `MTNCLOUD_API_TOKEN` |
+| Access token in a file, read again when refused (long applies; most resources) | `access_token_file` | `MTNCLOUD_API_TOKEN_FILE` |
 
 ### Which login is used
 
@@ -353,6 +354,7 @@ stored in state as sensitive values, because you need to read them back.
 | `username` | `MTNCLOUD_API_USERNAME` | Username login (wins over a token) |
 | `password` | `MTNCLOUD_API_PASSWORD` | Password for username login |
 | `access_token` | `MTNCLOUD_API_TOKEN` | Token login |
+| `access_token_file` | `MTNCLOUD_API_TOKEN_FILE` | Token login from a file, read again when the token is refused (most resources; see the note on long applies) |
 | `group` | `MTNCLOUD_GROUP` | Default group |
 | `cloud` | `MTNCLOUD_CLOUD` | Default cloud |
 | `project` | `MTNCLOUD_PROJECT` | Default project |

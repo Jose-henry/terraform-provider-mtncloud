@@ -44,9 +44,14 @@ func findOptionSourceOption(data *[]sdk.OptionSourceOption, kind, name string, i
 		options = *data
 	}
 	names := make([]string, 0, len(options))
+	var unreadable []string // options whose value isn't a whole number: they can't be used here
 	for _, o := range options {
 		v, ok := optionSourceID(o.Value)
 		if !ok {
+			if strings.EqualFold(o.Name, name) {
+				return sdk.OptionSourceOption{}, 0, fmt.Errorf("%s %q exists, but its value (%v) isn't a number, so it can't be used here", kind, o.Name, o.Value)
+			}
+			unreadable = append(unreadable, o.Name)
 			continue
 		}
 		names = append(names, o.Name)
@@ -57,6 +62,10 @@ func findOptionSourceOption(data *[]sdk.OptionSourceOption, kind, name string, i
 	want := fmt.Sprintf("named %q", name)
 	if id != 0 {
 		want = fmt.Sprintf("with id %d", id)
+	}
+	if len(names) == 0 && len(unreadable) > 0 {
+		sort.Strings(unreadable)
+		return sdk.OptionSourceOption{}, 0, fmt.Errorf("no %s %s: the %s offered (%s) have values that aren't numbers, so they can't be read", kind, want, kind, strings.Join(unreadable, ", "))
 	}
 	if len(names) == 0 {
 		return sdk.OptionSourceOption{}, 0, fmt.Errorf("no %s %s: none is available to this login", kind, want)

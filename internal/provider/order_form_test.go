@@ -124,7 +124,7 @@ resource "mtncloud_mongodb" "db" {
 					s.mu.Lock()
 					defer s.mu.Unlock()
 					c, _ := s.sent[9801]["config"].(map[string]any)
-					if c["newField"] != "x" || c["adminUsername"] != "Admin" || c["mongoUserRole"] != "readWrite" || c["enableAuth"] != false {
+					if c["newField"] != "x" || c["adminUsername"] != "Admin" || c["mongoUserRole"] != "readWrite" || c["enableAuth"] != "off" {
 						t.Errorf("newField %v, adminUsername %v, mongoUserRole %v, enableAuth %v", c["newField"], c["adminUsername"], c["mongoUserRole"], c["enableAuth"])
 					}
 					if _, sent := c["replicaSetName"]; sent {
@@ -297,6 +297,149 @@ resource "mtncloud_managed_streaming" "k" {
 	}
 }
 
+// An order's app renamed in the console, with an instance someone else added to it: the order keeps
+// its app by ID, plans nothing, and destroy takes the added instance out of the app (left running)
+// before deleting the app with the order's own instance (B-028 catches 1 and 2).
+func TestAppOrder_RenamedAppAddedInstance(t *testing.T) {
+	f, s, insts := orderFakes(t)
+	s.apps, s.appName, s.appStep = map[int64][]int64{}, map[int64]string{}, map[int64][]string{}
+	s.insts = insts
+	s.made = func(item map[string]any) {
+		cfg, _ := item["config"].(map[string]any)
+		insts.mu.Lock()
+		defer insts.mu.Unlock()
+		insts.nextID++
+		insts.insts[insts.nextID] = map[string]any{"id": insts.nextID, "name": "ab-42-MTN-CLOUD-KAFKA-1", "status": "running",
+			"config": map[string]any{"resourcePoolId": cfg["resourcepool"]}}
+		s.apps[9901], s.appName[9901] = []int64{insts.nextID}, "kafka-1"
+	}
+	cfg := f.providerConfig() + `
+resource "mtncloud_managed_streaming" "k" {
+  name             = "kafka-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 100
+  networks         = ["app-net"]
+  security_groups  = ["web"]
+  admin_password   = "s3cret-value"
+}
+`
+	const res = "mtncloud_managed_streaming.k"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		CheckDestroy: func(*terraform.State) error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if d := strings.Join(s.deleted, ","); !strings.Contains(d, "out of app 9901: 9750") || !strings.Contains(d, "app 9901") {
+				t.Errorf("destroy did %v: want instance 9750 taken out of app 9901, then the app deleted", s.deleted)
+			}
+			insts.mu.Lock()
+			defer insts.mu.Unlock()
+			if _, ok := insts.insts[9750]; !ok {
+				t.Error("the instance added to the app was deleted with the order")
+			}
+			if _, ok := insts.insts[9701]; ok {
+				t.Error("the order's own instance 9701 wasn't deleted")
+			}
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{Config: cfg, ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue(res, tfjsonpath.New("app_id"), knownvalue.StringExact("9901")),
+			}},
+			{
+				PreConfig: func() {
+					s.mu.Lock()
+					s.appName[9901] = "streaming-renamed"
+					s.apps[9901] = append(s.apps[9901], 9750)
+					s.mu.Unlock()
+					insts.mu.Lock()
+					insts.insts[9750] = map[string]any{"id": 9750, "name": "worker-x", "status": "running",
+						"config": map[string]any{"resourcePoolId": "pool-9201"}}
+					insts.mu.Unlock()
+				},
+				Config:           cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(res, tfjsonpath.New("instance_ids"), knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("9701")})),
+				},
+			},
+		},
+	})
+}
+
+// An app order imported after an instance was added to its app: the import has no saved instances,
+// but the added one isn't taken for the order's, so destroy takes it out of the app, left running.
+func TestAppOrder_ImportedAddedInstance(t *testing.T) {
+	f, s, insts := orderFakes(t)
+	s.apps, s.appName, s.appStep = map[int64][]int64{}, map[int64]string{}, map[int64][]string{}
+	s.insts = insts
+	s.made = func(item map[string]any) {
+		cfg, _ := item["config"].(map[string]any)
+		insts.mu.Lock()
+		defer insts.mu.Unlock()
+		insts.nextID++
+		insts.insts[insts.nextID] = map[string]any{"id": insts.nextID, "name": "ab-42-MTN-CLOUD-KAFKA-1", "status": "running",
+			"config": map[string]any{"resourcePoolId": cfg["resourcepool"]}}
+		s.apps[9901], s.appName[9901] = []int64{insts.nextID}, "kafka-1"
+	}
+	cfg := f.providerConfig() + `
+resource "mtncloud_managed_streaming" "k" {
+  name             = "kafka-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 100
+  networks         = ["app-net"]
+  security_groups  = ["web"]
+  admin_password   = "s3cret-value"
+}
+`
+	const res = "mtncloud_managed_streaming.k"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		CheckDestroy: func(*terraform.State) error {
+			insts.mu.Lock()
+			defer insts.mu.Unlock()
+			if _, ok := insts.insts[9750]; !ok {
+				t.Errorf("the instance added to the app was deleted with the imported order (%v)", s.deleted)
+			}
+			if _, ok := insts.insts[9701]; ok {
+				t.Error("the order's own instance 9701 wasn't deleted")
+			}
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{Config: cfg},
+			// Forgotten by Terraform, left in the cloud: then imported fresh, with no saved instances.
+			{Config: f.providerConfig() + `
+removed {
+  from = mtncloud_managed_streaming.k
+  lifecycle {
+    destroy = false
+  }
+}
+`},
+			{
+				PreConfig: func() {
+					s.mu.Lock()
+					s.apps[9901] = append(s.apps[9901], 9750)
+					s.mu.Unlock()
+					insts.mu.Lock()
+					insts.insts[9750] = map[string]any{"id": 9750, "name": "worker-x", "status": "running",
+						"config": map[string]any{"resourcePoolId": "pool-9201"}}
+					insts.mu.Unlock()
+				},
+				Config: cfg, ResourceName: res, ImportState: true, ImportStateId: "9801", ImportStatePersist: true,
+			},
+			{Config: cfg, ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue(res, tfjsonpath.New("instance_ids"), knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("9701")})),
+			}},
+		},
+	})
+}
+
 // An app that settles in any state but running fails the apply, so the next apply orders again.
 func TestAppOrder_AppFails(t *testing.T) {
 	f, s, insts := orderFakes(t)
@@ -354,5 +497,127 @@ resource "mtncloud_mysql" "db" {
 `,
 			ExpectError: regexp.MustCompile(wrapped(`(?s)instance not found.*no instance named "db-1" is in the project.*named it itself`)),
 		}, {Config: forget(f, "mtncloud_mysql.db")}},
+	})
+}
+
+// SOPHOS: MTN's workflow names the VM itself and reports it in its output. The order takes the VM
+// it reported, in its project only (never a same-name VM elsewhere, nor one named after the
+// order), and destroy deletes that VM.
+func TestSophosOrder(t *testing.T) {
+	f, s, insts := orderFakes(t)
+	f.net.(*netStore).networks[9351] = map[string]any{"id": 9351, "name": "dmz-net", "status": "ACTIVE",
+		"zonePool": map[string]any{"id": 9201, "name": "web-prod-Acme"}}
+	const vm = "ab-42-MTN-CLOUD-SPH001-1"
+	insts.insts[4600] = map[string]any{"id": 4600, "name": vm, "status": "running", "config": map[string]any{"resourcePoolId": "pool-9999"}}
+	insts.insts[4601] = map[string]any{"id": 4601, "name": "fw-1", "status": "running", "config": map[string]any{"resourcePoolId": "pool-9201"}}
+	s.made = func(item map[string]any) {
+		cfg, _ := item["config"].(map[string]any)
+		insts.mu.Lock()
+		defer insts.mu.Unlock()
+		insts.insts[4639] = map[string]any{"id": 4639, "name": vm, "status": "running", "config": map[string]any{"resourcePoolId": cfg["resourcepool"]}}
+		s.output = "Creating stack ...\n Instance name : " + vm + "\n   Console          : https://console.example/provisioning/instances/4639\n"
+	}
+	cfg := f.providerConfig() + `
+resource "mtncloud_sophos_firewall" "fw" {
+  name             = "fw-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 80
+  networks         = ["app-net", "dmz-net"]
+  floating_ip_pool = "public-network-01"
+}
+`
+	noName := strings.Replace(cfg, "  name             = \"fw-1\"\n", "", 1)
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		CheckDestroy: func(*terraform.State) error {
+			insts.mu.Lock()
+			defer insts.mu.Unlock()
+			if _, ok := insts.insts[4639]; ok {
+				t.Error("the reported VM 4639 wasn't deleted")
+			}
+			for _, id := range []int64{4600, 4601} {
+				if _, ok := insts.insts[id]; !ok {
+					t.Errorf("instance %d deleted, but the workflow didn't report it", id)
+				}
+			}
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{Config: cfg, ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue("mtncloud_sophos_firewall.fw", tfjsonpath.New("instance_ids"),
+					knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("4639")})),
+			}},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// name isn't used: removing it changes nothing, rather than ordering a new firewall.
+			{Config: noName, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+				plancheck.ExpectResourceAction("mtncloud_sophos_firewall.fw", plancheck.ResourceActionUpdate)}}},
+			{Config: noName, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// An order whose apply was cut off is imported by its inventory ID, and finds its VM again.
+			{Config: forget(f, "mtncloud_sophos_firewall.fw")},
+			{Config: noName, ResourceName: "mtncloud_sophos_firewall.fw", ImportState: true, ImportStateId: "9801", ImportStatePersist: true},
+			{Config: noName, ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue("mtncloud_sophos_firewall.fw", tfjsonpath.New("instance_ids"),
+					knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("4639")})),
+			}},
+			{Config: noName, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+// A workflow that fails after its VM is up (MTN's SOPHOS workflow, QA 2026-10-31) keeps the VM in
+// state: the apply fails and taints it, so the next apply deletes the VM before ordering again; and
+// an order that is seen to fail later, with its VM still there, plans a replace instead of leaving
+// the VM behind.
+func TestOrder_FailedAfterVM(t *testing.T) {
+	f, s, insts := orderFakes(t)
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	s.result, s.madeOnError = "error", true
+	cfg := f.providerConfig() + `
+resource "mtncloud_mysql" "db" {
+  name             = "db-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 40
+  networks         = ["app-net"]
+}
+`
+	vms := func(want int) resource.TestCheckFunc {
+		return func(*terraform.State) error {
+			if n := insts.count(); n != want {
+				t.Errorf("%d VMs, want %d", n, want)
+			}
+			return nil
+		}
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		CheckDestroy:             func(*terraform.State) error { return vms(0)(nil) },
+		Steps: []resource.TestStep{
+			{Config: cfg, ExpectError: regexp.MustCompile(wrapped(`(?s)order failed.*left instance 9701, kept in state`))},
+			{
+				PreConfig: lock(func() { s.result, s.madeOnError = "success", false }),
+				Config:    cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_mysql.db", plancheck.ResourceActionDestroyBeforeCreate)}},
+				Check: vms(1), // the failed order's VM was deleted, the new one made
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				// The order is seen to have failed later, its VM still there: replaced, not dropped.
+				PreConfig: lock(func() {
+					for _, it := range s.items {
+						if ex, ok := it["execution"].(map[string]any); ok && it["id"] != 9795 {
+							ex["status"] = "failed"
+						}
+					}
+				}),
+				Config: cfg, PlanOnly: true, ExpectNonEmptyPlan: true,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("mtncloud_mysql.db", plancheck.ResourceActionReplace)}},
+			},
+		},
 	})
 }

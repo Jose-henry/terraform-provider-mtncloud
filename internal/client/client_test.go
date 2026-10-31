@@ -766,3 +766,38 @@ func TestDo_SuccessFalseIsAnError(t *testing.T) {
 		t.Error("a refusal was not applied")
 	}
 }
+
+// A token file is read at the first call and again on a 401, so a token refreshed in the file
+// mid-run is used; one still holding the refused token says so.
+func TestTokenFile_ReloadOn401(t *testing.T) {
+	f := newFakeAPI(t)
+	file := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(file, []byte("old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var refused atomic.Int32
+	f.route("GET", "/api/whoami", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer new" {
+			if refused.Add(1) == 1 {
+				_ = os.WriteFile(file, []byte("new"), 0o600) // refreshed by another process
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"user":{"account":{"id":1,"name":"Acme"}}}`))
+	})
+	c := f.client(t, func(c *Config) { c.Token, c.TokenFile = "", file })
+	if _, err := c.WhoAmI(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if refused.Load() != 1 {
+		t.Errorf("refused %d times, want 1", refused.Load())
+	}
+
+	stale := newFakeAPI(t)
+	stale.route("GET", "/api/whoami", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) })
+	c = stale.client(t, func(c *Config) { c.Token, c.TokenFile = "", file })
+	if _, err := c.WhoAmI(t.Context()); err == nil || !strings.Contains(err.Error(), "refused the access token in") {
+		t.Errorf("err = %v, want the file's token refused", err)
+	}
+}

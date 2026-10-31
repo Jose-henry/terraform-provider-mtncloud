@@ -42,3 +42,25 @@ func TestExecutionFailure(t *testing.T) {
 		t.Error("no execution should say nothing")
 	}
 }
+
+func TestWorkflowInstance(t *testing.T) {
+	cases := []struct {
+		out  string
+		id   int64
+		name string
+	}{
+		{"Creating stack\n Instance name : ab-42-MTN-CLOUD-SPH001-1\n Stack : ab-42-MTN-CLOUD-SPH001-1-stack\n" +
+			"   Console          : https://console.example/provisioning/instances/4639\n", 4639, "ab-42-MTN-CLOUD-SPH001-1"},
+		// Still waiting for the sync: the name only.
+		{" Instance name : ab-42-MTN-CLOUD-SPH001-2\nLooking for OpenStack server", 0, "ab-42-MTN-CLOUD-SPH001-2"},
+		{"Validating\nDone", 0, ""},
+		// A name mentioned mid-line isn't the report.
+		{"checked Instance name : x-1 earlier", 0, ""},
+	}
+	for _, tc := range cases {
+		id, name := WorkflowInstance(tc.out)
+		if id != tc.id || name != tc.name {
+			t.Errorf("WorkflowInstance(%q) = %d, %q; want %d, %q", tc.out, id, name, tc.id, tc.name)
+		}
+	}
+}

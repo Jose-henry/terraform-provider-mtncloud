@@ -27,6 +27,15 @@ The provider signs in with a username and password, or an API token:
 
 A customer login also needs your tenant's subdomain or account ID, set with `tenant_subdomain` or `MTNCLOUD_API_TENANT`.
 
+**Long applies.** Some orders take longer than an API token lasts: a SOPHOS firewall about an hour, a
+Kubernetes cluster often more than 25 minutes. A token that expires mid-apply fails it with a 401
+while the order goes on in MTN Cloud. For those applies, sign in with a username and password (the
+provider signs in again when its token expires), use a token that lasts longer than the apply, or use
+`access_token_file` (`MTNCLOUD_API_TOKEN_FILE`): the provider reads the file again when a token is
+refused, so a token refreshed in that file during the apply is picked up. The tenancy, IAM,
+integration, automation, policy and appliance-configuration resources read it once, when the run
+starts: keep long orders and those resources in separate applies.
+
 TLS certificates are verified by default. Set `secure = false` (or `MTNCLOUD_API_SECURE=false`) only
 for a console with a self-signed certificate, never in production.
 

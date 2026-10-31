@@ -194,13 +194,13 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Description: "Security groups to apply, by name, in addition to the project's default group, which is " +
 					"always applied; listing the default too changes nothing. Changed in place. Each group needs the project as a location.",
 			},
-			// Optional+Computed: the plan's root size (10 GB) applies when left out.
+			// Required (owner, 2026-10-31): every VM states its disk, as the console asks for one.
 			"root_volume_size": schema.Int64Attribute{
-				Optional: true, Computed: true,
-				Description: "Root volume size in GB. Left out, the plan's size applies (10 GB). MTN Cloud can't resize a " +
-					"root volume: add a `data_volume` instead. Windows images need at least 40 GB.",
-				Validators:    []validator.Int64{int64validator.AtLeast(1)},
-				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
+				Required: true,
+				Description: "Root volume size in GB. MTN Cloud can't resize a root volume: add a `data_volume` instead. " +
+					"Windows images need at least 40 GB. Upgrading from 0.7.0, where it was optional, set it to the size " +
+					"the instance has (shown in state): any other size is refused, as a root disk can't be resized.",
+				Validators: []validator.Int64{int64validator.AtLeast(1)},
 			},
 			"datastore": schema.StringAttribute{
 				Optional: true,
@@ -258,27 +258,9 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Validators:    []validator.Int64{int64validator.Between(1, 20)},
 				PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()},
 			},
-			"scale": schema.SingleNestedAttribute{
-				Optional: true,
-				Description: "Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and removes one " +
-					"below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. " +
-					"Changed in place; removing it turns scaling off.",
-				Attributes: map[string]schema.Attribute{
-					"min_count": schema.Int64Attribute{Required: true, Description: "Fewest VMs.",
-						Validators: []validator.Int64{int64validator.AtLeast(1)}},
-					"max_count": schema.Int64Attribute{Required: true, Description: "Most VMs.",
-						Validators: []validator.Int64{int64validator.AtLeast(1)}},
-					"increment": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1),
-						Description: "VMs added or removed at a time. Defaults to 1.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
-					"auto_up": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
-						Description: "Add VMs automatically. Defaults to `true`."},
-					"auto_down": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
-						Description: "Remove VMs automatically. Defaults to `true`."},
-					"cpu":    usageRange("CPU"),
-					"memory": usageRange("Memory"),
-					"disk":   usageRange("Disk"),
-				},
-			},
+			"scale": scaleAttribute("Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and removes one " +
+				"below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. " +
+				"Changed in place; removing it turns scaling off."),
 			"floating_ip_pool": schema.StringAttribute{
 				// Kept as configured while the instance has an address: a customer can't read which pool it
 				// came from. No address means none is attached.
@@ -1140,6 +1122,16 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 	var inst *client.Instance
 	if resized {
 		inst, err = r.client.WaitForResize(ctx, id, in.PlanID, len(in.Volumes), 0)
+		if errors.Is(err, context.DeadlineExceeded) && inst != nil {
+			// Accepted, but not applied (B-016): say where it was left. State takes the instance as
+			// it is, so the next plan shows the resize again.
+			resp.Diagnostics.AddError("Resize not applied",
+				fmt.Sprintf("MTN Cloud accepted the resize of instance %d, but by the update timeout it was still on plan %q "+
+					"(asked for %q), status %q, with %d of %d disks. Check it in the console, then apply again, or raise "+
+					"`timeouts { update = \"60m\" }` if it is only slow.", id, inst.PlanName, plan.Plan.ValueString(), inst.Status,
+					len(inst.Volumes), len(in.Volumes)))
+			err = nil
+		}
 	} else {
 		inst, err = r.client.WaitForInstance(ctx, id)
 	}
@@ -1503,6 +1495,31 @@ func volumesOf(ctx context.Context, v types.List, diags *diag.Diagnostics) []dat
 		diags.Append(d...)
 	}
 	return out
+}
+
+// scaleAttribute is the scale block, Optional on both instance resources. It isn't Optional+Computed
+// on the settings resource: removing an Optional+Computed nested attribute from the configuration
+// plans an update every time (Terraform proposes null for it), so null means "not managed" there.
+func scaleAttribute(description string) schema.SingleNestedAttribute {
+	return schema.SingleNestedAttribute{
+		Optional:    true,
+		Description: description,
+		Attributes: map[string]schema.Attribute{
+			"min_count": schema.Int64Attribute{Required: true, Description: "Fewest VMs.",
+				Validators: []validator.Int64{int64validator.AtLeast(1)}},
+			"max_count": schema.Int64Attribute{Required: true, Description: "Most VMs.",
+				Validators: []validator.Int64{int64validator.AtLeast(1)}},
+			"increment": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1),
+				Description: "VMs added or removed at a time. Defaults to 1.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
+			"auto_up": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
+				Description: "Add VMs automatically. Defaults to `true`."},
+			"auto_down": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true),
+				Description: "Remove VMs automatically. Defaults to `true`."},
+			"cpu":    usageRange("CPU"),
+			"memory": usageRange("Memory"),
+			"disk":   usageRange("Disk"),
+		},
+	}
 }
 
 // checkScale refuses a scale block that can't work: no metric to watch, or marks the wrong way round.

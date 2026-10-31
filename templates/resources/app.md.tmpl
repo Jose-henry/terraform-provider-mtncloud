@@ -1,0 +1,30 @@
+---
+page_title: "mtncloud_app Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_app
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_app/resource.tf"}}
+
+## Notes
+
+- **Destroy keeps the instances.** The app is deleted; its instances keep running, and are deleted
+  through whatever made them.
+- **Members** join with `mtncloud_app_instance`, one per instance.
+- **Names are unique** in your tenant: a name already in use is refused at apply, with the import command.
+- **Catalog orders' apps** belong to their order: manage their settings with `mtncloud_app_settings`.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_app/import.sh" }}

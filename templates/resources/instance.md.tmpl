@@ -20,12 +20,13 @@ numbers them, or set it from the key.
 resource "mtncloud_instance" "worker" {
   for_each = toset(["a", "b", "c"])
 
-  name     = "worker-${each.key}"
-  group    = "MTNNG_CLOUD_AZ_1"
-  project  = "web-prod"
-  image    = "MTN-U24.04LTS"
-  plan     = "G1S1"
-  networks = [mtncloud_network.app.id]
+  name             = "worker-${each.key}"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod"
+  image            = "MTN-U24.04LTS"
+  plan             = "G1S1"
+  root_volume_size = 20
+  networks         = [mtncloud_network.app.id]
 }
 ```
 

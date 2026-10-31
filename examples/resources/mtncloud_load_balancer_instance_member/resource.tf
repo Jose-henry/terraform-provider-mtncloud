@@ -11,3 +11,13 @@ resource "mtncloud_load_balancer_instance_member" "app" {
 output "app_members" {
   value = mtncloud_load_balancer_instance_member.app.members[*].address
 }
+
+# Only one node of the instance, pinned: it stays when the instance scales, and no other node joins.
+resource "mtncloud_load_balancer_instance_member" "admin" {
+  network_id       = mtncloud_network.app.id
+  load_balancer_id = mtncloud_load_balancer.web.id
+  pool_id          = mtncloud_load_balancer_pool.admin.id
+  instance_id      = mtncloud_instance.app.id
+  pin_address      = mtncloud_instance.app.private_ip
+  port             = 9090
+}

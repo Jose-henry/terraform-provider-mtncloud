@@ -11,7 +11,9 @@ import (
 
 func resourceGroup() *schema.Resource {
 	return &schema.Resource{
-		Description:   "Provides an MTN Cloud group resource: a group of clouds that instances and orders are placed in.",
+		Description: "Provides an MTN Cloud group resource: a group of clouds that instances and orders are placed in. " +
+			"Needs a role with full access to groups (Administration > Groups); the default customer role can only read them, " +
+			"and gets a 403 on create. Use the `mtncloud_group` data source to look one up.",
 		CreateContext: resourceGroupCreate,
 		ReadContext:   resourceGroupRead,
 		UpdateContext: resourceGroupUpdate,

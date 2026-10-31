@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // MTN Networks: POST/GET/PUT/DELETE /api/networks[/{id}]. Shapes were captured as a customer
@@ -31,6 +32,9 @@ type Network struct {
 	AllowIPOverride bool
 	IPv6            *NetworkIPv6 // nil when IPv6 is off
 	SubnetID        int64        // the subnet made with the network; 0 if none yet
+	// DHCPRange is "<start>,<end>", one range; HostRoutes one "<destination CIDR>,<next hop>" per
+	// line (config.dhcpRange and config.hostRoutes, B-010, live 2026-10-31). "" when unset.
+	DHCPRange, HostRoutes string
 	// Read only.
 	DisplayName, Visibility string
 	Labels                  []string
@@ -59,6 +63,9 @@ type NetworkInput struct {
 	DHCP            bool
 	AllowIPOverride bool
 	IPv6            *NetworkIPv6
+	// Sent as config.dhcpRange and config.hostRoutes, "" clearing them. Nil leaves them out of
+	// the request (a create that sets neither).
+	DHCPRange, HostRoutes *string
 }
 
 type wireNetwork struct {
@@ -89,6 +96,10 @@ type wireNetwork struct {
 	Subnets             []struct {
 		ID int64 `json:"id"`
 	} `json:"subnets"`
+	Config *struct {
+		DHCPRange  *string `json:"dhcpRange"`
+		HostRoutes *string `json:"hostRoutes"`
+	} `json:"config"`
 }
 
 func (w wireNetwork) network() *Network {
@@ -115,6 +126,9 @@ func (w wireNetwork) network() *Network {
 	}
 	if len(w.Subnets) > 0 {
 		n.SubnetID = w.Subnets[0].ID
+	}
+	if w.Config != nil {
+		n.DHCPRange, n.HostRoutes = strings.TrimSpace(deref(w.Config.DHCPRange)), strings.TrimSpace(deref(w.Config.HostRoutes))
 	}
 	return n
 }
@@ -169,6 +183,9 @@ func networkBody(in NetworkInput) map[string]any {
 		b["dnsPrimaryIPv6"] = in.IPv6.DNSPrimary
 		b["dnsSecondaryIPv6"] = in.IPv6.DNSSecondary
 		b["dhcpServerIPv6"] = in.IPv6.DHCP
+	}
+	if in.DHCPRange != nil || in.HostRoutes != nil {
+		b["config"] = map[string]any{"dhcpRange": deref(in.DHCPRange), "hostRoutes": deref(in.HostRoutes)}
 	}
 	return b
 }
@@ -299,6 +316,34 @@ func (c *Client) WaitForNetwork(ctx context.Context, id int64) (*Network, error)
 func IsInUse(err error) bool {
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && strings.Contains(strings.ToLower(apiErr.Message), "still in use")
+}
+
+// networkWatch is how long a network is watched after an update: MTN Cloud answers "success" at
+// once, and the network service's refusal (a bad DHCP range) turns it "failed" seconds later.
+var networkWatch = struct {
+	reads int
+	every time.Duration
+}{4, 3 * time.Second}
+
+// WatchNetwork reads a network just updated a few times, a few seconds apart, and returns it as
+// soon as it is failed, or as last read.
+func (c *Client) WatchNetwork(ctx context.Context, id int64) (*Network, error) {
+	var n *Network
+	for i := 0; i < networkWatch.reads; i++ {
+		if i > 0 {
+			if err := sleep(ctx, networkWatch.every); err != nil {
+				return n, err
+			}
+		}
+		var err error
+		if n, err = c.GetNetwork(ctx, id); err != nil {
+			return nil, err
+		}
+		if NetworkFailed(n.Status) {
+			return n, nil
+		}
+	}
+	return n, nil
 }
 
 // WaitForNetworkSubnet reads a network until it has a subnet: a network made moments ago gets its

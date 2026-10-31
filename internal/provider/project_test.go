@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,13 +31,16 @@ type orderStore struct {
 	postFail  int    // the order POST places the order, then answers with this status
 	// made, when set, runs once when an order's execution succeeds: what the workflow creates.
 	made func(order map[string]any)
-	sent map[int64]map[string]any // each order's item, as posted
+	// madeOnError runs made for a failed execution too: a workflow that fails after its VM is up.
+	madeOnError bool
+	sent        map[int64]map[string]any // each order's item, as posted
 	// apps maps an app ID to its instance IDs; deleting one (removeInstances=on) deletes them from
 	// insts. deleted lists the inventory records and apps deleted, in order ("item 9801", "app 9901").
 	apps    map[int64][]int64
 	appName map[int64]string   // an app's name, "app-<id>" when not set
 	appStep map[int64][]string // an app's status on each list, the last kept; "running" when not set
 	failure string             // the failed task's output in every execution, when set
+	output  string             // a finished task's output in every execution, when set
 	insts   *instStore
 	deleted []string
 }
@@ -93,6 +97,9 @@ func (s *orderStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/job-executions/") {
 		ev := []any{map[string]any{"status": "complete", "output": "Validating"}}
+		if s.output != "" {
+			ev = append(ev, map[string]any{"status": "complete", "output": s.output})
+		}
 		if s.failure != "" {
 			ev = append(ev, map[string]any{"status": "failed", "output": s.failure})
 		}
@@ -120,14 +127,14 @@ func (s *orderStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if s.result == "error" {
 			item["statusMessage"] = "Resource pool create returned 400"
 		}
-		if s.result == "success" && s.made != nil {
+		if (s.result == "success" || s.madeOnError) && s.made != nil {
 			s.made(s.sent[id])
 		}
 	}
 	reply(http.StatusOK, map[string]any{"item": item})
 }
 
-// serveApps lists the apps, and deletes one with its instances.
+// serveApps lists the apps, takes an instance out of one, and deletes one with its instances.
 func (s *orderStore) serveApps(r *http.Request, reply func(int, any)) {
 	if r.Method == http.MethodGet && r.URL.Path == "/api/apps" {
 		list := []any{}
@@ -151,8 +158,19 @@ func (s *orderStore) serveApps(r *http.Request, reply func(int, any)) {
 		reply(http.StatusOK, map[string]any{"apps": list, "meta": map[string]any{"total": len(list)}})
 		return
 	}
-	id, _ := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, "/api/apps/"), 10, 64)
+	rest, removing := strings.CutSuffix(strings.TrimPrefix(r.URL.Path, "/api/apps/"), "/remove-instance")
+	id, _ := strconv.ParseInt(rest, 10, 64)
 	held, ok := s.apps[id]
+	if removing && r.Method == http.MethodPost && ok {
+		var body struct {
+			InstanceID int64 `json:"instanceId"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		s.apps[id] = slices.DeleteFunc(held, func(i int64) bool { return i == body.InstanceID })
+		s.deleted = append(s.deleted, fmt.Sprint("out of app ", id, ": ", body.InstanceID))
+		reply(http.StatusOK, map[string]any{"success": true})
+		return
+	}
 	if r.Method != http.MethodDelete || !ok {
 		reply(http.StatusNotFound, map[string]any{"success": false, "msg": "App not found"})
 		return

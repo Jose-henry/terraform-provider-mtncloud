@@ -1,0 +1,32 @@
+---
+page_title: "mtncloud_app_settings Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_app_settings
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_app_settings/resource.tf"}}
+
+## Notes
+
+- **Ownership.** The order or console that made the app still owns it: destroying the order deletes the
+  app, and these settings leave state on the next refresh. Renaming the app here doesn't stop the order
+  finding it: the order keeps its app by ID.
+- **Owner.** Changing `owner` also changes the owner of every instance in the app.
+- **Settings left out** aren't managed: they show the app's values, and removing one from the
+  configuration leaves the app as it is.
+- **VM settings** (plan, power, security groups) belong to each instance: use `mtncloud_instance_settings`.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_app_settings/import.sh" }}

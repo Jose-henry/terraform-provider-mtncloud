@@ -82,7 +82,7 @@ func TestMySQLOrder(t *testing.T) {
 					defer s.mu.Unlock()
 					got, _ := json.Marshal(s.sent[9801]["config"])
 					want := `{"cloud":"4","environment":"production","floatingip":"pool-44","group-vpn":"9101","hostCIDRs":"0.0.0.0/0",` +
-						`"labels":"db","makeUserDbOwner":false,"mysqlVersion":"8.4","name":"db-1",` +
+						`"labels":"db","makeUserDbOwner":"off","mysqlVersion":"8.4","name":"db-1",` +
 						`"networks":[{"network":{"id":"network-9350"},"primaryInterface":true}],"passwordExpiryDays":90,"plan":13107,` +
 						`"resourcepool":"pool-9201","securitygroups":[{"id":9301},{"id":9302}],` +
 						`"volumes":[{"name":"root","rootVolume":true,"size":40},{"name":"data-1","rootVolume":false,"size":100,"storageType":414}],` +
@@ -363,7 +363,7 @@ resource "mtncloud_letsencrypt_certificate" "web" {
 					s.mu.Lock()
 					defer s.mu.Unlock()
 					got, _ := json.Marshal(s.sent[9801])
-					want := `{"config":{"sslDomainName":"shop.example.com","sslStaging":true},"context":"instance",` +
+					want := `{"config":{"sslDomainName":"shop.example.com","sslStaging":"on"},"context":"instance",` +
 						`"targets":[{"id":"9705"}],"type":{"name":"MTN Let's Encrypt SSL"}}`
 					if string(got) != want {
 						t.Errorf("order item\n got %s\nwant %s", got, want)
