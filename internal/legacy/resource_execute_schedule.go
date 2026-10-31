@@ -3,6 +3,7 @@ package legacy
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 
 	"log"
 
@@ -114,7 +115,7 @@ func resourceExecuteScheduleRead(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -186,7 +187,7 @@ func resourceExecuteScheduleDelete(ctx context.Context, d *schema.ResourceData, 
 	req := &sdk.Request{}
 	resp, err := client.DeleteExecuteSchedule(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

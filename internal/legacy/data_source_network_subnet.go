@@ -3,6 +3,7 @@ package legacy
 import (
 	"context"
 	"log"
+	"net/http"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -83,7 +84,7 @@ func dataSourceNetworkSubnetRead(ctx context.Context, d *schema.ResourceData, me
 
 		if err != nil {
 			errorPrefix := "API FAILURE"
-			if resp != nil && resp.StatusCode == 404 {
+			if resp != nil && resp.StatusCode == http.StatusNotFound {
 				errorPrefix = "API 404"
 			}
 			log.Printf("%s: %s - %v", errorPrefix, resp, err)
@@ -116,7 +117,7 @@ func dataSourceNetworkSubnetRead(ctx context.Context, d *schema.ResourceData, me
 		resp, err = client.GetNetworkSubnet(networkSubnetID, &sdk.Request{})
 		if err != nil {
 			errorPrefix := "API FAILURE"
-			if resp != nil && resp.StatusCode == 404 {
+			if resp != nil && resp.StatusCode == http.StatusNotFound {
 				errorPrefix = "API 404"
 			}
 			log.Printf("%s: %s - %v", errorPrefix, resp, err)

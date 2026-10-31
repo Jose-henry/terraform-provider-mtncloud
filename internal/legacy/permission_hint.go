@@ -2,7 +2,11 @@ package legacy
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"sync"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
@@ -50,7 +54,7 @@ func withPermissionHints(p *schema.Provider) {
 				return fn(ctx, d, meta)
 			}
 			diags := fn(ctx, d, c)
-			return addForbiddenHint(diags, c.LastResponse())
+			return addValidationErrors(addForbiddenHint(diags, c.LastResponse()), c.LastResponse())
 		}
 	}
 	for _, r := range p.ResourcesMap {
@@ -90,4 +94,44 @@ func addForbiddenHint(diags diag.Diagnostics, last *sdk.Response) diag.Diagnosti
 		}
 	}
 	return diags
+}
+
+// addValidationErrors adds the platform's field errors to a refused request's error. MTN Cloud
+// answers a bad body with {"success":false,"errors":{"field":"why"}} and often no msg, and the SDK
+// then says only "API returned HTTP 400" (live QA 2026-10-31: task and workflow jobs).
+func addValidationErrors(diags diag.Diagnostics, last *sdk.Response) diag.Diagnostics {
+	if last == nil || last.StatusCode < 400 || last.StatusCode >= 500 || last.StatusCode == http.StatusForbidden {
+		return diags
+	}
+	detail := validationDetail(last.Body)
+	if detail == "" {
+		return diags
+	}
+	for i := range diags {
+		if diags[i].Severity != diag.Error || strings.Contains(diags[i].Detail, detail) {
+			continue
+		}
+		if diags[i].Detail == "" {
+			diags[i].Detail = detail
+		} else {
+			diags[i].Detail += "\n\n" + detail
+		}
+	}
+	return diags
+}
+
+// validationDetail lists a response's field errors, sorted, as "MTN Cloud refused: a: why; b: why."
+func validationDetail(body []byte) string {
+	var r struct {
+		Errors map[string]any `json:"errors"`
+	}
+	if json.Unmarshal(body, &r) != nil || len(r.Errors) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(r.Errors))
+	for k, v := range r.Errors {
+		parts = append(parts, fmt.Sprintf("%s: %v", k, v))
+	}
+	slices.Sort(parts)
+	return "MTN Cloud refused: " + strings.Join(parts, "; ") + "."
 }

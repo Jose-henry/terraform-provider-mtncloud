@@ -7,8 +7,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-// A permission set left out is no change; one that isn't JSON fails instead of being sent as
-// empty (B-001: the error used to be dropped).
+// A permission set left out is empty (Create adds the defaults, see TestUserRoleDefaultsOnCreateOnly);
+// one that isn't JSON fails instead of being sent as empty (B-001: the error used to be dropped).
 func TestPermissionSetJSON(t *testing.T) {
 	for _, c := range []struct{ in, wantErr, wantDefault string }{
 		{"", "", ""},

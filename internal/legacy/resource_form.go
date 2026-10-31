@@ -2,6 +2,7 @@ package legacy
 
 import (
 	"context"
+	"net/http"
 	"strconv"
 
 	"log"
@@ -294,7 +295,7 @@ func resourceForm() *schema.Resource {
 							Optional:    true,
 							Computed:    true,
 						},
-						"collapsed_by_deafult": {
+						"collapsed_by_deafult": { //nolint:misspell // released attribute name; renaming it breaks configs
 							Type:        schema.TypeBool,
 							Description: "Whether the field group is collapsed by default",
 							Optional:    true,
@@ -663,7 +664,7 @@ func resourceFormCreate(ctx context.Context, d *schema.ResourceData, meta interf
 			row["name"] = fieldGroupConfig["name"]
 			row["description"] = fieldGroupConfig["description"]
 			row["collapsible"] = fieldGroupConfig["collapsible"]
-			row["defaultCollapsed"] = fieldGroupConfig["collapsed_by_deafult"]
+			row["defaultCollapsed"] = fieldGroupConfig["collapsed_by_deafult"] //nolint:misspell // released attribute name; renaming it breaks configs
 			row["visibleOnCode"] = fieldGroupConfig["visibility_field"]
 			if fieldGroupConfig["option_type"] != nil {
 				// optiontypes
@@ -833,7 +834,7 @@ func resourceFormRead(ctx context.Context, d *schema.ResourceData, meta interfac
 
 	if err != nil {
 		// 404 is ok?
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			d.SetId("")
 			return diags
@@ -928,7 +929,7 @@ func resourceFormRead(ctx context.Context, d *schema.ResourceData, meta interfac
 			row["name"] = fieldGroup.Name
 			row["description"] = fieldGroup.Description
 			row["collapsible"] = fieldGroup.Collapsible
-			row["collapsed_by_deafult"] = fieldGroup.DefaultCollapsed
+			row["collapsed_by_deafult"] = fieldGroup.DefaultCollapsed //nolint:misspell // released attribute name; renaming it breaks configs
 			row["visibility_field"] = fieldGroup.VisibleOnCode
 			var fgOptionTypes []map[string]interface{}
 			if len(fieldGroup.Options) != 0 {
@@ -1119,7 +1120,7 @@ func resourceFormUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 			row["name"] = fieldGroupConfig["name"]
 			row["description"] = fieldGroupConfig["description"]
 			row["collapsible"] = fieldGroupConfig["collapsible"]
-			row["defaultCollapsed"] = fieldGroupConfig["collapsed_by_deafult"]
+			row["defaultCollapsed"] = fieldGroupConfig["collapsed_by_deafult"] //nolint:misspell // released attribute name; renaming it breaks configs
 			row["visibleOnCode"] = fieldGroupConfig["visibility_field"]
 			if fieldGroupConfig["option_type"] != nil {
 				// optiontypes
@@ -1280,7 +1281,7 @@ func resourceFormDelete(ctx context.Context, d *schema.ResourceData, meta interf
 		},
 	})
 	if err != nil {
-		if catalogItemsResp != nil && catalogItemsResp.StatusCode == 404 {
+		if catalogItemsResp != nil && catalogItemsResp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", catalogItemsResp, err)
 			return diag.FromErr(err)
 		} else {
@@ -1301,7 +1302,7 @@ func resourceFormDelete(ctx context.Context, d *schema.ResourceData, meta interf
 
 	resp, err := client.DeleteForm(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

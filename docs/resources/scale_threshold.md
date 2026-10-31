@@ -9,6 +9,10 @@ description: |-
 
 Provides an MTN Cloud scale threshold resource: the CPU, memory or disk levels at which an instance scales out or in.
 
+A library threshold is applied to a VM for part of the week, or between two dates, with
+`mtncloud_instance_scale_schedule`, which copies its values. A VM's scaling at other times is its `scale`
+block on `mtncloud_instance` (or `mtncloud_instance_settings` for a VM made elsewhere).
+
 ## Example Usage
 
 ```terraform

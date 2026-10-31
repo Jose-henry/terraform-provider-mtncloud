@@ -9,6 +9,10 @@ description: |-
 
 Provides an MTN Cloud Cypher tfvars secret resource: Terraform variable values stored in Cypher under `tfvars/`, for Terraform blueprints.
 
+~> **Known MTN Cloud issue:** MTN Cloud's web firewall currently refuses a value that contains double
+quotes, such as `region = "az1"`, and the apply fails with HTTP 403 and a firewall reference (seen
+2026-10-31). Values without quotes, such as `size = 2`, are stored. MTN has been asked to fix it.
+
 ## Example Usage
 
 ```terraform

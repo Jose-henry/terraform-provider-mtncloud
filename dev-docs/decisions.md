@@ -434,3 +434,25 @@ files and download links follow (slice 2). Live probe on the dev tenant: dev-doc
   create answer holds only the secret, so the link is found by it. An expired link is removed from
   state, and the next apply makes a new one. `archive` or `archive_id` (owner: "archive id support
   wont be bad too"), resolved at plan time like `mos_bucket`.
+
+## D-035 A library scale threshold attaches through its own schedule resource (2026-10-31)
+The owner asked for `mtncloud_scale_threshold` to attach to a VM. The only place the API takes a library
+threshold is an instance schedule (`POST /api/instances/{id}/schedules`, `threshold.sourceThresholdId`);
+the instance's own threshold (`PUT /threshold`) takes values only. Live QA (t108, 2026-10-31):
+- Create copies the threshold's values into the schedule. The schedule keeps no link: neither the create
+  answer nor a read returns `sourceThresholdId`.
+- A later change to the threshold doesn't reach the schedule (max CPU 80 -> 70: the schedule kept 80).
+- `PUT .../schedules/{id}` with `sourceThresholdId` copies the current values again; a PUT with only
+  `endTime` changes only that.
+So `mtncloud_instance_scale_schedule` is its own resource (one per window; it works for a VM from
+`mtncloud_instance` or `mtncloud_instance_settings`, and a VM can have several) rather than a block on
+the two instance resources, as the backlog first suggested. Read compares the copy with the library
+threshold and, when they differ (or the threshold is gone), drops `scale_threshold_id` from state so the
+plan sets it again and the update re-copies. `replace_triggered_by` on the threshold copies it in the
+same apply. Import can't know the source threshold, so the first plan after it sets the ID once.
+Review (2026-10-31): an update sends `sourceThresholdId` only when `scale_threshold_id` changed (or Read
+dropped it), because the plan keeps the copied values otherwise and a threshold applied earlier in the same
+run would make the result differ from the plan ("inconsistent result"). The known exception to "apply, then
+`No changes.`": after an apply that changes a library threshold, the next plan updates the schedules that
+copy it, unless they use `replace_triggered_by` (the documented way). Create adopts an existing schedule
+only when times, zone and copied values all match, so it never takes over another config's schedule.

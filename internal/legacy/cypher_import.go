@@ -54,7 +54,7 @@ func cypherImportKey(mount, importID string, list []sdk.Cypher) (string, error) 
 			continue
 		}
 		if !strings.HasPrefix(c.ItemKey, prefix) {
-			return "", fmt.Errorf("Cypher entry %d is %q, not in the %s mount", n, c.ItemKey, mount)
+			return "", fmt.Errorf("cypher entry %d is %q, not in the %s mount", n, c.ItemKey, mount)
 		}
 		return strings.TrimPrefix(c.ItemKey, prefix), nil
 	}

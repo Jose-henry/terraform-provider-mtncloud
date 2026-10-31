@@ -2,6 +2,7 @@ package provider
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -399,6 +400,47 @@ func TestInstanceSettings_SeveralServersUnconfirmed(t *testing.T) {
 				}
 				s.silentServer = 0
 			}), Config: settingsConfig(f, "")},
+		},
+	})
+}
+
+// scale_factor on an adopted instance: left out it only shows the count; set, servers are added in
+// place (each gets a floating IP) and removed newest first; it can't go with scale.
+func TestInstanceSettings_ScaleFactor(t *testing.T) {
+	f, s := newInstFakes(t)
+	seedOrderVM(s, 9750)
+	cfg := func(extra string) string {
+		return settingsConfig(f, "  floating_ip_pool = \"public-network-02\"\n"+extra)
+	}
+	empty := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	count := func(n int64) []statecheck.StateCheck {
+		return []statecheck.StateCheck{settingsAttr("scale_factor", knownvalue.Int64Exact(n)), settingsAttr("public_ips", knownvalue.ListSizeExact(int(n)))}
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("  scale_factor = 2\n  scale = {\n    min_count = 1\n    max_count = 3\n    cpu = { min = 10, max = 80 }\n  }\n"),
+				PlanOnly: true, ExpectError: regexp.MustCompile(`scale_factor and scale together`)},
+			{Config: cfg(""), ConfigStateChecks: count(1)},
+			{Config: cfg("  scale_factor = 3\n"), ConfigStateChecks: count(3), Check: func(*terraform.State) error {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				if s.addedServers != 2 || len(s.attached) != 3 {
+					t.Errorf("%d added, attached to %v; want 2 added and an address each", s.addedServers, s.attached)
+				}
+				return nil
+			}},
+			{Config: cfg("  scale_factor = 3\n"), ConfigPlanChecks: empty},
+			{Config: cfg("  scale_factor = 2\n"), ConfigStateChecks: count(2), Check: func(*terraform.State) error {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				if !slices.Equal(s.removedServers, []int64{97509}) {
+					t.Errorf("removed %v, want the newest", s.removedServers)
+				}
+				return nil
+			}},
+			// Left out again: not managed, nothing changes.
+			{Config: cfg(""), ConfigPlanChecks: empty},
 		},
 	})
 }

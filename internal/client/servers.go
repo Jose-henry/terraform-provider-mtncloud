@@ -40,12 +40,13 @@ func (c *Client) FillServerIPs(ctx context.Context, in *Instance) error {
 		}
 	}
 	in.PublicIPs = out
-	if in.PublicIP == "" {
-		for _, ip := range out {
-			if ip != "" {
-				in.PublicIP = ip
-				break
-			}
+	// public_ip is the oldest server's address that has one. connectionInfo shows any one server
+	// and isn't stable: live 2026-10-31 (t105), it swapped between two servers from read to read.
+	in.PublicIP = ""
+	for _, ip := range out {
+		if ip != "" {
+			in.PublicIP = ip
+			break
 		}
 	}
 	return nil

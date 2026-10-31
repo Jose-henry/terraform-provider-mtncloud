@@ -3,6 +3,7 @@ package legacy
 import (
 	"context"
 	"log"
+	"net/http"
 	"strconv"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
@@ -195,7 +196,7 @@ func resourceUserRead(ctx context.Context, d *schema.ResourceData, meta interfac
 		return diag.Errorf("User cannot be read without username or id")
 	}
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -292,7 +293,7 @@ func resourceUserDelete(ctx context.Context, d *schema.ResourceData, meta interf
 	req := &sdk.Request{}
 	resp, err := client.DeleteUserResult(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

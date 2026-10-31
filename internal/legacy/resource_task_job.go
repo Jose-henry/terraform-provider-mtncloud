@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"log"
@@ -222,7 +223,7 @@ func resourceTaskJobRead(ctx context.Context, d *schema.ResourceData, meta inter
 	}
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -240,9 +241,8 @@ func resourceTaskJobRead(ctx context.Context, d *schema.ResourceData, meta inter
 
 	d.SetId(int64ToString(taskJob.ID))
 	d.Set("name", taskJob.Name)
-	if len(taskJob.Labels) > 0 {
-		d.Set("labels", taskJob.Labels)
-	}
+	// Always set, even empty: an imported job without labels otherwise plans labels as unknown.
+	d.Set("labels", taskJob.Labels)
 	d.Set("enabled", taskJob.Enabled)
 	d.Set("task_id", taskJob.Task.ID)
 	d.Set("context_type", taskJob.TargetType)
@@ -273,7 +273,7 @@ func resourceTaskJobRead(ctx context.Context, d *schema.ResourceData, meta inter
 			// iterate over the array of targets
 			for i := 0; i < len(taskJob.Targets); i++ {
 				instance := taskJob.Targets[i]
-				instanceIds = append(instanceIds, int64(instance.RefId))
+				instanceIds = append(instanceIds, instance.RefId)
 			}
 		}
 		d.Set("instance_ids", instanceIds)
@@ -284,14 +284,18 @@ func resourceTaskJobRead(ctx context.Context, d *schema.ResourceData, meta inter
 			// iterate over the array of targets
 			for i := 0; i < len(taskJob.Targets); i++ {
 				server := taskJob.Targets[i]
-				serverIds = append(serverIds, int64(server.RefId))
+				serverIds = append(serverIds, server.RefId)
 			}
 		}
 		d.Set("server_ids", serverIds)
 	case "instance-label":
-		d.Set("instance_label", taskJob.Targets[0].Name)
+		if len(taskJob.Targets) > 0 { // a job with no target left would panic here
+			d.Set("instance_label", taskJob.Targets[0].Name)
+		}
 	case "server-label":
-		d.Set("server_label", taskJob.Targets[0].Name)
+		if len(taskJob.Targets) > 0 { // a job with no target left would panic here
+			d.Set("server_label", taskJob.Targets[0].Name)
+		}
 	}
 
 	return diags
@@ -395,7 +399,7 @@ func resourceTaskJobDelete(ctx context.Context, d *schema.ResourceData, meta int
 	req := &sdk.Request{}
 	resp, err := client.DeleteJob(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

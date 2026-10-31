@@ -3,6 +3,7 @@ package legacy
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -103,7 +104,7 @@ func resourceCypherTFVarsRead(ctx context.Context, d *schema.ResourceData, meta 
 	}
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -144,7 +145,7 @@ func resourceCypherTFVarsDelete(ctx context.Context, d *schema.ResourceData, met
 	tfvarsPath := fmt.Sprintf("tfvars/%s", d.Get("key").(string))
 	resp, err := client.DeleteCypher(tfvarsPath, req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

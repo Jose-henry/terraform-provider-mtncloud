@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -75,6 +76,8 @@ func resourceUserRoleCreate(ctx context.Context, d *schema.ResourceData, meta in
 	if err := permissionSetJSON(d, &data); err != nil {
 		return diag.FromErr(err)
 	}
+	// Create only: on update an omitted default stays as set in the console.
+	permissionDefaults(&data)
 
 	var roleDefinition RolePermissionPayload
 	roleDefinition.Name = d.Get("name").(string)
@@ -82,7 +85,9 @@ func resourceUserRoleCreate(ctx context.Context, d *schema.ResourceData, meta in
 	roleDefinition.RoleType = "user"
 	roleDefinition.Multitenant = d.Get("multitenant_role").(bool)
 	roleDefinition.MultitenantLocked = d.Get("multitenant_locked").(bool)
-	roleDefinition.DefaultPersona.Code = data.DefaultPersona
+	if data.DefaultPersona != "" {
+		roleDefinition.DefaultPersona = &personaCode{Code: data.DefaultPersona}
+	}
 	roleDefinition.GlobalGroupAccess = data.DefaultGroupPermission
 	roleDefinition.GlobalInstanceTypeAccess = data.DefaultInstanceTypePermission
 	roleDefinition.GlobalBlueprintAccess = data.DefaultBlueprintPermission
@@ -150,7 +155,7 @@ func resourceUserRoleRead(ctx context.Context, d *schema.ResourceData, meta inte
 	}
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -406,7 +411,9 @@ func resourceUserRoleUpdate(ctx context.Context, d *schema.ResourceData, meta in
 	roleDefinition.RoleType = "user"
 	roleDefinition.Multitenant = d.Get("multitenant_role").(bool)
 	roleDefinition.MultitenantLocked = d.Get("multitenant_locked").(bool)
-	roleDefinition.DefaultPersona.Code = data.DefaultPersona
+	if data.DefaultPersona != "" {
+		roleDefinition.DefaultPersona = &personaCode{Code: data.DefaultPersona}
+	}
 	roleDefinition.GlobalGroupAccess = data.DefaultGroupPermission
 	roleDefinition.GlobalInstanceTypeAccess = data.DefaultInstanceTypePermission
 	roleDefinition.GlobalBlueprintAccess = data.DefaultBlueprintPermission
@@ -459,7 +466,7 @@ func resourceUserRoleDelete(ctx context.Context, d *schema.ResourceData, meta in
 	req := &sdk.Request{}
 	resp, err := client.DeleteRole(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {
@@ -499,6 +506,10 @@ type CreateRoleResult struct {
 	Role    *sdk.Role         `json:"role"`
 }
 
+type personaCode struct {
+	Code string `json:"code"`
+}
+
 type RolePermissionPayload struct {
 	Name              string `json:"authority"`
 	Description       string `json:"description"`
@@ -506,18 +517,18 @@ type RolePermissionPayload struct {
 	RoleType          string `json:"roleType"`
 	Multitenant       bool   `json:"multitenant"`
 	MultitenantLocked bool   `json:"multitenantLocked"`
-	DefaultPersona    struct {
-		Code string `json:"code"`
-	} `json:"defaultPersona"`
-	GlobalGroupAccess           string                      `json:"globalSiteAccess"`
-	GlobalInstanceTypeAccess    string                      `json:"globalInstanceTypeAccess"`
-	GlobalBlueprintAccess       string                      `json:"globalAppTemplateAccess"`
-	GlobalReportTypeAccess      string                      `json:"globalReportTypeAccess"`
-	GlobalPersonaAccess         string                      `json:"globalPersonaAccess"`
-	GlobalCatalogItemTypeAccess string                      `json:"globalCatalogItemTypeAccess"`
-	GlobalVDIPoolAccess         string                      `json:"globalVdiPoolAccess"`
-	GlobalTaskAccess            string                      `json:"globalTaskAccess"`
-	GlobalWorkflowAccess        string                      `json:"globalTaskSetAccess"`
+	// The defaults are left out when empty: Create always fills them (permissionDefaults), and an
+	// update that omits one leaves the console's value alone instead of sending "".
+	DefaultPersona              *personaCode                `json:"defaultPersona,omitempty"`
+	GlobalGroupAccess           string                      `json:"globalSiteAccess,omitempty"`
+	GlobalInstanceTypeAccess    string                      `json:"globalInstanceTypeAccess,omitempty"`
+	GlobalBlueprintAccess       string                      `json:"globalAppTemplateAccess,omitempty"`
+	GlobalReportTypeAccess      string                      `json:"globalReportTypeAccess,omitempty"`
+	GlobalPersonaAccess         string                      `json:"globalPersonaAccess,omitempty"`
+	GlobalCatalogItemTypeAccess string                      `json:"globalCatalogItemTypeAccess,omitempty"`
+	GlobalVDIPoolAccess         string                      `json:"globalVdiPoolAccess,omitempty"`
+	GlobalTaskAccess            string                      `json:"globalTaskAccess,omitempty"`
+	GlobalWorkflowAccess        string                      `json:"globalTaskSetAccess,omitempty"`
 	FeaturePermissions          []featurePermission         `json:"permissions"`
 	GroupPermissions            []groupPermission           `json:"sites"`
 	InstanceTypePermissions     []instanceTypePermission    `json:"instanceTypes"`
@@ -530,14 +541,30 @@ type RolePermissionPayload struct {
 	Workflows                   []workflowPermission        `json:"taskSets"`
 }
 
-// permissionSetJSON reads permission_set into data. Left out (or empty), it is no change.
+// permissionSetJSON reads permission_set into data. Left out (or empty), it is no change. It adds
+// no defaults: Create does (permissionDefaults), and Update leaves an omitted default as it is.
 func permissionSetJSON(d *schema.ResourceData, data *PermissionSet) error {
 	raw, _ := d.Get("permission_set").(string)
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	if err := json.Unmarshal([]byte(raw), data); err != nil {
-		return fmt.Errorf("permission_set isn't valid JSON: %w", err)
+	if strings.TrimSpace(raw) != "" {
+		if err := json.Unmarshal([]byte(raw), data); err != nil {
+			return fmt.Errorf("permission_set isn't valid JSON: %w", err)
+		}
 	}
 	return nil
+}
+
+// permissionDefaults fills the defaults a permission set leaves out: no access, and the standard
+// persona. MTN Cloud refuses a role sent with them empty, saying only "Role creation failed." (live
+// QA 2026-10-31, a role with no permission_set).
+func permissionDefaults(p *PermissionSet) {
+	for _, v := range []*string{&p.DefaultGroupPermission, &p.DefaultInstanceTypePermission, &p.DefaultBlueprintPermission,
+		&p.DefaultReportTypePermission, &p.DefaultCatalogItemTypePermission, &p.DefaultVdiPoolPermission,
+		&p.DefaultWorkflowPermission, &p.DefaultTaskPermission} {
+		if *v == "" {
+			*v = "none"
+		}
+	}
+	if p.DefaultPersona == "" {
+		p.DefaultPersona = "standard"
+	}
 }

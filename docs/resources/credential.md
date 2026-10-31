@@ -164,3 +164,7 @@ Import is supported using the following syntax:
 ```shell
 terraform import mtncloud_credential.tf_example_credential 1
 ```
+
+~> MTN Cloud never returns a credential's secret (`password`, `secret_key`, `api_key`, `client_secret`), so an
+import can't read it. The first plan after an import shows the secret as an in-place change; applying it
+sends the value from your configuration once, and later plans show no change.

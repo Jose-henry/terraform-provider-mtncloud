@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
 	"strings"
 
 	"log"
@@ -247,7 +248,7 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 	}
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -389,7 +390,7 @@ func resourceCredentialDelete(ctx context.Context, d *schema.ResourceData, meta 
 	req := &sdk.Request{}
 	resp, err := client.DeleteCredential(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

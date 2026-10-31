@@ -6,7 +6,7 @@ import (
 
 // This file contains some helper methods for things like
 // converting values to one type or another.
-// Suprisingly this is not as simple as it should be
+// Surprisingly this is not as simple as it should be
 // but I probably don't know what I am doing though...
 // Hey, let's convert all our IDs to strings though, for real.
 

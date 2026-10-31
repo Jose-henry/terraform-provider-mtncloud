@@ -2,6 +2,7 @@ package legacy
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"log"
@@ -143,7 +144,7 @@ func resourceManualOptionListRead(ctx context.Context, d *schema.ResourceData, m
 	}
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -225,7 +226,7 @@ func resourceManualOptionListDelete(ctx context.Context, d *schema.ResourceData,
 	req := &sdk.Request{}
 	resp, err := client.DeleteOptionList(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

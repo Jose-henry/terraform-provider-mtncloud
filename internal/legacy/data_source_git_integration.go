@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -59,7 +60,7 @@ func dataSourceGitIntegrationRead(ctx context.Context, d *schema.ResourceData, m
 		return diag.Errorf("Integration cannot be read without name or id")
 	}
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %v", resp, err)
 			return nil
 		} else {

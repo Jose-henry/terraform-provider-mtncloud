@@ -3,6 +3,7 @@ package legacy
 import (
 	"context"
 	"log"
+	"net/http"
 	"strconv"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
@@ -98,7 +99,7 @@ func dataSourceUserGroupsRead(ctx context.Context, d *schema.ResourceData, meta 
 	})
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %v", resp, err)
 			return nil
 		} else {

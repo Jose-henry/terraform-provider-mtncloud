@@ -9,6 +9,11 @@ description: |-
 
 {{ .Description | trimspace }}
 
+~> **Known MTN Cloud issue:** MTN Cloud's web firewall refuses some scripts before they reach the API,
+and the apply fails with HTTP 403 and a firewall reference. `echo tf-acc` was refused and `uptime`
+wasn't (2026-10-31). If a script is refused, send the firewall reference to MTN, or keep the script
+in a repository and use `source_type = "repository"`.
+
 ## Example Usage
 
 Creating the shell script task with local script content:

@@ -24,6 +24,12 @@ description: |-
 {{tffile "examples/resources/mtncloud_workflow_job/resource_schedule.tf"}}
 
 
+## Notes
+
+- `context_type = "appliance"` (run on the platform itself) isn't open to tenant logins: MTN Cloud answers
+  "Target Type not found". Target VMs by `instance`, `server`, `instance-label` or `server-label`.
+- A `scheduled` job needs an **enabled** `mtncloud_execute_schedule`; on a disabled one MTN Cloud answers
+  "Schedule not found with id N".
 
 {{ .SchemaMarkdown | trimspace }}
 

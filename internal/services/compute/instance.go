@@ -24,7 +24,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -256,10 +255,8 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 			},
 			"scale_factor": schema.Int64Attribute{
 				Optional: true, Computed: true, Default: int64default.StaticInt64(1),
-				Description: "Number of VMs in the instance. Defaults to 1. For several separate instances use `count` or " +
-					"`for_each`. Changing it replaces the instance.",
-				Validators:    []validator.Int64{int64validator.Between(1, 20)},
-				PlanModifiers: []planmodifier.Int64{int64planmodifier.RequiresReplace()},
+				Description: scaleFactorDescription,
+				Validators:  []validator.Int64{int64validator.Between(1, 20)},
 			},
 			"scale": scaleAttribute("Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and removes one " +
 				"below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. " +
@@ -1048,6 +1045,7 @@ func (r *instanceResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 	r.refresh(ctx, &state, inst, &resp.Diagnostics)
+	readServerCount(&state, inst)
 	// Every attach waits for its address, so a missing one was released outside Terraform and the next
 	// apply attaches one again; except an attach that was sent but never seen, which may yet arrive.
 	pending, d := req.Private.GetKey(ctx, fipUnconfirmedKey)
@@ -1155,11 +1153,36 @@ func (r *instanceResource) Update(ctx context.Context, req resource.UpdateReques
 	} else {
 		inst, err = r.client.WaitForInstance(ctx, id)
 	}
-	if !sameName(plan.FloatingIPPool, state.FloatingIPPool) {
+	scaled := false
+	if err == nil && !plan.ScaleFactor.Equal(state.ScaleFactor) {
+		// In place (live 2026-10-31): Add Node for each server missing, Remove Node for the newest.
+		got, serr := r.client.ScaleInstance(ctx, id, int(plan.ScaleFactor.ValueInt64()))
+		if serr != nil {
+			// Nothing after the scale ran: state keeps what was applied before, so the next apply
+			// tries the rest again (the next Read takes the servers there are).
+			plan.ScaleFactor, plan.FloatingIPPool, plan.RestartTrigger = state.ScaleFactor, state.FloatingIPPool, state.RestartTrigger
+			if got == nil {
+				got = current
+			}
+			resp.Diagnostics.AddAttributeError(path.Root("scale_factor"), "Unable to change the number of servers",
+				fmt.Sprintf("Instance %d: %s%s.", id, serr, timeoutHint(serr)))
+			r.settle(ctx, &plan, got, nil, "update", &resp.Diagnostics)
+			resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+			return
+		}
+		inst, scaled = got, true
+	}
+	fipChanged := !sameName(plan.FloatingIPPool, state.FloatingIPPool)
+	if fipChanged || scaled && err == nil && known(plan.FloatingIPPool) {
 		if err != nil {
 			plan.FloatingIPPool = state.FloatingIPPool // not changed: the next apply tries again
 		} else {
-			got, done, ferr := r.setFloatingIP(ctx, inst, fromPool(ctx, req.Private, state.FloatingIPPool, plan.FloatingIPPool, &resp.Diagnostics), plan.FloatingIPPool)
+			// New servers only need an address: the others keep theirs, unless the pool changes too.
+			from := types.StringNull()
+			if fipChanged {
+				from = fromPool(ctx, req.Private, state.FloatingIPPool, plan.FloatingIPPool, &resp.Diagnostics)
+			}
+			got, done, ferr := r.setFloatingIP(ctx, inst, from, plan.FloatingIPPool)
 			if ferr != nil {
 				resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("public_ips"), types.ListValueMust(types.StringType, nil))...)
 				resp.Diagnostics.AddAttributeError(path.Root("floating_ip_pool"), "Unable to change the floating IP", ferr.Error())
@@ -1243,7 +1266,11 @@ func (r *instanceResource) refresh(ctx context.Context, m *instanceModel, in *cl
 	m.PublicIPs = serverIPs(ctx, r.client, in, diags) // may set in.PublicIP from a server
 	m.PublicIP = optional(in.PublicIP)
 	m.InstallAgent = types.BoolValue(!in.NoAgent)
-	m.ScaleFactor = types.Int64Value(in.LayoutSize)
+	// After an apply, the planned number stands (the servers were scaled to it); Read takes the
+	// servers there are (readServerCount).
+	if m.ScaleFactor.IsNull() || m.ScaleFactor.IsUnknown() {
+		m.ScaleFactor = types.Int64Value(in.LayoutSize)
+	}
 	// expire_days and shutdown_days stay as configured: a policy may set days the configuration
 	// doesn't, and those show in the dates.
 	m.ExpireDate, m.ShutdownDate = optional(in.ExpireDate), optional(in.ShutdownDate)
@@ -1635,6 +1662,22 @@ func (r *instanceResource) setFloatingIP(ctx context.Context, inst *client.Insta
 	if from.IsNull() && !inst.MissingPublicIP() {
 		return inst, done, nil
 	}
+	// MTN Cloud accepts an attach for a network with no router to that pool, and the address never
+	// comes (live 2026-10-31, t105): fail now, before anything is detached, instead of waiting out
+	// the timeout. By now the VM is running, so a router made in the same apply exists. A failed
+	// check doesn't block the attach.
+	if known(to) && len(inst.Interfaces) > 0 {
+		net, pool := inst.Interfaces[0].NetworkID, to.ValueString()
+		if ok, others, err := r.client.PoolRouter(ctx, net, pool); err == nil && !ok {
+			if len(others) > 0 {
+				return inst, done, fmt.Errorf("network %d is on router %s, so a floating IP from %s can't reach it. "+
+					"Use that router's pool, or change its external_network", net, strings.Join(others, ", "), pool)
+			}
+			return inst, done, fmt.Errorf("network %d isn't on an MTN Router with external network %q, and MTN Cloud "+
+				"gives no address without one. Add an mtncloud_router with external_network = %q and this network "+
+				"(in the same configuration, reference it in depends_on), then apply again", net, pool, pool)
+		}
+	}
 	if len(inst.ContainerIDs) == 0 {
 		return inst, done, fmt.Errorf("instance %d has no VM to attach a floating IP to yet", inst.ID)
 	}
@@ -1778,4 +1821,19 @@ func fromPool(ctx context.Context, priv privateState, state, to types.String, di
 		return state
 	}
 	return types.StringValue(was)
+}
+
+const scaleFactorDescription = "Number of VMs (servers) in the instance. Defaults to 1. **Changed in place**: raising it " +
+	"adds servers, a few minutes each, and gives each a floating IP when `floating_ip_pool` is set; lowering it " +
+	"**deletes the newest servers and their disks**. A server added or removed in the console is put back by the next " +
+	"apply. With `scale`, MTN Cloud changes the number itself: this then isn't read back, and changing it scales to the " +
+	"new number once. For several separate instances use `count` or `for_each`."
+
+// readServerCount sets scale_factor to the servers there are, so one added or removed in the console
+// is drift. With scaling (the threshold read into m.Scale, also on import), MTN Cloud sets the number
+// itself and the configured one stays: an import then keeps the create-time number.
+func readServerCount(m *instanceModel, in *client.Instance) {
+	if n := int64(len(in.ContainerIDs)); n > 0 && m.Scale.IsNull() {
+		m.ScaleFactor = types.Int64Value(n)
+	}
 }

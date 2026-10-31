@@ -1,0 +1,33 @@
+{
+  "instanceSchedules": [
+    {
+      "id": 3,
+      "scheduleType": "dayOfWeek",
+      "startDayOfWeek": 2,
+      "scheduleTimezone": "Africa/Lagos",
+      "startTime": "08:00",
+      "endDayOfWeek": 6,
+      "endTime": "18:00",
+      "startDisplay": "Mon@8:00AM - Africa/Lagos",
+      "endDisplay": "Fri@6:00PM - Africa/Lagos",
+      "threshold": {
+        "autoUp": true,
+        "autoDown": true,
+        "minCount": 1,
+        "maxCount": 3,
+        "scaleIncrement": 1,
+        "cpuEnabled": true,
+        "minCpu": 10.0,
+        "maxCpu": 80.0,
+        "memoryEnabled": false,
+        "minMemory": 0.0,
+        "maxMemory": 0.0,
+        "diskEnabled": false,
+        "minDisk": 0.0,
+        "maxDisk": 0.0
+      },
+      "dateCreated": "2026-10-31T14:56:39.747Z",
+      "lastUpdated": "2026-10-31T14:56:39.747Z"
+    }
+  ]
+}

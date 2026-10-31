@@ -37,6 +37,7 @@ type fakeAPI struct {
 	mos    http.Handler    // /api/storage-buckets and /api/archives, console bucket records (mos_test.go), when set
 	cypher http.Handler    // /api/cypher, a stateful fake (mos_access_test.go), when set
 	app    http.Handler    // /api/apps/{id} and /api/users, one app's settings (app_settings_test.go), when set
+	sched  http.Handler    // /api/instances/{id}/schedules and /api/scale-thresholds (scale_schedule_test.go), when set
 	denied map[string]bool // paths answered with 403 (not retried), set by a test step
 }
 
@@ -101,8 +102,13 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.calls[r.URL.Path]++
-		sg, net, router, inst, order, clu, lb, mos, cy, app := f.sg, f.net, f.router, f.inst, f.order, f.clu, f.lb, f.mos, f.cypher, f.app
+		sg, net, router, inst, order, clu, lb, mos, cy, app, sched := f.sg, f.net, f.router, f.inst, f.order, f.clu, f.lb, f.mos, f.cypher, f.app, f.sched
 		f.mu.Unlock()
+		if sched != nil && (strings.Contains(r.URL.Path, "/schedules") || strings.HasPrefix(r.URL.Path, "/api/scale-thresholds")) &&
+			r.Header.Get("Authorization") == "Bearer test-token" {
+			sched.ServeHTTP(w, r)
+			return
+		}
 		if app != nil && (strings.HasPrefix(r.URL.Path, "/api/apps") || r.URL.Path == "/api/users") && r.Header.Get("Authorization") == "Bearer test-token" {
 			app.ServeHTTP(w, r)
 			return

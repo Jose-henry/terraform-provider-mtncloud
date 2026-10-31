@@ -3,6 +3,7 @@ package legacy
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -103,7 +104,7 @@ func resourceCypherSecretRead(ctx context.Context, d *schema.ResourceData, meta 
 	}
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -144,7 +145,7 @@ func resourceCypherSecretDelete(ctx context.Context, d *schema.ResourceData, met
 	secretPath := fmt.Sprintf("secret/%s", d.Get("key").(string))
 	resp, err := client.DeleteCypher(secretPath, req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

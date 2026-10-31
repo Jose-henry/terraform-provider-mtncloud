@@ -1,0 +1,38 @@
+---
+page_title: "mtncloud_instance_scale_schedule Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_instance_scale_schedule
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_instance_scale_schedule/resource.tf"}}
+
+## Notes
+
+- **The values are copied.** MTN Cloud copies the library threshold's values into the schedule when it is made
+  or updated, and keeps no link to the threshold. The `threshold` attribute shows the copy.
+- **When the threshold changes,** the schedule keeps the old values until the next apply: the plan after the
+  change shows `scale_threshold_id` being set again, and applying copies the new values. To copy them in the
+  same apply that changes the threshold, add `replace_triggered_by = [mtncloud_scale_threshold.<name>]` to
+  the schedule's `lifecycle` block, as in the example. A threshold that is deleted shows the same way, and
+  applying fails until `scale_threshold_id` names one that exists.
+- **Weekly or once.** Give `start_day`, `start_time`, `end_day` and `end_time` for a weekly window (in
+  `time_zone`, UTC by default), or `start_date` and `end_date` for one window.
+- **A retried create doesn't add a second schedule.** Create takes over a schedule on the instance only when its
+  times, time zone and copied values all match; schedules have no name, so any other schedule is left alone.
+- **The instance's own scaling** (the `scale` block on `mtncloud_instance` or `mtncloud_instance_settings`)
+  applies outside the schedule's window.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_instance_scale_schedule/import.sh" }}

@@ -22,10 +22,12 @@ linters:
   exclusions:
     generated: strict
     rules:
-      # Legacy debt baseline (counted 2026-10-26): 1439 unchecked d.Set, 32 unchecked
-      # json.Unmarshal, 2 unchecked logo uploads, 60 QF1008, 1 SA6005, 2 unused funcs.
+      # Legacy debt baseline (counted 2026-10-31): 576 unchecked d.Set, and nothing else. Every
+      # other linter passes on internal/legacy (was 1439 d.Set, 32 json.Unmarshal, 60 QF1008, ...
+      # on 2026-10-26). Any other unchecked error there fails the lint.
       - path: internal/legacy/
-        linters: [errcheck, staticcheck, unused, errorlint, misspell, unconvert, usestdlibvars, nilerr, bodyclose]
+        linters: [errcheck]
+        text: "Error return value of `d.Set` is not checked"
 
 formatters:
   enable:

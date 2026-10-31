@@ -3,6 +3,7 @@ package legacy
 import (
 	"context"
 	"log"
+	"net/http"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -146,7 +147,7 @@ func resourceNetworkDomainRead(ctx context.Context, d *schema.ResourceData, meta
 	}
 	if err != nil {
 		// 404 is ok?
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -221,7 +222,7 @@ func resourceNetworkDomainDelete(ctx context.Context, d *schema.ResourceData, me
 	req := &sdk.Request{}
 	resp, err := client.DeleteNetworkDomain(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

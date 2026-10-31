@@ -38,6 +38,16 @@ func TestFillServerIPs(t *testing.T) {
 		t.Errorf("PublicIP %q, want a server's address", two.PublicIP)
 	}
 
+	// connectionInfo showing the second server's address: public_ip is still the first's, so it
+	// doesn't swap between reads.
+	swapped := &Instance{ContainerIDs: []int64{71, 75}, PublicIP: "203.0.113.75"}
+	f.route("GET", "/api/containers/75", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"container":{"id":75,"ip":"203.0.113.75","internalIp":"10.0.0.75"}}`))
+	})
+	if err := c.FillServerIPs(ctx, swapped); err != nil || swapped.PublicIP != "203.0.113.71" {
+		t.Errorf("swapped connectionInfo: PublicIP %q %v, want the first server's", swapped.PublicIP, err)
+	}
+
 	// connectionInfo showing another server's private address: the servers decide.
 	stale := &Instance{ContainerIDs: []int64{72, 72}, PublicIP: "10.0.0.99"}
 	if err := c.FillServerIPs(ctx, stale); err != nil || !stale.NoPublicIP() || !stale.MissingPublicIP() {

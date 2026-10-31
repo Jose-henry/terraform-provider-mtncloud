@@ -178,7 +178,9 @@ func (w wireInstance) instance() *Instance {
 		Status: w.Status, Environment: deref(w.InstanceContext), Labels: w.Labels, EnvPrefix: w.EnvironmentPrefix,
 		Tags: map[string]string{}, EnvVars: map[string]string{},
 	}
-	in.ContainerIDs = w.Containers
+	// The API lists the servers in no fixed order (live 2026-10-31: two reads of one instance
+	// swapped them). Oldest first keeps public_ips in a stable order.
+	in.ContainerIDs = slices.Sorted(slices.Values(w.Containers))
 	in.ExpireDate, in.ShutdownDate = deref(w.ExpireDate), deref(w.ShutdownDate)
 	if w.ExpireDays != nil {
 		in.ExpireDays = *w.ExpireDays
@@ -800,13 +802,8 @@ func (c *Client) InstanceThreshold(ctx context.Context, id int64) (*Threshold, e
 	if w == nil {
 		return &Threshold{MinCount: 1, Increment: 1}, nil
 	}
-	return &Threshold{
-		AutoUp: w.AutoUp, AutoDown: w.AutoDown,
-		MinCount: orZero(w.MinCount), MaxCount: orZero(w.MaxCount), Increment: orZero(w.ScaleIncrement),
-		CPU:    rangeOf(w.CPUEnabled, w.MinCPU, w.MaxCPU),
-		Memory: rangeOf(w.MemoryEnabled, w.MinMemory, w.MaxMemory),
-		Disk:   rangeOf(w.DiskEnabled, w.MinDisk, w.MaxDisk),
-	}, nil
+	t := w.toThreshold()
+	return &t, nil
 }
 
 // SetInstanceThreshold replaces an instance's scaling. A zero Threshold turns scaling off.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
 	"strings"
 
 	"log"
@@ -73,7 +74,7 @@ func resourceActiveDirectoryIdentitySource() *schema.Resource {
 					h := sha256.New()
 					h.Write([]byte(new))
 					sha256_hash := hex.EncodeToString(h.Sum(nil))
-					return strings.ToLower(old) == strings.ToLower(sha256_hash)
+					return strings.EqualFold(old, sha256_hash)
 				},
 			},
 			"required_group": {
@@ -216,7 +217,7 @@ func resourceActiveDirectoryIdentitySourceRead(ctx context.Context, d *schema.Re
 	}
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -330,7 +331,7 @@ func resourceActiveDirectoryIdentitySourceDelete(ctx context.Context, d *schema.
 	req := &sdk.Request{}
 	resp, err := client.DeleteIdentitySource(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

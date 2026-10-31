@@ -34,7 +34,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [x] Day-2, added 2026-10-31: data disks (append-only, attached in place), floating IP (`floating_ip_pool`, one per server, re-attached when released), scaling (`scale`), and `expire_date` (read only: expiry can only be set at create). NICs can't be added in place (as on `mtncloud_instance`, where a new network replaces the VM).
 - [x] Read-only: image, project, root disk, name and IPs, since changing them would rebuild the VM.
 - [x] **Several servers in one instance.** Done 2026-10-31: `public_ips` (one per server, read from each server's container when there are several; a role that can't read them falls back to the instance's one address); drift and re-attach per server. Live check with `scale_factor = 2` still open. Was: (Floating IPs attach per server; `public_ip` still shows one, B-013.) Resize, power, security groups, labels and tags apply to every server. A floating IP is attached per server, but `public_ip` holds only one: expose one public IP per server and check drift on each (B-013).
-- [ ] **Research:** changing the number of servers in place. `mtncloud_instance` replaces on `scale_factor`, and an adopted instance can't be replaced.
+- [x] **Changing the number of servers in place.** Done 2026-10-31: Add Node (`PUT /api/instances/{id}/action?code=generic-add-node`, empty body, one server per call, about 4 minutes) and Remove Node (`PUT /api/containers/{id}/action?code=generic-remove-node`, seconds), codes read from the actions lists. `scale_factor` is in place on `mtncloud_instance` and on `mtncloud_instance_settings`; live 1 -> 2 -> 1 with floating IPs, `No changes.` after each (t105). During Add Node the instance stays `running` (435 s in t108) while the new server reads `deploying`, so the wait reads `GET /api/instances/{id}?details=true`, whose `containerDetails[].status` covers every server in one call. Live 2 -> 1 through `scale_factor` in 20 s (t108).
 - [x] **Code:** done by calling `mtncloud_instance`'s own helpers (power, environment, security group names) rather than moving them; its tests pass unchanged. Was: move `mtncloud_instance`'s update steps into shared functions in `internal/services/compute/`. Its tests must pass unchanged first.
 - [x] **Tests:** (done 2026-10-31, mutation-checked)
   - adopt, then an empty plan;
@@ -53,12 +53,14 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [x] Name, once catch 1 is fixed.
 - [x] Membership: add and remove instances by tier, as its own resource `mtncloud_app_instance` (2026-10-31), so membership and settings don't fight. Removing a node from a managed service warns that it can break the service.
 - [ ] **Security groups: pending.** App-level security groups don't work on MTN yet, so they go through the instance. When they work, only one of the app and the instance settings may own an instance's security groups, or the two undo each other.
-- [ ] **State, refresh, prepare-apply:** these work only for Terraform, CloudFormation and ARM blueprint apps. Read one managed service's app type first (`apps get <id> -j`, read-only); leave them out if it doesn't qualify.
+- [x] **State, refresh, prepare-apply:** left out (2026-10-31): the tenant's apps are type `morpheus` (native blueprints), not Terraform, CloudFormation or ARM, so these don't apply.
 - [x] No app-level power, resize, disk, NIC or floating IP call exists: VMs are reconfigured through their instances.
 
 **Order of work:** order fixes, then `mtncloud_instance_settings`, then `mtncloud_app_settings`, then `mtncloud_app` (B-017).
 
 ## 2. Features not built
+
+- [x] **Instance scaling schedules (owner, 2026-10-31).** Done 2026-10-31: `mtncloud_instance_scale_schedule` (D-035). Live: the schedule copies the library threshold's values and keeps no link; `PUT` with `sourceThresholdId` copies again.
 
 - [x] **Order networks made in the same apply (B-034 #1).** Done 2026-10-31: networks by ID too.
 - [x] **Router waits for new subnets (B-034 #2).** Done 2026-10-31: a router made in the same apply as its networks waits for their subnets (within its create timeout) instead of failing with "no subnet yet, try again".
@@ -71,6 +73,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [x] **App orders wait for the app (B-034 #3).** Done 2026-10-31: managed services' workflows end once they ask for the app, whose VMs MTN names itself. Create waits for the app named after the order and takes its VMs; destroy deletes the app.
 - [x] **Never-blank lists send their first choice (B-034 #4).** Done 2026-10-31: MQ and Streaming workflows failed on `msg_engine`/`kafkaVersion` null.
 - [x] **SOPHOS: find the VM its workflow names itself (B-034 #10).** Done 2026-10-31: the VM the workflow reports in its output (its console link, else " Instance name : "), only within the order's project; 3-hour create timeout; destroy warns that the Heat stack stays. `name` is optional and unused.
+- [ ] **Ask MTN: the web firewall blocks Cypher tfvars values with double quotes** (2026-10-31, t106): `region = "az1"` gets HTTP 403 with a firewall reference; `size = 2` is stored. Typical tfvars have quoted strings. Documented on `mtncloud_cypher_tfvars`.
 - [ ] **Ask MTN: Managed MQ and Streaming blueprints 16 and 21 not found (B-034 #6).**
 - [ ] **Ask MTN: remove the SOPHOS Heat stack left by QA order 2758** (`<initials>-72-MTN-CLOUD-SPH001-1-stack`). Its floating IP keeps router `tf-acc-rtr-cat-04jkx` (1271) from deleting, so it and networks `tf-acc-net-cat-{a,b}-04jkx` (690, 691) are still up; the VM (4639) is deleted. Then `terraform destroy` in the QA folder `t97-catalog`.
 - [x] **A failed order keeps the VM it made (SOPHOS QA order 2759).** Done 2026-10-31: MTN's SOPHOS workflow failed at "Convert to Managed" with the VM up; create and refresh now keep the order (tainted, `instance_ids` saved), so the next apply deletes the VM and orders again, and destroy deletes it.
@@ -100,18 +103,18 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
   - Which status words besides `provisioning` and `ok`?
   - Does an `external_network` in another case give a no-op update after import?
 - [ ] **Instance (B-013).**
-  - Do the name and hostname policies keep, refuse or ignore what's sent?
+  - Do the name and hostname policies keep, refuse or ignore what's sent? **Kept** as sent (t105); left out, the hostname is the name.
   - Resize bodies.
   - Do empty labels or tags clear? **Yes** (live 2026-10-31, t103, Debian 12): `labels = []` and `tags = {}` cleared both, read back empty by CLI, `No changes.` after.
   - Delete policies.
   - Floating IP:
     - with `scale_factor` above 1: **works** (live 2026-10-31, t102): one address per server, two distinct, `public_ips` lists both, `No changes.` after;
     - how long until it shows: create with both attached took 5 minutes in all; a detach of both showed in 8 seconds;
-    - is the address released on detach: detached from both servers (each server's container shows none); whether it goes back to the pool is still unchecked;
-    - the error when the network has no router.
+    - is the address released on detach: detached from both servers (each server's container shows none); whether it goes back to the pool can't be checked with this login: `GET /api/networks/floating-ips` is 403 for the customer role (t105);
+    - the error when the network has no router: **none**; MTN Cloud accepts the attach and no address comes (t105). The provider now checks the router when the VM runs and fails at once.
   - The availability zone list.
   - The default `domain`: none is set (the instance reads back no domain, t103).
-  - Masking of `evars`.
+  - Masking of `evars`: **not masked**: the API returns the values in plain text, `masked: false` (t105). The provider marks them sensitive.
   - The `expireDays` echo: **echoes back** (t103).
   - The threshold `PUT`: reads back clean, `No changes.` after (t103).
   - Status words.
@@ -127,7 +130,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
   - User roles, users and user groups.
 - [ ] **Data source filter sweep (B-018 #6).** Each filter argument on its own against live data, compared with a CLI read.
 - [ ] **Customer-role 403s (B-016).** Not tested yet: SSL certificate, standalone floating IP, option lists and types, shell script tasks and their workflows, NFS/SMB orders. Needs a login with those permissions.
-- [ ] **Cypher tfvars import (B-016).** Confirm that GET returns `data` as a string.
+- [x] **Cypher tfvars import (B-016).** Done 2026-10-31 (t106): GET returns `data` as a string; import by `tfvars/<key>` and by the console's numeric ID both plan 0 changes.
 - [ ] **MOS object lock and retention (B-022).** Waiting for MTN to enable object lock.
 - [ ] **Security groups (B-009).** Blocked on the platform bug, where rules aren't applied. Once fixed: egress with no CIDR, group-source, `any` and `icmp` rules, clearing the description, `remove_default_egress`, groups with several locations.
 - [ ] **Sub-tenant login (B-006).** Confirm the single-backslash login with a real sub-tenant run.
@@ -144,7 +147,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 ## 5. Debt and housekeeping
 
 - [x] **Legacy bugs (B-001).** Done 2026-10-31: no dropped `json.Unmarshal` error is left; the logo uploads went with their types (D-025).
-- [ ] **Legacy lint debt (B-002).** The `.golangci.yml` exclusions for `internal/legacy/` only shrink.
+- [ ] **Legacy lint debt (B-002).** 2026-10-31: only 576 unchecked `d.Set` are left; the exclusion now covers just that message (every other linter passes on `internal/legacy`). The rest go as resources move to the Framework.
 - [x] **Example defects (B-003).** Done 2026-10-31: the known-defects list is empty.
 - [x] **Local tfvars (B-004).** Done 2026-10-31. Remove the stale `username`, `password` and `tenant_subdomain` keys from the local quickstart `terraform.tfvars`.
 - [ ] **Open questions.**

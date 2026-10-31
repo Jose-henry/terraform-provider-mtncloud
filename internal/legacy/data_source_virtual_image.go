@@ -3,6 +3,7 @@ package legacy
 import (
 	"context"
 	"log"
+	"net/http"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -58,7 +59,7 @@ func dataSourceVirtualImageRead(ctx context.Context, d *schema.ResourceData, met
 		return diag.Errorf("Virtual image cannot be read without name or id")
 	}
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %v", resp, err)
 			return nil
 		} else {

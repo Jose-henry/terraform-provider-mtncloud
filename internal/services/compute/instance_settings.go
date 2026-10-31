@@ -56,6 +56,7 @@ type instanceSettingsModel struct {
 	PublicIPs      types.List     `tfsdk:"public_ips"`
 	FloatingIPPool types.String   `tfsdk:"floating_ip_pool"`
 	Scale          types.Object   `tfsdk:"scale"`
+	ScaleFactor    types.Int64    `tfsdk:"scale_factor"`
 	ExpireDate     types.String   `tfsdk:"expire_date"`
 	DataVolumes    types.List     `tfsdk:"data_volume"`
 	Timeouts       timeouts.Value `tfsdk:"timeouts"`
@@ -122,6 +123,13 @@ func (r *instanceSettingsResource) Schema(ctx context.Context, _ resource.Schema
 			"scale": scaleAttribute("Automatic scaling: MTN Cloud adds a VM when usage stays above a metric's `max` and " +
 				"removes one below its `min`, between `min_count` and `max_count`. Watch at least one of `cpu`, `memory`, `disk`. " +
 				"Changed in place, and put back when changed in the console. Left out, scaling isn't managed (and isn't shown); removing it leaves scaling as it is."),
+			// Optional+Computed: left out, the number of servers isn't managed and this shows it.
+			"scale_factor": schema.Int64Attribute{Optional: true, Computed: true,
+				Description: "Number of servers (VMs) in the instance, changed in place: raising it adds servers, a few minutes " +
+					"each, and gives each a floating IP when `floating_ip_pool` is set; lowering it **deletes the newest servers " +
+					"and their disks**. When set, a server added or removed in the console is put back by the next apply. Left " +
+					"out, the number isn't managed and this shows it. Can't be set with `scale`, where MTN Cloud sets the number.",
+				Validators: []validator.Int64{int64validator.Between(1, 20)}},
 			"expire_date": schema.StringAttribute{Computed: true,
 				Description: "When the instance will be deleted, if it expires (set when it was made, or by a policy). Read only."},
 		},
@@ -284,6 +292,13 @@ func (r *instanceSettingsResource) ValidateConfig(ctx context.Context, req resou
 	var sc types.Object
 	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("scale"), &sc)...)
 	checkScale(ctx, sc, &resp.Diagnostics)
+	var n types.Int64
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("scale_factor"), &n)...)
+	if !n.IsNull() && !sc.IsNull() {
+		resp.Diagnostics.AddAttributeError(path.Root("scale_factor"), "scale_factor and scale together",
+			"With `scale`, MTN Cloud adds and removes servers itself, so a set number would undo it on every apply. "+
+				"Set one of them: `scale` for automatic scaling, `scale_factor` for a fixed number.")
+	}
 }
 
 func (r *instanceSettingsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -309,11 +324,21 @@ func (r *instanceSettingsResource) Update(ctx context.Context, req resource.Upda
 	plan.ID = state.ID
 	pending, d := req.Private.GetKey(ctx, fipUnconfirmedKey)
 	resp.Diagnostics.Append(d...)
-	partial := fromPool(ctx, req.Private, state.FloatingIPPool, plan.FloatingIPPool, &resp.Diagnostics)
+	// A pool a Read set aside (state's is then null) for servers that kept their address; with
+	// state's pool set, nothing was set aside, and only servers without an address get one.
+	partial := types.StringNull()
+	if state.FloatingIPPool.IsNull() {
+		partial = fromPool(ctx, req.Private, state.FloatingIPPool, plan.FloatingIPPool, &resp.Diagnostics)
+	}
 	unconfirmed := r.apply(ctx, &plan, state, inst, pending != nil, partial, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	// Every server has its address (not just one of them): nothing is still on its way.
-	complete := plan.PublicIP.ValueString() != "" && len(plan.PublicIPs.Elements()) >= len(inst.ContainerIDs)
+	// The servers there are now (read back after a scale), not before the apply.
+	servers := int64(len(inst.ContainerIDs))
+	if n := plan.ScaleFactor; !n.IsNull() && !n.IsUnknown() {
+		servers = n.ValueInt64()
+	}
+	complete := plan.PublicIP.ValueString() != "" && int64(len(plan.PublicIPs.Elements())) >= servers
 	switch {
 	case unconfirmed:
 		recordUnconfirmed(ctx, resp.Private, &resp.Diagnostics)
@@ -454,6 +479,22 @@ func (r *instanceSettingsResource) apply(ctx context.Context, plan *instanceSett
 		}
 		werr = err
 	}
+	if n := plan.ScaleFactor; werr == nil && !n.IsUnknown() && !n.IsNull() && int(n.ValueInt64()) != len(inst.ContainerIDs) {
+		got, err := r.client.ScaleInstance(ctx, id, int(n.ValueInt64()))
+		if got != nil {
+			inst = got
+		}
+		if err != nil {
+			diags.AddAttributeError(path.Root("scale_factor"), "Unable to change the number of servers",
+				fmt.Sprintf("Instance %d: %s%s.", id, err, timeoutHint(err)))
+			r.settle(ctx, plan, inst, nil, diags)
+			return
+		}
+		// Which servers have an address, so new ones get one below.
+		if err := r.client.FillServerIPs(ctx, inst); err != nil {
+			werr = err
+		}
+	}
 	if werr == nil && !client.InstanceFailed(inst.Status) {
 		// The instance resource's power handling, on this resource's power_state.
 		m := instanceModel{PowerState: plan.PowerState}
@@ -538,6 +579,12 @@ func (r *instanceSettingsResource) refresh(ctx context.Context, m *instanceSetti
 	m.Description = types.StringValue(in.Description)
 	if !strings.EqualFold(m.Plan.ValueString(), in.PlanName) || m.Plan.IsUnknown() {
 		m.Plan = types.StringValue(in.PlanName)
+	}
+	switch n := int64(len(in.ContainerIDs)); {
+	case n > 0:
+		m.ScaleFactor = types.Int64Value(n)
+	case m.ScaleFactor.IsUnknown():
+		m.ScaleFactor = types.Int64Null()
 	}
 	labels, _ := types.SetValueFrom(ctx, types.StringType, append([]string{}, in.Labels...))
 	m.Labels = labels

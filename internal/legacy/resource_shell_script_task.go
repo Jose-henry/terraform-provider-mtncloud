@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net/http"
 	"strings"
 
 	"log"
@@ -304,7 +305,7 @@ func resourceShellScriptTaskRead(ctx context.Context, d *schema.ResourceData, me
 
 	if err != nil {
 		// 404 is ok?
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -451,7 +452,7 @@ func resourceShellScriptTaskDelete(ctx context.Context, d *schema.ResourceData, 
 	req := &sdk.Request{}
 	resp, err := client.DeleteTask(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return nil
 		} else {

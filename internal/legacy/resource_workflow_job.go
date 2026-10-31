@@ -2,6 +2,7 @@ package legacy
 
 import (
 	"context"
+	"net/http"
 	"strconv"
 
 	"log"
@@ -228,7 +229,7 @@ func resourceWorkflowJobRead(ctx context.Context, d *schema.ResourceData, meta i
 	}
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -246,9 +247,8 @@ func resourceWorkflowJobRead(ctx context.Context, d *schema.ResourceData, meta i
 
 	d.SetId(int64ToString(workflowJob.ID))
 	d.Set("name", workflowJob.Name)
-	if len(workflowJob.Labels) > 0 {
-		d.Set("labels", workflowJob.Labels)
-	}
+	// Always set, even empty: an imported job without labels otherwise plans labels as unknown.
+	d.Set("labels", workflowJob.Labels)
 	d.Set("enabled", workflowJob.Enabled)
 	d.Set("workflow_id", workflowJob.Workflow.ID)
 	d.Set("context_type", workflowJob.TargetType)
@@ -276,7 +276,7 @@ func resourceWorkflowJobRead(ctx context.Context, d *schema.ResourceData, meta i
 			// iterate over the array of targets
 			for i := 0; i < len(workflowJob.Targets); i++ {
 				instance := workflowJob.Targets[i]
-				instanceIds = append(instanceIds, int64(instance.RefId))
+				instanceIds = append(instanceIds, instance.RefId)
 			}
 		}
 		d.Set("instance_ids", instanceIds)
@@ -287,14 +287,18 @@ func resourceWorkflowJobRead(ctx context.Context, d *schema.ResourceData, meta i
 			// iterate over the array of targets
 			for i := 0; i < len(workflowJob.Targets); i++ {
 				server := workflowJob.Targets[i]
-				serverIds = append(serverIds, int64(server.RefId))
+				serverIds = append(serverIds, server.RefId)
 			}
 		}
 		d.Set("server_ids", serverIds)
 	case "instance-label":
-		d.Set("instance_label", workflowJob.Targets[0].Name)
+		if len(workflowJob.Targets) > 0 { // a job with no target left would panic here
+			d.Set("instance_label", workflowJob.Targets[0].Name)
+		}
 	case "server-label":
-		d.Set("server_label", workflowJob.Targets[0].Name)
+		if len(workflowJob.Targets) > 0 { // a job with no target left would panic here
+			d.Set("server_label", workflowJob.Targets[0].Name)
+		}
 	}
 	d.Set("custom_options", workflowJob.CustomOptions)
 
@@ -404,7 +408,7 @@ func resourceWorkflowJobDelete(ctx context.Context, d *schema.ResourceData, meta
 	req := &sdk.Request{}
 	resp, err := client.DeleteJob(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

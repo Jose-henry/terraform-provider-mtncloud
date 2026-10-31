@@ -2,6 +2,7 @@ package legacy
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"log"
@@ -105,7 +106,7 @@ func resourceWikiPageRead(ctx context.Context, d *schema.ResourceData, meta inte
 	}
 
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			log.Printf("Forcing recreation of resource")
 			d.SetId("")
@@ -168,7 +169,7 @@ func resourceWikiPageDelete(ctx context.Context, d *schema.ResourceData, meta in
 	req := &sdk.Request{}
 	resp, err := client.DeleteWiki(toInt64(id), req)
 	if err != nil {
-		if resp != nil && resp.StatusCode == 404 {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
 			log.Printf("API 404: %s - %s", resp, err)
 			return diag.FromErr(err)
 		} else {

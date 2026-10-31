@@ -23,32 +23,35 @@ import (
 // new instance reads "provisioning" once before "running"; the naming template names an instance
 // sent without a name; the platform adds its own <PREFIX>_* variables; groups are kept per instance.
 type instStore struct {
-	mu            sync.Mutex
-	nextID, seq   int64
-	insts         map[int64]map[string]any
-	sgs           map[int64][]int64
-	thresholds    map[int64]map[string]any
-	thresholdErr  bool // PUT /threshold answers 400
-	fipErr        bool // attach answers 400, as for a network with no router
-	fip504        bool // attach is applied but answers 504, so only the wait can tell
-	fipSilent     bool // attach answers 200 but no address ever shows
-	detachStuck   bool // detach answers 200 but the address stays
-	attachCalls   int
-	attached      []int64
-	serverIP      map[int64]string // each server's floating IP, by container ID (several servers)
-	silentServer  int64            // an attach to this container answers 200 but never shows
-	pending       map[int64]bool
-	fail          string // the next create ends in this status
-	stuck         bool   // instances never leave "provisioning"
-	sgsDenied     int64  // reading this instance's security groups answers 403
-	lostReplies   int    // the next creates are applied but answer 502
-	creates       int
-	lastCreate    map[string]any
-	resizes       []map[string]any
-	powers        []string // power actions, in order
-	powerErr      bool     // power actions answer 400
-	resizeIgnored bool     // a resize answers 200 but changes nothing
-	resizeFails   bool     // a resize answers 200, then the instance goes to failed
+	mu             sync.Mutex
+	nextID, seq    int64
+	insts          map[int64]map[string]any
+	sgs            map[int64][]int64
+	thresholds     map[int64]map[string]any
+	thresholdErr   bool    // PUT /threshold answers 400
+	fipErr         bool    // attach answers 400, as for a network with no router
+	addedServers   int     // Add Node calls
+	addNodeFails   bool    // Add Node answers 400
+	removedServers []int64 // servers removed with Remove Node
+	fip504         bool    // attach is applied but answers 504, so only the wait can tell
+	fipSilent      bool    // attach answers 200 but no address ever shows
+	detachStuck    bool    // detach answers 200 but the address stays
+	attachCalls    int
+	attached       []int64
+	serverIP       map[int64]string // each server's floating IP, by container ID (several servers)
+	silentServer   int64            // an attach to this container answers 200 but never shows
+	pending        map[int64]bool
+	fail           string // the next create ends in this status
+	stuck          bool   // instances never leave "provisioning"
+	sgsDenied      int64  // reading this instance's security groups answers 403
+	lostReplies    int    // the next creates are applied but answer 502
+	creates        int
+	lastCreate     map[string]any
+	resizes        []map[string]any
+	powers         []string // power actions, in order
+	powerErr       bool     // power actions answer 400
+	resizeIgnored  bool     // a resize answers 200 but changes nothing
+	resizeFails    bool     // a resize answers 200, then the instance goes to failed
 }
 
 func newInstStore() *instStore {
@@ -120,6 +123,20 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case len(parts) == 2 && parts[1] == "actions":
+		reply(http.StatusOK, map[string]any{"instanceIds": []any{id}, "actions": []any{map[string]any{"code": "generic-add-node", "name": "Add Node"}}})
+	case len(parts) == 2 && parts[1] == "action" && r.Method == http.MethodPut && s.addNodeFails:
+		reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "No capacity for another node"})
+	case len(parts) == 2 && parts[1] == "action" && r.Method == http.MethodPut:
+		// A new server gets the next free ID of this instance (id*10+7, +8, ...).
+		list := in["containers"].([]any)
+		next := id*10 + 7
+		for slices.ContainsFunc(list, func(v any) bool { return fmt.Sprint(v) == fmt.Sprint(next) }) {
+			next++
+		}
+		in["containers"] = append(slices.Clone(list), next)
+		s.addedServers++
+		reply(http.StatusOK, map[string]any{"success": true})
 	case len(parts) == 2 && r.Method == http.MethodPut && powerStatus[parts[1]] != "":
 		if s.powerErr {
 			reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "Instance is busy"})
@@ -977,15 +994,27 @@ func (s *instStore) floating(w http.ResponseWriter, r *http.Request, reply func(
 	if s.serverIP == nil {
 		s.serverIP = map[int64]string{}
 	}
+	listed := slices.ContainsFunc(in["containers"].([]any), func(v any) bool { return fmt.Sprint(v) == fmt.Sprint(cid) })
+	if !listed {
+		reply(http.StatusNotFound, map[string]any{"success": false, "msg": "Container not found"})
+		return
+	}
 	if len(parts) == 1 {
 		ip, ok := s.serverIP[cid]
 		if !ok {
 			ip, _ = private.(string)
 		}
-		reply(http.StatusOK, map[string]any{"container": map[string]any{"id": cid, "ip": ip, "internalIp": private}})
+		reply(http.StatusOK, map[string]any{"container": map[string]any{"id": cid, "ip": ip, "internalIp": private, "status": "running"}})
 		return
 	}
 	switch parts[1] {
+	case "actions":
+		reply(http.StatusOK, map[string]any{"containerIds": []any{cid}, "actions": []any{map[string]any{"code": "generic-remove-node", "name": "Remove Node"}}})
+		return
+	case "action":
+		s.removedServers = append(s.removedServers, cid)
+		in["containers"] = slices.DeleteFunc(slices.Clone(in["containers"].([]any)), func(v any) bool { return fmt.Sprint(v) == fmt.Sprint(cid) })
+		delete(s.serverIP, cid)
 	case "attach-floating-ip":
 		s.attachCalls++
 		if s.fipErr {
@@ -1034,6 +1063,32 @@ func TestInstance_PoolCheckedAgainstRouter(t *testing.T) {
 	}})
 	if n := s.count(); n != 0 {
 		t.Errorf("%d instances made by plans", n)
+	}
+}
+
+// No router holds the network when the VM is running: MTN Cloud would accept the attach and never
+// give an address (live, t105), so the apply fails at once, sends no attach, and taints the VM.
+func TestInstance_PoolNoRouterFailsFast(t *testing.T) {
+	f, s := newInstFakes(t)
+	routers := newRouterStore()
+	routers.routers[9990] = map[string]any{"id": 9990, "name": "edge", "status": "ok", "enabled": true,
+		"externalNetwork": map[string]any{"id": 32, "name": "public-network-02"},
+		"interfaces":      []any{map[string]any{"network": map[string]any{"id": 9303}}}} // another network
+	f.router = routers
+	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: []resource.TestStep{
+		{Config: instConfig(f, `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+  floating_ip_pool = "public-network-02"
+  timeouts {
+    create = "30s"
+  }
+`), ExpectError: regexp.MustCompile(`(?s)network\s+9301\s+isn't\s+on\s+an\s+MTN\s+Router.*"public-network-02",\s+and\s+MTN\s+Cloud\s+gives\s+no\s+address`)},
+	}})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.attached) != 0 {
+		t.Errorf("%d attaches sent, want none", len(s.attached))
 	}
 }
 
@@ -1454,4 +1509,122 @@ func TestInstance_FloatingIPSeveralServers(t *testing.T) {
 			{Config: cfg("public-network-01"), ConfigPlanChecks: empty},
 		},
 	})
+}
+
+// scale_factor changes in place: up adds servers (each gets a floating IP, the others keep theirs),
+// down removes the newest; a server added in the console is removed by the next apply.
+func TestInstance_ScaleInPlace(t *testing.T) {
+	f, s := newInstFakes(t)
+	lock := func(fn func()) func() { return func() { s.mu.Lock(); defer s.mu.Unlock(); fn() } }
+	cfg := func(n int) string {
+		return instConfig(f, fmt.Sprintf(`  name = "app-1"
+  plan = "G1S1"
+  scale_factor = %d
+  networks = ["9301"]
+  floating_ip_pool = "public-network-02"`, n))
+	}
+	ips := func(n int) []statecheck.StateCheck {
+		return []statecheck.StateCheck{statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("public_ips"), knownvalue.ListSizeExact(n))}
+	}
+	empty := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	var id int64
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg(1), ConfigStateChecks: ips(1), Check: func(*terraform.State) error {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				for k := range s.insts {
+					id = k
+				}
+				return nil
+			}},
+			{Config: cfg(3), ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate), ConfigStateChecks: ips(3),
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if s.addedServers != 2 || len(s.attached) != 3 {
+						t.Errorf("%d servers added, attached to %v; want 2 added and one address each", s.addedServers, s.attached)
+					}
+					return nil
+				}},
+			{Config: cfg(3), ConfigPlanChecks: empty},
+			{Config: cfg(1), ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate), ConfigStateChecks: ips(1),
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if want := []int64{id*10 + 9, id*10 + 8}; !slices.Equal(s.removedServers, want) {
+						t.Errorf("removed %v, want the newest %v", s.removedServers, want)
+					}
+					return nil
+				}},
+			{Config: cfg(1), ConfigPlanChecks: empty},
+			// Added in the console: the next apply removes it.
+			{PreConfig: lock(func() { s.insts[id]["containers"] = append(s.insts[id]["containers"].([]any), id*10+8) }),
+				Config: cfg(1), ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate), ConfigStateChecks: ips(1)},
+			{Config: cfg(1), ConfigPlanChecks: empty},
+		},
+	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.creates != 1 {
+		t.Errorf("%d instances made, want 1: scaling never replaces", s.creates)
+	}
+}
+
+// A scale that fails leaves state as it was applied before, pool included, so the next apply tries
+// both again.
+func TestInstance_ScaleFailureKeepsState(t *testing.T) {
+	f, s := newInstFakes(t)
+	cfg := func(n int, pool string) string {
+		return instConfig(f, fmt.Sprintf(`  name = "app-1"
+  plan = "G1S1"
+  scale_factor = %d
+  networks = ["9301"]
+  floating_ip_pool = %q`, n, pool))
+	}
+	pool := func(want string) []statecheck.StateCheck {
+		return []statecheck.StateCheck{statecheck.ExpectKnownValue("mtncloud_instance.app", tfjsonpath.New("floating_ip_pool"), knownvalue.StringExact(want))}
+	}
+	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: []resource.TestStep{
+		{Config: cfg(1, "public-network-02")},
+		{PreConfig: func() { s.mu.Lock(); s.addNodeFails = true; s.mu.Unlock() }, Config: cfg(2, "public-network-01"),
+			ExpectError: regexp.MustCompile(`(?s)Unable to change the number of servers.*No capacity`)},
+		{PreConfig: func() { s.mu.Lock(); s.addNodeFails = false; s.mu.Unlock() }, Config: cfg(1, "public-network-02"),
+			ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}, ConfigStateChecks: pool("public-network-02")},
+		{Config: cfg(2, "public-network-01"), ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate), ConfigStateChecks: pool("public-network-01")},
+		{Config: cfg(2, "public-network-01"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+	}})
+}
+
+// With scale, MTN Cloud sets the number of servers: one it added isn't drift. Removing scale applies
+// cleanly (no inconsistent result), and the next plan then takes the number back to the configured one.
+func TestInstance_ScaleFactorWithAutoscaling(t *testing.T) {
+	f, s := newInstFakes(t)
+	base := `  name = "app-1"
+  plan = "G1S1"
+  networks = ["9301"]
+`
+	scaled := instConfig(f, base+`  scale = {
+    min_count = 1
+    max_count = 3
+    cpu       = { min = 30, max = 75 }
+  }`)
+	plain := instConfig(f, base)
+	grow := func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for id, in := range s.insts {
+			in["containers"] = append(slices.Clone(in["containers"].([]any)), id*10+8)
+		}
+	}
+	empty := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: []resource.TestStep{
+		{Config: scaled},
+		{PreConfig: grow, Config: scaled, ConfigPlanChecks: empty},
+		// Applies cleanly; the plan after it shows the number going back to 1.
+		{Config: plain, ExpectNonEmptyPlan: true},
+		{Config: plain, ConfigPlanChecks: instPlan(plancheck.ResourceActionUpdate)},
+		{Config: plain, ConfigPlanChecks: empty},
+	}})
 }

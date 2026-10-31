@@ -195,3 +195,47 @@ func TestListAllVirtualImages_Pages(t *testing.T) {
 		t.Error("no error when page 2 fails")
 	}
 }
+
+// A refused body with field errors and no msg: the SDK says only "API returned HTTP 400", so the
+// wrapper adds the fields and why, sorted. A 500 gets nothing added.
+func TestPermissionHint_ValidationErrors(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		want   string
+	}{
+		{http.StatusBadRequest, "MTN Cloud refused: dateTime: is required; task: must be set."},
+		{http.StatusInternalServerError, ""},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(tc.status)
+			_, _ = w.Write([]byte(`{"success":false,"errors":{"task":"must be set","dateTime":"is required"}}`))
+		}))
+		create := func(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
+			_, err := meta.(*sdk.Client).Post(&sdk.Request{Path: "/api/jobs", Body: map[string]any{}})
+			return diag.FromErr(err)
+		}
+		r := &schema.Resource{CreateContext: create, Schema: map[string]*schema.Schema{}}
+		withPermissionHints(&schema.Provider{ResourcesMap: map[string]*schema.Resource{"mtncloud_thing": r}})
+		c := sdk.NewClient(srv.URL)
+		c.SetAccessToken("test-token", "", 3600, "write")
+		diags := r.CreateContext(t.Context(), r.TestResourceData(), c)
+		srv.Close()
+		if !diags.HasError() {
+			t.Fatalf("%d: no error", tc.status)
+		}
+		if got := diags[0].Detail; (tc.want == "" && got != "") || !strings.Contains(got, tc.want) {
+			t.Errorf("%d: detail %q, want %q", tc.status, got, tc.want)
+		}
+	}
+}
+
+// A role with no permission set, or one leaving defaults out, is sent with no access and the
+// standard persona; a value that is set stays.
+func TestPermissionDefaults(t *testing.T) {
+	p := PermissionSet{DefaultTaskPermission: "full"}
+	permissionDefaults(&p)
+	if p.DefaultPersona != "standard" || p.DefaultGroupPermission != "none" || p.DefaultWorkflowPermission != "none" || p.DefaultTaskPermission != "full" {
+		t.Errorf("defaults %+v, want none and standard, with task kept at full", p)
+	}
+}

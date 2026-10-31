@@ -609,3 +609,10 @@ func TestWaitForPublicIP(t *testing.T) {
 		t.Errorf("want the context's deadline, got %v", err)
 	}
 }
+
+func TestInstanceServersOldestFirst(t *testing.T) {
+	in := wireInstance{ID: 1, Containers: []int64{72, 71, 73}}.instance()
+	if !slices.Equal(in.ContainerIDs, []int64{71, 72, 73}) {
+		t.Errorf("ContainerIDs %v, want oldest first", in.ContainerIDs)
+	}
+}
