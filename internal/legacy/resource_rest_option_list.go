@@ -236,16 +236,16 @@ func resourceRestOptionListRead(ctx context.Context, d *schema.ResourceData, met
 	optionList := result.OptionList
 	if optionList != nil {
 		d.SetId(int64ToString(optionList.ID))
-		d.Set("name", optionList.Name)
-		d.Set("description", optionList.Description)
-		d.Set("labels", optionList.Labels)
-		d.Set("visibility", optionList.Visibility)
-		d.Set("initial_dataset", optionList.InitialDataset)
-		d.Set("real_time", optionList.RealTime)
-		d.Set("translation_script", optionList.TranslationScript)
-		d.Set("request_script", optionList.RequestScript)
-		d.Set("source_url", optionList.SourceURL)
-		d.Set("source_method", optionList.SourceMethod)
+		setAttr(ctx, d, "name", optionList.Name)
+		setAttr(ctx, d, "description", optionList.Description)
+		setAttr(ctx, d, "labels", optionList.Labels)
+		setAttr(ctx, d, "visibility", optionList.Visibility)
+		setAttr(ctx, d, "initial_dataset", optionList.InitialDataset)
+		setAttr(ctx, d, "real_time", optionList.RealTime)
+		setAttr(ctx, d, "translation_script", optionList.TranslationScript)
+		setAttr(ctx, d, "request_script", optionList.RequestScript)
+		setAttr(ctx, d, "source_url", optionList.SourceURL)
+		setAttr(ctx, d, "source_method", optionList.SourceMethod)
 	} else {
 		log.Println(optionList)
 		return diag.Errorf("read operation: option list not found in response data") // should not happen

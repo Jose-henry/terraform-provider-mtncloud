@@ -211,18 +211,18 @@ func resourceLibraryScriptTaskRead(ctx context.Context, d *schema.ResourceData, 
 	libraryScriptTask := result.Task
 
 	d.SetId(int64ToString(libraryScriptTask.ID))
-	d.Set("name", libraryScriptTask.Name)
-	d.Set("code", libraryScriptTask.Code)
-	d.Set("labels", libraryScriptTask.Labels)
-	d.Set("result_type", libraryScriptTask.ResultType)
-	d.Set("script_template", libraryScriptTask.TaskOptions.ContainerScript)
-	d.Set("script_template_id", libraryScriptTask.TaskOptions.ContainerScriptId)
-	d.Set("execute_target", libraryScriptTask.ExecuteTarget)
-	d.Set("retryable", libraryScriptTask.Retryable)
-	d.Set("retry_count", libraryScriptTask.RetryCount)
-	d.Set("retry_delay_seconds", libraryScriptTask.RetryDelaySeconds)
-	d.Set("allow_custom_config", libraryScriptTask.AllowCustomConfig)
-	d.Set("visibility", libraryScriptTask.Visibility)
+	setAttr(ctx, d, "name", libraryScriptTask.Name)
+	setAttr(ctx, d, "code", libraryScriptTask.Code)
+	setAttr(ctx, d, "labels", libraryScriptTask.Labels)
+	setAttr(ctx, d, "result_type", libraryScriptTask.ResultType)
+	setAttr(ctx, d, "script_template", libraryScriptTask.TaskOptions.ContainerScript)
+	setAttr(ctx, d, "script_template_id", libraryScriptTask.TaskOptions.ContainerScriptId)
+	setAttr(ctx, d, "execute_target", libraryScriptTask.ExecuteTarget)
+	setAttr(ctx, d, "retryable", libraryScriptTask.Retryable)
+	setAttr(ctx, d, "retry_count", libraryScriptTask.RetryCount)
+	setAttr(ctx, d, "retry_delay_seconds", libraryScriptTask.RetryDelaySeconds)
+	setAttr(ctx, d, "allow_custom_config", libraryScriptTask.AllowCustomConfig)
+	setAttr(ctx, d, "visibility", libraryScriptTask.Visibility)
 	return diags
 }
 

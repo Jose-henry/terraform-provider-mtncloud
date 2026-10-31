@@ -131,6 +131,6 @@ func dataSourceTasksRead(ctx context.Context, d *schema.ResourceData, meta inter
 		}
 	}
 	d.SetId("1")
-	d.Set("ids", taskIDs)
+	setAttr(ctx, d, "ids", taskIDs)
 	return diags
 }

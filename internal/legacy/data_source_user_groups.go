@@ -120,6 +120,6 @@ func dataSourceUserGroupsRead(ctx context.Context, d *schema.ResourceData, meta 
 		}
 	}
 	d.SetId("1")
-	d.Set("ids", userGroupIDs)
+	setAttr(ctx, d, "ids", userGroupIDs)
 	return diags
 }

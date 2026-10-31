@@ -161,13 +161,13 @@ func resourceRestartTaskRead(ctx context.Context, d *schema.ResourceData, meta i
 	result := resp.Result.(*sdk.GetTaskResult)
 	restartTask := result.Task
 	d.SetId(int64ToString(restartTask.ID))
-	d.Set("name", restartTask.Name)
-	d.Set("code", restartTask.Code)
-	d.Set("labels", restartTask.Labels)
-	d.Set("retryable", restartTask.Retryable)
-	d.Set("retry_count", restartTask.RetryCount)
-	d.Set("retry_delay_seconds", restartTask.RetryDelaySeconds)
-	d.Set("allow_custom_config", restartTask.AllowCustomConfig)
+	setAttr(ctx, d, "name", restartTask.Name)
+	setAttr(ctx, d, "code", restartTask.Code)
+	setAttr(ctx, d, "labels", restartTask.Labels)
+	setAttr(ctx, d, "retryable", restartTask.Retryable)
+	setAttr(ctx, d, "retry_count", restartTask.RetryCount)
+	setAttr(ctx, d, "retry_delay_seconds", restartTask.RetryDelaySeconds)
+	setAttr(ctx, d, "allow_custom_config", restartTask.AllowCustomConfig)
 	return diags
 }
 

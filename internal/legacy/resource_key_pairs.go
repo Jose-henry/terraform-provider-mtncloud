@@ -137,9 +137,9 @@ func resourceKeyPairRead(ctx context.Context, d *schema.ResourceData, meta inter
 	}
 	if keyPair != nil {
 		d.SetId(int64ToString(keyPair.ID))
-		d.Set("name", keyPair.Name)
-		d.Set("public_key", keyPair.PublicKey)
-		d.Set("private_key", keyPair.PrivateKeyHash)
+		setAttr(ctx, d, "name", keyPair.Name)
+		setAttr(ctx, d, "public_key", keyPair.PublicKey)
+		setAttr(ctx, d, "private_key", keyPair.PrivateKeyHash)
 	} else {
 		return diag.Errorf("Key pair not found in response data.") // should not happen
 	}

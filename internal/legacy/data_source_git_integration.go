@@ -75,7 +75,7 @@ func dataSourceGitIntegrationRead(ctx context.Context, d *schema.ResourceData, m
 	integration := result.Integration
 	if integration != nil {
 		d.SetId(int64ToString(integration.ID))
-		d.Set("name", integration.Name)
+		setAttr(ctx, d, "name", integration.Name)
 		resp, err = client.Execute(&sdk.Request{
 			Method:      "GET",
 			Path:        fmt.Sprintf("/api/options/codeRepositories?integrationId=%d", integration.ID),
@@ -94,7 +94,7 @@ func dataSourceGitIntegrationRead(ctx context.Context, d *schema.ResourceData, m
 		for _, v := range itemResponsePayload.Data {
 			repo_ids[v.Name] = v.Value
 		}
-		d.Set("repository_ids", repo_ids)
+		setAttr(ctx, d, "repository_ids", repo_ids)
 	} else {
 		return diag.Errorf("Git integration not found in response data.") // should not happen
 	}

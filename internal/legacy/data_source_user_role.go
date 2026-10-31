@@ -66,6 +66,6 @@ func dataSourceUserRoleRead(ctx context.Context, d *schema.ResourceData, meta in
 	result := resp.Result.(*sdk.GetRoleResult)
 	role := result.Role
 	d.SetId(int64ToString(role.ID))
-	d.Set("name", role.Authority)
+	setAttr(ctx, d, "name", role.Authority)
 	return diags
 }

@@ -125,7 +125,7 @@ func resourceIPv4IPPoolRead(ctx context.Context, d *schema.ResourceData, meta in
 	result := resp.Result.(*sdk.GetNetworkPoolResult)
 	pool := result.NetworkPool
 	d.SetId(int64ToString(pool.ID))
-	d.Set("name", pool.Name)
+	setAttr(ctx, d, "name", pool.Name)
 	var ipRanges []map[string]interface{}
 	var unsortedRanges []IPRange
 	if pool.IpRanges != nil {
@@ -147,7 +147,7 @@ func resourceIPv4IPPoolRead(ctx context.Context, d *schema.ResourceData, meta in
 		rangePayload["starting_address"] = ipRange.StartAddress
 		ipRanges = append(ipRanges, rangePayload)
 	}
-	d.Set("ip_range", ipRanges)
+	setAttr(ctx, d, "ip_range", ipRanges)
 	return diags
 }
 

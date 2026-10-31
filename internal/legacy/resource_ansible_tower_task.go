@@ -219,33 +219,33 @@ func resourceAnsibleTowerTaskRead(ctx context.Context, d *schema.ResourceData, m
 	ansibleTowerTask := result.Task
 
 	d.SetId(int64ToString(ansibleTowerTask.ID))
-	d.Set("name", ansibleTowerTask.Name)
-	d.Set("code", ansibleTowerTask.Code)
-	d.Set("labels", ansibleTowerTask.Labels)
+	setAttr(ctx, d, "name", ansibleTowerTask.Name)
+	setAttr(ctx, d, "code", ansibleTowerTask.Code)
+	setAttr(ctx, d, "labels", ansibleTowerTask.Labels)
 	integrationId, err := strconv.Atoi(ansibleTowerTask.TaskOptions.AnsibleTowerIntegrationId)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	d.Set("ansible_tower_integration_id", integrationId)
+	setAttr(ctx, d, "ansible_tower_integration_id", integrationId)
 	inventoryId, err := strconv.Atoi(ansibleTowerTask.TaskOptions.AnsibleTowerInventoryId)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	d.Set("ansible_tower_inventory_id", inventoryId)
-	d.Set("group", ansibleTowerTask.TaskOptions.AnsibleGroup)
-	d.Set("scm_override", ansibleTowerTask.TaskOptions.AnsibleTowerGitRef)
-	d.Set("execute_mode", ansibleTowerTask.TaskOptions.AnsibleTowerExecuteMode)
+	setAttr(ctx, d, "ansible_tower_inventory_id", inventoryId)
+	setAttr(ctx, d, "group", ansibleTowerTask.TaskOptions.AnsibleGroup)
+	setAttr(ctx, d, "scm_override", ansibleTowerTask.TaskOptions.AnsibleTowerGitRef)
+	setAttr(ctx, d, "execute_mode", ansibleTowerTask.TaskOptions.AnsibleTowerExecuteMode)
 	jobTemplateId, err := strconv.Atoi(ansibleTowerTask.TaskOptions.AnsibleTowerJobTemplateId)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	d.Set("job_template_id", jobTemplateId)
-	d.Set("execute_target", ansibleTowerTask.ExecuteTarget)
-	d.Set("retryable", ansibleTowerTask.Retryable)
-	d.Set("retry_count", ansibleTowerTask.RetryCount)
-	d.Set("retry_delay_seconds", ansibleTowerTask.RetryDelaySeconds)
-	d.Set("allow_custom_config", ansibleTowerTask.AllowCustomConfig)
-	d.Set("visibility", ansibleTowerTask.Visibility)
+	setAttr(ctx, d, "job_template_id", jobTemplateId)
+	setAttr(ctx, d, "execute_target", ansibleTowerTask.ExecuteTarget)
+	setAttr(ctx, d, "retryable", ansibleTowerTask.Retryable)
+	setAttr(ctx, d, "retry_count", ansibleTowerTask.RetryCount)
+	setAttr(ctx, d, "retry_delay_seconds", ansibleTowerTask.RetryDelaySeconds)
+	setAttr(ctx, d, "allow_custom_config", ansibleTowerTask.AllowCustomConfig)
+	setAttr(ctx, d, "visibility", ansibleTowerTask.Visibility)
 	return diags
 }
 

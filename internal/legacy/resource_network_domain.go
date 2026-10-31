@@ -164,12 +164,12 @@ func resourceNetworkDomainRead(ctx context.Context, d *schema.ResourceData, meta
 	networkDomain := result.NetworkDomain
 	if networkDomain != nil {
 		d.SetId(int64ToString(networkDomain.ID))
-		d.Set("name", networkDomain.Name)
-		d.Set("description", networkDomain.Description)
-		d.Set("active", networkDomain.Active)
-		d.Set("public_zone", networkDomain.PublicZone)
-		d.Set("domain_controller", networkDomain.DomainController)
-		d.Set("visibility", networkDomain.Visibility)
+		setAttr(ctx, d, "name", networkDomain.Name)
+		setAttr(ctx, d, "description", networkDomain.Description)
+		setAttr(ctx, d, "active", networkDomain.Active)
+		setAttr(ctx, d, "public_zone", networkDomain.PublicZone)
+		setAttr(ctx, d, "domain_controller", networkDomain.DomainController)
+		setAttr(ctx, d, "visibility", networkDomain.Visibility)
 		// d.Set("fqdn", networkDomain.Fqdn)
 	} else {
 		return diag.Errorf("NetworkDomain not found in response data.") // should not happen

@@ -165,16 +165,16 @@ func resourceGroupRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	group := result.Group
 	if group != nil {
 		d.SetId(int64ToString(group.ID))
-		d.Set("name", group.Name)
-		d.Set("code", group.Code)
-		d.Set("location", group.Location)
+		setAttr(ctx, d, "name", group.Name)
+		setAttr(ctx, d, "code", group.Code)
+		setAttr(ctx, d, "location", group.Location)
 		var clouds []int64
 		if len(group.Clouds) > 0 {
 			for _, v := range group.Clouds {
 				clouds = append(clouds, v.ID)
 			}
 		}
-		d.Set("cloud_ids", clouds)
+		setAttr(ctx, d, "cloud_ids", clouds)
 	} else {
 		return diag.Errorf("Group not found in response data.") // should not happen
 	}

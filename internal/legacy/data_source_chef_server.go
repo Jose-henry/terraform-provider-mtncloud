@@ -64,8 +64,8 @@ func dataSourceChefServerRead(ctx context.Context, d *schema.ResourceData, meta 
 
 	// store resource data
 	d.SetId(strconv.FormatInt(id, 10))
-	d.Set("id", id)
-	d.Set("name", option.Name)
+	setAttr(ctx, d, "id", id)
+	setAttr(ctx, d, "name", option.Name)
 
 	return diags
 }

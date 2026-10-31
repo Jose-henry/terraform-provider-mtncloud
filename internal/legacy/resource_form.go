@@ -850,10 +850,10 @@ func resourceFormRead(ctx context.Context, d *schema.ResourceData, meta interfac
 	form := result.Form
 
 	d.SetId(int64ToString(form.ID))
-	d.Set("name", form.Name)
-	d.Set("code", form.Code)
-	d.Set("description", form.Description)
-	d.Set("labels", form.Labels)
+	setAttr(ctx, d, "name", form.Name)
+	setAttr(ctx, d, "code", form.Code)
+	setAttr(ctx, d, "description", form.Description)
+	setAttr(ctx, d, "labels", form.Labels)
 
 	// Option Types
 	var optionTypes []map[string]interface{}
@@ -919,7 +919,7 @@ func resourceFormRead(ctx context.Context, d *schema.ResourceData, meta interfac
 			optionTypes = append(optionTypes, row)
 		}
 	}
-	d.Set("option_type", optionTypes)
+	setAttr(ctx, d, "option_type", optionTypes)
 
 	// Field Groups
 	var fieldGroups []map[string]interface{}
@@ -996,7 +996,7 @@ func resourceFormRead(ctx context.Context, d *schema.ResourceData, meta interfac
 			fieldGroups = append(fieldGroups, row)
 		}
 	}
-	d.Set("field_group", fieldGroups)
+	setAttr(ctx, d, "field_group", fieldGroups)
 
 	return diags
 }

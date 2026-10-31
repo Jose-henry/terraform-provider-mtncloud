@@ -119,9 +119,9 @@ func resourceContactRead(ctx context.Context, d *schema.ResourceData, meta inter
 	contact := result.Contact
 	if contact != nil {
 		d.SetId(int64ToString(contact.ID))
-		d.Set("name", contact.Name)
-		d.Set("email_address", contact.EmailAddress)
-		d.Set("mobile_number", contact.SmsAddress)
+		setAttr(ctx, d, "name", contact.Name)
+		setAttr(ctx, d, "email_address", contact.EmailAddress)
+		setAttr(ctx, d, "mobile_number", contact.SmsAddress)
 	} else {
 		return diag.Errorf("read operation: contact not found in response data") // should not happen
 	}

@@ -21,13 +21,7 @@ linters:
       locale: US
   exclusions:
     generated: strict
-    rules:
-      # Legacy debt baseline (counted 2026-10-31): 576 unchecked d.Set, and nothing else. Every
-      # other linter passes on internal/legacy (was 1439 d.Set, 32 json.Unmarshal, 60 QF1008, ...
-      # on 2026-10-26). Any other unchecked error there fails the lint.
-      - path: internal/legacy/
-        linters: [errcheck]
-        text: "Error return value of `d.Set` is not checked"
+    # No exclusions: the legacy d.Set debt was paid on 2026-10-31 (setAttr in internal/legacy).
 
 formatters:
   enable:

@@ -178,9 +178,9 @@ func resourceOperationalWorkflowRead(ctx context.Context, d *schema.ResourceData
 	workflow := result.TaskSet
 	if workflow != nil {
 		d.SetId(int64ToString(workflow.ID))
-		d.Set("name", workflow.Name)
-		d.Set("description", workflow.Description)
-		d.Set("labels", workflow.Labels)
+		setAttr(ctx, d, "name", workflow.Name)
+		setAttr(ctx, d, "description", workflow.Description)
+		setAttr(ctx, d, "labels", workflow.Labels)
 		// option types
 		var optionTypes []int64
 		if workflow.OptionTypes != nil {
@@ -191,11 +191,11 @@ func resourceOperationalWorkflowRead(ctx context.Context, d *schema.ResourceData
 				optionTypes = append(optionTypes, optionID)
 			}
 		}
-		d.Set("option_types", optionTypes)
-		d.Set("task_ids", workflow.Tasks)
-		d.Set("visibility", workflow.Visibility)
-		d.Set("allow_custom_config", workflow.AllowCustomConfig)
-		d.Set("platform", workflow.Platform)
+		setAttr(ctx, d, "option_types", optionTypes)
+		setAttr(ctx, d, "task_ids", workflow.Tasks)
+		setAttr(ctx, d, "visibility", workflow.Visibility)
+		setAttr(ctx, d, "allow_custom_config", workflow.AllowCustomConfig)
+		setAttr(ctx, d, "platform", workflow.Platform)
 	} else {
 		return diag.Errorf("read operation: workflow not found in response data") // should not happen
 	}

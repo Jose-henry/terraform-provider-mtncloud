@@ -131,11 +131,11 @@ func resourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta i
 	environment := result.Environment
 	if environment != nil {
 		d.SetId(int64ToString(environment.ID))
-		d.Set("active", environment.Active)
-		d.Set("name", environment.Name)
-		d.Set("description", environment.Description)
-		d.Set("visibility", environment.Visibility)
-		d.Set("code", environment.Code)
+		setAttr(ctx, d, "active", environment.Active)
+		setAttr(ctx, d, "name", environment.Name)
+		setAttr(ctx, d, "description", environment.Description)
+		setAttr(ctx, d, "visibility", environment.Visibility)
+		setAttr(ctx, d, "code", environment.Code)
 	} else {
 		err := fmt.Errorf("read operation: environment not found in response data") // should not happen
 		return diag.FromErr(err)

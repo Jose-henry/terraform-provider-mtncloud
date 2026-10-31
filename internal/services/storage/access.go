@@ -60,7 +60,8 @@ func (r *accessResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 			"**Ordering replaces the keys for the whole tenant:** every tool and user of the old keys loses access " +
 			"until it takes the new ones from Cypher (MTN's workflow updates the console's own bucket records). The " +
 			"keys are never stored in state: MOS resources read them from Cypher. Destroy deletes nothing: the keys " +
-			"stay, since others use them.",
+			"stay, since others use them. **Recommended:** order MOS once from the MTN Cloud console to get the keys, " +
+			"then let this resource adopt them.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, PlanModifiers: keep,
 				Description: "Where the keys are in Cypher: `secret/MOS-<tenant>_<user>_` (no secret)."},

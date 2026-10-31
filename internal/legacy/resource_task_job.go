@@ -240,29 +240,29 @@ func resourceTaskJobRead(ctx context.Context, d *schema.ResourceData, meta inter
 	taskJob := result.Job
 
 	d.SetId(int64ToString(taskJob.ID))
-	d.Set("name", taskJob.Name)
+	setAttr(ctx, d, "name", taskJob.Name)
 	// Always set, even empty: an imported job without labels otherwise plans labels as unknown.
-	d.Set("labels", taskJob.Labels)
-	d.Set("enabled", taskJob.Enabled)
-	d.Set("task_id", taskJob.Task.ID)
-	d.Set("context_type", taskJob.TargetType)
+	setAttr(ctx, d, "labels", taskJob.Labels)
+	setAttr(ctx, d, "enabled", taskJob.Enabled)
+	setAttr(ctx, d, "task_id", taskJob.Task.ID)
+	setAttr(ctx, d, "context_type", taskJob.TargetType)
 	switch taskJob.ScheduleMode {
 	case "manual":
-		d.Set("schedule_mode", "manual")
+		setAttr(ctx, d, "schedule_mode", "manual")
 	case "dateTime":
-		d.Set("schedule_mode", "date_and_time")
-		d.Set("scheduled_date_and_time", taskJob.DateTime)
+		setAttr(ctx, d, "schedule_mode", "date_and_time")
+		setAttr(ctx, d, "scheduled_date_and_time", taskJob.DateTime)
 		// Execute schedule uses the schedule mode field for storing the execute schedule id
 	default:
-		d.Set("schedule_mode", "scheduled")
+		setAttr(ctx, d, "schedule_mode", "scheduled")
 		intVar, err := strconv.Atoi(taskJob.ScheduleMode)
 		if err != nil {
 			log.Printf("String Conversion Failure: %s", err)
 		}
-		d.Set("execution_schedule_id", intVar)
+		setAttr(ctx, d, "execution_schedule_id", intVar)
 	}
 	if taskJob.CustomConfig != "" {
-		d.Set("custom_config", taskJob.CustomConfig)
+		setAttr(ctx, d, "custom_config", taskJob.CustomConfig)
 	}
 
 	switch taskJob.TargetType {
@@ -276,7 +276,7 @@ func resourceTaskJobRead(ctx context.Context, d *schema.ResourceData, meta inter
 				instanceIds = append(instanceIds, instance.RefId)
 			}
 		}
-		d.Set("instance_ids", instanceIds)
+		setAttr(ctx, d, "instance_ids", instanceIds)
 	case "server":
 		// servers
 		var serverIds []int64
@@ -287,14 +287,14 @@ func resourceTaskJobRead(ctx context.Context, d *schema.ResourceData, meta inter
 				serverIds = append(serverIds, server.RefId)
 			}
 		}
-		d.Set("server_ids", serverIds)
+		setAttr(ctx, d, "server_ids", serverIds)
 	case "instance-label":
 		if len(taskJob.Targets) > 0 { // a job with no target left would panic here
-			d.Set("instance_label", taskJob.Targets[0].Name)
+			setAttr(ctx, d, "instance_label", taskJob.Targets[0].Name)
 		}
 	case "server-label":
 		if len(taskJob.Targets) > 0 { // a job with no target left would panic here
-			d.Set("server_label", taskJob.Targets[0].Name)
+			setAttr(ctx, d, "server_label", taskJob.Targets[0].Name)
 		}
 	}
 

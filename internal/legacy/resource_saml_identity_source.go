@@ -251,28 +251,28 @@ func resourceSAMLIdentitySourceRead(ctx context.Context, d *schema.ResourceData,
 	result := resp.Result.(*sdk.GetIdentitySourceResult)
 	identitySource := result.IdentitySource
 	d.SetId(int64ToString(identitySource.ID))
-	d.Set("name", identitySource.Name)
-	d.Set("description", identitySource.Description)
-	d.Set("login_redirect_url", identitySource.Config.URL)
-	d.Set("logout_redirect_url", identitySource.Config.LogoutURL)
+	setAttr(ctx, d, "name", identitySource.Name)
+	setAttr(ctx, d, "description", identitySource.Description)
+	setAttr(ctx, d, "login_redirect_url", identitySource.Config.URL)
+	setAttr(ctx, d, "logout_redirect_url", identitySource.Config.LogoutURL)
 	if identitySource.Config.DoNotIncludeSAMLRequest {
-		d.Set("include_saml_request_parameter", false)
+		setAttr(ctx, d, "include_saml_request_parameter", false)
 	} else {
-		d.Set("include_saml_request_parameter", true)
+		setAttr(ctx, d, "include_saml_request_parameter", true)
 	}
-	d.Set("saml_request", identitySource.Config.SAMLSignatureMode)
+	setAttr(ctx, d, "saml_request", identitySource.Config.SAMLSignatureMode)
 	if identitySource.Config.DoNotValidateSignature {
-		d.Set("validate_assertion_signature", false)
+		setAttr(ctx, d, "validate_assertion_signature", false)
 	} else {
-		d.Set("validate_assertion_signature", true)
+		setAttr(ctx, d, "validate_assertion_signature", true)
 	}
-	d.Set("given_name_attribute", identitySource.Config.GivenNameAttribute)
-	d.Set("surname_attribute", identitySource.Config.SurnameAttribute)
-	d.Set("email_attribute", identitySource.Config.EmailAttribute)
-	d.Set("default_account_role_id", identitySource.DefaultAccountRole.ID)
-	d.Set("role_attribute_name", identitySource.Config.RoleAttributeName)
-	d.Set("required_role_attribute_value", identitySource.Config.RequiredAttributeValue)
-	d.Set("enable_role_mapping_permission", identitySource.AllowCustomMappings)
+	setAttr(ctx, d, "given_name_attribute", identitySource.Config.GivenNameAttribute)
+	setAttr(ctx, d, "surname_attribute", identitySource.Config.SurnameAttribute)
+	setAttr(ctx, d, "email_attribute", identitySource.Config.EmailAttribute)
+	setAttr(ctx, d, "default_account_role_id", identitySource.DefaultAccountRole.ID)
+	setAttr(ctx, d, "role_attribute_name", identitySource.Config.RoleAttributeName)
+	setAttr(ctx, d, "required_role_attribute_value", identitySource.Config.RequiredAttributeValue)
+	setAttr(ctx, d, "enable_role_mapping_permission", identitySource.AllowCustomMappings)
 
 	var roleMappingPayload []map[string]interface{}
 
@@ -283,7 +283,7 @@ func resourceSAMLIdentitySourceRead(ctx context.Context, d *schema.ResourceData,
 		roleOutput["role_name"] = roleMapping.MappedRole.Authority
 		roleMappingPayload = append(roleMappingPayload, roleOutput)
 	}
-	d.Set("role_mapping", roleMappingPayload)
+	setAttr(ctx, d, "role_mapping", roleMappingPayload)
 	return diags
 }
 

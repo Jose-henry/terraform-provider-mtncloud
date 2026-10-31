@@ -181,16 +181,15 @@ func resourceNestedWorkflowTaskRead(ctx context.Context, d *schema.ResourceData,
 	result := resp.Result.(*sdk.GetTaskResult)
 	nestedWorkflowTask := result.Task
 	d.SetId(int64ToString(nestedWorkflowTask.ID))
-	d.Set("name", nestedWorkflowTask.Name)
-	d.Set("code", nestedWorkflowTask.Code)
-	d.Set("labels", nestedWorkflowTask.Labels)
-	d.Set("execute_target", nestedWorkflowTask.ExecuteTarget)
-	d.Set("operational_workflow_id", nestedWorkflowTask.TaskOptions.OperationalWorkflowId)
-	d.Set("operational_workflow_name", nestedWorkflowTask.TaskOptions.OperationalWorkflowName)
-	d.Set("retryable", nestedWorkflowTask.Retryable)
-	d.Set("retry_count", nestedWorkflowTask.RetryCount)
-	d.Set("retry_delay_seconds", nestedWorkflowTask.RetryDelaySeconds)
-	d.Set("allow_custom_config", nestedWorkflowTask.AllowCustomConfig)
+	setAttr(ctx, d, "name", nestedWorkflowTask.Name)
+	setAttr(ctx, d, "code", nestedWorkflowTask.Code)
+	setAttr(ctx, d, "labels", nestedWorkflowTask.Labels)
+	setIntFromString(ctx, d, "operational_workflow_id", nestedWorkflowTask.TaskOptions.OperationalWorkflowId)
+	setAttr(ctx, d, "operational_workflow_name", nestedWorkflowTask.TaskOptions.OperationalWorkflowName)
+	setAttr(ctx, d, "retryable", nestedWorkflowTask.Retryable)
+	setAttr(ctx, d, "retry_count", nestedWorkflowTask.RetryCount)
+	setAttr(ctx, d, "retry_delay_seconds", nestedWorkflowTask.RetryDelaySeconds)
+	setAttr(ctx, d, "allow_custom_config", nestedWorkflowTask.AllowCustomConfig)
 	return diags
 }
 

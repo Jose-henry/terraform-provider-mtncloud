@@ -66,7 +66,7 @@ func dataSourceContactRead(ctx context.Context, d *schema.ResourceData, meta int
 	contact := result.Contact
 	if contact != nil {
 		d.SetId(int64ToString(contact.ID))
-		d.Set("name", contact.Name)
+		setAttr(ctx, d, "name", contact.Name)
 	} else {
 		return diag.Errorf("Contact not found in response data.") // should not happen
 	}

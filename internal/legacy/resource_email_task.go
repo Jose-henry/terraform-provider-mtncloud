@@ -242,32 +242,32 @@ func resourceEmailTaskRead(ctx context.Context, d *schema.ResourceData, meta int
 	emailTask := result.Task
 
 	d.SetId(int64ToString(emailTask.ID))
-	d.Set("name", emailTask.Name)
-	d.Set("code", emailTask.Code)
-	d.Set("labels", emailTask.Labels)
-	d.Set("email_address", emailTask.TaskOptions.EmailAddress)
-	d.Set("subject", emailTask.TaskOptions.EmailSubject)
-	d.Set("source", emailTask.File.SourceType)
+	setAttr(ctx, d, "name", emailTask.Name)
+	setAttr(ctx, d, "code", emailTask.Code)
+	setAttr(ctx, d, "labels", emailTask.Labels)
+	setAttr(ctx, d, "email_address", emailTask.TaskOptions.EmailAddress)
+	setAttr(ctx, d, "subject", emailTask.TaskOptions.EmailSubject)
+	setAttr(ctx, d, "source", emailTask.File.SourceType)
 	if emailTask.File.SourceType == "url" {
-		d.Set("content_url", emailTask.File.ContentPath)
+		setAttr(ctx, d, "content_url", emailTask.File.ContentPath)
 	}
 	if emailTask.File.SourceType == "repository" {
-		d.Set("content_path", emailTask.File.ContentPath)
-		d.Set("repository_id", emailTask.File.Repository.ID)
-		d.Set("version_ref", emailTask.File.ContentRef)
+		setAttr(ctx, d, "content_path", emailTask.File.ContentPath)
+		setAttr(ctx, d, "repository_id", emailTask.File.Repository.ID)
+		setAttr(ctx, d, "version_ref", emailTask.File.ContentRef)
 	}
 	if emailTask.File.SourceType == "local" {
-		d.Set("content", emailTask.File.Content)
+		setAttr(ctx, d, "content", emailTask.File.Content)
 	}
 	if emailTask.TaskOptions.EmailSkipTemplate == "on" {
-		d.Set("skip_wrapped_email_template", true)
+		setAttr(ctx, d, "skip_wrapped_email_template", true)
 	} else {
-		d.Set("skip_wrapped_email_template", false)
+		setAttr(ctx, d, "skip_wrapped_email_template", false)
 	}
-	d.Set("retryable", emailTask.Retryable)
-	d.Set("retry_count", emailTask.RetryCount)
-	d.Set("retry_delay_seconds", emailTask.RetryDelaySeconds)
-	d.Set("allow_custom_config", emailTask.AllowCustomConfig)
+	setAttr(ctx, d, "retryable", emailTask.Retryable)
+	setAttr(ctx, d, "retry_count", emailTask.RetryCount)
+	setAttr(ctx, d, "retry_delay_seconds", emailTask.RetryDelaySeconds)
+	setAttr(ctx, d, "allow_custom_config", emailTask.AllowCustomConfig)
 	return diags
 }
 

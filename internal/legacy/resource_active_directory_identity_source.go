@@ -233,21 +233,21 @@ func resourceActiveDirectoryIdentitySourceRead(ctx context.Context, d *schema.Re
 	result := resp.Result.(*sdk.GetIdentitySourceResult)
 	identitySource := result.IdentitySource
 	d.SetId(int64ToString(identitySource.ID))
-	d.Set("name", identitySource.Name)
-	d.Set("description", identitySource.Description)
-	d.Set("ad_server", identitySource.Config.URL)
-	d.Set("domain", identitySource.Config.Domain)
+	setAttr(ctx, d, "name", identitySource.Name)
+	setAttr(ctx, d, "description", identitySource.Description)
+	setAttr(ctx, d, "ad_server", identitySource.Config.URL)
+	setAttr(ctx, d, "domain", identitySource.Config.Domain)
 	if identitySource.Config.UseSSL == "off" {
-		d.Set("use_ssl", false)
+		setAttr(ctx, d, "use_ssl", false)
 	} else {
-		d.Set("use_ssl", true)
+		setAttr(ctx, d, "use_ssl", true)
 	}
-	d.Set("binding_username", identitySource.Config.BindingUsername)
-	d.Set("binding_password", identitySource.Config.BindingPasswordHash)
-	d.Set("required_group", identitySource.Config.RequiredGroup)
-	d.Set("search_member_groups", identitySource.Config.SearchMemberGroups)
-	d.Set("enable_role_mapping_permission", identitySource.AllowCustomMappings)
-	d.Set("default_account_role_id", identitySource.DefaultAccountRole.ID)
+	setAttr(ctx, d, "binding_username", identitySource.Config.BindingUsername)
+	setAttr(ctx, d, "binding_password", identitySource.Config.BindingPasswordHash)
+	setAttr(ctx, d, "required_group", identitySource.Config.RequiredGroup)
+	setAttr(ctx, d, "search_member_groups", identitySource.Config.SearchMemberGroups)
+	setAttr(ctx, d, "enable_role_mapping_permission", identitySource.AllowCustomMappings)
+	setAttr(ctx, d, "default_account_role_id", identitySource.DefaultAccountRole.ID)
 
 	var roleMappingPayload []map[string]interface{}
 
@@ -259,7 +259,7 @@ func resourceActiveDirectoryIdentitySourceRead(ctx context.Context, d *schema.Re
 		roleOutput["role_name"] = roleMapping.MappedRole.Authority
 		roleMappingPayload = append(roleMappingPayload, roleOutput)
 	}
-	d.Set("role_mapping", roleMappingPayload)
+	setAttr(ctx, d, "role_mapping", roleMappingPayload)
 	return diags
 }
 

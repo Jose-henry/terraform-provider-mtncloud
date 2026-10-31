@@ -67,7 +67,7 @@ func dataSourceUserGroupRead(ctx context.Context, d *schema.ResourceData, meta i
 	userGroup := result.UserGroup
 	if userGroup != nil {
 		d.SetId(int64ToString(userGroup.ID))
-		d.Set("name", userGroup.Name)
+		setAttr(ctx, d, "name", userGroup.Name)
 	} else {
 		return diag.Errorf("User Group not found in response data.") // should not happen
 	}

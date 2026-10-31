@@ -76,9 +76,9 @@ func dataSourceGroupRead(ctx context.Context, d *schema.ResourceData, meta inter
 	group := result.Group
 	if group != nil {
 		d.SetId(int64ToString(group.ID))
-		d.Set("name", group.Name)
-		d.Set("code", group.Code)
-		d.Set("location", group.Location)
+		setAttr(ctx, d, "name", group.Name)
+		setAttr(ctx, d, "code", group.Code)
+		setAttr(ctx, d, "location", group.Location)
 	} else {
 		return diag.Errorf("Group not found in response data.") // should not happen
 	}

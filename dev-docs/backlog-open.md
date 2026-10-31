@@ -95,7 +95,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 
 ## 3. Live checks still open (each needs permission, or MTN)
 
-- [ ] **MTN Network (B-011).** Answered live 2026-10-31 (t102): a `PUT` with an empty description clears it (the API then returns none), and the plan after is `No changes.` Answered live 2026-10-31 (t104): leaving IPv6 `dns_secondary` out clears it (API `dnsSecondaryIPv6` null, `No changes.` after); a gateway change on a network attached to a router is accepted in place (status `ok`, `No changes.` after). Still open: IPv6 defaults. The status words of a failed network. The status code of an "in use" security group refusal.
+- [ ] **MTN Network (B-011).** Answered live 2026-10-31 (t102): a `PUT` with an empty description clears it (the API then returns none), and the plan after is `No changes.` Answered live 2026-10-31 (t104): leaving IPv6 `dns_secondary` out clears it (API `dnsSecondaryIPv6` null, `No changes.` after); a gateway change on a network attached to a router is accepted in place (status `ok`, `No changes.` after). IPv6 defaults: **answered by the owner (2026-10-31)**: IPv4 is required, IPv6 is optional and usually off; left out, it is disabled. That is the provider's design (`ipv6` block optional, `ipv6Enabled = false` sent when it's left out; `No changes.` after, t104). Still open: the status words of a failed network. The status code of an "in use" security group refusal.
 - [ ] **MTN Router (B-012).**
   - Is the GET current straight after a PUT? **Yes** (live 2026-10-31, t102: a description update, then `No changes.`).
   - Does re-sending `externalNetwork` keep the IP? Not re-sent: an update that keeps the gateway leaves `externalNetwork` out, and the external IP stayed the same (checked live by hash, t102). **Re-sending it is unsafe** (live 2026-10-31, t104, direct PUT on a QA router): the gateway interface lost its address (`ipAddress` null for 2+ minutes) while the API's `externalIp` field kept the old one. Keep `KeepGateway`; never re-send an unchanged gateway. Also: a PUT with `interfaces` `[]` detaches every internal network, and the next plan shows it as drift.
@@ -118,7 +118,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
   - The `expireDays` echo: **echoes back** (t103).
   - The threshold `PUT`: reads back clean, `No changes.` after (t103).
   - Status words.
-- [ ] **Project order (B-015).** Needs one real order. Does it get an `execution`? Does the response carry `order.items[0].id`? Group and cloud are sent as IDs.
+- [x] **Project order (B-015).** Done 2026-10-31 (t109, owner approved one order): the order finished in 19 s with an `execution` (status `success`), the project showed as resource pool `<name>-<TENANCY>` at once, and the plan after was `No changes.` Destroy is refused as designed; QA released it with `state rm`. **Ask MTN** to delete the QA projects `tf-acc-proj-ob804` and `tf-acc-proj-w1hl0`. Docs now recommend ordering projects, and MOS keys, from the console.
 - [x] **Power suspend (B-018 #1).** Done 2026-10-31: retested on Debian 12 (t103) after Ubuntu 24.04; MTN Cloud accepts the suspend and the VM keeps running on both. Documented in `power_state` as not working on MTN Cloud's images so far; use `stopped`. Reopen if MTN enables it.
 - [x] **Managed order destroy (B-018 #2).** Done 2026-10-31: the app is named after the order (Managed Database app 368, two-tier K8s app 371), and destroy went through it (API 404 checked). Nodes are named from MTN's template, not `<name>-<n>`, so that match was removed (D-029).
 - [ ] **QA second pass (B-018 #6).**
@@ -147,7 +147,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 ## 5. Debt and housekeeping
 
 - [x] **Legacy bugs (B-001).** Done 2026-10-31: no dropped `json.Unmarshal` error is left; the logo uploads went with their types (D-025).
-- [ ] **Legacy lint debt (B-002).** 2026-10-31: only 576 unchecked `d.Set` are left; the exclusion now covers just that message (every other linter passes on `internal/legacy`). The rest go as resources move to the Framework.
+- [x] **Legacy lint debt (B-002).** Done 2026-10-31: all 576 unchecked `d.Set` calls now go through `setAttr`, which turns a value that doesn't fit its attribute into a warning naming it (it was silently dropped); not an error, since the provider is released. No lint exclusions are left. The review found three reads that always failed (fixed: `manual_option_list` and `nested_workflow_task` set keys not in the schema; `operational_workflow_id`, `vro_integration_id`, `vro_workflow_value` came back as strings, now `setIntFromString`). Still to confirm live: `workflow_job.custom_options` (a non-string value or `[]` would warn) and `scheduled_date_and_time` on task/workflow jobs (warns if MTN returns an epoch number); check in the B-018 #6 pass.
 - [x] **Example defects (B-003).** Done 2026-10-31: the known-defects list is empty.
 - [x] **Local tfvars (B-004).** Done 2026-10-31. Remove the stale `username`, `password` and `tenant_subdomain` keys from the local quickstart `terraform.tfvars`.
 - [ ] **Open questions.**

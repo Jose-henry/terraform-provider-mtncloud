@@ -210,18 +210,18 @@ func resourceLibraryTemplateTaskRead(ctx context.Context, d *schema.ResourceData
 	libraryTemplateTask := result.Task
 
 	d.SetId(int64ToString(libraryTemplateTask.ID))
-	d.Set("name", libraryTemplateTask.Name)
-	d.Set("code", libraryTemplateTask.Code)
-	d.Set("labels", libraryTemplateTask.Labels)
-	d.Set("result_type", libraryTemplateTask.ResultType)
-	d.Set("file_template", libraryTemplateTask.TaskOptions.ContainerTemplate)
-	d.Set("file_template_id", libraryTemplateTask.TaskOptions.ContainerTemplateId)
-	d.Set("execute_target", libraryTemplateTask.ExecuteTarget)
-	d.Set("retryable", libraryTemplateTask.Retryable)
-	d.Set("retry_count", libraryTemplateTask.RetryCount)
-	d.Set("retry_delay_seconds", libraryTemplateTask.RetryDelaySeconds)
-	d.Set("allow_custom_config", libraryTemplateTask.AllowCustomConfig)
-	d.Set("visibility", libraryTemplateTask.Visibility)
+	setAttr(ctx, d, "name", libraryTemplateTask.Name)
+	setAttr(ctx, d, "code", libraryTemplateTask.Code)
+	setAttr(ctx, d, "labels", libraryTemplateTask.Labels)
+	setAttr(ctx, d, "result_type", libraryTemplateTask.ResultType)
+	setAttr(ctx, d, "file_template", libraryTemplateTask.TaskOptions.ContainerTemplate)
+	setAttr(ctx, d, "file_template_id", libraryTemplateTask.TaskOptions.ContainerTemplateId)
+	setAttr(ctx, d, "execute_target", libraryTemplateTask.ExecuteTarget)
+	setAttr(ctx, d, "retryable", libraryTemplateTask.Retryable)
+	setAttr(ctx, d, "retry_count", libraryTemplateTask.RetryCount)
+	setAttr(ctx, d, "retry_delay_seconds", libraryTemplateTask.RetryDelaySeconds)
+	setAttr(ctx, d, "allow_custom_config", libraryTemplateTask.AllowCustomConfig)
+	setAttr(ctx, d, "visibility", libraryTemplateTask.Visibility)
 	return diags
 }
 

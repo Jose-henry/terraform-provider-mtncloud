@@ -67,7 +67,7 @@ func dataSourceStorageBucketRead(ctx context.Context, d *schema.ResourceData, me
 	storageBucket := result.StorageBucket
 	if storageBucket != nil {
 		d.SetId(int64ToString(storageBucket.ID))
-		d.Set("name", storageBucket.Name)
+		setAttr(ctx, d, "name", storageBucket.Name)
 	} else {
 		return diag.Errorf("Storage Bucket not found in response data.") // should not happen
 	}

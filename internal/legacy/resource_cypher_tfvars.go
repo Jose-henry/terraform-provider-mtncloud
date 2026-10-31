@@ -123,10 +123,10 @@ func resourceCypherTFVarsRead(ctx context.Context, d *schema.ResourceData, meta 
 		d.SetId(int64ToString(result.Cypher.ID))
 		keyData := strings.Split(result.Cypher.ItemKey, "/")
 		keyData = keyData[1:]
-		d.Set("key", strings.Join(keyData, "/"))
-		d.Set("ttl", result.LeaseDuration)
+		setAttr(ctx, d, "key", strings.Join(keyData, "/"))
+		setAttr(ctx, d, "ttl", result.LeaseDuration)
 		if v, ok := result.Data.(string); ok {
-			d.Set("value", v) // the stored value: an import adopts it, and a change made elsewhere shows
+			setAttr(ctx, d, "value", v) // the stored value: an import adopts it, and a change made elsewhere shows
 		}
 	} else {
 		return diag.Errorf("read operation: cypher not found in response data") // should not happen

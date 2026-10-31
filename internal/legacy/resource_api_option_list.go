@@ -159,13 +159,13 @@ func resourceApiOptionListRead(ctx context.Context, d *schema.ResourceData, meta
 	optionList := result.OptionList
 	if optionList != nil {
 		d.SetId(int64ToString(optionList.ID))
-		d.Set("name", optionList.Name)
-		d.Set("description", optionList.Description)
-		d.Set("labels", optionList.Labels)
-		d.Set("visibility", optionList.Visibility)
-		d.Set("option_list", optionList.APIType)
-		d.Set("translation_script", optionList.TranslationScript)
-		d.Set("request_script", optionList.RequestScript)
+		setAttr(ctx, d, "name", optionList.Name)
+		setAttr(ctx, d, "description", optionList.Description)
+		setAttr(ctx, d, "labels", optionList.Labels)
+		setAttr(ctx, d, "visibility", optionList.Visibility)
+		setAttr(ctx, d, "option_list", optionList.APIType)
+		setAttr(ctx, d, "translation_script", optionList.TranslationScript)
+		setAttr(ctx, d, "request_script", optionList.RequestScript)
 	} else {
 		log.Println(optionList)
 		return diag.Errorf("read operation: option list not found in response data") // should not happen

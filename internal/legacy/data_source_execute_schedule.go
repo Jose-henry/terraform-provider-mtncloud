@@ -66,7 +66,7 @@ func dataSourceExecuteScheduleRead(ctx context.Context, d *schema.ResourceData, 
 	executeSchedule := result.ExecuteSchedule
 	if executeSchedule != nil {
 		d.SetId(int64ToString(executeSchedule.ID))
-		d.Set("name", executeSchedule.Name)
+		setAttr(ctx, d, "name", executeSchedule.Name)
 	} else {
 		return diag.Errorf("Execute schedule not found in response data.") // should not happen
 	}

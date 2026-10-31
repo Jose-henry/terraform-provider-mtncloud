@@ -750,7 +750,7 @@ func dataSourcePermissionSetRead(ctx context.Context, d *schema.ResourceData, me
 		return diag.Errorf("writing permission set: formatting JSON: %s", err)
 	}
 	jsonString := string(jsonDoc)
-	d.Set("json", jsonString)
+	setAttr(ctx, d, "json", jsonString)
 	d.SetId(strconv.Itoa(1))
 	return diags
 }

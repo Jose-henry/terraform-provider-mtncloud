@@ -74,8 +74,8 @@ func dataSourceVirtualImageRead(ctx context.Context, d *schema.ResourceData, met
 	virtualImage := result.VirtualImage
 	if virtualImage != nil {
 		d.SetId(int64ToString(virtualImage.ID))
-		d.Set("name", virtualImage.Name)
-		d.Set("imagetype", virtualImage.ImageType)
+		setAttr(ctx, d, "name", virtualImage.Name)
+		setAttr(ctx, d, "imagetype", virtualImage.ImageType)
 	} else {
 		return diag.Errorf("Virtual image not found in response data.") // should not happen
 	}

@@ -66,7 +66,7 @@ func dataSourceBudgetRead(ctx context.Context, d *schema.ResourceData, meta inte
 	budget := result.Budget
 	if budget != nil {
 		d.SetId(int64ToString(budget.ID))
-		d.Set("name", budget.Name)
+		setAttr(ctx, d, "name", budget.Name)
 	} else {
 		return diag.Errorf("budget not found in response data.") // should not happen
 	}

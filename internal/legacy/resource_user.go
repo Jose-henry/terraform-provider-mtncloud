@@ -213,19 +213,19 @@ func resourceUserRead(ctx context.Context, d *schema.ResourceData, meta interfac
 	user := result.User
 	if user != nil {
 		d.SetId(int64ToString(user.ID))
-		d.Set("username", user.Username)
-		d.Set("first_name", user.FirstName)
-		d.Set("last_name", user.LastName)
-		d.Set("email", user.Email)
-		d.Set("receive_notifications", user.ReceiveNotifications)
+		setAttr(ctx, d, "username", user.Username)
+		setAttr(ctx, d, "first_name", user.FirstName)
+		setAttr(ctx, d, "last_name", user.LastName)
+		setAttr(ctx, d, "email", user.Email)
+		setAttr(ctx, d, "receive_notifications", user.ReceiveNotifications)
 		var roleIds []int
 		for _, role := range user.Roles {
 			roleIds = append(roleIds, int(role.ID))
 		}
-		d.Set("role_ids", matchUserRoleIdsWithSchema(roleIds, d.Get("role_ids").([]interface{})))
-		d.Set("linux_keypair_id", user.LinuxKeyPairID)
-		d.Set("linux_username", user.LinuxUsername)
-		d.Set("windows_username", user.WindowsUsername)
+		setAttr(ctx, d, "role_ids", matchUserRoleIdsWithSchema(roleIds, d.Get("role_ids").([]interface{})))
+		setAttr(ctx, d, "linux_keypair_id", user.LinuxKeyPairID)
+		setAttr(ctx, d, "linux_username", user.LinuxUsername)
+		setAttr(ctx, d, "windows_username", user.WindowsUsername)
 	} else {
 		return diag.Errorf("User not found in response data.") // should not happen
 	}

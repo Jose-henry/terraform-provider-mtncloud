@@ -246,26 +246,26 @@ func resourceWorkflowJobRead(ctx context.Context, d *schema.ResourceData, meta i
 	workflowJob := result.Job
 
 	d.SetId(int64ToString(workflowJob.ID))
-	d.Set("name", workflowJob.Name)
+	setAttr(ctx, d, "name", workflowJob.Name)
 	// Always set, even empty: an imported job without labels otherwise plans labels as unknown.
-	d.Set("labels", workflowJob.Labels)
-	d.Set("enabled", workflowJob.Enabled)
-	d.Set("workflow_id", workflowJob.Workflow.ID)
-	d.Set("context_type", workflowJob.TargetType)
+	setAttr(ctx, d, "labels", workflowJob.Labels)
+	setAttr(ctx, d, "enabled", workflowJob.Enabled)
+	setAttr(ctx, d, "workflow_id", workflowJob.Workflow.ID)
+	setAttr(ctx, d, "context_type", workflowJob.TargetType)
 	switch workflowJob.ScheduleMode {
 	case "manual":
-		d.Set("schedule_mode", "manual")
+		setAttr(ctx, d, "schedule_mode", "manual")
 	case "dateTime":
-		d.Set("schedule_mode", "date_and_time")
-		d.Set("scheduled_date_and_time", workflowJob.DateTime)
+		setAttr(ctx, d, "schedule_mode", "date_and_time")
+		setAttr(ctx, d, "scheduled_date_and_time", workflowJob.DateTime)
 		// Execute schedule uses the schedule mode field for storing the execute schedule id
 	default:
-		d.Set("schedule_mode", "scheduled")
+		setAttr(ctx, d, "schedule_mode", "scheduled")
 		intVar, err := strconv.Atoi(workflowJob.ScheduleMode)
 		if err != nil {
 			log.Printf("String Conversion Failure: %s", err)
 		}
-		d.Set("execution_schedule_id", intVar)
+		setAttr(ctx, d, "execution_schedule_id", intVar)
 	}
 
 	switch workflowJob.TargetType {
@@ -279,7 +279,7 @@ func resourceWorkflowJobRead(ctx context.Context, d *schema.ResourceData, meta i
 				instanceIds = append(instanceIds, instance.RefId)
 			}
 		}
-		d.Set("instance_ids", instanceIds)
+		setAttr(ctx, d, "instance_ids", instanceIds)
 	case "server":
 		// servers
 		var serverIds []int64
@@ -290,17 +290,17 @@ func resourceWorkflowJobRead(ctx context.Context, d *schema.ResourceData, meta i
 				serverIds = append(serverIds, server.RefId)
 			}
 		}
-		d.Set("server_ids", serverIds)
+		setAttr(ctx, d, "server_ids", serverIds)
 	case "instance-label":
 		if len(workflowJob.Targets) > 0 { // a job with no target left would panic here
-			d.Set("instance_label", workflowJob.Targets[0].Name)
+			setAttr(ctx, d, "instance_label", workflowJob.Targets[0].Name)
 		}
 	case "server-label":
 		if len(workflowJob.Targets) > 0 { // a job with no target left would panic here
-			d.Set("server_label", workflowJob.Targets[0].Name)
+			setAttr(ctx, d, "server_label", workflowJob.Targets[0].Name)
 		}
 	}
-	d.Set("custom_options", workflowJob.CustomOptions)
+	setAttr(ctx, d, "custom_options", workflowJob.CustomOptions)
 
 	return diags
 }

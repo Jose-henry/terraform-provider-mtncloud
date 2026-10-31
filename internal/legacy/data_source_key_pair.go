@@ -68,8 +68,8 @@ func dataSourceMorphesKeyPairRead(ctx context.Context, d *schema.ResourceData, m
 	}
 	if keyPair != nil {
 		d.SetId(int64ToString((*keyPair).ID))
-		d.Set("name", (*keyPair).Name)
-		d.Set("publickey", (*keyPair).PublicKey)
+		setAttr(ctx, d, "name", (*keyPair).Name)
+		setAttr(ctx, d, "publickey", (*keyPair).PublicKey)
 	} else {
 		return diag.Errorf("Key pair not found in response data.") // should not happen
 	}

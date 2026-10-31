@@ -179,14 +179,14 @@ func resourceWriteAttributesTaskRead(ctx context.Context, d *schema.ResourceData
 	writeAttributesTask := result.Task
 
 	d.SetId(int64ToString(writeAttributesTask.ID))
-	d.Set("name", writeAttributesTask.Name)
-	d.Set("code", writeAttributesTask.Code)
-	d.Set("labels", writeAttributesTask.Labels)
-	d.Set("attributes", writeAttributesTask.TaskOptions.WriteAttributesAttributes)
-	d.Set("retryable", writeAttributesTask.Retryable)
-	d.Set("retry_count", writeAttributesTask.RetryCount)
-	d.Set("retry_delay_seconds", writeAttributesTask.RetryDelaySeconds)
-	d.Set("allow_custom_config", writeAttributesTask.AllowCustomConfig)
+	setAttr(ctx, d, "name", writeAttributesTask.Name)
+	setAttr(ctx, d, "code", writeAttributesTask.Code)
+	setAttr(ctx, d, "labels", writeAttributesTask.Labels)
+	setAttr(ctx, d, "attributes", writeAttributesTask.TaskOptions.WriteAttributesAttributes)
+	setAttr(ctx, d, "retryable", writeAttributesTask.Retryable)
+	setAttr(ctx, d, "retry_count", writeAttributesTask.RetryCount)
+	setAttr(ctx, d, "retry_delay_seconds", writeAttributesTask.RetryDelaySeconds)
+	setAttr(ctx, d, "allow_custom_config", writeAttributesTask.AllowCustomConfig)
 	return diags
 }
 

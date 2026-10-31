@@ -67,7 +67,7 @@ func dataSourcePowerScheduleRead(ctx context.Context, d *schema.ResourceData, me
 	powerSchedule := result.PowerSchedule
 	if powerSchedule != nil {
 		d.SetId(int64ToString(powerSchedule.ID))
-		d.Set("name", powerSchedule.Name)
+		setAttr(ctx, d, "name", powerSchedule.Name)
 	} else {
 		return diag.Errorf("Power schedule not found in response data.") // should not happen
 	}

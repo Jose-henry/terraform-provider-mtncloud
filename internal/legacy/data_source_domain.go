@@ -81,10 +81,10 @@ func dataSourceDomainRead(ctx context.Context, d *schema.ResourceData, meta inte
 	domain := result.NetworkDomain
 	if domain != nil {
 		d.SetId(int64ToString(domain.ID))
-		d.Set("active", domain.Active)
-		d.Set("name", domain.Name)
-		d.Set("description", domain.Description)
-		d.Set("visibility", domain.Visibility)
+		setAttr(ctx, d, "active", domain.Active)
+		setAttr(ctx, d, "name", domain.Name)
+		setAttr(ctx, d, "description", domain.Description)
+		setAttr(ctx, d, "visibility", domain.Visibility)
 	} else {
 		return diag.Errorf("Domain not found in response data.") // should not happen
 	}

@@ -172,10 +172,10 @@ func resourceUserRoleRead(ctx context.Context, d *schema.ResourceData, meta inte
 	role := result
 
 	d.SetId(int64ToString(role.Role.ID))
-	d.Set("name", role.Role.Authority)
-	d.Set("description", role.Role.Description)
-	d.Set("multitenant_role", role.Role.MultiTenant)
-	d.Set("multitenant_locked", role.Role.MultiTenantLocked)
+	setAttr(ctx, d, "name", role.Role.Authority)
+	setAttr(ctx, d, "description", role.Role.Description)
+	setAttr(ctx, d, "multitenant_role", role.Role.MultiTenant)
+	setAttr(ctx, d, "multitenant_locked", role.Role.MultiTenantLocked)
 
 	// Convert the MTN Cloud API response into the permission set JSON format for comparison
 	data := PermissionSet{}
@@ -391,7 +391,7 @@ func resourceUserRoleRead(ctx context.Context, d *schema.ResourceData, meta inte
 		return diag.FromErr(err)
 	}
 	jsonString := string(jsonDoc)
-	d.Set("permission_set", jsonString)
+	setAttr(ctx, d, "permission_set", jsonString)
 
 	return diags
 }

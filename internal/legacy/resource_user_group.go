@@ -133,10 +133,10 @@ func resourceUserGroupRead(ctx context.Context, d *schema.ResourceData, meta int
 	userGroup := result.UserGroup
 
 	d.SetId(intToString(int(userGroup.ID)))
-	d.Set("name", userGroup.Name)
-	d.Set("description", userGroup.Description)
-	d.Set("server_group", userGroup.ServerGroup)
-	d.Set("sudo_access", userGroup.SudoUser)
+	setAttr(ctx, d, "name", userGroup.Name)
+	setAttr(ctx, d, "description", userGroup.Description)
+	setAttr(ctx, d, "server_group", userGroup.ServerGroup)
+	setAttr(ctx, d, "sudo_access", userGroup.SudoUser)
 	var users []int64
 	if userGroup.Users != nil {
 		// iterate over the array of tasks
@@ -145,7 +145,7 @@ func resourceUserGroupRead(ctx context.Context, d *schema.ResourceData, meta int
 		}
 	}
 	userIds := matchUserIdsWithSchema(users, d.Get("user_ids").([]interface{}))
-	d.Set("user_ids", userIds)
+	setAttr(ctx, d, "user_ids", userIds)
 
 	return diags
 }

@@ -67,7 +67,7 @@ func dataSourceVDIPoolRead(ctx context.Context, d *schema.ResourceData, meta int
 	vdiPool := result.VDIPool
 	if vdiPool != nil {
 		d.SetId(int64ToString(vdiPool.ID))
-		d.Set("name", vdiPool.Name)
+		setAttr(ctx, d, "name", vdiPool.Name)
 	} else {
 		return diag.Errorf("VDI Pool not found in response data.") // should not happen
 	}

@@ -67,7 +67,7 @@ func dataSourceJobRead(ctx context.Context, d *schema.ResourceData, meta interfa
 	job := result.Job
 	if job != nil {
 		d.SetId(int64ToString(job.ID))
-		d.Set("name", job.Name)
+		setAttr(ctx, d, "name", job.Name)
 	} else {
 		return diag.Errorf("Job not found in response data.") // should not happen
 	}

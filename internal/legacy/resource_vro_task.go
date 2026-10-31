@@ -198,18 +198,18 @@ func resourceVrealizeOrchestratorTaskRead(ctx context.Context, d *schema.Resourc
 	workflowTask := result.Task
 
 	d.SetId(int64ToString(workflowTask.ID))
-	d.Set("name", workflowTask.Name)
-	d.Set("code", workflowTask.Code)
-	d.Set("labels", workflowTask.Labels)
-	d.Set("result_type", workflowTask.ResultType)
-	d.Set("vro_integration_id", workflowTask.TaskOptions.VroIntegrationId)
-	d.Set("vro_workflow_value", workflowTask.TaskOptions.VroWorkflow)
-	d.Set("body", workflowTask.TaskOptions.VroBody)
-	d.Set("execute_target", workflowTask.ExecuteTarget)
-	d.Set("retryable", workflowTask.Retryable)
-	d.Set("retry_count", workflowTask.RetryCount)
-	d.Set("retry_delay_seconds", workflowTask.RetryDelaySeconds)
-	d.Set("allow_custom_config", workflowTask.AllowCustomConfig)
+	setAttr(ctx, d, "name", workflowTask.Name)
+	setAttr(ctx, d, "code", workflowTask.Code)
+	setAttr(ctx, d, "labels", workflowTask.Labels)
+	setAttr(ctx, d, "result_type", workflowTask.ResultType)
+	setIntFromString(ctx, d, "vro_integration_id", workflowTask.TaskOptions.VroIntegrationId)
+	setIntFromString(ctx, d, "vro_workflow_value", workflowTask.TaskOptions.VroWorkflow)
+	setAttr(ctx, d, "body", workflowTask.TaskOptions.VroBody)
+	setAttr(ctx, d, "execute_target", workflowTask.ExecuteTarget)
+	setAttr(ctx, d, "retryable", workflowTask.Retryable)
+	setAttr(ctx, d, "retry_count", workflowTask.RetryCount)
+	setAttr(ctx, d, "retry_delay_seconds", workflowTask.RetryDelaySeconds)
+	setAttr(ctx, d, "allow_custom_config", workflowTask.AllowCustomConfig)
 	return diags
 }
 

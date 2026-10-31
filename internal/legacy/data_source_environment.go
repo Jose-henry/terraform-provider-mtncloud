@@ -86,11 +86,11 @@ func dataSourceEnvironmentRead(ctx context.Context, d *schema.ResourceData, meta
 	environment := result.Environment
 	if environment != nil {
 		d.SetId(int64ToString(environment.ID))
-		d.Set("active", environment.Active)
-		d.Set("name", environment.Name)
-		d.Set("code", environment.Code)
-		d.Set("description", environment.Description)
-		d.Set("visibility", environment.Visibility)
+		setAttr(ctx, d, "active", environment.Active)
+		setAttr(ctx, d, "name", environment.Name)
+		setAttr(ctx, d, "code", environment.Code)
+		setAttr(ctx, d, "description", environment.Description)
+		setAttr(ctx, d, "visibility", environment.Visibility)
 	} else {
 		return diag.Errorf("Environment not found in response data.") // should not happen
 	}

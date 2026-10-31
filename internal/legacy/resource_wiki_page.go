@@ -122,9 +122,9 @@ func resourceWikiPageRead(ctx context.Context, d *schema.ResourceData, meta inte
 	wikiPage := result.Wiki
 
 	d.SetId(intToString(int(wikiPage.ID)))
-	d.Set("name", wikiPage.Name)
-	d.Set("category", wikiPage.Category)
-	d.Set("content", wikiPage.Content)
+	setAttr(ctx, d, "name", wikiPage.Name)
+	setAttr(ctx, d, "category", wikiPage.Category)
+	setAttr(ctx, d, "content", wikiPage.Content)
 
 	return diags
 }

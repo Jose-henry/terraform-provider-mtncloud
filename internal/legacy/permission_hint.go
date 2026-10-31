@@ -49,12 +49,14 @@ func withPermissionHints(p *schema.Provider) {
 			return nil
 		}
 		return func(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+			ctx, failed := withSetFailures(ctx)
 			c, ok := own(meta)
 			if !ok {
-				return fn(ctx, d, meta)
+				return append(fn(ctx, d, meta), failed.warning()...)
 			}
 			diags := fn(ctx, d, c)
-			return addValidationErrors(addForbiddenHint(diags, c.LastResponse()), c.LastResponse())
+			diags = addValidationErrors(addForbiddenHint(diags, c.LastResponse()), c.LastResponse())
+			return append(diags, failed.warning()...)
 		}
 	}
 	for _, r := range p.ResourcesMap {

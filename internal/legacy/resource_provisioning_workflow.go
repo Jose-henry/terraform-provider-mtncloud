@@ -203,16 +203,16 @@ func resourceProvisioningWorkflowRead(ctx context.Context, d *schema.ResourceDat
 	}
 	if workflow != nil {
 		d.SetId(int64ToString(workflow.ID))
-		d.Set("name", workflow.Name)
-		d.Set("description", workflow.Description)
-		d.Set("labels", workflow.Labels)
-		d.Set("visibility", workflow.Visibility)
+		setAttr(ctx, d, "name", workflow.Name)
+		setAttr(ctx, d, "description", workflow.Description)
+		setAttr(ctx, d, "labels", workflow.Labels)
+		setAttr(ctx, d, "visibility", workflow.Visibility)
 		if workflow.Platform == "" {
-			d.Set("platform", "all")
+			setAttr(ctx, d, "platform", "all")
 		} else {
-			d.Set("platform", workflow.Platform)
+			setAttr(ctx, d, "platform", workflow.Platform)
 		}
-		d.Set("task", tasks)
+		setAttr(ctx, d, "task", tasks)
 	} else {
 		return diag.Errorf("read operation: workflow not found in response data") // should not happen
 	}

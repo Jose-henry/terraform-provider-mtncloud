@@ -106,6 +106,6 @@ func dataSourceEnvironmentsRead(ctx context.Context, d *schema.ResourceData, met
 		environmentIDs = append(environmentIDs, environment.ID)
 	}
 	d.SetId("1")
-	d.Set("ids", environmentIDs)
+	setAttr(ctx, d, "ids", environmentIDs)
 	return diags
 }

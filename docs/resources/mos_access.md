@@ -3,12 +3,12 @@
 page_title: "mtncloud_mos_access Resource - mtncloud"
 subcategory: ""
 description: |-
-  The tenant's MOS (MTN Object Storage) keys. MOS has one pair of keys per tenant, kept in Cypher. Create adopts the keys the tenant already has and orders nothing; it orders the MOS catalog item only when the tenant has no keys, or when rotate = true. Changing rotate_trigger orders new keys in place. Ordering replaces the keys for the whole tenant: every tool and user of the old keys loses access until it takes the new ones from Cypher (MTN's workflow updates the console's own bucket records). The keys are never stored in state: MOS resources read them from Cypher. Destroy deletes nothing: the keys stay, since others use them.
+  The tenant's MOS (MTN Object Storage) keys. MOS has one pair of keys per tenant, kept in Cypher. Create adopts the keys the tenant already has and orders nothing; it orders the MOS catalog item only when the tenant has no keys, or when rotate = true. Changing rotate_trigger orders new keys in place. Ordering replaces the keys for the whole tenant: every tool and user of the old keys loses access until it takes the new ones from Cypher (MTN's workflow updates the console's own bucket records). The keys are never stored in state: MOS resources read them from Cypher. Destroy deletes nothing: the keys stay, since others use them. Recommended: order MOS once from the MTN Cloud console to get the keys, then let this resource adopt them.
 ---
 
 # mtncloud_mos_access (Resource)
 
-The tenant's MOS (MTN Object Storage) keys. MOS has one pair of keys per tenant, kept in Cypher. Create **adopts** the keys the tenant already has and orders nothing; it orders the MOS catalog item only when the tenant has no keys, or when `rotate = true`. Changing `rotate_trigger` orders new keys in place. **Ordering replaces the keys for the whole tenant:** every tool and user of the old keys loses access until it takes the new ones from Cypher (MTN's workflow updates the console's own bucket records). The keys are never stored in state: MOS resources read them from Cypher. Destroy deletes nothing: the keys stay, since others use them.
+The tenant's MOS (MTN Object Storage) keys. MOS has one pair of keys per tenant, kept in Cypher. Create **adopts** the keys the tenant already has and orders nothing; it orders the MOS catalog item only when the tenant has no keys, or when `rotate = true`. Changing `rotate_trigger` orders new keys in place. **Ordering replaces the keys for the whole tenant:** every tool and user of the old keys loses access until it takes the new ones from Cypher (MTN's workflow updates the console's own bucket records). The keys are never stored in state: MOS resources read them from Cypher. Destroy deletes nothing: the keys stay, since others use them. **Recommended:** order MOS once from the MTN Cloud console to get the keys, then let this resource adopt them.
 
 ## Example Usage
 

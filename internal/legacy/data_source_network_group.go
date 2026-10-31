@@ -81,10 +81,10 @@ func dataSourceNetworkGroupRead(ctx context.Context, d *schema.ResourceData, met
 	networkGroup := result.NetworkGroup
 	if networkGroup != nil {
 		d.SetId(int64ToString(networkGroup.ID))
-		d.Set("name", networkGroup.Name)
-		d.Set("active", networkGroup.Active)
-		d.Set("description", networkGroup.Description)
-		d.Set("visibility", networkGroup.Visibility)
+		setAttr(ctx, d, "name", networkGroup.Name)
+		setAttr(ctx, d, "active", networkGroup.Active)
+		setAttr(ctx, d, "description", networkGroup.Description)
+		setAttr(ctx, d, "visibility", networkGroup.Visibility)
 	} else {
 		return diag.Errorf("Network group not found in response data.") // should not happen
 	}

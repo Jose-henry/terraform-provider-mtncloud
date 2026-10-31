@@ -113,18 +113,18 @@ func dataSourceStorageVolumeRead(ctx context.Context, d *schema.ResourceData, me
 	storageVolume := result.StorageVolume
 	if storageVolume != nil {
 		d.SetId(int64ToString(int64(storageVolume.ID.(float64))))
-		d.Set("name", storageVolume.Name)
-		d.Set("active", storageVolume.Active)
-		d.Set("category", storageVolume.Category)
-		d.Set("cloud_name", storageVolume.Zone.Name)
-		d.Set("cloud_id", storageVolume.Zone.ID)
-		d.Set("datastore_id", storageVolume.Datastore.ID)
-		d.Set("datastore_name", storageVolume.Datastore.Name)
-		d.Set("status", storageVolume.Status)
-		d.Set("source", storageVolume.Source)
-		d.Set("type", storageVolume.Type.Name)
-		d.Set("type_id", storageVolume.TypeId)
-		d.Set("uuid", storageVolume.Uuid)
+		setAttr(ctx, d, "name", storageVolume.Name)
+		setAttr(ctx, d, "active", storageVolume.Active)
+		setAttr(ctx, d, "category", storageVolume.Category)
+		setAttr(ctx, d, "cloud_name", storageVolume.Zone.Name)
+		setAttr(ctx, d, "cloud_id", storageVolume.Zone.ID)
+		setAttr(ctx, d, "datastore_id", storageVolume.Datastore.ID)
+		setAttr(ctx, d, "datastore_name", storageVolume.Datastore.Name)
+		setAttr(ctx, d, "status", storageVolume.Status)
+		setAttr(ctx, d, "source", storageVolume.Source)
+		setAttr(ctx, d, "type", storageVolume.Type.Name)
+		setAttr(ctx, d, "type_id", storageVolume.TypeId)
+		setAttr(ctx, d, "uuid", storageVolume.Uuid)
 	} else {
 		return diag.Errorf("Storage volume not found in response data.") // should not happen
 	}

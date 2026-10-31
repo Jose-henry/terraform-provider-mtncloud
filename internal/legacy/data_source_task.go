@@ -66,7 +66,7 @@ func dataSourceTaskRead(ctx context.Context, d *schema.ResourceData, meta interf
 	task := result.Task
 	if task != nil {
 		d.SetId(int64ToString(task.ID))
-		d.Set("name", task.Name)
+		setAttr(ctx, d, "name", task.Name)
 	} else {
 		return diag.Errorf("Task not found in response data.") // should not happen
 	}

@@ -66,7 +66,7 @@ func dataSourceMorphesIntegrationRead(ctx context.Context, d *schema.ResourceDat
 	integration := result.Integration
 	if integration != nil {
 		d.SetId(int64ToString(integration.ID))
-		d.Set("name", integration.Name)
+		setAttr(ctx, d, "name", integration.Name)
 	} else {
 		return diag.Errorf("Integration not found in response data.") // should not happen
 	}

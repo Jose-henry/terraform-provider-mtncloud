@@ -134,11 +134,11 @@ func resourceExecuteScheduleRead(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	d.SetId(intToString(executeSchedule.Schedule.ID))
-	d.Set("name", executeSchedule.Schedule.Name)
-	d.Set("description", executeSchedule.Schedule.Description)
-	d.Set("enabled", executeSchedule.Schedule.Enabled)
-	d.Set("time_zone", executeSchedule.Schedule.Scheduletimezone)
-	d.Set("schedule", executeSchedule.Schedule.Cron)
+	setAttr(ctx, d, "name", executeSchedule.Schedule.Name)
+	setAttr(ctx, d, "description", executeSchedule.Schedule.Description)
+	setAttr(ctx, d, "enabled", executeSchedule.Schedule.Enabled)
+	setAttr(ctx, d, "time_zone", executeSchedule.Schedule.Scheduletimezone)
+	setAttr(ctx, d, "schedule", executeSchedule.Schedule.Cron)
 
 	return diags
 }

@@ -66,7 +66,7 @@ func dataSourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta 
 	credential := result.Credential
 	if credential != nil {
 		d.SetId(int64ToString(credential.ID))
-		d.Set("name", credential.Name)
+		setAttr(ctx, d, "name", credential.Name)
 	} else {
 		return diag.Errorf("credential not found in response data.") // should not happen
 	}

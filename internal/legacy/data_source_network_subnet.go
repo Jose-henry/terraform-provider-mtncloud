@@ -134,10 +134,10 @@ func dataSourceNetworkSubnetRead(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	d.SetId(int64ToString(networkSubnet.ID))
-	d.Set("name", networkSubnet.Name)
-	d.Set("external_id", networkSubnet.ExternalId)
-	d.Set("cidr", networkSubnet.Cidr)
-	d.Set("netmask", networkSubnet.Netmask)
-	d.Set("visibility", networkSubnet.Visibility)
+	setAttr(ctx, d, "name", networkSubnet.Name)
+	setAttr(ctx, d, "external_id", networkSubnet.ExternalId)
+	setAttr(ctx, d, "cidr", networkSubnet.Cidr)
+	setAttr(ctx, d, "netmask", networkSubnet.Netmask)
+	setAttr(ctx, d, "visibility", networkSubnet.Visibility)
 	return diags
 }

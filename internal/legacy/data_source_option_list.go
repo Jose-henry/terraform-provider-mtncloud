@@ -67,7 +67,7 @@ func dataSourceOptionListRead(ctx context.Context, d *schema.ResourceData, meta 
 	optionList := result.OptionList
 	if optionList != nil {
 		d.SetId(int64ToString(optionList.ID))
-		d.Set("name", optionList.Name)
+		setAttr(ctx, d, "name", optionList.Name)
 	} else {
 		return diag.Errorf("Option list not found in response data.") // should not happen
 	}

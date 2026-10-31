@@ -65,8 +65,8 @@ func dataSourceVrealizeOrchestratorWorkflowRead(ctx context.Context, d *schema.R
 
 	// store resource data
 	d.SetId(strconv.FormatInt(id, 10))
-	d.Set("value", id)
-	d.Set("name", option.Name)
+	setAttr(ctx, d, "value", id)
+	setAttr(ctx, d, "name", option.Name)
 
 	return diags
 }

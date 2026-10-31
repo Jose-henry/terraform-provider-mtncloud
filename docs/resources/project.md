@@ -59,6 +59,9 @@ nothing.
 
 ## Notes
 
+- **Recommended: order projects from the MTN Cloud console.** A project can't be deleted from Terraform
+  (or by a customer login at all), so a mistyped name stays until MTN Cloud support removes it. Ordering
+  from the console, then using the project by name in other resources, avoids that.
 - **Waits for the order only.** Create places the order and waits for MTN's "Create Project"
   workflow to finish (default timeout 15 minutes, see `timeouts`). It does not wait for the project
   to sync in. Allow **up to an hour** before its default security group, networks and floating IP

@@ -79,9 +79,9 @@ func dataSourceStorageTypeRead(ctx context.Context, d *schema.ResourceData, meta
 	storageVolumeType := result.StorageVolumeType
 	if storageVolumeType != nil {
 		d.SetId(int64ToString(storageVolumeType.ID))
-		d.Set("name", storageVolumeType.Name)
-		d.Set("code", storageVolumeType.Code)
-		d.Set("category", storageVolumeType.Category)
+		setAttr(ctx, d, "name", storageVolumeType.Name)
+		setAttr(ctx, d, "code", storageVolumeType.Code)
+		setAttr(ctx, d, "category", storageVolumeType.Category)
 	} else {
 		return diag.Errorf("Storage volume type not found in response data.") // should not happen
 	}

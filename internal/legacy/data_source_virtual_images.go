@@ -120,7 +120,7 @@ func dataSourceVirtualImagesRead(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	d.SetId("1")
-	d.Set("ids", virtulImageIDs)
+	setAttr(ctx, d, "ids", virtulImageIDs)
 	return diags
 }
 

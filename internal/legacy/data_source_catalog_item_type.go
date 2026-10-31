@@ -84,7 +84,7 @@ func dataSourceCatalogItemTypeRead(ctx context.Context, d *schema.ResourceData, 
 	catalogItem := result.CatalogItemType
 	if catalogItem != nil {
 		d.SetId(int64ToString(catalogItem.Id))
-		d.Set("name", catalogItem.Name)
+		setAttr(ctx, d, "name", catalogItem.Name)
 	} else {
 		return diag.Errorf("Catalog item type not found in response data.") // should not happen
 	}

@@ -265,38 +265,38 @@ func resourceCredentialRead(ctx context.Context, d *schema.ResourceData, meta in
 	credential := result.Credential
 	if credential != nil {
 		d.SetId(int64ToString(credential.ID))
-		d.Set("name", credential.Name)
-		d.Set("description", credential.Description)
-		d.Set("enabled", credential.Enabled)
-		d.Set("type", credential.Type.Code) // import needs it, or the next plan replaces the credential
+		setAttr(ctx, d, "name", credential.Name)
+		setAttr(ctx, d, "description", credential.Description)
+		setAttr(ctx, d, "enabled", credential.Enabled)
+		setAttr(ctx, d, "type", credential.Type.Code) // import needs it, or the next plan replaces the credential
 		if credential.Integration.ID != 0 {
-			d.Set("credential_store_integration_id", credential.Integration.ID)
+			setAttr(ctx, d, "credential_store_integration_id", credential.Integration.ID)
 		}
 		// Secrets (password, secret_key, api_key, client_secret) are never read back: the API answers
 		// a hash, which showed as a change on every plan. State keeps the value written.
 		switch credential.Type.Code {
 		case "access-key-secret":
-			d.Set("access_key", credential.Username)
+			setAttr(ctx, d, "access_key", credential.Username)
 		case "api-key":
 		case "client-id-secret":
-			d.Set("client_id", credential.Username)
+			setAttr(ctx, d, "client_id", credential.Username)
 		case "email-private-key":
-			d.Set("email", credential.Username)
-			d.Set("key_pair_id", credential.AuthKey.ID)
+			setAttr(ctx, d, "email", credential.Username)
+			setAttr(ctx, d, "key_pair_id", credential.AuthKey.ID)
 		case "tenant-username-keypair":
-			d.Set("tenant", credential.AuthPath)
-			d.Set("username", credential.Username)
-			d.Set("key_pair_id", credential.AuthKey.ID)
+			setAttr(ctx, d, "tenant", credential.AuthPath)
+			setAttr(ctx, d, "username", credential.Username)
+			setAttr(ctx, d, "key_pair_id", credential.AuthKey.ID)
 		case "username-api-key":
-			d.Set("username", credential.Username)
+			setAttr(ctx, d, "username", credential.Username)
 		case "username-keypair":
-			d.Set("username", credential.Username)
-			d.Set("key_pair_id", credential.AuthKey.ID)
+			setAttr(ctx, d, "username", credential.Username)
+			setAttr(ctx, d, "key_pair_id", credential.AuthKey.ID)
 		case "username-password":
-			d.Set("username", credential.Username)
+			setAttr(ctx, d, "username", credential.Username)
 		case "username-password-keypair":
-			d.Set("username", credential.Username)
-			d.Set("key_pair_id", credential.AuthKey.ID)
+			setAttr(ctx, d, "username", credential.Username)
+			setAttr(ctx, d, "key_pair_id", credential.AuthKey.ID)
 		}
 	} else {
 		return diag.Errorf("read operation: credential not found in response data") // should not happen

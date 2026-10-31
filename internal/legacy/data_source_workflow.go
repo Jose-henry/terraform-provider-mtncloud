@@ -66,7 +66,7 @@ func dataSourceWorkflowRead(ctx context.Context, d *schema.ResourceData, meta in
 	workflow := result.TaskSet
 	if workflow != nil {
 		d.SetId(int64ToString(workflow.ID))
-		d.Set("name", workflow.Name)
+		setAttr(ctx, d, "name", workflow.Name)
 	} else {
 		return diag.Errorf("Workflow not found in response data.") // should not happen
 	}
