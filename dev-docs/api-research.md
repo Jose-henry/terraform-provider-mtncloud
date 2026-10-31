@@ -408,6 +408,12 @@ Never paste tokens, secret keys or passwords. `-V` already masks the bearer toke
   from `internalIp` and is public; `externalIp` is null. The instance's `connectionInfo` holds the
   same public address, but only one entry, so with several servers each server's address is read
   from its own container (B-013).
+- Live 2026-10-31 (QA t102, `tf-acc-*` in `admin`, destroyed): an instance with `scale_factor = 2`
+  and a floating IP pool got one address per server (two distinct, read from the containers); the
+  plan after apply was `No changes.` Removing the pool detached both, shown within 8 seconds.
+- Same run: a router description `PUT` is read back straight away (`No changes.` after), and the
+  external IP stays when the update leaves `externalNetwork` out. A network `PUT` with an empty
+  description clears it.
 - Attach: `PUT /api/containers/{id}/attach-floating-ip {config:{osExternalNetworkId:"pool-<id>"}}`;
   detach: `PUT /api/containers/{id}/detach-floating-ip` (Context7). Not yet sent live.
 - The apply waits for each attach and detach to show on the instance (`connectionInfo`), like a

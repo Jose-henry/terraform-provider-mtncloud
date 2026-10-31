@@ -92,10 +92,10 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 
 ## 3. Live checks still open (each needs permission, or MTN)
 
-- [ ] **MTN Network (B-011).** Does a `PUT` with an empty description or IPv6 DNS clear it? IPv6 defaults. The status words of a failed network. A gateway change while a router port holds the old address. The status code of an "in use" security group refusal.
+- [ ] **MTN Network (B-011).** Answered live 2026-10-31 (t102): a `PUT` with an empty description clears it (the API then returns none), and the plan after is `No changes.` Still open: does an empty IPv6 DNS clear it? IPv6 defaults. The status words of a failed network. A gateway change while a router port holds the old address. The status code of an "in use" security group refusal.
 - [ ] **MTN Router (B-012).**
-  - Is the GET current straight after a PUT?
-  - Does re-sending `externalNetwork` keep the IP?
+  - Is the GET current straight after a PUT? **Yes** (live 2026-10-31, t102: a description update, then `No changes.`).
+  - Does re-sending `externalNetwork` keep the IP? Not re-sent: an update that keeps the gateway leaves `externalNetwork` out, and the external IP stayed the same (checked live by hash, t102). Re-sending it is still unchecked.
   - When is the gateway IP set?
   - Which status words besides `provisioning` and `ok`?
   - Does an `external_network` in another case give a no-op update after import?
@@ -105,9 +105,9 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
   - Do empty labels or tags clear?
   - Delete policies.
   - Floating IP:
-    - with `scale_factor` above 1;
-    - how long until it shows;
-    - is the address released on detach;
+    - with `scale_factor` above 1: **works** (live 2026-10-31, t102): one address per server, two distinct, `public_ips` lists both, `No changes.` after;
+    - how long until it shows: create with both attached took 5 minutes in all; a detach of both showed in 8 seconds;
+    - is the address released on detach: detached from both servers (each server's container shows none); whether it goes back to the pool is still unchecked;
     - the error when the network has no router.
   - The availability zone list.
   - The default `domain`.
