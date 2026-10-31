@@ -496,3 +496,14 @@ Owner to decide: build it, and whether adopting with no order is the right defau
 `internal/services/cluster/cluster.go` `defaultLayouts` picks "MTN Kubernetes Single-Master" and
 "MTN Docker Cluster" by name. MTN renames things (PfSense, 2026-10-30): when clusters are worked on
 (B-016), pick layouts by code, keeping the names as a fallback.
+
+## B-034 Catalog QA findings (live, 2026-10-31)
+1. (Fixed 2026-10-31: networks by ID too, checked once the network exists.) **An order can't name a network made in the same apply.** `networks = [mtncloud_network.a.name]`
+   is known at plan (the name is in the configuration), but the network doesn't exist yet, so the
+   plan check says `no network named ... in the project`. Workaround: apply the network first. Fix
+   idea: when a name isn't found, look for a planned network in the same configuration is not
+   possible from a provider, so accept IDs (`mtncloud_network.a.id`, unknown until made, so checked
+   at apply) as well as names, and say so in the error.
+2. (Fixed 2026-10-31: the router waits for the subnet within its timeout.) **A router made right after its networks fails**: "Network ... has no subnet yet, so a router
+   can't attach to it. Try again in a minute." Rule 13 (eventual consistency): the router create (or
+   the network create) should wait for the subnet, with the create timeout, instead of failing.

@@ -38,6 +38,10 @@ resource "mtncloud_pfsense_vpn" "vpn" {
 		Steps: []resource.TestStep{
 			{Config: cfg("G2S4", `"app-net"`), PlanOnly: true,
 				ExpectError: regexp.MustCompile(wrapped(`(?s)Too few networks.*at least 2 networks; 1 is set.*The form says: Note: Service requires at least 2`))},
+			// A network by ID (as one made in the same apply is given) works like one by name.
+			{Config: cfg("G2S4", `"app-net", "9351"`), PlanOnly: true, ExpectNonEmptyPlan: true},
+			{Config: cfg("G2S4", `"app-net", "99999"`), PlanOnly: true,
+				ExpectError: regexp.MustCompile(wrapped(`(?s)no network named "99999", or with that ID.*give its ID`))},
 			{Config: cfg("XL", two), PlanOnly: true,
 				ExpectError: regexp.MustCompile(wrapped(`(?s)no plan "XL": choose one of Small \(G2S4\), Medium \(G4S4\), Large\s+\(G4S8\)`))},
 			{

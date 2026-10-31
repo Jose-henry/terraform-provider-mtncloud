@@ -533,9 +533,10 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 		case kNetworks:
 			var nets []any
 			for i, name := range strs(f.attr) {
-				n, err := r.client.FindNetwork(ctx, name, projectID)
+				n, err := r.findNetwork(ctx, name, projectID)
 				if err == nil && n == nil {
-					err = fmt.Errorf("no network named %q in the project", name)
+					err = fmt.Errorf("no network named %q, or with that ID, in the project. For a network made in the same "+
+						"apply, give its ID (mtncloud_network.<name>.id): its name is known before the network exists", name)
 				}
 				if err != nil {
 					fail(f.attr, err)
@@ -1088,4 +1089,27 @@ func (r *orderResource) ImportState(ctx context.Context, req resource.ImportStat
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
+}
+
+// findNetwork finds a project's network by name, then by ID. An ID is what a network made in the
+// same apply can be given by: it stays unknown until the network exists, so it is checked then.
+func (r *orderResource) findNetwork(ctx context.Context, ref string, projectID int64) (*client.Network, error) {
+	n, err := r.client.FindNetwork(ctx, ref, projectID)
+	if err != nil || n != nil {
+		return n, err
+	}
+	id, ok := networkID(ref)
+	if !ok {
+		return nil, nil // a name, not an ID: not found
+	}
+	n, err = r.client.GetNetwork(ctx, id)
+	if client.IsNotFound(err) || (err == nil && n.ProjectID != projectID) {
+		return nil, nil
+	}
+	return n, err
+}
+
+func networkID(ref string) (int64, bool) {
+	id, err := strconv.ParseInt(ref, 10, 64)
+	return id, err == nil && id > 0
 }

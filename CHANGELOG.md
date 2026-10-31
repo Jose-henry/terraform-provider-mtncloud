@@ -14,6 +14,8 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 - Fixed: `mtncloud_wireguard_vpn` requires `root_volume_size`, as its form does; it failed with "VOLUMES is required" otherwise.
 - Changed: `admin_username` is optional on the managed services and MongoDB (the form's default is sent); MongoDB's `admin_password` is needed only while `enable_auth` is on.
 - Changed: `mtncloud_instance` `install_agent`, left out, is on when the primary network is on an MTN Router with an external network and off otherwise, decided at create (the plan shows it as known after apply) and kept. Existing instances keep what they have.
+- New: catalog orders take networks by ID as well as by name, so a network made in the same apply can be given as `mtncloud_network.x.id` (its name is known at plan, before the network exists, and was refused).
+- Fixed: `mtncloud_router` waits for a network made in the same apply to get its subnet, instead of failing with "has no subnet yet".
 - New: the `mtncloud_instance` data source shows `networks`, `security_groups` and `volumes`.
 - Changed: a 403 says what blocked it: a role (as before), MTN Cloud's web firewall (with its reference ID), or a network or IP block.
 - Docs: examples pin `~> 0.7`; wrong descriptions on `mtncloud_ansible_tower_task`, `mtncloud_catalog_item_type` and `mtncloud_vdi_pool` fixed; the version note on `mtncloud_user_role` removed; the appliance examples meet each item's minimums.

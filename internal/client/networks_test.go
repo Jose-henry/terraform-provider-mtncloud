@@ -139,3 +139,21 @@ func TestFindNetwork_MatchesNameAndProject(t *testing.T) {
 		t.Errorf("got %+v, %v", n, err)
 	}
 }
+
+// A network made moments ago gets its subnet a little later: the wait reads until it has one.
+func TestWaitForNetworkSubnet(t *testing.T) {
+	f := newFakeAPI(t)
+	reads := 0
+	f.route("GET", "/api/networks/690", func(w http.ResponseWriter, _ *http.Request) {
+		reads++
+		subnets := `[]`
+		if reads > 2 {
+			subnets = `[{"id":700,"name":"net subnet","cidr":"10.0.0.0/24"}]`
+		}
+		_, _ = w.Write([]byte(`{"network":{"id":690,"name":"net","zonePool":{"id":1},"subnets":` + subnets + `}}`))
+	})
+	n, err := f.client(t, fastPoll).WaitForNetworkSubnet(t.Context(), 690)
+	if err != nil || n.SubnetID != 700 || reads != 3 {
+		t.Fatalf("got %+v, %v after %d reads; want subnet 700 on the third read", n, err, reads)
+	}
+}

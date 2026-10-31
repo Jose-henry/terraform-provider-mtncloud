@@ -190,7 +190,11 @@ func (r *routerResource) input(ctx context.Context, m routerModel, diags *diag.D
 	slices.Sort(ids) // a stable order, so the same set always sends the same body
 	for _, s := range ids {
 		id, _ := strconv.ParseInt(s, 10, 64)
-		n, err := r.client.GetNetwork(ctx, id)
+		// A network made in the same apply may not have its subnet yet: wait for it, within the timeout.
+		n, err := r.client.WaitForNetworkSubnet(ctx, id)
+		if errors.Is(err, context.DeadlineExceeded) && n != nil {
+			err = nil // reported below as "no subnet"
+		}
 		if err != nil {
 			if client.IsNotFound(err) {
 				err = fmt.Errorf("network %s does not exist", s)
@@ -206,7 +210,7 @@ func (r *routerResource) input(ctx context.Context, m routerModel, diags *diag.D
 		}
 		if n.SubnetID == 0 {
 			diags.AddAttributeError(path.Root("networks"), "Network has no subnet",
-				fmt.Sprintf("Network %q (%s) has no subnet yet, so a router can't attach to it. Try again in a minute.", n.Name, s))
+				fmt.Sprintf("Network %q (%s) still has no subnet, so a router can't attach to it. Check it in the console, or raise timeouts.", n.Name, s))
 			return in, false
 		}
 		in.SubnetIDs = append(in.SubnetIDs, n.SubnetID)

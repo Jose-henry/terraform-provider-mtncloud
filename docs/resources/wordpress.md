@@ -45,7 +45,7 @@ resource "mtncloud_wordpress" "this" {
 - `database_user` (String) WordPress database user.
 - `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`.
 - `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it.
-- `networks` (List of String) MTN Networks in the project, by name. The first is the primary interface.
+- `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists.
 - `php_upload_max` (String) Largest upload PHP accepts, for example `64M`.
 - `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices.
 - `root_volume_size` (Number) Root disk size in GB.

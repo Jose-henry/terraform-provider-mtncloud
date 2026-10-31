@@ -87,7 +87,8 @@ func vm(labelKey string, req ...string) []field {
 		{attr: "plan", key: "plan", kind: kPlan, required: r["plan"], desc: "Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices."},
 		{attr: "", key: "volumes", kind: kVolumes, required: r["volumes"]},
 		{attr: "networks", key: "networks", kind: kNetworks, required: r["networks"],
-			desc: "MTN Networks in the project, by name. The first is the primary interface."},
+			desc: "MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in " +
+				"the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists."},
 		{attr: "security_groups", key: "securitygroups", kind: kSecGroups, required: r["securitygroups"],
 			desc: "Security groups in the project, by name, in addition to the project's default group, which is always applied."},
 		{attr: "floating_ip_pool", key: "floatingip", kind: kFloatingIP, required: r["floatingip"],

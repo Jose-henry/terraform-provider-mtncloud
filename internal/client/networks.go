@@ -300,3 +300,16 @@ func IsInUse(err error) bool {
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && strings.Contains(strings.ToLower(apiErr.Message), "still in use")
 }
+
+// WaitForNetworkSubnet reads a network until it has a subnet: a network made moments ago gets its
+// subnet a little later (rule 13), and a router can't attach to it before then. It stops when ctx
+// does, returning the network as last read.
+func (c *Client) WaitForNetworkSubnet(ctx context.Context, id int64) (*Network, error) {
+	return poll(ctx, c, func(ctx context.Context) (*Network, error) { return c.GetNetwork(ctx, id) },
+		func(n *Network, err error) (bool, error) {
+			if err != nil {
+				return false, err
+			}
+			return n.SubnetID != 0, nil
+		})
+}

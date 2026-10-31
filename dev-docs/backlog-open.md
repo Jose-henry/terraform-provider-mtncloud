@@ -59,6 +59,8 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 
 ## 2. Features not built
 
+- [x] **Order networks made in the same apply (B-034 #1).** Done 2026-10-31: networks by ID too.
+- [x] **Router waits for new subnets (B-034 #2).** Done 2026-10-31: a router made in the same apply as its networks waits for their subnets (within its create timeout) instead of failing with "no subnet yet, try again".
 - [ ] **Catalog QA (B-029 #8).** Order every catalog item live (`tf-acc-*` in `admin`): apply, plan `No changes.`, destroy.
 - [ ] **Catalog form snapshot in the docs (B-029 #7, report B6).** Each order page shows the form's help text and requirements.
 - [ ] **Legacy descriptions (report B5).** About 80 one-line legacy descriptions to rewrite in the newer style.

@@ -38,7 +38,7 @@ resource "mtncloud_managed_streaming" "this" {
 
 - `admin_password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Administrator password. Write-only: sent with the order, never stored in state.
 - `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it.
-- `networks` (List of String) MTN Networks in the project, by name. The first is the primary interface.
+- `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists.
 - `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices.
 - `root_volume_size` (Number) Root disk size in GB.
 - `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
