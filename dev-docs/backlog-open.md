@@ -70,7 +70,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [X] **Instance scaling schedules (owner, 2026-10-31).** Done 2026-10-31: `mtncloud_instance_scale_schedule` (D-035). Live: the schedule copies the library threshold's values and keeps no link; `PUT` with `sourceThresholdId` copies again.
 - [X] **Order networks made in the same apply (B-034 #1).** Done 2026-10-31: networks by ID too.
 - [X] **Router waits for new subnets (B-034 #2).** Done 2026-10-31: a router made in the same apply as its networks waits for their subnets (within its create timeout) instead of failing with "no subnet yet, try again".
-- [ ] **Catalog QA (B-029 #8).** 2026-10-31 later: self-managed Kubernetes passed single-node and two-tier (1 master + 1 worker: `Master` and `Worker` tiers, about 14 minutes; apply, `No changes.`; day-2 `mtncloud_app_settings` plus `mtncloud_instance_settings` with `for_each` on its VMs, `No changes.`; destroy, API 404 checked). Owner chose linked per-VM resources over a wrapped block (2026-10-31: wrapping risks two resources fighting over a VM, and partial failures across VMs). Order every catalog item live (`tf-acc-*` in `admin`): apply, plan `No changes.`, destroy.
+- [X] **Catalog QA (B-029 #8).** 2026-10-31 later: self-managed Kubernetes passed single-node and two-tier (1 master + 1 worker: `Master` and `Worker` tiers, about 14 minutes; apply, `No changes.`; day-2 `mtncloud_app_settings` plus `mtncloud_instance_settings` with `for_each` on its VMs, `No changes.`; destroy, API 404 checked). Owner chose linked per-VM resources over a wrapped block (2026-10-31: wrapping risks two resources fighting over a VM, and partial failures across VMs). Order every catalog item live (`tf-acc-*` in `admin`): apply, plan `No changes.`, destroy.
   2026-10-31: passed (apply, `No changes.`, destroy) for MySQL, PostgreSQL, MariaDB, MongoDB, Apache, Nginx,
   LAMP, LEMP, WordPress, Managed Database, Bastion, WireGuard, PfSense, Fortinet and SIEM. Blocked on MTN:
   Managed MQ and Streaming (their blueprints 16 and 21 aren't found, B-034 #6), SOPHOS (order 2758 never
@@ -78,9 +78,9 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
   **FortiADC** (order 2768) is a Heat workflow like SOPHOS (`Fortinet/FortiADCheat.sh`): its record showed
   no execution while the workflow made VM `<initials>-<account>-MTN-CLOUD-FADC001-1`, so an order with no
   execution is never taken as withdrawn. Fixed 2026-11-01 (`heat` on the spec).
-  2026-11-01: SMB and NFS shares passed (apply, `No changes.`, destroy, 404s). **Left open:** only SOPHOS and
-  FortiADC have never completed live, as MTN's Heat workflow didn't start for either; the owner chose not to
-  re-run them (2026-11-01). Close this when one of them is ordered again and passes.
+  2026-11-01: SMB and NFS shares passed (apply, `No changes.`, destroy, 404s). **Closed by the owner** (2026-11-01)
+  without SOPHOS and FortiADC: neither completed live, as MTN's Heat workflow didn't start for either, and
+  the owner chose not to re-run them.
 - [X] **Catalog form snapshot in the docs (B-029 #7, report B6).** Done 2026-10-31: `internal/services/catalog/forms/*.json` (written by `TestAccCatalogForms_Snapshot`, drift-checked by `TestAccCatalogForms_MatchSpecs`) feed each argument's description; the `mtncloud_catalog_item` data source shows each input's rules; locked, not-blank, pattern and range are checked at plan.
 - [X] **App orders wait for the app (B-034 #3).** Done 2026-10-31: managed services' workflows end once they ask for the app, whose VMs MTN names itself. Create waits for the app named after the order and takes its VMs; destroy deletes the app.
 - [X] **Never-blank lists send their first choice (B-034 #4).** Done 2026-10-31: MQ and Streaming workflows failed on `msg_engine`/`kafkaVersion` null.
@@ -158,7 +158,7 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [X] **Legacy lint debt (B-002).** Done 2026-10-31: all 576 unchecked `d.Set` calls now go through `setAttr`, which turns a value that doesn't fit its attribute into a warning naming it (it was silently dropped); not an error, since the provider is released. No lint exclusions are left. The review found three reads that always failed (fixed: `manual_option_list` and `nested_workflow_task` set keys not in the schema; `operational_workflow_id`, `vro_integration_id`, `vro_workflow_value` came back as strings, now `setIntFromString`). Still to confirm live: `workflow_job.custom_options` (a non-string value or `[]` would warn) and `scheduled_date_and_time` on task/workflow jobs (warns if MTN returns an epoch number); check in the B-018 #6 pass.
 - [X] **Example defects (B-003).** Done 2026-10-31: the known-defects list is empty.
 - [X] **Local tfvars (B-004).** Done 2026-10-31. Remove the stale `username`, `password` and `tenant_subdomain` keys from the local quickstart `terraform.tfvars`.
-- [ ] **Open questions.**
+- [X] **Open questions.**
   - Q6: **closed by the owner (2026-10-31): no acceptance CI.** Live QA stays manual (QA folders + ledger, `tf-acc-*` in `admin`); `.github/workflows/acceptance.yml` stays manual-dispatch for the catalog form checks.
 - [X] **Stale entries in backlog.md.** Done 2026-10-31: build order, Q1, Q3 and Q4 updated.
   - The "Build order" list strikes through only steps 1 and 2, though security groups, networks, routers, projects, orders, MOS and load balancers are built.

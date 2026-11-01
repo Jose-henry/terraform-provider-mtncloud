@@ -3,9 +3,9 @@
 Manage [MTN Cloud](https://console.cloud.mtn.ng) with Terraform: projects, MTN Networks and Routers,
 security groups, instances, clusters, catalog services, Cypher secrets, automation, and users.
 
-> Status: **pre-release** (0.4.x). The core resources (projects, networks, routers, security groups,
-> instances, clusters, catalog services) are built and were tested live on 2026-10-28; MOS buckets,
-> apps and load balancers are still to come (see `dev-docs/status.md`). Test before you rely on it.
+> Status: **pre-release** (0.9.x). Projects, networks, routers, instances, catalog services, shares,
+> MOS, apps, load balancers, workflows and deployments are built and tested live in a test tenant
+> (latest pass 2026-11-01). Clusters are on hold; see `dev-docs/status.md`. Test before you rely on it.
 
 ## Use
 
