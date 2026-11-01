@@ -141,14 +141,14 @@ func TestShare_FailedOrderSaysWhy(t *testing.T) {
 	f, s, _ := orderFakes(t)
 	s.result = "error"
 	s.failure = "Checking whether this tenant already has a volume called 'files'...\n" +
-		"[CRITICAL] One account serves all of them, so setting a password here would rotate it for every one.\n" +
+		"[CRITICAL] One account serves all of them, so setting a password here would rotate it for every one and break their connections.\n" +
 		"+ echo Files-pw1 > /tmp/smb\n" +
 		"[CRITICAL] Leave the password blank to add this share, or use Update mode to rotate deliberately. Nothing created."
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{{
 			Config:      f.providerConfig() + "resource \"mtncloud_smb_share\" \"files\" {\n  name = \"files\"\n  password = \"Files-pw1\"\n  password_version = 1\n}\n",
-			ExpectError: regexp.MustCompile(`(?s)Order 9801 ended with "error".*Checking whether.*One account.*Leave the password\s+blank to add this\s+share`),
+			ExpectError: regexp.MustCompile(`(?s)Order 9801 ended with "error".*Checking\s+whether.*One\s+account.*Leave\s+the\s+password\s+blank\s+to\s+add\s+this\s+share`),
 		}},
 	})
 }

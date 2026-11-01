@@ -303,11 +303,13 @@ func WorkflowInstance(output string) (id int64, name string) {
 // the one exception.
 var secretWord = regexp.MustCompile(`(?i)pass|pwd|secret|token|key|credential|auth|private|\*\*\*|\s-p\S`)
 
-// explained is how MTN's own workflows explain a refusal that names a secret without carrying one
-// ("[CRITICAL] Leave the password blank to add this share", SMB, live 2026-11-01). Such a line is
-// kept when it also has no quote and no digit after its log prefix: it is often the only reason the
-// run gives.
-var explained = regexp.MustCompile(`(?i)leave the password blank|setting a password here would rotate|one account serves all of them`)
+// explained is the exact sentences MTN's own workflows use to explain a refusal that names a secret
+// without carrying one (SMB.sh, live 2026-11-01). A line is kept only when, after its log prefix,
+// it is one of them in full: anything added to it could be a value, so it is left out.
+var explained = regexp.MustCompile(`^(?:` +
+	`One account serves all of them, so setting a password here would rotate it for every one and break their connections\.` +
+	`|Leave the password blank to add this share, or use Update mode to rotate deliberately\. Nothing created\.` +
+	`)$`)
 
 // logPrefix is a workflow log line's leading "[2026-11-01 19:31:35] [CRITICAL] " tags.
 var logPrefix = regexp.MustCompile(`^(\[[^\]]*\]\s*)+`)
@@ -325,8 +327,7 @@ func secretLine(l string) bool {
 		return false
 	}
 	rest := logPrefix.ReplaceAllString(l, "")
-	// Kept only as one of MTN's explanations with nothing that could be a value in it.
-	return !explained.MatchString(rest) || strings.ContainsAny(rest, "'\"`0123456789=:")
+	return !explained.MatchString(rest)
 }
 
 // lastLines is the last n non-empty lines of s that don't mention a secret, joined, at most 500

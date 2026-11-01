@@ -13,13 +13,15 @@ func TestLastLines(t *testing.T) {
 		{"x\ny\nz\nw", "y z w"},
 		{"Error: bad\nADMIN_PASSWORD=hunter2\n", "Error: bad"},
 		// MTN's own explanations are kept (SMB, live 2026-11-01), with their log prefix.
-		{"x\n[2026-11-01 19:31:35] [CRITICAL] One account serves all of them, so setting a password here would rotate it for every one.\n" +
+		{"x\n[2026-11-01 19:31:35] [CRITICAL] One account serves all of them, so setting a password here would rotate it for every one and break their connections.\n" +
 			"[2026-11-01 19:31:35] [CRITICAL] Leave the password blank to add this share, or use Update mode to rotate deliberately. Nothing created.",
-			"x [2026-11-01 19:31:35] [CRITICAL] One account serves all of them, so setting a password here would rotate it for every one. " +
+			"x [2026-11-01 19:31:35] [CRITICAL] One account serves all of them, so setting a password here would rotate it for every one and break their connections. " +
 				"[2026-11-01 19:31:35] [CRITICAL] Leave the password blank to add this share, or use Update mode to rotate deliberately. Nothing created."},
 		// ...but not when a value rides along with the same words.
 		{"ok\n[CRITICAL] Leave the password blank: Hunter2Pw", "ok"},
 		{"ok\nLeave the password blank, it was 'Hunterpw'", "ok"},
+		{"ok\n[CRITICAL] Leave the password blank. New password is Hunterpw", "ok"},
+		{"ok\nLeave the password blank to add this share, or use Update mode to rotate deliberately. Nothing created. pw Hunterpw", "ok"},
 		// Every other line that mentions a secret is dropped (review, 2026-11-01).
 		{"ok\nGenerated password for user tfuser is Xk9fLm2Q\n+ sshpass -p Hunter2Pw ssh root@10.0.0.5", "ok"},
 		{"ok\n+ mysql -u root --password Hunter2Pw -e 'select 1'\n+ echo tfuser:Hunter2Pw | chpasswd", "ok"},
