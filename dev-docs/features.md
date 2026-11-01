@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 111 | 111 |
-| Usable with a customer (sub-tenant) login | 111 | 106 |
+| Available today | 119 | 111 |
+| Usable with a customer (sub-tenant) login | 119 | 106 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 2 | 0 |
@@ -111,6 +111,7 @@ Workflows that chain tasks, and jobs that run them on a schedule.
 |---|---|
 | [`mtncloud_execute_schedule`](../docs/resources/execute_schedule.md) | Yes (read verified) |
 | [`mtncloud_operational_workflow`](../docs/resources/operational_workflow.md) | Yes (read verified) |
+| [`mtncloud_power_schedule`](../docs/resources/power_schedule.md) | Yes (read verified) |
 | [`mtncloud_provisioning_workflow`](../docs/resources/provisioning_workflow.md) | Yes (read verified) |
 | [`mtncloud_task_job`](../docs/resources/task_job.md) | Yes (read verified) |
 | [`mtncloud_workflow_job`](../docs/resources/workflow_job.md) | Yes (read verified) |
@@ -186,12 +187,18 @@ NFS and SMB shares (created, updated and deleted by orders) and Let's Encrypt ce
 
 ### Compute
 
-Instances (virtual machines from MTN's OS images), and Kubernetes and Docker clusters from MTN's layouts.
+Instances (virtual machines from MTN's OS images), their day-2 settings, power and scale schedules, apps and their instances, and Kubernetes and Docker clusters from MTN's layouts.
 
 | Type | Customer login |
 |---|---|
+| [`mtncloud_app`](../docs/resources/app.md) | Yes (read verified) |
+| [`mtncloud_app_instance`](../docs/resources/app_instance.md) | Yes (read verified) |
+| [`mtncloud_app_settings`](../docs/resources/app_settings.md) | Yes (read verified) |
 | [`mtncloud_cluster`](../docs/resources/cluster.md) | Yes (read verified) |
 | [`mtncloud_instance`](../docs/resources/instance.md) | Yes, built for customers |
+| [`mtncloud_instance_power_schedule`](../docs/resources/instance_power_schedule.md) | Yes (read verified) |
+| [`mtncloud_instance_scale_schedule`](../docs/resources/instance_scale_schedule.md) | Yes (read verified) |
+| [`mtncloud_instance_settings`](../docs/resources/instance_settings.md) | Yes (read verified) |
 
 ### Networking
 
@@ -227,6 +234,7 @@ S3-compatible buckets, listed in the console, with their access, CORS, lifecycle
 
 | Type | Customer login |
 |---|---|
+| [`mtncloud_mos_access`](../docs/resources/mos_access.md) | Yes (read verified) |
 | [`mtncloud_mos_bucket`](../docs/resources/mos_bucket.md) | Yes (read verified) |
 | [`mtncloud_mos_bucket_acl`](../docs/resources/mos_bucket_acl.md) | Yes (read verified) |
 | [`mtncloud_mos_bucket_cors`](../docs/resources/mos_bucket_cors.md) | Yes (read verified) |

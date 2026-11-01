@@ -45,7 +45,7 @@ RESOURCES = [
     ("Automation: workflows, jobs and schedules",
      "Workflows that chain tasks, and jobs that run them on a schedule.",
      ["operational_workflow", "provisioning_workflow", "task_job", "workflow_job",
-      "execute_schedule"]),
+      "execute_schedule", "power_schedule"]),
     ("Projects",
      "Projects (resource pools), ordered from MTN's catalog.",
      ["project"]),
@@ -65,8 +65,10 @@ RESOURCES = [
      "NFS and SMB shares (created, updated and deleted by orders) and Let's Encrypt certificates for instances.",
      ["nfs_share", "smb_share", "letsencrypt_certificate"]),
     ("Compute",
-     "Instances (virtual machines from MTN's OS images), and Kubernetes and Docker clusters from MTN's layouts.",
-     ["instance", "cluster"]),
+     "Instances (virtual machines from MTN's OS images), their day-2 settings, power and scale schedules, apps "
+     "and their instances, and Kubernetes and Docker clusters from MTN's layouts.",
+     ["instance", "instance_settings", "instance_power_schedule", "instance_scale_schedule",
+      "app", "app_instance", "app_settings", "cluster"]),
     ("Networking",
      "MTN Networks and MTN Routers, security groups (instance firewalls) and their rules, IP pools "
      "(static IP ranges for a network) and DNS domains (instance hostnames and domain join).",
@@ -78,7 +80,7 @@ RESOURCES = [
     ("MOS (MTN Object Storage)",
      "S3-compatible buckets, listed in the console, with their access, CORS, lifecycle, access logging and "
      "object lock settings, and the objects in them (with retention).",
-     ["mos_bucket", "mos_bucket_acl", "mos_bucket_cors", "mos_bucket_lifecycle", "mos_bucket_logging",
+     ["mos_access", "mos_bucket", "mos_bucket_acl", "mos_bucket_cors", "mos_bucket_lifecycle", "mos_bucket_logging",
       "mos_bucket_object_lock", "mos_object", "mos_object_acl"]),
     ("Archives",
      "File stores (Tools > Archives) whose files are kept in a MOS bucket, their files, and download links to them.",
