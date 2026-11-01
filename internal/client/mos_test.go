@@ -199,17 +199,18 @@ func TestPutThenSettle_OneWriteAtATimePerBucket(t *testing.T) {
 				mu.Unlock()
 				return nil
 			},
-			func(context.Context) (bool, error) { return true, nil }, true)
+			// The write ends with its settle, still under the bucket's lock: count it out there, as
+			// counting after putThenSettle returns races with the next writer (CI, 2026-11-01).
+			func(context.Context) (bool, error) {
+				mu.Lock()
+				inFlight--
+				mu.Unlock()
+				return true, nil
+			}, true)
 	}
 	done := make(chan error)
 	for range 4 {
-		go func() {
-			err := write("same-bucket")
-			mu.Lock()
-			inFlight--
-			mu.Unlock()
-			done <- err
-		}()
+		go func() { done <- write("same-bucket") }()
 	}
 	for range 4 {
 		if err := <-done; err != nil {
