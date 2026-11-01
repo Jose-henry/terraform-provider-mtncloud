@@ -68,6 +68,9 @@ type Config struct {
 	// LBWriteAttempt bounds one run of a load balancer write: the plugin itself waits up to 3
 	// minutes for the cloud, and an update first waits for the save.
 	LBWriteAttempt time.Duration
+	// VersionInUseWait is how long a deployment version's delete waits while MTN Cloud says the version
+	// is used in deploys (an instance it was deployed to is still being deleted).
+	VersionInUseWait time.Duration
 	// LBPendingGrace is how long a write the plugin answered with pending (its save still running)
 	// may read ACTIVE before that is believed: until the save reaches the cloud, the load balancer
 	// still reads as it was.

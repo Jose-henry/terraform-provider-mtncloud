@@ -51,6 +51,9 @@ func pollDefaults(cfg *Config) {
 	if cfg.LBAttempt <= 0 {
 		cfg.LBAttempt = 3 * time.Minute
 	}
+	if cfg.VersionInUseWait <= 0 {
+		cfg.VersionInUseWait = 5 * time.Minute
+	}
 	if cfg.LBWriteAttempt <= 0 {
 		cfg.LBWriteAttempt = 8 * time.Minute
 	}

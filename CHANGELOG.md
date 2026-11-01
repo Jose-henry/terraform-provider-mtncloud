@@ -2,6 +2,13 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
+## Unreleased
+
+- **New: `mtncloud_load_balancer_cluster_member`.** A Kubernetes cluster's nodes of one role (for example `kube-worker`) as pool members, kept in step with the cluster by the load balancer. Weight and backup change in place.
+- **New: `mtncloud_instance_workflow`.** Runs an operational workflow (for example MTN's "Create Linux User Git") on instances, again when its inputs or `triggers` change. Password fields go in `secret_inputs`; plan time checks the inputs against the workflow's form.
+- **New: deployments.** `mtncloud_deployment`, `mtncloud_deployment_version` (files, git or a URL to fetch), `mtncloud_deployment_file` and `mtncloud_instance_deploy`. A deploy whose run fails on the instance fails the apply with MTN Cloud's message, and the next plan deploys again. MTN's standard images don't have a deploy folder yet, so deploys to them fail until MTN adds one.
+- **Fixed: an imported instance plans clean.** `expire_days` and `shutdown_days` are read from the instance when the state has none (after an import, or left out and set by a policy), so an imported VM whose configuration sets them plans `No changes.` What was set at create is kept as before.
+
 ## 0.8.0 (2026-11-01)
 
 - **Changed: what MTN Cloud can't change after create is refused at plan time, never replaced** (D-038). Before, a change to (for example) a router's name, a network's CIDR, an instance's hostname, a bucket's name or a load balancer listener's port deleted the object and made a new one. Now the plan stops with `<attribute> can't change`, the value to set back, and how to make a new one if that's what you want. `terraform apply -replace` still makes a new one. A sensitive value is never shown in the error.

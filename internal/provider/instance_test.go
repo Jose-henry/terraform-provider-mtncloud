@@ -769,7 +769,7 @@ func TestInstance_ScaleAndLifecycle(t *testing.T) {
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
 			},
 			{ResourceName: "mtncloud_instance.app", ImportState: true, ImportStateVerify: true,
-				ImportStateVerifyIgnore: []string{"timeouts", "expire_days"}, Config: scaled},
+				ImportStateVerifyIgnore: []string{"timeouts"}, Config: scaled},
 			{
 				// Changed in place: memory instead of cpu.
 				Config: cfg(`  scale = {

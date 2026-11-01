@@ -24,22 +24,24 @@ import (
 // fakeAPI serves the scrubbed fixtures the client contract tests use. Requests under
 // /api/security-groups go to sg, a stateful fake (security_group_test.go), when it is set.
 type fakeAPI struct {
-	srv    *httptest.Server
-	mu     sync.Mutex
-	calls  map[string]int
-	sg     http.Handler
-	net    http.Handler    // /api/networks, a stateful fake (network_test.go), when set
-	router http.Handler    // /api/networks/routers, a stateful fake (router_test.go), when set
-	inst   http.Handler    // /api/instances, a stateful fake (instance_test.go), when set
-	order  http.Handler    // /api/catalog/orders and /items, a stateful fake (project_test.go), when set
-	clu    http.Handler    // /api/clusters, a stateful fake (cluster_test.go), when set
-	lb     http.Handler    // /api/tasks and /api/job-executions, the load balancer task (loadbalancer_test.go), when set
-	mos    http.Handler    // /api/storage-buckets and /api/archives, console bucket records (mos_test.go), when set
-	cypher http.Handler    // /api/cypher, a stateful fake (mos_access_test.go), when set
-	app    http.Handler    // /api/apps/{id} and /api/users, one app's settings (app_settings_test.go), when set
-	sched  http.Handler    // /api/instances/{id}/schedules and /api/scale-thresholds (scale_schedule_test.go), when set
-	power  http.Handler    // /api/power-schedules and /api/instances/4660 (power_schedule_test.go), when set
-	denied map[string]bool // paths answered with 403 (not retried), set by a test step
+	srv      *httptest.Server
+	mu       sync.Mutex
+	calls    map[string]int
+	sg       http.Handler
+	net      http.Handler    // /api/networks, a stateful fake (network_test.go), when set
+	router   http.Handler    // /api/networks/routers, a stateful fake (router_test.go), when set
+	inst     http.Handler    // /api/instances, a stateful fake (instance_test.go), when set
+	order    http.Handler    // /api/catalog/orders and /items, a stateful fake (project_test.go), when set
+	clu      http.Handler    // /api/clusters, a stateful fake (cluster_test.go), when set
+	lb       http.Handler    // /api/tasks and /api/job-executions, the load balancer task (loadbalancer_test.go), when set
+	mos      http.Handler    // /api/storage-buckets and /api/archives, console bucket records (mos_test.go), when set
+	cypher   http.Handler    // /api/cypher, a stateful fake (mos_access_test.go), when set
+	app      http.Handler    // /api/apps/{id} and /api/users, one app's settings (app_settings_test.go), when set
+	sched    http.Handler    // /api/instances/{id}/schedules and /api/scale-thresholds (scale_schedule_test.go), when set
+	power    http.Handler    // /api/power-schedules and /api/instances/4660 (power_schedule_test.go), when set
+	denied   map[string]bool // paths answered with 403 (not retried), set by a test step
+	extra    http.Handler    // paths extraFor matches, a test's own stateful fake, when set
+	extraFor func(path string) bool
 }
 
 // deny makes the fake refuse path from now on.
@@ -104,7 +106,12 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		f.mu.Lock()
 		f.calls[r.URL.Path]++
 		sg, net, router, inst, order, clu, lb, mos, cy, app, sched, power := f.sg, f.net, f.router, f.inst, f.order, f.clu, f.lb, f.mos, f.cypher, f.app, f.sched, f.power
+		extra, extraFor := f.extra, f.extraFor
 		f.mu.Unlock()
+		if extra != nil && extraFor(r.URL.Path) && r.Header.Get("Authorization") == "Bearer test-token" {
+			extra.ServeHTTP(w, r)
+			return
+		}
 		if power != nil && (strings.HasPrefix(r.URL.Path, "/api/power-schedules") || r.URL.Path == "/api/instances/4660") &&
 			r.Header.Get("Authorization") == "Bearer test-token" {
 			power.ServeHTTP(w, r)

@@ -93,8 +93,8 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 - [x] **Customer-login refusal at plan time (B-007).** Closed 2026-10-31: D-024 removed every master-only type, so nothing is left to refuse. Role-dependent types (`mtncloud_group`) say so in their description, and a 403 names the role.
 - [x] **`dhcp_range` and `host_routes` on `mtncloud_network` (B-010).** Done 2026-10-31: formats proved live on a QA network ([api-research](api-research.md#network-dhcp-range-and-host-routes-b-010)); new `status` attribute, and a failed network plans a resend.
 - [x] **Load balancer members (B-023): pinning one node.** Done 2026-10-31: `pin_address` on `mtncloud_load_balancer_instance_member` (the plugin's `pinAddress`; import `.../<instance_id>@<address>`).
-- [ ] **Cluster-group members (`clusterGroup`, B-023).** With the cluster work.
-- [ ] **Instance workflows and deployments (B-014).** Deferred by the owner.
+- [x] **Cluster-group members (`clusterGroup`, B-023).** Done 2026-11-01: `mtncloud_load_balancer_cluster_member` (`cluster:<id>:<role>`), live-tested with the owner's cluster (3 workers, weight changed in place, plan `No changes.`).
+- [x] **Instance workflows and deployments (B-014).** Done 2026-11-01 (D-039). MTN-side: images need a deploy folder; workflow targets need the agent.
 - [x] **Catalog item inputs (B-008).** Already done with the orders: the `mtncloud_catalog_item` data source shows each input (name, type, required, default, choices, and the form's rules).
 
 ## 3. Live checks still open (each needs permission, or MTN)

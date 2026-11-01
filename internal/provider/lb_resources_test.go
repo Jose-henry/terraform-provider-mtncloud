@@ -325,6 +325,25 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		if e := needPool(); e != nil {
 			return e
 		}
+		if cg, has := spec["clusterGroup"]; has { // a cluster role: cluster 143's three workers, as one group
+			if cg != "cluster:143:kube-worker" {
+				return refuse("Cluster group %v is not one this load balancer can use.", cg)
+			}
+			if _, pinned := spec["pinAddress"]; pinned {
+				return refuse("A cluster group is added whole; pinAddress cannot be used with it.")
+			}
+			group := "morpheus:group:" + fmt.Sprint(cg) // mtncloud:allow-upstream-name (the plugin's tag on the wire)
+			ms := []any{}
+			for _, a := range []string{"10.0.0.43", "10.0.0.41", "10.0.0.42"} {
+				m := map[string]any{"id": p.id("m"), "name": "", "address": a, "protocol_port": spec["port"], "subnet_id": lb["vip_subnet_id"],
+					"weight": spec["weight"], "backup": spec["backup"], "admin_state_up": true, "tags": []any{tag, group}}
+				pool["members"] = append(list(pool, "members"), m)
+				ms = append(ms, m)
+			}
+			out := ok(map[string]any{"success": true, "steps": []any{map[string]any{"kind": "members", "applied": true, "count": len(ms)}}})
+			out["piece"] = map[string]any{"members": ms}
+			return out
+		}
 		if inst, has := spec["instanceId"]; has { // an instance: its two nodes on this network, as one group
 			if fmt.Sprint(inst) != "301" {
 				return refuse("Instance %v is not one this load balancer can use.", inst)
@@ -363,7 +382,11 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		if e := needPool(); e != nil {
 			return e
 		}
-		if inst, has := o["instanceId"]; has && action == "member-remove" {
+		inst, has := o["instanceId"]
+		if cg, isCluster := o["clusterGroup"]; isCluster {
+			inst, has = cg, true
+		}
+		if has && action == "member-remove" {
 			group, kept, n := "morpheus:group:"+fmt.Sprint(inst), []any{}, 0 // mtncloud:allow-upstream-name (the plugin's tag on the wire)
 			for _, x := range list(pool, "members") {
 				if slices.Contains(list(x.(map[string]any), "tags"), any(group)) {

@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 119 | 111 |
-| Usable with a customer (sub-tenant) login | 119 | 106 |
+| Available today | 125 | 111 |
+| Usable with a customer (sub-tenant) login | 125 | 106 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 2 | 0 |
@@ -105,16 +105,28 @@ Building blocks for workflows.
 
 ### Automation: workflows, jobs and schedules
 
-Workflows that chain tasks, and jobs that run them on a schedule.
+Workflows that chain tasks, runs of a workflow on instances, and jobs that run them on a schedule.
 
 | Type | Customer login |
 |---|---|
 | [`mtncloud_execute_schedule`](../docs/resources/execute_schedule.md) | Yes (read verified) |
+| [`mtncloud_instance_workflow`](../docs/resources/instance_workflow.md) | Yes (read verified) |
 | [`mtncloud_operational_workflow`](../docs/resources/operational_workflow.md) | Yes (read verified) |
 | [`mtncloud_power_schedule`](../docs/resources/power_schedule.md) | Yes (read verified) |
 | [`mtncloud_provisioning_workflow`](../docs/resources/provisioning_workflow.md) | Yes (read verified) |
 | [`mtncloud_task_job`](../docs/resources/task_job.md) | Yes (read verified) |
 | [`mtncloud_workflow_job`](../docs/resources/workflow_job.md) | Yes (read verified) |
+
+### Deployments
+
+Applications as deployments (Provisioning > Deployments): their versions, the files of a version, and a version deployed to an instance.
+
+| Type | Customer login |
+|---|---|
+| [`mtncloud_deployment`](../docs/resources/deployment.md) | Yes (read verified) |
+| [`mtncloud_deployment_file`](../docs/resources/deployment_file.md) | Yes (read verified) |
+| [`mtncloud_deployment_version`](../docs/resources/deployment_version.md) | Yes (read verified) |
+| [`mtncloud_instance_deploy`](../docs/resources/instance_deploy.md) | Yes (read verified) |
 
 ### Projects
 
@@ -220,6 +232,7 @@ Load balancers on an MTN Network, and their listeners, pools, members and health
 | Type | Customer login |
 |---|---|
 | [`mtncloud_load_balancer`](../docs/resources/load_balancer.md) | Yes (read verified) |
+| [`mtncloud_load_balancer_cluster_member`](../docs/resources/load_balancer_cluster_member.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_floating_ip`](../docs/resources/load_balancer_floating_ip.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_health_monitor`](../docs/resources/load_balancer_health_monitor.md) | Yes (read verified) |
 | [`mtncloud_load_balancer_instance_member`](../docs/resources/load_balancer_instance_member.md) | Yes (read verified) |

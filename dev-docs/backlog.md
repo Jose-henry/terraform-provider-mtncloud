@@ -146,7 +146,9 @@ Assumed by the fake API; no IPv6 network or failed network has been captured.
 - Status words besides `provisioning`, `running`, `failed`, `error`, and where the reason lives
   (`statusMessage` or `errorMessage`).
 
-## B-014 Instance workflows and deployments (deferred, owner 2026-10-27)
+## B-014 Instance workflows and deployments (done 2026-11-01, D-039)
+- Done: `mtncloud_instance_workflow` and the four deployment resources. Open on MTN's side: a deploy folder on
+  the standard images' node types, and the agent on VMs that run workflows. History below.
 - **Workflows:** every MTN workflow customers see (6, captured 2026-10-27) is an *operational* one,
   run on an existing instance with inputs, some secret: Create Linux/Windows User, Update Linux User
   Passwd, Install/Uninstall LetsEncrypt SSL, MK8S Cypher Regeneration. None is a provisioning

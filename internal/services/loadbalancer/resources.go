@@ -33,7 +33,7 @@ import (
 func Resources() []func() resource.Resource {
 	return []func() resource.Resource{
 		newLoadBalancerResource, newListenerResource, newPoolResource, newMonitorResource, newMemberResource,
-		newL7PolicyResource, newInstanceMemberResource, newFloatingIPResource,
+		newL7PolicyResource, newInstanceMemberResource, newClusterMemberResource, newFloatingIPResource,
 	}
 }
 

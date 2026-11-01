@@ -388,6 +388,28 @@ Never paste tokens, secret keys or passwords. `-V` already masks the bearer toke
 - `GET /api/instances/{id}/deploys` works (empty); `/api/deployments` is empty for the tenant.
 - `/api/task-sets`: 6 workflows, all `type: operation` (see B-014).
 
+### Deployments and workflow runs (live, customer login, 2026-11-01; D-039)
+- `POST/PUT/DELETE /api/deployments` `{deployment:{name, description}}`; deleting one deletes its versions.
+- `POST /api/deployments/{id}/versions` `{version:{version, deployType: file|git|fetch, fetchUrl, gitUrl, gitRef}}`;
+  the answer's `userVersion` is the version string; PUT changes type, URLs and version; DELETE works.
+- Files: `POST .../versions/{id}/files?filename=<name>` with the raw body (octet-stream) lands at the top
+  level and overwrites a file of that name; `GET .../files` lists `name`, `directory`, `contentLength`;
+  `DELETE .../files/<name>` works at the top level only (inside a folder, list and delete answer 500).
+- `POST /api/instances/{id}/deploys` `{appDeploy:{versionId, config, stageOnly}}` deploys straight away;
+  `GET /api/instances/{id}/deploys` lists `appDeploys` with `status` `committed` (live) / `archived`,
+  and `dateCreated`. `DELETE /api/deploys/{id}` deletes archived ones only.
+- The deploy's outcome is the instance's `deploy` process (`GET /api/processes?instanceId=`), which
+  starts 4–5 s after the deploy's `dateCreated`. On MTN's Ubuntu 24.04 image it fails with "Failed to
+  build deploy config. This Container Node Type may be missing a deploy folder configuration." while the
+  deploy still reads `committed`.
+- Workflows: `GET /api/task-sets?name=` matches the exact name, any case, and returns the form
+  (`optionTypes[].fieldName/type/required/defaultValue`). MTN's user workflow is named
+  "Create Linux User Git" (task set 61: linuxUser, linuxPassword (password), makeSudoer, passwordExpires,
+  passwordDays). Its task (166) is unreadable for customers.
+- `POST /api/task-sets/{id}/execute` `{job:{name, targetType: "instance", instances:[ids], customOptions}}`
+  returns `jobExecution.id`; `GET /api/job-executions/{id}` gives `status` and `process.events[]`. On a VM
+  made without the agent the run ends `error` after about 4 minutes, with empty `error`/`output`.
+
 ### Floating IPs for customers (captured 2026-10-27)
 - `GET /api/options/openStack/openstackFloatingIpOptions?containerId=<vm>` works for customers (the
   earlier 500s had no `containerId`; `/api/options/openstackFloatingIpOptions` still answers 500).

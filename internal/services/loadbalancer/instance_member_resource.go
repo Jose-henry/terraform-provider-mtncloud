@@ -10,7 +10,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -44,8 +43,6 @@ type instanceMemberRes struct {
 	Members        types.List     `tfsdk:"members"`
 	Timeouts       timeouts.Value `tfsdk:"timeouts"`
 }
-
-var instanceMemberType = types.ObjectType{AttrTypes: map[string]attr.Type{"id": types.StringType, "address": types.StringType}}
 
 const instanceMemberKind = "instance's members"
 
@@ -112,25 +109,7 @@ func (r *instanceMemberResource) fill(m *instanceMemberRes, lb *client.LoadBalan
 	if len(ms) == 0 {
 		return true
 	}
-	flat := flattenMembers(ms) // sorted by address
-	elems := make([]attr.Value, 0, len(flat))
-	for _, x := range flat {
-		elems = append(elems, types.ObjectValueMust(instanceMemberType.AttrTypes, map[string]attr.Value{
-			"id": types.StringValue(x.ID), "address": types.StringValue(x.Address)}))
-	}
-	m.Members = types.ListValueMust(instanceMemberType, elems)
-	// The group was added with one port, weight and backup; its first member shows them. Members that
-	// disagree (an update stopped part-way, or a change in the console) read as a value no
-	// configuration has (weight -1, backup null), so the next plan sets every member again.
-	m.Port, m.Weight, m.Backup = types.Int64Value(flat[0].Port), types.Int64Value(flat[0].Weight), types.BoolValue(flat[0].Backup)
-	for _, x := range flat[1:] {
-		if x.Weight != flat[0].Weight {
-			m.Weight = types.Int64Value(-1)
-		}
-		if x.Backup != flat[0].Backup {
-			m.Backup = types.BoolNull()
-		}
-	}
+	m.Members, m.Port, m.Weight, m.Backup = readGroup(ms)
 	return false
 }
 
@@ -239,27 +218,15 @@ func (r *instanceMemberResource) Update(ctx context.Context, req resource.Update
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	// Weight and backup change on each member in place: the members stay in the pool throughout.
-	var members []struct {
-		ID      types.String `tfsdk:"id"`
-		Address types.String `tfsdk:"address"`
-	}
-	resp.Diagnostics.Append(state.Members.ElementsAs(ctx, &members, false)...)
-	weight, backup := plan.Weight.ValueInt64(), plan.Backup.ValueBool()
-	for _, m := range members {
-		err := r.client.UpdateLBMember(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(),
-			m.ID.ValueString(), client.LBMemberSpec{Weight: &weight, Backup: &backup})
-		if err != nil {
-			resp.Diagnostics.AddError("Unable to change the instance's members",
-				fmt.Sprintf("Member %s (%s): %s. The members changed so far keep the new value; the next apply sets "+
-					"them all.", m.ID.ValueString(), m.Address.ValueString(), err))
-			// A fresh context: the failure may have been the timeout. State takes the members as they
-			// are, so mixed members read as a change still to make.
-			rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
-			defer rcancel()
-			r.refresh(rctx, &state, &resp.State, &resp.Diagnostics)
-			return
-		}
+	if err := r.setGroupWeight(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(),
+		state.Members, plan.Weight.ValueInt64(), plan.Backup.ValueBool()); err != nil {
+		resp.Diagnostics.AddError("Unable to change the instance's members", err.Error()+".")
+		// A fresh context: the failure may have been the timeout. State takes the members as they
+		// are, so mixed members read as a change still to make.
+		rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+		defer rcancel()
+		r.refresh(rctx, &state, &resp.State, &resp.Diagnostics)
+		return
 	}
 	r.refresh(ctx, &plan, &resp.State, &resp.Diagnostics)
 }

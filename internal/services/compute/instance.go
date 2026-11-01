@@ -24,6 +24,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -272,16 +273,21 @@ func (r *instanceResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 					"place: the old address is released and a new one attached. Apply waits until the instance shows the " +
 					"address (in `public_ip`), and fails if it doesn't.",
 			},
+			// Optional+Computed: set at create by the user, or read from the instance when the state has
+			// none (after an import, or left out and set by a policy), so an imported VM's configuration matches.
 			"expire_days": schema.Int64Attribute{
-				Optional: true,
+				Optional: true, Computed: true,
 				Description: "Delete the instance this many days after it is created. Set at create only: afterwards extend " +
-					"or cancel the expiry in the console (a change here is refused at plan time).",
-				Validators: []validator.Int64{int64validator.AtLeast(1)},
+					"or cancel the expiry in the console (a change here is refused at plan time). Left out, it shows the " +
+					"days a policy set, if any.",
+				Validators:    []validator.Int64{int64validator.AtLeast(1)},
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"shutdown_days": schema.Int64Attribute{
-				Optional:    true,
-				Description: "Stop the VM this many days after it is created. Set at create only, like `expire_days`.",
-				Validators:  []validator.Int64{int64validator.AtLeast(1)},
+				Optional: true, Computed: true,
+				Description:   "Stop the VM this many days after it is created. Set at create only, like `expire_days`.",
+				Validators:    []validator.Int64{int64validator.AtLeast(1)},
+				PlanModifiers: []planmodifier.Int64{int64planmodifier.UseStateForUnknown()},
 			},
 			"expire_date": schema.StringAttribute{Computed: true, PlanModifiers: keep,
 				Description: "When the instance will be deleted, if it expires (from `expire_days` or a policy)."},
@@ -1253,8 +1259,15 @@ func (r *instanceResource) refresh(ctx context.Context, m *instanceModel, in *cl
 	if m.ScaleFactor.IsNull() || m.ScaleFactor.IsUnknown() {
 		m.ScaleFactor = types.Int64Value(in.LayoutSize)
 	}
-	// expire_days and shutdown_days stay as configured: a policy may set days the configuration
-	// doesn't, and those show in the dates.
+	// expire_days and shutdown_days keep what was configured at create (a policy may change the days
+	// the instance shows; the dates show the result). With none in state, as after an import or when
+	// left out, they are the instance's.
+	if m.ExpireDays.IsNull() || m.ExpireDays.IsUnknown() {
+		m.ExpireDays = daysOf(in.ExpireDays)
+	}
+	if m.ShutdownDays.IsNull() || m.ShutdownDays.IsUnknown() {
+		m.ShutdownDays = daysOf(in.ShutdownDays)
+	}
 	m.ExpireDate, m.ShutdownDate = optional(in.ExpireDate), optional(in.ShutdownDate)
 	if m.CreateUser.IsNull() || m.CreateUser.IsUnknown() {
 		m.CreateUser = types.BoolValue(true)
@@ -1818,4 +1831,12 @@ func readServerCount(m *instanceModel, in *client.Instance) {
 	if n := int64(len(in.ContainerIDs)); n > 0 && m.Scale.IsNull() {
 		m.ScaleFactor = types.Int64Value(n)
 	}
+}
+
+// daysOf is an instance's expiry or shutdown days, null for none.
+func daysOf(n int64) types.Int64 {
+	if n <= 0 {
+		return types.Int64Null()
+	}
+	return types.Int64Value(n)
 }

@@ -227,7 +227,48 @@ func PinnedMember(p *LBPool, address string, port int64) *LBMember {
 
 // InstanceMembers are the members of a pool that belong to an instance's group.
 func InstanceMembers(p *LBPool, instanceID int64) []LBMember {
-	tag := instanceGroupTag(instanceID)
+	return groupMembers(p, instanceGroupTag(instanceID))
+}
+
+// ClusterGroup is the plugin's key for one role of a cluster's nodes, "cluster:<id>:<role>", for
+// example "cluster:143:kube-worker". The role is the nodes' type as MTN Cloud names it.
+func ClusterGroup(clusterID int64, role string) string {
+	return "cluster:" + strconv.FormatInt(clusterID, 10) + ":" + role
+}
+
+// ClusterMembers are the members of a pool that belong to a cluster role group.
+func ClusterMembers(p *LBPool, clusterID int64, role string) []LBMember {
+	return groupMembers(p, groupTagPrefix+ClusterGroup(clusterID, role))
+}
+
+// LBClusterMemberSpec adds every node of one cluster role that has an address on the load
+// balancer's network, as one group the console keeps in step as the cluster gains or loses nodes.
+type LBClusterMemberSpec struct {
+	ClusterID int64
+	Role      string
+	Port      int64
+	Weight    int64
+	Backup    bool
+}
+
+// AddLBClusterMembers adds a cluster role's nodes to a pool. The cluster must be one the console's
+// member picker offers for this load balancer: the tenant's own (or a public one), with nodes on its
+// network. The members are read back from the load balancer.
+func (c *Client) AddLBClusterMembers(ctx context.Context, networkID int64, lbID, poolID string, s LBClusterMemberSpec) error {
+	spec := map[string]any{"clusterGroup": ClusterGroup(s.ClusterID, s.Role), "port": s.Port, "weight": s.Weight, "backup": s.Backup}
+	in := map[string]any{"poolId": poolID, "spec": spec, "requestId": newRequestID()}
+	_, err := c.lbWrite(ctx, networkID, lbID, "member-add", in)
+	return err
+}
+
+// RemoveLBClusterMembers removes every member of a cluster role group from a pool. None left is
+// not an error.
+func (c *Client) RemoveLBClusterMembers(ctx context.Context, networkID int64, lbID, poolID string, clusterID int64, role string) error {
+	return c.lbRemove(ctx, networkID, lbID, "member-remove", map[string]any{"poolId": poolID, "clusterGroup": ClusterGroup(clusterID, role)})
+}
+
+// groupMembers are the members of a pool carrying one group tag.
+func groupMembers(p *LBPool, tag string) []LBMember {
 	var out []LBMember
 	for _, m := range p.Members {
 		if hasTag(m.Tags, tag) {

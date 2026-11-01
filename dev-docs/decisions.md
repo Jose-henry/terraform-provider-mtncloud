@@ -458,6 +458,30 @@ run would make the result differ from the plan ("inconsistent result"). The know
 copy it, unless they use `replace_triggered_by` (the documented way). Create adopts an existing schedule
 only when times, zone and copied values all match, so it never takes over another config's schedule.
 
+## D-039 Workflow runs and deployments: a run is a resource, a deploy's run decides (owner, 2026-11-01)
+The owner asked for instance workflows and deployments (B-014). Read first: Context7 (deploys,
+processes), the CLI PDF, MTN's `Linux Operations/CreateLinuxUser.sh`, and live probes as the customer.
+- **`mtncloud_instance_workflow`** runs an operational workflow (by name) on instances when created
+  and again when the workflow, instances, inputs, secret inputs or `triggers` change. Password fields
+  must go in `secret_inputs` (sensitive), which plan time checks against the workflow's form, along
+  with unknown and missing required fields. A run isn't an object MTN Cloud keeps, so there is no
+  import and destroy undoes nothing. A run that fails with no output on a VM made without the agent
+  says so: live, "Create Linux User Git" on an agentless VM ended `error` after 4 minutes, with nothing
+  in its events.
+- **Deployments** are four resources: `mtncloud_deployment`, `mtncloud_deployment_version` (`file`,
+  `git` or `fetch`), `mtncloud_deployment_file` (top level only: MTN Cloud answers 500 for listing or
+  deleting files in a folder), and `mtncloud_instance_deploy`. Everything but the parents changes in
+  place. An existing deployment, version or file is never taken over: the create names it for import.
+- **A deploy's run decides, not its status.** MTN Cloud marks a deploy `committed` even when the
+  instance's `deploy` process failed (live: "Failed to build deploy config. This Container Node Type
+  may be missing a deploy folder configuration."). The apply waits for that process and fails with its
+  message. Read treats a failed run as not deployed, so the next plan deploys again. The process is
+  matched by time: the first `deploy` process on the instance that started at or after the deploy's
+  `dateCreated` (live, 4–5 s later; 2 s skew allowed).
+- **Known platform gap:** MTN's standard images have no deploy folder, so deploys to them fail
+  until MTN configures one on the node types (an MTN admin change). The resource says so in its
+  description.
+
 ## D-038 What MTN Cloud can't change is refused at plan time, never replaced (owner, 2026-10-31)
 Supersedes the 2026-10-30 rule that a changed catalog-order input orders it again. Owner: things
 that have no way to change after creation "shouldn't be editable", like key pairs; "dont reinvent

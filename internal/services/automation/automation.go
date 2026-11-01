@@ -18,7 +18,7 @@ func Resources() []func() resource.Resource {
 	for _, s := range taskSpecs() {
 		out = append(out, func() resource.Resource { return &taskResource{spec: s} })
 	}
-	return out
+	return append(out, newInstanceWorkflow)
 }
 
 // base gives every resource its client.
