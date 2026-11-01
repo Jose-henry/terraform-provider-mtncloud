@@ -4,6 +4,13 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+- **Fixed: SMB and NFS shares follow MTN Cloud's form rules at plan time** (live QA, 2026-11-01). `client_ips` takes single IPv4 addresses (MTN Cloud refuses CIDR ranges; the SMB example used one), `name` is 3 to 64 letters, digits, `_` or `-`, and the SMB `password` needs 8 characters with a lowercase letter, an uppercase letter and a digit.
+- **SMB `password` is the tenant's.** One account serves every SMB share in a tenant: leave `password` out to add a share once the tenant has one (MTN Cloud refuses it then), and set it only to rotate it for every share. The docs say so, and a share name's description says MTN Cloud stores it lower-cased with `_` and `-` removed.
+- **A failed catalog workflow explains itself more often.** Output lines that mention a secret are still left out, except MTN's own explanations such as "Leave the password blank to add this share". Key and certificate blocks are now left out whole, as is a value printed under its label. Failed SMB and NFS orders now show the workflow's reason, with the order's password masked.
+- **Docs:** the `mtncloud_key_pair` page had another resource's heading, and its example now uses only a public key.
+
+- **Removed: the old names `mtncloud_managed_kubernetes` and `mtncloud_vpn_service`.** They were deprecated aliases of `mtncloud_self_managed_kubernetes` and `mtncloud_pfsense_vpn`. The provider isn't in production yet, so they are removed now instead of after a deprecation period (D-040). `mtncloud_managed_kubernetes` will come back as a Kubernetes cluster built through the cluster API.
+
 - **New: `mtncloud_load_balancer_cluster_member`.** A Kubernetes cluster's nodes of one role (for example `kube-worker`) as pool members, kept in step with the cluster by the load balancer. Weight and backup change in place.
 - **New: `mtncloud_instance_workflow`.** Runs an operational workflow (for example MTN's "Create Linux User Git") on instances, again when its inputs or `triggers` change. Password fields go in `secret_inputs`; plan time checks the inputs against the workflow's form.
 - **New: deployments.** `mtncloud_deployment`, `mtncloud_deployment_version` (files, git or a URL to fetch), `mtncloud_deployment_file` and `mtncloud_instance_deploy`. A deploy whose run fails on the instance fails the apply with MTN Cloud's message, and the next plan deploys again. MTN's standard images don't have a deploy folder yet, so deploys to them fail until MTN adds one.

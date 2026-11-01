@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/planmodifiers"
+	"github.com/mtn/terraform-provider-mtncloud/internal/validators"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -68,20 +70,32 @@ func (r *shareResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 	attrs := map[string]schema.Attribute{
 		"id": schema.StringAttribute{Computed: true, Description: "ID of the order that created the share.", PlanModifiers: keep},
 		"name": schema.StringAttribute{Required: true,
-			Description: "Share (volume) name. Set at create: MTN Cloud can't rename a share, so a change is refused at plan time.",
+			Description: "Share (volume) name. Set at create: MTN Cloud can't rename a share, so a change is refused at plan time. " +
+				"MTN Cloud stores it in lower case with `_` and `-` removed (`tf-acc-data` becomes `tfaccdata`), so two names that " +
+				"differ only in case or those characters are the same share.",
 			// An imported share has no name in state yet: adopting one isn't a change.
 			PlanModifiers: []planmodifier.String{planmodifiers.SetAtCreateUnlessImported("share")},
-			Validators:    []validator.String{stringvalidator.RegexMatches(regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`), "letters, digits, `.`, `_` and `-`")}},
+			// The form's own rule (verifyPattern, live 2026-11-01).
+			Validators: []validator.String{stringvalidator.RegexMatches(regexp.MustCompile(`^[a-zA-Z0-9_-]{3,64}$`),
+				"3 to 64 letters, digits, `_` or `-`, as MTN Cloud's form requires")}},
 		"quota_gb": schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(10),
 			Description: "Size limit in GB. Defaults to 10. Changing it updates the share in place.",
 			Validators:  []validator.Int64{int64validator.AtLeast(1)}},
 		"client_ips": schema.ListAttribute{Optional: true, ElementType: types.StringType,
-			Description: "Addresses allowed to mount the share. Left out or empty, every address may. Changing it updates the share in place."},
+			Description: "IPv4 addresses allowed to mount the share, one per entry (MTN Cloud takes single addresses, not CIDR " +
+				"ranges). Left out or empty, every address may. Changing it updates the share in place.",
+			// The form's rule: comma-separated IPv4 addresses (verifyPattern, live 2026-11-01).
+			Validators: []validator.List{listvalidator.ValueStringsAre(validators.IPv4Address())}},
 		"status": schema.StringAttribute{Computed: true, Description: "Result of the last order, for example `success`."},
 	}
 	if r.smb {
 		attrs["password"] = schema.StringAttribute{Optional: true, Sensitive: true, WriteOnly: true,
-			Description: "Password of the share's user. Write-only (Terraform 1.11 or newer): never stored. To change it, change `password_version` too."}
+			Description: "Password of the tenant's SMB account. **One account serves every SMB share in the tenant**, so this " +
+				"password is shared: leave it out to add a share once the tenant has one (MTN Cloud refuses a password then, as it " +
+				"would change it for every share), and set it, with a new `password_version`, only to rotate it on purpose, which " +
+				"breaks the other shares' connections until they use the new one. At least 8 characters, with a lowercase letter, " +
+				"an uppercase letter and a digit (MTN Cloud's rule). Write-only (Terraform 1.11 or newer): never stored.",
+			Validators: []validator.String{validators.MixedPassword(8)}}
 		attrs["password_version"] = schema.Int64Attribute{Optional: true,
 			Description: "Any number; changing it sends `password` again. Write-only values can't be compared, so this is how a new password is noticed."}
 	} else {
@@ -117,7 +131,15 @@ func (r *shareResource) order(ctx context.Context, config map[string]any, what s
 		item = got
 	}
 	if done, ok := client.ExecutionDone(item.Execution); (done && !ok) || strings.EqualFold(item.Status, "failed") {
-		diags.AddError("Unable to "+what, fmt.Sprintf("Order %d ended with %q%s. Check it under Catalog > Inventory.", item.ID, executionStatus(item), message(item)))
+		// The workflow's own reason, for example that the tenant's SMB password is shared (live 2026-11-01).
+		why := message(item)
+		if item.Execution != nil {
+			secret, _ := config["smbPassword"].(string)
+			if f := r.client.ExecutionFailure(ctx, item.Execution.ID, []string{secret}); f != "" {
+				why = ":\n" + f + "\n"
+			}
+		}
+		diags.AddError("Unable to "+what, fmt.Sprintf("Order %d ended with %q%s. Check it under Catalog > Inventory.", item.ID, executionStatus(item), why))
 		return nil
 	}
 	if err != nil {

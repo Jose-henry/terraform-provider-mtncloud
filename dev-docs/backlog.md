@@ -446,7 +446,7 @@ Sources: the issue report (sub-tenant tester, 2026-10-28→30) and a read-only d
 - A changed input plans a replace (owner approved), so `-replace` and `-destroy` work.
 Work:
 1. Items by stable code (`/api/catalog-item-types`, readable by a customer login), then known names;
-   a renamed item warns and carries on. `mtncloud_vpn_service` → `mtncloud_pfsense_vpn` (moved).
+   a renamed item warns and carries on. `mtncloud_vpn_service` became `mtncloud_pfsense_vpn`; the old name was removed (D-040).
 2. Inputs RequiresReplace instead of the "can't change" error (report A4).
 3. Failed VMs fail the order and taint it; refresh plans a replace for a failed VM (report A1).
 4. Plan-time checks from the live form: required, hidden defaults, conditional requirements

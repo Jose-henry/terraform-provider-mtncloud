@@ -77,19 +77,6 @@ exactly as ordered. The first apply after an import records them, finds the inst
 
 ## Notes
 
-- **Formerly `mtncloud_vpn_service`.** MTN renamed the catalog item ("MTN VPN Service" to "MTN
-  PfSense VPN"); the item is found by its code, so the rename doesn't break existing orders. To move
-  one, rename the resource and add a `moved` block (Terraform 1.8 or newer); nothing is ordered
-  again:
-
-  ```terraform
-  moved {
-    from = mtncloud_vpn_service.this
-    to   = mtncloud_pfsense_vpn.this
-  }
-  ```
-
-  The old `root_volume_size` and `data_volume_size` are dropped: the form fixes the disks.
 - **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
   finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
   they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's

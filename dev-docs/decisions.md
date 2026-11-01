@@ -3,6 +3,7 @@
 Each entry records what was decided, why, and what it rules out. Change a decision by adding a new
 entry that supersedes it, never by editing history.
 
+
 ## D-001 Fork the upstream provider, rename everything (2026-10-26)
 Start from the upstream Morpheus SDKv2 provider (MIT), moved whole into `internal/legacy`. The
 product name is replaced everywhere: types `mtncloud_*`, env vars `MTNCLOUD_*`, docs "MTN Cloud".
@@ -249,9 +250,7 @@ infrastructure), and a generic `mtncloud_catalog_order`. Inputs per item:
 ## D-030 Kubernetes is self-managed; SIEM isn't a managed service (owner, 2026-10-29)
 Owner: "those two are self managed". `mtncloud_managed_kubernetes` is renamed
 `mtncloud_self_managed_kubernetes`. It is still an app (destroy goes through its app, D-029). The old
-name stays registered as a deprecated alias of the same spec, and the new type implements
-`MoveState`, so `moved {}` moves the state with nothing replaced (Terraform 1.8+). Remove the alias in
-a later minor release, with a changelog note. `mtncloud_siem` keeps its name. It was never an app; it is
+name was kept as a deprecated alias until D-040 removed it. `mtncloud_siem` keeps its name. It was never an app; it is
 now listed with the security appliances. The spec flag `managed` is renamed `app`, since it means
 "deleted through its app", not "managed by MTN".
 
@@ -458,6 +457,13 @@ run would make the result differ from the plan ("inconsistent result"). The know
 copy it, unless they use `replace_triggered_by` (the documented way). Create adopts an existing schedule
 only when times, zone and copied values all match, so it never takes over another config's schedule.
 
+## D-040 Old names removed: nothing is in production (owner, 2026-11-01)
+Owner: "remove the alias, and note of deprecation, and not any major version, terraform is still in
+development so not in prod yet." `mtncloud_managed_kubernetes` (D-030) and `mtncloud_vpn_service` (the
+PfSense rename) are no longer registered, and the `moved {}` support for them (`MoveState`) is gone.
+Rule 10 (state upgraders, SemVer, deprecation periods) applies from the first production release.
+`mtncloud_managed_kubernetes` is free for the cluster-API Kubernetes resource (B-035), with Docker
+clusters as their own resource.
 ## D-039 Workflow runs and deployments: a run is a resource, a deploy's run decides (owner, 2026-11-01)
 The owner asked for instance workflows and deployments (B-014). Read first: Context7 (deploys,
 processes), the CLI PDF, MTN's `Linux Operations/CreateLinuxUser.sh`, and live probes as the customer.

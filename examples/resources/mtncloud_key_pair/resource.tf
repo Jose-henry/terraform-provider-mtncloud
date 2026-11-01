@@ -1,6 +1,5 @@
-resource "mtncloud_key_pair" "tf_example_key_pair" {
-  name        = "TF Example Key Pair"
-  public_key  = "ssh-rsa AAAAB3Nz"
-  private_key = file("privatekey.rsa")
-  passphrase  = "12312"
+# Only the public key is needed for VMs to be created with it.
+resource "mtncloud_key_pair" "deploy" {
+  name       = "deploy-key"
+  public_key = file("~/.ssh/id_ed25519.pub")
 }

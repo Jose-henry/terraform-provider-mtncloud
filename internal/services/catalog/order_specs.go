@@ -55,12 +55,7 @@ type orderSpec struct {
 	// `Fortinet/FortiADCheat.sh`, live 2026-10-31). It takes about an hour.
 	heat   bool
 	fields []field
-	// movedFrom is a former type name. The old name stays as a deprecated alias, and a `moved {}`
-	// block moves its state here without a replace.
-	movedFrom  string
-	oldFields  []field // the alias's fields, when the rename also changed them (nil: the same)
-	deprecated string  // set on the alias: the type name that replaces it
-	rules      rules
+	rules  rules
 }
 
 // rules are the limits a form states only in its help text (2026-10-30), checked at plan time. Zero
@@ -258,13 +253,11 @@ func orderSpecs() []orderSpec {
 		{typeName: "bastion_host", item: "Warpgate Bastion Host", code: "bastion987", about: "A bastion host for SSH, HTTPS and database access.",
 			fields: with(vm("labels", "plan", "resourcepool", "volumes", "networks", "floatingip"),
 				field{attr: "admin_password", key: "warpgateAdminPassword", kind: kSecret, required: true, desc: "Administrator password."})},
-		{typeName: "pfsense_vpn", movedFrom: "vpn_service", item: "MTN PfSense VPN", code: "MVPNSV02", aliases: []string{"MTN VPN Service"},
+		{typeName: "pfsense_vpn", item: "MTN PfSense VPN", code: "MVPNSV02", aliases: []string{"MTN VPN Service"},
 			about: "A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk).",
 			// The form's disks are hidden and locked: the provider sends the form's own (50 GB root).
 			fields: without(vm("label", applianceBase...), "volumes"),
-			oldFields: with(vm("label", applianceBase...),
-				field{attr: "data_volume_size", key: "volume", kind: kBytes, def: "50", desc: "Data disk size in GB. Defaults to 50."}),
-			rules: rules{minNetworks: 2}},
+			rules:  rules{minNetworks: 2}},
 		{typeName: "wireguard_vpn", item: "MTN WireGuard SSL VPN", code: "WGVPN001", about: "A WireGuard VPN server.",
 			fields: vm("labels", append(applianceBase, "volumes")...)},
 		heat(appliance("MTN SOPHOS Firewall (BYOL)", "sophos_firewall", "A SOPHOS firewall. Bring your own license.",
@@ -279,7 +272,7 @@ func orderSpecs() []orderSpec {
 			rules{minRootGB: 500, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 8}),
 		appliance("MTN FortiAnalyzer (BYOL)", "fortianalyzer", "A FortiAnalyzer. Bring your own license.",
 			rules{minRootGB: 250, dataDiskGB: 250, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 8}),
-		{typeName: "self_managed_kubernetes", movedFrom: "managed_kubernetes", item: "MTN KUBERNETES (MK8S)", code: "K8S", app: true,
+		{typeName: "self_managed_kubernetes", item: "MTN KUBERNETES (MK8S)", code: "K8S", app: true,
 			about: "A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it.",
 			fields: []field{
 				{attr: "name", key: "name", kind: kText, required: true, desc: "Cluster name. Its VMs are named after it."},

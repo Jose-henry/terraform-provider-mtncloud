@@ -6,7 +6,7 @@ variable "share_password" {
 resource "mtncloud_smb_share" "files" {
   name             = "team-files"
   quota_gb         = 100
-  client_ips       = ["10.0.0.0/24"]
+  client_ips       = ["10.0.0.10", "10.0.0.11"]
   password         = var.share_password
   password_version = 1 # change it to send a new password
 }

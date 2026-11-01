@@ -12,6 +12,26 @@ func TestLastLines(t *testing.T) {
 		{"a\n\nError: kafkaVersion must be 4.3.1\nNothing was provisioned.\n", "a Error: kafkaVersion must be 4.3.1 Nothing was provisioned."},
 		{"x\ny\nz\nw", "y z w"},
 		{"Error: bad\nADMIN_PASSWORD=hunter2\n", "Error: bad"},
+		// MTN's own explanations are kept (SMB, live 2026-11-01), with their log prefix.
+		{"x\n[2026-11-01 19:31:35] [CRITICAL] One account serves all of them, so setting a password here would rotate it for every one.\n" +
+			"[2026-11-01 19:31:35] [CRITICAL] Leave the password blank to add this share, or use Update mode to rotate deliberately. Nothing created.",
+			"x [2026-11-01 19:31:35] [CRITICAL] One account serves all of them, so setting a password here would rotate it for every one. " +
+				"[2026-11-01 19:31:35] [CRITICAL] Leave the password blank to add this share, or use Update mode to rotate deliberately. Nothing created."},
+		// ...but not when a value rides along with the same words.
+		{"ok\n[CRITICAL] Leave the password blank: Hunter2Pw", "ok"},
+		{"ok\nLeave the password blank, it was 'Hunterpw'", "ok"},
+		// Every other line that mentions a secret is dropped (review, 2026-11-01).
+		{"ok\nGenerated password for user tfuser is Xk9fLm2Q\n+ sshpass -p Hunter2Pw ssh root@10.0.0.5", "ok"},
+		{"ok\n+ mysql -u root --password Hunter2Pw -e 'select 1'\n+ echo tfuser:Hunter2Pw | chpasswd", "ok"},
+		{"ok\n+ smbpasswd -a tfuser <<< Hunter2Pw\nAdmin password is now Hunter2Pw", "ok"},
+		{"ok\nSetting password for tfuser to 'Hunter2Pw'\nError: password 'Hunter2Pw' does not meet the policy", "ok"},
+		{"ok\nmysqladmin -uroot password Hunter2Pw\nYour token abc123def456", "ok"},
+		{"ok\n{\"password\": \"hunter2\"}\npassword: hunter2\nadmin_pass = hunter2", "ok"},
+		{"ok\nAuthorization: Bearer abc.def\nmysql -pS3cret db\nmasked ***", "ok"},
+		// A key or certificate block, every line of it, and a value printed under its label.
+		{"ok\n-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo\nshort\n-----END RSA PRIVATE KEY-----", "ok"},
+		{"ok\nSecret key\nwJalrXUtnFEMI", "ok"},
+		{"ok\nMIIEowIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo4gP0sQ9xYz", "ok"},
 		{"  \n", ""},
 	} {
 		if got := lastLines(tc.in, 3); got != tc.want {

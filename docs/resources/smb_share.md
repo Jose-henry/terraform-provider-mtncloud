@@ -20,7 +20,7 @@ variable "share_password" {
 resource "mtncloud_smb_share" "files" {
   name             = "team-files"
   quota_gb         = 100
-  client_ips       = ["10.0.0.0/24"]
+  client_ips       = ["10.0.0.10", "10.0.0.11"]
   password         = var.share_password
   password_version = 1 # change it to send a new password
 }
@@ -31,14 +31,14 @@ resource "mtncloud_smb_share" "files" {
 
 ### Required
 
-- `name` (String) Share (volume) name. Set at create: MTN Cloud can't rename a share, so a change is refused at plan time.
+- `name` (String) Share (volume) name. Set at create: MTN Cloud can't rename a share, so a change is refused at plan time. MTN Cloud stores it in lower case with `_` and `-` removed (`tf-acc-data` becomes `tfaccdata`), so two names that differ only in case or those characters are the same share.
 
 ### Optional
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
-- `client_ips` (List of String) Addresses allowed to mount the share. Left out or empty, every address may. Changing it updates the share in place.
-- `password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Password of the share's user. Write-only (Terraform 1.11 or newer): never stored. To change it, change `password_version` too.
+- `client_ips` (List of String) IPv4 addresses allowed to mount the share, one per entry (MTN Cloud takes single addresses, not CIDR ranges). Left out or empty, every address may. Changing it updates the share in place.
+- `password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Password of the tenant's SMB account. **One account serves every SMB share in the tenant**, so this password is shared: leave it out to add a share once the tenant has one (MTN Cloud refuses a password then, as it would change it for every share), and set it, with a new `password_version`, only to rotate it on purpose, which breaks the other shares' connections until they use the new one. At least 8 characters, with a lowercase letter, an uppercase letter and a digit (MTN Cloud's rule). Write-only (Terraform 1.11 or newer): never stored.
 - `password_version` (Number) Any number; changing it sends `password` again. Write-only values can't be compared, so this is how a new password is noticed.
 - `quota_gb` (Number) Size limit in GB. Defaults to 10. Changing it updates the share in place.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))

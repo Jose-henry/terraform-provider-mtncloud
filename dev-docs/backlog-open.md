@@ -157,3 +157,6 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
   - The "Build order" list strikes through only steps 1 and 2, though security groups, networks, routers, projects, orders, MOS and load balancers are built.
   - Q3 (load balancer API) was answered by D-031.
   - Q4's payloads may be stale.
+- [ ] **B-035: managed Kubernetes on the cluster API (on hold with `mtncloud_cluster`).** Owner, 2026-11-01: "managed kubernetes should be a wrapper over the cluster for kubernetes cluster, then docker cluster on its own."
+  - `mtncloud_managed_kubernetes` becomes a typed wrapper over `/api/clusters` for Kubernetes clusters (layout, masters, workers, scaling), not the alias of `mtncloud_self_managed_kubernetes` it was. A Docker cluster gets its own resource.
+  - The old alias is removed (D-040), so the name is free.

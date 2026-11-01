@@ -777,3 +777,17 @@ Through the CLI on a QA MOS bucket (`mtncloud_mos_bucket`, console record from t
   expirationDate, downloadCount}], archiveFileLinkCount, meta}`.- The public download URL is `<console>/public-archives/link?s=<secret>`, **not** the documented
   `/api/public-archives/link` (that one answers 401 "Full authentication is required"). Checked live:
   the link downloaded the exact bytes Terraform uploaded, without a token.
+
+## SMB and NFS shares (live, customer login, 2026-11-01)
+- The forms (catalog types 17 SMB, 18 NFS) check `clientIps` with
+  `^([0-9]{1,3}\.){3}[0-9]{1,3}(,\s*([0-9]{1,3}\.){3}[0-9]{1,3})*$`: single IPv4 addresses, no CIDR
+  (a CIDR is refused with 400 "clientIps: The value does not match the required pattern").
+  `volumeName`: `^[a-zA-Z0-9_-]{3,64}$`. SMB `smbPassword`: `^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$`.
+  The provider checks all three at plan time.
+- **One SMB account per tenant.** `SMB Folder (Operational)/SMB.sh` refuses a password on create once
+  the tenant has a share ("One account serves all of them, so setting a password here would rotate
+  it for every one"). Leave `password` out to add a share.
+- Both scripts rewrite the volume name the same way on every operation (lower case, spaces to `_`,
+  punctuation removed), so `tf-acc-smb-x` is stored as `tfaccsmbx`.
+- Destroy places a deletion order (`deleteOnly`); the create and delete orders stay in Catalog >
+  Inventory as records.

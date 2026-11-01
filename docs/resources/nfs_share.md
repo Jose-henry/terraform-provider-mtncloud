@@ -24,11 +24,11 @@ resource "mtncloud_nfs_share" "data" {
 
 ### Required
 
-- `name` (String) Share (volume) name. Set at create: MTN Cloud can't rename a share, so a change is refused at plan time.
+- `name` (String) Share (volume) name. Set at create: MTN Cloud can't rename a share, so a change is refused at plan time. MTN Cloud stores it in lower case with `_` and `-` removed (`tf-acc-data` becomes `tfaccdata`), so two names that differ only in case or those characters are the same share.
 
 ### Optional
 
-- `client_ips` (List of String) Addresses allowed to mount the share. Left out or empty, every address may. Changing it updates the share in place.
+- `client_ips` (List of String) IPv4 addresses allowed to mount the share, one per entry (MTN Cloud takes single addresses, not CIDR ranges). Left out or empty, every address may. Changing it updates the share in place.
 - `quota_gb` (Number) Size limit in GB. Defaults to 10. Changing it updates the share in place.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 

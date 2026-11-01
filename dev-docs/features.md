@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 125 | 111 |
-| Usable with a customer (sub-tenant) login | 125 | 106 |
+| Available today | 123 | 111 |
+| Usable with a customer (sub-tenant) login | 123 | 106 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 2 | 0 |
@@ -288,15 +288,6 @@ Autoscaling thresholds.
 | Type | Customer login |
 |---|---|
 | [`mtncloud_scale_threshold`](../docs/resources/scale_threshold.md) | Yes (read verified) |
-
-### Deprecated names
-
-Old names kept for now; each page says what replaces it and how to move without replacing anything.
-
-| Type | Customer login |
-|---|---|
-| [`mtncloud_managed_kubernetes`](../docs/resources/managed_kubernetes.md) | Yes (read verified) |
-| [`mtncloud_vpn_service`](../docs/resources/vpn_service.md) | Yes (read verified) |
 
 ## Data sources
 

@@ -95,9 +95,6 @@ RESOURCES = [
     ("Scaling",
      "Autoscaling thresholds.",
      ["scale_threshold"]),
-    ("Deprecated names",
-     "Old names kept for now; each page says what replaces it and how to move without replacing anything.",
-     ["managed_kubernetes", "vpn_service"]),
 ]
 
 DATA_SOURCES = [

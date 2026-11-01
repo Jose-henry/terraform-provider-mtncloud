@@ -3,6 +3,7 @@ package provider
 import (
 	"encoding/json"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -34,26 +35,33 @@ func TestSMBShare(t *testing.T) {
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
+			// MTN Cloud's form rules, refused at plan time (live 2026-11-01: a CIDR was refused by the order).
+			{Config: cfg("  client_ips = [\"10.0.0.0/24\"]\n  password = \"Files-pw1\"\n"), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`(?s)client_ips.*IPv4\s+address`)},
+			{Config: cfg("  password = \"files-pw1\"\n"), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`(?s)Password too weak.*uppercase\s+letter`)},
+			{Config: strings.Replace(cfg("  password = \"Files-pw1\"\n"), `name = "files"`, `name = "f.s"`, 1), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`(?s)name.*3\s+to\s+64\s+letters`)},
 			{
-				Config: cfg("  client_ips = [\"10.0.0.5\"]\n  password = \"pw-1\"\n  password_version = 1\n"),
-				Check:  last(`{"clientIps":"10.0.0.5","deleteOnly":false,"quotaSize":10737418240,"smbPassword":"pw-1","updateOnly":false,"updateType":"'Replace'","volumeName":"files"}`),
+				Config: cfg("  client_ips = [\"10.0.0.5\"]\n  password = \"Files-pw1\"\n  password_version = 1\n"),
+				Check:  last(`{"clientIps":"10.0.0.5","deleteOnly":false,"quotaSize":10737418240,"smbPassword":"Files-pw1","updateOnly":false,"updateType":"'Replace'","volumeName":"files"}`),
 			},
-			{Config: cfg("  client_ips = [\"10.0.0.5\"]\n  password = \"pw-1\"\n  password_version = 1\n"),
+			{Config: cfg("  client_ips = [\"10.0.0.5\"]\n  password = \"Files-pw1\"\n  password_version = 1\n"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 			{
 				// A bigger quota: only updateQuota, and no password sent.
-				Config: cfg("  quota_gb = 20\n  client_ips = [\"10.0.0.5\"]\n  password = \"pw-1\"\n  password_version = 1\n"), ConfigPlanChecks: inPlace,
+				Config: cfg("  quota_gb = 20\n  client_ips = [\"10.0.0.5\"]\n  password = \"Files-pw1\"\n  password_version = 1\n"), ConfigPlanChecks: inPlace,
 				Check: last(`{"clientIps":"10.0.0.5","deleteOnly":false,"quotaSize":21474836480,"updateClientIps":false,"updateOnly":true,"updatePassword":false,"updateQuota":true,"updateType":"'Append'","volumeName":"files"}`),
 			},
 			{
 				// Every client allowed.
-				Config: cfg("  quota_gb = 20\n  password = \"pw-1\"\n  password_version = 1\n"), ConfigPlanChecks: inPlace,
+				Config: cfg("  quota_gb = 20\n  password = \"Files-pw1\"\n  password_version = 1\n"), ConfigPlanChecks: inPlace,
 				Check: last(`{"deleteOnly":false,"quotaSize":21474836480,"updateClientIps":true,"updateOnly":true,"updatePassword":false,"updateQuota":false,"updateType":"'Allow All'","volumeName":"files"}`),
 			},
 			{
 				// A new password is noticed through password_version.
-				Config: cfg("  quota_gb = 20\n  password = \"pw-2\"\n  password_version = 2\n"), ConfigPlanChecks: inPlace,
-				Check: last(`{"deleteOnly":false,"quotaSize":21474836480,"smbPassword":"pw-2","updateClientIps":false,"updateOnly":true,"updatePassword":true,"updateQuota":false,"updateType":"'Append'","volumeName":"files"}`),
+				Config: cfg("  quota_gb = 20\n  password = \"Files-pw2\"\n  password_version = 2\n"), ConfigPlanChecks: inPlace,
+				Check: last(`{"deleteOnly":false,"quotaSize":21474836480,"smbPassword":"Files-pw2","updateClientIps":false,"updateOnly":true,"updatePassword":true,"updateQuota":false,"updateType":"'Append'","volumeName":"files"}`),
 			},
 		},
 		CheckDestroy: func(*terraform.State) error {
@@ -122,6 +130,26 @@ func TestNFSShare(t *testing.T) {
 				},
 			},
 		},
+	})
+}
+
+// A failed share order says why, in the workflow's own words: here, MTN's refusal to set the
+// tenant-wide SMB password while other shares use it (live 2026-11-01, order 2787). The password
+// is masked: the echo line names no secret, so only masking keeps it out of the error (otherwise
+// it would be one of the last three lines and push "Checking whether" out).
+func TestShare_FailedOrderSaysWhy(t *testing.T) {
+	f, s, _ := orderFakes(t)
+	s.result = "error"
+	s.failure = "Checking whether this tenant already has a volume called 'files'...\n" +
+		"[CRITICAL] One account serves all of them, so setting a password here would rotate it for every one.\n" +
+		"+ echo Files-pw1 > /tmp/smb\n" +
+		"[CRITICAL] Leave the password blank to add this share, or use Update mode to rotate deliberately. Nothing created."
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{
+			Config:      f.providerConfig() + "resource \"mtncloud_smb_share\" \"files\" {\n  name = \"files\"\n  password = \"Files-pw1\"\n  password_version = 1\n}\n",
+			ExpectError: regexp.MustCompile(`(?s)Order 9801 ended with "error".*Checking whether.*One account.*Leave the password\s+blank to add this\s+share`),
+		}},
 	})
 }
 

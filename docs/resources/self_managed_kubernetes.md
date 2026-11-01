@@ -126,24 +126,6 @@ exactly as ordered. The first apply after an import records them, finds the inst
   `mtncloud_app_settings` with `app_id`. See the `mtncloud_app_settings` example.
 - **Tiers.** With `single_node = false`, the app has a `Master` and a `Worker` tier (checked live
   with one master and one worker, 2026-10-31: about 14 minutes, then `No changes.`).
-- **Renamed from `mtncloud_managed_kubernetes`** (0.6.0). The old name still works for now, with a
-  deprecation warning. To switch without replacing anything, rename the resource and add:
-
-  ```terraform
-  moved {
-    from = mtncloud_managed_kubernetes.k8s
-    to   = mtncloud_self_managed_kubernetes.k8s
-  }
-  ```
-
-  `moved` between resource types needs Terraform 1.8 or newer. On older versions, take it out of state
-  and import it under the new name, by its order ID (Catalog > Inventory). The first apply after the
-  import records the inputs and orders nothing:
-
-  ```shell
-  terraform state rm mtncloud_managed_kubernetes.k8s
-  terraform import mtncloud_self_managed_kubernetes.k8s <order id>
-  ```
 - **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
   finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
   they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's

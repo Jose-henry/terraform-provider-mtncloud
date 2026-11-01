@@ -64,9 +64,6 @@ func TestConditionMet(t *testing.T) {
 func TestRootDiskRequired(t *testing.T) {
 	for _, f := range orderResources() {
 		r := f().(*orderResource)
-		if r.spec.deprecated != "" {
-			continue // the alias keeps its old arguments
-		}
 		a, ok := orderSchema(t, r).Schema.Attributes["root_volume_size"]
 		switch {
 		case r.spec.typeName == "pfsense_vpn" && ok:

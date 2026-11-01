@@ -298,16 +298,63 @@ func WorkflowInstance(output string) (id int64, name string) {
 }
 
 // secretWord marks an output line that may carry a secret: a word for one, a masked value, or a
-// password flag ("mysql -pS3cret").
+// password flag ("mysql -pS3cret"). Any line that mentions a secret is left out, as a workflow can
+// print one in many ways ("Admin password is now Hunter2Pw", "+ sshpass -p ..."); explained below is
+// the one exception.
 var secretWord = regexp.MustCompile(`(?i)pass|pwd|secret|token|key|credential|auth|private|\*\*\*|\s-p\S`)
 
+// explained is how MTN's own workflows explain a refusal that names a secret without carrying one
+// ("[CRITICAL] Leave the password blank to add this share", SMB, live 2026-11-01). Such a line is
+// kept when it also has no quote and no digit after its log prefix: it is often the only reason the
+// run gives.
+var explained = regexp.MustCompile(`(?i)leave the password blank|setting a password here would rotate|one account serves all of them`)
+
+// logPrefix is a workflow log line's leading "[2026-11-01 19:31:35] [CRITICAL] " tags.
+var logPrefix = regexp.MustCompile(`^(\[[^\]]*\]\s*)+`)
+
+// keyBody is a long run of base64, as in a key or certificate body (with mixed case and digits).
+var keyBody = regexp.MustCompile(`^[A-Za-z0-9+/=]{40,}$`)
+
+// secretLine is a line that may carry a secret.
+func secretLine(l string) bool {
+	if keyBody.MatchString(l) && strings.ContainsAny(l, "0123456789") &&
+		strings.ContainsAny(l, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") && strings.ContainsAny(l, "abcdefghijklmnopqrstuvwxyz") {
+		return true
+	}
+	if !secretWord.MatchString(l) {
+		return false
+	}
+	rest := logPrefix.ReplaceAllString(l, "")
+	// Kept only as one of MTN's explanations with nothing that could be a value in it.
+	return !explained.MatchString(rest) || strings.ContainsAny(rest, "'\"`0123456789=:")
+}
+
 // lastLines is the last n non-empty lines of s that don't mention a secret, joined, at most 500
-// characters.
+// characters. Lines between a BEGIN and an END marker (a key or certificate), and the line after a
+// bare label that names a secret ("Secret key" then its value), are left out too.
 func lastLines(s string, n int) string {
-	var keep []string
 	lines := strings.Split(s, "\n")
+	skip := make([]bool, len(lines))
+	inBlock := false
+	for i, raw := range lines {
+		l := strings.TrimSpace(raw)
+		switch {
+		case strings.Contains(l, "-----BEGIN "):
+			inBlock = true
+			skip[i] = true
+		case strings.Contains(l, "-----END "):
+			inBlock = false
+			skip[i] = true
+		case inBlock:
+			skip[i] = true
+		}
+		if i > 0 && secretWord.MatchString(strings.TrimSpace(lines[i-1])) && len(strings.Fields(lines[i-1])) <= 3 {
+			skip[i] = true
+		}
+	}
+	var keep []string
 	for i := len(lines) - 1; i >= 0 && len(keep) < n; i-- {
-		if l := strings.TrimSpace(lines[i]); l != "" && !secretWord.MatchString(l) {
+		if l := strings.TrimSpace(lines[i]); l != "" && !skip[i] && !secretLine(l) {
 			keep = append([]string{l}, keep...)
 		}
 	}

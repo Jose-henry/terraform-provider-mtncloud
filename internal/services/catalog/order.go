@@ -33,7 +33,6 @@ const orderTimeout = 90 * time.Minute
 var (
 	_ resource.ResourceWithModifyPlan  = (*orderResource)(nil)
 	_ resource.ResourceWithImportState = (*orderResource)(nil)
-	_ resource.ResourceWithMoveState   = (*orderResource)(nil)
 )
 
 // orderResource is one catalog item, ordered (D-026). Its inputs can't change after the order, so a
@@ -48,14 +47,6 @@ func orderResources() []func() resource.Resource {
 	out := []func() resource.Resource{}
 	for _, s := range orderSpecs() {
 		out = append(out, func() resource.Resource { return &orderResource{spec: s} })
-		if s.movedFrom != "" {
-			alias := s
-			alias.typeName, alias.movedFrom, alias.deprecated = s.movedFrom, "", s.typeName
-			if s.oldFields != nil {
-				alias.fields = s.oldFields
-			}
-			out = append(out, func() resource.Resource { return &orderResource{spec: alias} })
-		}
 	}
 	return out
 }
@@ -162,53 +153,6 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 	}
 	desc += r.formSummary()
 	resp.Schema = schema.Schema{Description: desc, Attributes: attrs, Blocks: blocks}
-	if r.spec.deprecated != "" {
-		resp.Schema.DeprecationMessage = "Renamed to mtncloud_" + r.spec.deprecated + ". Rename the resource in your " +
-			"configuration and add a `moved {}` block from this address to the new one (Terraform 1.8 or newer): nothing is " +
-			"replaced. On older Terraform, run `terraform state rm` on this address, then `terraform import` the new one with the same order ID."
-		resp.Schema.Description = "**Deprecated:** renamed to `mtncloud_" + r.spec.deprecated + "`. " + desc
-	}
-}
-
-// MoveState accepts the state of the type's former name (`moved {}` from the deprecated alias). Every
-// attribute both schemas have is carried over; one the new type dropped (PfSense's disks, now fixed
-// by the form) is left behind.
-func (r *orderResource) MoveState(ctx context.Context) []resource.StateMover {
-	if r.spec.movedFrom == "" {
-		return nil
-	}
-	old := r.spec
-	if old.oldFields != nil {
-		old.fields = old.oldFields
-	}
-	var src, dst resource.SchemaResponse
-	(&orderResource{spec: old}).Schema(ctx, resource.SchemaRequest{}, &src)
-	r.Schema(ctx, resource.SchemaRequest{}, &dst)
-	return []resource.StateMover{{
-		SourceSchema: &src.Schema,
-		StateMover: func(ctx context.Context, req resource.MoveStateRequest, resp *resource.MoveStateResponse) {
-			if req.SourceTypeName != "mtncloud_"+r.spec.movedFrom || !strings.HasSuffix(req.SourceProviderAddress, "/mtncloud") {
-				return
-			}
-			if req.SourceState == nil {
-				resp.Diagnostics.AddError("Unable to move "+req.SourceTypeName,
-					"The saved state doesn't match the resource's schema. Run `terraform apply` with the previous name first, then move it.")
-				return
-			}
-			if r.spec.oldFields == nil {
-				resp.TargetState.Raw = req.SourceState.Raw
-				return
-			}
-			for name := range dst.Schema.Attributes {
-				if _, ok := src.Schema.Attributes[name]; !ok {
-					continue
-				}
-				var v attr.Value
-				resp.Diagnostics.Append(req.SourceState.GetAttribute(ctx, path.Root(name), &v)...)
-				resp.Diagnostics.Append(resp.TargetState.SetAttribute(ctx, path.Root(name), v)...)
-			}
-		},
-	}}
 }
 
 func (r *orderResource) attribute(f field) schema.Attribute {
