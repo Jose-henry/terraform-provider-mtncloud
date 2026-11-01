@@ -13,7 +13,7 @@ security groups, instances, clusters, catalog services, Cypher secrets, automati
 terraform {
   required_providers {
     mtncloud = {
-      source = "mtncloud-mcs/mtncloud"
+      source = "jose-henry/mtncloud"
     }
   }
 }
@@ -47,7 +47,7 @@ To try a local build, point Terraform at it with a `dev_overrides` block in `~/.
 ```hcl
 provider_installation {
   dev_overrides {
-    "mtncloud-mcs/mtncloud" = "/path/to/MTN-TERRAFORM-PROVIDER/bin"
+    "jose-henry/mtncloud" = "/path/to/MTN-TERRAFORM-PROVIDER/bin"
   }
   direct {}
 }

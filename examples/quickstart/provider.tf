@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     mtncloud = {
-      source = "mtncloud-mcs/mtncloud"
+      source = "jose-henry/mtncloud"
     }
   }
 }

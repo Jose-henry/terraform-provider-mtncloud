@@ -457,6 +457,13 @@ run would make the result differ from the plan ("inconsistent result"). The know
 copy it, unless they use `replace_triggered_by` (the documented way). Create adopts an existing schedule
 only when times, zone and copied values all match, so it never takes over another config's schedule.
 
+## D-041 Registry address back to `jose-henry/mtncloud` (owner, 2026-11-01)
+Supersedes D-037. The registry never published 0.8.0 or 0.9.0 from the `mtncloud-mcs` organisation:
+its listing is `jose-henry/mtncloud`, tied to `github.com/Jose-henry/terraform-provider-mtncloud`, and
+nothing was listed under `mtncloud-mcs`, so `source = "mtncloud-mcs/mtncloud"` didn't resolve. The
+owner moved the repository back to `Jose-henry` (same name). `main.go`, the docs and the examples use
+`jose-henry/mtncloud` again. The Go module path is unchanged.
+
 ## D-040 Old names removed: nothing is in production (owner, 2026-11-01)
 Owner: "remove the alias, and note of deprecation, and not any major version, terraform is still in
 development so not in prod yet." `mtncloud_managed_kubernetes` (D-030) and `mtncloud_vpn_service` (the
@@ -524,7 +531,7 @@ things". So:
 - **Task type:** fixed. `PUT /api/tasks/{id}` answers success but keeps the type, by code or by ID,
   and `tasks update` has no type option (live 2026-10-31, task 457, deleted).
 
-## D-037 Registry address `mtncloud-mcs/mtncloud` (2026-10-31)
+## D-037 Registry address `mtncloud-mcs/mtncloud` (2026-10-31, superseded by D-041)
 Supersedes D-021. The owner moved the repository to the `mtncloud-mcs` GitHub organisation
 (`github.com/mtncloud-mcs/terraform-provider-mtncloud`) to make the provider official. `main.go` serves
 `registry.terraform.io/mtncloud-mcs/mtncloud`, and the docs and examples use that source. The address

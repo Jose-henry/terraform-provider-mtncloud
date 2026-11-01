@@ -8,7 +8,7 @@
 | ~~Q2~~ | ~~Confirm Plugin Framework + mux (D-005)~~ resolved: confirmed and built | |
 | ~~Q3~~ | ~~Load balancer API~~ answered by D-031: the console task `lboperate.terraform`; built | |
 | ~~Q4~~ | ~~Payloads P1–P10~~ resolved: network, router, security group, instance and MOS were built and tested live from real payloads ([api-research.md](api-research.md)) | |
-| ~~Q5~~ | Answered (D-037, superseding D-021): public registry, `mtncloud-mcs/mtncloud` | |
+| ~~Q5~~ | Answered (D-041, superseding D-037 and D-021): public registry, `jose-henry/mtncloud` | |
 | Q6 | Test tenant + credentials for acceptance tests (isolated, disposable) | acceptance CI |
 
 ## Build order (after approval)

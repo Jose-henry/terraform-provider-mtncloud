@@ -42,7 +42,7 @@ Create a `provider.tf` file:
 terraform {
   required_providers {
     mtncloud = {
-      source  = "mtncloud-mcs/mtncloud"
+      source  = "jose-henry/mtncloud"
       version = "~> 0.7"
     }
   }
