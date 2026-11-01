@@ -53,10 +53,13 @@ func (r *versionResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Description: "The version's name, for example `1.4.0`."},
 			"type": schema.StringAttribute{Required: true, Validators: []validator.String{stringvalidator.OneOf("file", "git", "fetch")},
 				Description: "Where the content comes from: `file` (uploaded with `mtncloud_deployment_file`), `git` or `fetch`."},
-			"fetch_url": schema.StringAttribute{Optional: true, Validators: notBlank,
-				Description: "With `type = \"fetch\"`: the URL MTN Cloud downloads when it deploys."},
-			"git_url": schema.StringAttribute{Optional: true, Validators: notBlank,
-				Description: "With `type = \"git\"`: the repository's URL."},
+			// Sensitive: a fetch URL may be pre-signed, and a git URL may carry a token (https://<token>@host/...).
+			"fetch_url": schema.StringAttribute{Optional: true, Sensitive: true, Validators: notBlank,
+				Description: "With `type = \"fetch\"`: the URL MTN Cloud downloads when it deploys. Sensitive, as it may be " +
+					"a pre-signed link: it is hidden in plans, and kept in state."},
+			"git_url": schema.StringAttribute{Optional: true, Sensitive: true, Validators: notBlank,
+				Description: "With `type = \"git\"`: the repository's URL. Sensitive, as it may carry a token: it is hidden in " +
+					"plans, and kept in state."},
 			"git_ref": schema.StringAttribute{Optional: true, Validators: notBlank,
 				Description: "With `type = \"git\"`: the branch, tag or commit. Leave it out for the repository's default."},
 			"status": schema.StringAttribute{Computed: true, Description: "The version's status, for example `created`."},

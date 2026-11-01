@@ -49,9 +49,9 @@ resource "mtncloud_deployment_version" "release" {
 
 ### Optional
 
-- `fetch_url` (String) With `type = "fetch"`: the URL MTN Cloud downloads when it deploys.
+- `fetch_url` (String, Sensitive) With `type = "fetch"`: the URL MTN Cloud downloads when it deploys. Sensitive, as it may be a pre-signed link: it is hidden in plans, and kept in state.
 - `git_ref` (String) With `type = "git"`: the branch, tag or commit. Leave it out for the repository's default.
-- `git_url` (String) With `type = "git"`: the repository's URL.
+- `git_url` (String, Sensitive) With `type = "git"`: the repository's URL. Sensitive, as it may carry a token: it is hidden in plans, and kept in state.
 
 ### Read-Only
 
