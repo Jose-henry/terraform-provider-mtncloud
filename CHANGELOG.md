@@ -2,7 +2,7 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
-## Unreleased
+## 0.8.0 (2026-11-01)
 
 - **Changed: what MTN Cloud can't change after create is refused at plan time, never replaced** (D-038). Before, a change to (for example) a router's name, a network's CIDR, an instance's hostname, a bucket's name or a load balancer listener's port deleted the object and made a new one. Now the plan stops with `<attribute> can't change`, the value to set back, and how to make a new one if that's what you want. `terraform apply -replace` still makes a new one. A sensitive value is never shown in the error.
 - **Changed: catalog orders are placed once.** A changed input is refused at plan time instead of deleting what the order made and ordering again. The plan, labels, security groups, floating IP and data disks of an order's VMs change in place through `mtncloud_instance_settings` (the error says how). A failed order is still ordered again.
