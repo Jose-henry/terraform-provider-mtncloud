@@ -2,7 +2,7 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
-## Unreleased
+## 0.9.0 (2026-11-01)
 
 - **Fixed: SMB and NFS shares follow MTN Cloud's form rules at plan time** (live QA, 2026-11-01). `client_ips` takes single IPv4 addresses (MTN Cloud refuses CIDR ranges; the SMB example used one), `name` is 3 to 64 letters, digits, `_` or `-`, and the SMB `password` needs 8 characters with a lowercase letter, an uppercase letter and a digit.
 - **SMB `password` is the tenant's.** One account serves every SMB share in a tenant: leave `password` out to add a share once the tenant has one (MTN Cloud refuses it then), and set it only to rotate it for every share. The docs say so, and a share name's description says MTN Cloud stores it lower-cased with `_` and `-` removed.
