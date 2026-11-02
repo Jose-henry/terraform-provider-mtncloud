@@ -2,18 +2,17 @@
 page_title: "mtncloud_fortiadc Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A FortiADC application delivery controller. Bring your own license. Ordered from MTN Cloud's catalog (MTN FortiADC (BYOL)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Slow: MTN's workflow builds the VM through a Heat stack, then waits for MTN Cloud to discover it, so an order takes about an hour (the create timeout defaults to 3 hours). Use a login that outlasts the apply: username and password (the provider logs in again when a token expires), or a token that lasts longer than the apply; or order it in the console instead. The workflow names the VM itself (<initials>-<account>-MTN-CLOUD-<type>-<n>) and reports it, so instance_ids is the VM it reported, whatever name says. Destroy deletes that VM, but not its Heat stack, whose port and floating IP stay until MTN removes the stack. Each argument says what the MTN FortiADC (BYOL) order form requires and allows (read 2026-10-31); every plan checks the live form.
+  A FortiADC application delivery controller. Bring your own license. Ordered from MTN Cloud's catalog (MTN FortiADC (BYOL)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Slow: MTN's workflow builds the VM through a Heat stack, then waits for MTN Cloud to discover it, so an order takes about an hour (the create timeout defaults to 3 hours). Use a login that outlasts the apply: username and password (the provider logs in again when a token expires), or a token that lasts longer than the apply; or order it in the console instead. Destroy deletes its VM, but not its Heat stack, whose port and floating IP stay until MTN removes the stack. The order form doesn't let you name the VM: MTN names it from its template (<initials>-<account>-MTN-CLOUD-<type>-<n>), as in the console, and the provider finds it from the workflow's own report. instance_names shows the name it got. Each argument says what the MTN FortiADC (BYOL) order form requires and allows (read 2026-11-02); every plan checks the live form. The form fills name itself, and they are sent as it fills them.
 ---
 
 # mtncloud_fortiadc
 
-A FortiADC application delivery controller. Bring your own license. Ordered from MTN Cloud's catalog (MTN FortiADC (BYOL)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. **Slow:** MTN's workflow builds the VM through a Heat stack, then waits for MTN Cloud to discover it, so an order takes about an hour (the create timeout defaults to 3 hours). Use a login that outlasts the apply: `username` and `password` (the provider logs in again when a token expires), or a token that lasts longer than the apply; or order it in the console instead. The workflow names the VM itself (`<initials>-<account>-MTN-CLOUD-<type>-<n>`) and reports it, so `instance_ids` is the VM it reported, whatever `name` says. Destroy deletes that VM, but not its Heat stack, whose port and floating IP stay until MTN removes the stack. Each argument says what the MTN FortiADC (BYOL) order form requires and allows (read 2026-10-31); every plan checks the live form.
+A FortiADC application delivery controller. Bring your own license. Ordered from MTN Cloud's catalog (MTN FortiADC (BYOL)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. **Slow:** MTN's workflow builds the VM through a Heat stack, then waits for MTN Cloud to discover it, so an order takes about an hour (the create timeout defaults to 3 hours). Use a login that outlasts the apply: `username` and `password` (the provider logs in again when a token expires), or a token that lasts longer than the apply; or order it in the console instead. Destroy deletes its VM, but not its Heat stack, whose port and floating IP stay until MTN removes the stack. The order form doesn't let you name the VM: MTN names it from its template (`<initials>-<account>-MTN-CLOUD-<type>-<n>`), as in the console, and the provider finds it from the workflow's own report. `instance_names` shows the name it got. Each argument says what the MTN FortiADC (BYOL) order form requires and allows (read 2026-11-02); every plan checks the live form. The form fills `name` itself, and they are sent as it fills them.
 
 ## Example Usage
 
 ```terraform
 resource "mtncloud_fortiadc" "this" {
-  name             = "adc-1"
   project          = "web-prod"
   plan             = "G4S16"
   root_volume_size = 30
@@ -35,13 +34,11 @@ resource "mtncloud_fortiadc" "this" {
 
 ### Optional
 
-- `data_volume` (Block List) Extra disks, in order. (see [below for nested schema](#nestedblock--data_volume))
-- `datastore` (String) Datastore (volume type) of the root disk, by name. Left out, the project's default.
+- `data_volume` (Block List) Extra disks, in order. MTN's workflow puts every disk on the project's default datastore. (see [below for nested schema](#nestedblock--data_volume))
 - `environment` (String) Environment, by name or code, for example `Production`.
 - `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
 - `labels` (Set of String) Labels on the instance.
-- `name` (String) Not used: MTN's workflow names the VM itself (`<initials>-<account>-MTN-CLOUD-<type>-<n>`), and the provider finds the VM from the workflow's own report. Optional; kept for configurations that set it. Order form: required; locked (not editable).
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
 - `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
@@ -49,7 +46,8 @@ resource "mtncloud_fortiadc" "this" {
 ### Read-Only
 
 - `id` (String) Order ID (Catalog > Inventory).
-- `instance_ids` (List of String) IDs of the instances the order created, found by name in the project.
+- `instance_ids` (List of String) IDs of the instances the order created.
+- `instance_names` (List of String) Names of the instances the order created, in the order of `instance_ids`. Where the form names the VM itself, this is the name MTN gave it (`<initials>-<account>-MTN-CLOUD-<type>-<n>`).
 - `instance_statuses` (Map of String) Status of each instance the order created, by instance ID, for example `running`. A `failed` instance plans a replace: the order is deleted and placed again.
 - `status` (String) The order's workflow result, for example `success`.
 
@@ -59,10 +57,6 @@ resource "mtncloud_fortiadc" "this" {
 Required:
 
 - `size` (Number) Size in GB.
-
-Optional:
-
-- `datastore` (String) Datastore, by name. Left out, the project's default.
 
 
 <a id="nestedblock--timeouts"></a>

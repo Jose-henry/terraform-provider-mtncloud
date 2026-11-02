@@ -12,7 +12,6 @@ resource "mtncloud_managed_mq" "this" {
   security_groups  = ["web"]
   engine           = "rabbit"
   rabbitmq_version = "4.3.2"
-  node_count       = 3
   admin_username   = "admin"
   admin_password   = var.admin_password
 }

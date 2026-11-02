@@ -2,12 +2,12 @@
 page_title: "mtncloud_self_managed_kubernetes Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN KUBERNETES (MK8S) order form requires and allows (read 2026-10-31); every plan checks the live form.
+  A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN KUBERNETES (MK8S) order form requires and allows (read 2026-11-02); every plan checks the live form. The form fills worker_floatingip itself, and they are sent as it fills them.
 ---
 
 # mtncloud_self_managed_kubernetes
 
-A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN KUBERNETES (MK8S) order form requires and allows (read 2026-10-31); every plan checks the live form.
+A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it. Ordered from MTN Cloud's catalog (MTN KUBERNETES (MK8S)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Apps in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN KUBERNETES (MK8S) order form requires and allows (read 2026-11-02); every plan checks the live form. The form fills `worker_floatingip` itself, and they are sent as it fills them.
 
 ## Example Usage
 
@@ -48,17 +48,14 @@ resource "mtncloud_self_managed_kubernetes" "k8s" {
 - `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
 - `labels` (Set of String) Labels.
-- `master_count` (Number) Number of master nodes. Defaults to 1. Order form: pre-filled with `1`; from 1 to 5. It says: "Number of Master Nodes. Select 3 or More for HA (Requires VIP)."
-- `master_data_volume` (Block List) Extra disks, in order. (see [below for nested schema](#nestedblock--master_data_volume))
-- `master_datastore` (String) Datastore (volume type) of the root disk, by name. Left out, the project's default.
+- `master_count` (Number) Number of master nodes. Order form: pre-filled with `1`; from 1 to 5. It says: "Number of Master Nodes. Select 3 or More for HA (Requires VIP)."
+- `master_data_volume` (Block List) Extra disks, in order. MTN's workflow puts every disk on the project's default datastore. (see [below for nested schema](#nestedblock--master_data_volume))
 - `master_floating_ip_pool` (String) External network for the masters' public IPs, by name. Order form: choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
-- `single_node` (Boolean) Run everything on one node. Order form: pre-filled with `false`. Defaults to `false`.
+- `single_node` (Boolean) Run everything on one node. Order form: left out, `false` (the form's default).
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `worker_count` (Number) Number of worker nodes. Defaults to 3. Order form: pre-filled with `3`; from 0 to any. It says: "Number of Worker Nodes."
-- `worker_data_volume` (Block List) Extra disks, in order. (see [below for nested schema](#nestedblock--worker_data_volume))
-- `worker_datastore` (String) Datastore (volume type) of the root disk, by name. Left out, the project's default.
-- `worker_floating_ip_pool` (String) External network for the workers' public IPs, by name. Order form: choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
+- `worker_count` (Number) Number of worker nodes. Order form: pre-filled with `3`; from 0 to any. It says: "Number of Worker Nodes."
+- `worker_data_volume` (Block List) Extra disks, in order. MTN's workflow puts every disk on the project's default datastore. (see [below for nested schema](#nestedblock--worker_data_volume))
 - `worker_networks` (List of String) Networks of the worker nodes, by name; the first is primary. It says: "If different from master's network, ensure reachability by appropriate routing of both networks, i.e. two networks on the same router, and ensure security groups for both allows themselves. For availability across availability zones, use 'Network Groups' which uses a 'Round Robin' algorithm."
 - `worker_plan` (String) Plan (size) of the worker nodes, by name. It says: "If left unselected, master plan will be inherited."
 - `worker_root_volume_size` (Number) Root disk size in GB.
@@ -68,7 +65,8 @@ resource "mtncloud_self_managed_kubernetes" "k8s" {
 
 - `app_id` (String) ID of the app the order made (under Apps in the console). Destroy deletes this app, even after it is renamed; an instance added to it later is taken out of it first and left running.
 - `id` (String) Order ID (Catalog > Inventory).
-- `instance_ids` (List of String) IDs of the instances the order created, found by name in the project.
+- `instance_ids` (List of String) IDs of the instances the order created.
+- `instance_names` (List of String) Names of the instances the order created, in the order of `instance_ids`. Where the form names the VM itself, this is the name MTN gave it (`<initials>-<account>-MTN-CLOUD-<type>-<n>`).
 - `instance_statuses` (Map of String) Status of each instance the order created, by instance ID, for example `running`. A `failed` instance plans a replace: the order is deleted and placed again.
 - `status` (String) The order's workflow result, for example `success`.
 
@@ -78,10 +76,6 @@ resource "mtncloud_self_managed_kubernetes" "k8s" {
 Required:
 
 - `size` (Number) Size in GB.
-
-Optional:
-
-- `datastore` (String) Datastore, by name. Left out, the project's default.
 
 
 <a id="nestedblock--timeouts"></a>
@@ -99,10 +93,6 @@ Optional:
 Required:
 
 - `size` (Number) Size in GB.
-
-Optional:
-
-- `datastore` (String) Datastore, by name. Left out, the project's default.
 
 ## Import
 

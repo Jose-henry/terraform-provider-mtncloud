@@ -202,6 +202,29 @@ func (c *Client) SecurityGroupIDs(ctx context.Context, p *Placement, projectID i
 	return ids, nil
 }
 
+// SecurityGroupExternalIDs is SecurityGroupIDs as the cluster API takes them: the cloud's own IDs.
+// POST /api/clusters refuses console IDs ("Security group not available"), and the groups offered
+// for the project are the only ones it can attach (MTN's CreateCluster.sh, live 2026-11-02).
+func (c *Client) SecurityGroupExternalIDs(ctx context.Context, p *Placement, projectID int64, names []string) ([]string, error) {
+	ids, err := c.SecurityGroupIDs(ctx, p, projectID, names)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := c.SecurityGroupsAt(ctx, p, projectID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		i := slices.IndexFunc(groups, func(g Option) bool { return g.ID == id })
+		if i < 0 || groups[i].ExternalID == "" {
+			return nil, fmt.Errorf("security group %d has no cloud ID yet: it isn't synced to the project. %s", id, SyncHint)
+		}
+		out = append(out, groups[i].ExternalID)
+	}
+	return out, nil
+}
+
 // IsDefaultSecurityGroup reports the name of a project's synced default group.
 func IsDefaultSecurityGroup(name string) bool {
 	n := strings.ToLower(name)

@@ -560,3 +560,95 @@ Owner to decide: build it, and whether adopting with no order is the right defau
     to delete a saved ID that is still in the project even though its name isn't the order's
     (today it only deletes the saved IDs whose name matches): that is the part to agree first.
     Fortinet, PfSense and WireGuard use the name sent (checked live).
+
+## B-035 Clusters: `mtncloud_managed_kubernetes_cluster` and `mtncloud_docker_cluster` (owner, 2026-11-02) — code done 2026-11-02, live QA open
+Replace `mtncloud_cluster` (removed, no alias: nothing is in production, D-040). Each resource gets a
+single and a list data source. `layout` takes `single`, `ha3` or `ha5` (Kubernetes), found by layout code,
+with the name as a fallback (B-033). The payload follows `Manage Kubernetes/CreateCluster.sh`:
+- security groups as the cloud's external IDs, on the server and the workers alike;
+- the autoscaler set at create;
+- an ssh key pair;
+- the default registry.
+
+The docs say the security group must allow 6443 and 10250 (MTN's MK8S provisioning doc). Live QA:
+one cluster of each type (build, scale, autoscaler, edit, import, destroy), with permission first.
+
+Done 2026-11-02, checked input by input against `CreateCluster.sh` (owner's request):
+- a fixed root disk, with your disks as data disks;
+- `MK8S` label and description;
+- `createUser` and `noAgent`;
+- the worker block always sent;
+- numeric network IDs;
+- security group UUIDs from `options/zoneSecurityGroup` (`value`);
+- the top-level `config` (workerCount, defaultRepoAccount, versions, CIDRs, initConfig);
+- the autoscaler `on`, pinned to the worker count.
+
+Not taken from the script (owner, 2026-11-02):
+- `environment`: the script reads it but never sends it;
+- `sshKeyPairId`: optional in the script and never sent by the console's wizard; the owner removed it;
+- `osExternalNetworkId` (floating IP): the owner wants no public IP on cluster nodes.
+
+Disks follow the script and instances: root fixed at 100 GB on both kinds (owner, 2026-11-02; the script's
+50 GB moves to 100), every volume `storageType: 11` (the only type
+MTN's scripts send) with `datastoreId` the chosen datastore or `auto`. Before, a data disk's datastore ID was
+sent as `storageType`.
+
+Confirmed with the CLI, sub-tenant login (2026-11-02, after the console outage):
+- storage volume type 11 is `openstackVolume`, the cloud's default block-volume type (83 types listed);
+- the project's datastore options (`options/datastores?zoneId&siteId&resourcePoolId`) are only
+  `__DEFAULT__`, so a customer's data disk `datastore` can only be the default today; the master
+  tenant also sees `ENCR_AT_REST` and `_MULTIATTACH_` (P8).
+
+Catalog orders (2026-11-02): every MTN order workflow (`Create*.sh`) builds its disks with
+`datastoreId: "auto"` (four send `2`, `__DEFAULT__`) and passes the form disk's `storageType` on as the
+volume type, defaulting to 11. The provider sent a chosen datastore's ID as `storageType`, so it reached
+the workflow as a wrong volume type, and no datastore could ever be honoured. `datastore` and
+`data_volume.datastore` are removed from catalog orders; disks go without `storageType`.
+
+Later (owner, 2026-11-02, not now): MTN may add a datastore input to the order scripts and forms, hidden
+from the console's view but settable through the API. When that lands, bring back `datastore` and
+`data_volume.datastore` on catalog orders, sent in that new field (not `storageType`). This is an
+owner-approved exception to "catalog orders take only what the console lets you set".
+
+Docker, per the CLI (`/api/cluster-types` read by the owner, and the 9.0.0 CLI's `clusters.rb`, 2026-11-02):
+- the Docker type has no masters; its only node type is the worker type "Docker Host";
+- the create sends the host count as `server.nodeCount` and `server.config.nodeCount`, with no worker block;
+- hosts are added through `POST /api/clusters/{id}/servers` with only the outer `nodeCount`, and listed
+  through `/api/clusters/{id}/workers`;
+- the provider does the same.
+
+A CLI dry run of `clusters add` can't be captured with the customer login: it reads `/api/zones/{id}`
+first (403).
+The cluster list has no type code, only the type name, so the data sources match on `Kubernetes Cluster` and
+`Docker Cluster`, the names layout 311 and 313 report as their `groupType` (live 2026-11-02).
+
+## B-036 Catalog form fixes (fix list of 2026-11-02, D-042) — code done 2026-11-02, live QA open
+Done:
+- hidden and locked arguments removed (names; `floating_ip_pool` on the managed DB and MQ;
+  `worker_floating_ip_pool`; MQ `node_count`; WordPress `user_owns_database`), and NFS's unused
+  `password` and `password_version`;
+- `instance_names` on every catalog order;
+- checkboxes left out are sent as the form's default, else `off`;
+- defaults come from the live form only;
+- "Input not used" shows only for a value the configuration set;
+- Let's Encrypt checks its instance and DNS record at plan;
+- `mos_access` sets `source` at plan;
+- SIEM `archive_events` lists `yes` and `no`.
+
+Live QA (with permission): order one of the name-hidden items (for example FortiWeb) with no name.
+Check that the VM gets MTN's template name and that the order finds and deletes it.
+
+## B-037 Load balancer plugin update (MTN, 2026-11-02): provider follow-ups
+The plugin now undoes a failed save. When the save changed nothing that existed, the pools and
+listeners it created are deleted again, marked `rolledBack: true`. Pieces it couldn't remove, or a
+save that changed existing pieces, are listed in `leftBehind: [{kind, name, id, error? | kept: true}]`.
+A `pending: true` create can still be rolled back. Listener ports are unique per transport: HTTP, HTTPS,
+TERMINATED_HTTPS and TCP share one set; UDP and SCTP each have their own. A clash is refused before
+anything is sent. One pool may be the default of several listeners. PROXY and PROXYV2 pools work.
+
+Provider: a shared default pool is already allowed (checked). To do:
+1. Name `leftBehind` pieces in the error, and say to read the load balancer before retrying.
+2. Treat a rolled-back pending piece as gone (the read already does).
+3. Check port clashes per transport at plan.
+4. Pool docs: PROXY members must expect the PROXY header.
+

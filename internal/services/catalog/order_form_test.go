@@ -132,27 +132,31 @@ func TestCheckField(t *testing.T) {
 	one, three := int64(1), int64(3)
 	r := orderType(t, "mysql")
 	for _, tc := range []struct {
-		name string
-		ff   client.FormField
-		v    any
-		want string
+		name   string
+		ff     client.FormField
+		v      any
+		filled bool
+		want   string
 	}{
-		{"locked, as set", client.FormField{Name: "no_nodes", Type: "number", Locked: true, Default: float64(1)}, int64(1), ""},
-		{"locked, changed", client.FormField{Name: "no_nodes", Type: "number", Locked: true, Default: float64(1)}, int64(3), "Input locked by the form"},
-		{"locked flag", client.FormField{Name: "makeUserDbOwner", Type: "checkbox", Locked: true, Default: true}, false, "Input locked by the form"},
-		{"locked flag sent as on", client.FormField{Name: "makeUserDbOwner", Type: "checkbox", Locked: true, Default: "true"}, "on", ""},
-		{"locked flag sent as off", client.FormField{Name: "makeUserDbOwner", Type: "checkbox", Locked: true, Default: "true"}, "off", "Input locked by the form"},
-		{"locked disks the form fills", client.FormField{Name: "volumes", Type: "diskManager", Hidden: true, Locked: true, Default: "[]"}, []any{}, ""},
-		{"locked name is sent", client.FormField{Name: "name", Locked: true, Default: "${userInitials}-x"}, "vpn-1", ""},
-		{"blank", client.FormField{Name: "mysqlVersion", NoBlank: true}, " ", "Empty input"},
-		{"pattern ok", client.FormField{Name: "dbName", Pattern: `(?i)^[a-z_][a-z0-9_\$]{0,62}$`}, "app_db", ""},
-		{"pattern bad", client.FormField{Name: "dbName", Pattern: `(?i)^[a-z_][a-z0-9_\$]{0,62}$`}, "9db", "Invalid dbName"},
-		{"look-ahead left to the console", client.FormField{Name: "smbPassword", Pattern: `^(?=.*[a-z]).{8,}$`}, "x", ""},
-		{"in range", client.FormField{Name: "no_nodes", Min: &one, Max: &three}, int64(3), ""},
-		{"out of range", client.FormField{Name: "no_nodes", Min: &one, Max: &three}, int64(4), "Out of range"},
+		{"locked, as set", client.FormField{Name: "no_nodes", Type: "number", Locked: true, Default: float64(1)}, int64(1), false, ""},
+		{"locked, changed", client.FormField{Name: "no_nodes", Type: "number", Locked: true, Default: float64(1)}, int64(3), false, "Input locked by the form"},
+		// A locked list's default given by its shown name is sent as the choice's value: the form's
+		// own value, never refused.
+		{"locked list the form fills", client.FormField{Name: "mongoUserRole", Type: "select", Locked: true, Default: "Read & Write"}, "readWrite", true, ""},
+		{"locked flag", client.FormField{Name: "makeUserDbOwner", Type: "checkbox", Locked: true, Default: true}, false, false, "Input locked by the form"},
+		{"locked flag sent as on", client.FormField{Name: "makeUserDbOwner", Type: "checkbox", Locked: true, Default: "true"}, "on", false, ""},
+		{"locked flag sent as off", client.FormField{Name: "makeUserDbOwner", Type: "checkbox", Locked: true, Default: "true"}, "off", false, "Input locked by the form"},
+		{"locked disks the form fills", client.FormField{Name: "volumes", Type: "diskManager", Hidden: true, Locked: true, Default: "[]"}, []any{}, false, ""},
+		{"locked name is sent", client.FormField{Name: "name", Locked: true, Default: "${userInitials}-x"}, "vpn-1", false, ""},
+		{"blank", client.FormField{Name: "mysqlVersion", NoBlank: true}, " ", false, "Empty input"},
+		{"pattern ok", client.FormField{Name: "dbName", Pattern: `(?i)^[a-z_][a-z0-9_\$]{0,62}$`}, "app_db", false, ""},
+		{"pattern bad", client.FormField{Name: "dbName", Pattern: `(?i)^[a-z_][a-z0-9_\$]{0,62}$`}, "9db", false, "Invalid dbName"},
+		{"look-ahead left to the console", client.FormField{Name: "smbPassword", Pattern: `^(?=.*[a-z]).{8,}$`}, "x", false, ""},
+		{"in range", client.FormField{Name: "no_nodes", Min: &one, Max: &three}, int64(3), false, ""},
+		{"out of range", client.FormField{Name: "no_nodes", Min: &one, Max: &three}, int64(4), false, "Out of range"},
 	} {
 		var diags diag.Diagnostics
-		r.checkField(tc.ff, tc.v, &diags)
+		r.checkField(tc.ff, tc.v, tc.filled, &diags)
 		got := ""
 		if diags.HasError() {
 			got = diags.Errors()[0].Summary()
@@ -163,7 +167,7 @@ func TestCheckField(t *testing.T) {
 	}
 	// A password that fails a pattern is never repeated in the error.
 	var diags diag.Diagnostics
-	r.checkField(client.FormField{Name: "pw", Type: "password", Pattern: `^.{20,}$`}, "s3cret-value", &diags)
+	r.checkField(client.FormField{Name: "pw", Type: "password", Pattern: `^.{20,}$`}, "s3cret-value", false, &diags)
 	if !diags.HasError() || strings.Contains(diags.Errors()[0].Detail(), "s3cret-value") {
 		t.Errorf("password shown or not checked: %v", diags)
 	}

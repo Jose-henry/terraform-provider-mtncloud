@@ -2,17 +2,17 @@
 page_title: "mtncloud_cluster_layouts Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Lists MTN's cluster layouts: MTN Kubernetes Single-Master, MTN Kubernetes HA (3), MTN Kubernetes HA (5) and MTN Docker Cluster. Use a name as mtncloud_cluster's layout.
+  Lists MTN's cluster layouts: MTN Kubernetes Single-Master, MTN Kubernetes HA (3), MTN Kubernetes HA (5) and MTN Docker Cluster. mtncloud_managed_kubernetes_cluster's layout takes single, ha3 or ha5 for the Kubernetes ones; mtncloud_docker_cluster always uses the Docker one.
 ---
 
 # mtncloud_cluster_layouts (Data Source)
 
-Lists MTN's cluster layouts: `MTN Kubernetes Single-Master`, `MTN Kubernetes HA (3)`, `MTN Kubernetes HA (5)` and `MTN Docker Cluster`. Use a name as `mtncloud_cluster`'s `layout`.
+Lists MTN's cluster layouts: `MTN Kubernetes Single-Master`, `MTN Kubernetes HA (3)`, `MTN Kubernetes HA (5)` and `MTN Docker Cluster`. `mtncloud_managed_kubernetes_cluster`'s `layout` takes `single`, `ha3` or `ha5` for the Kubernetes ones; `mtncloud_docker_cluster` always uses the Docker one.
 
 ## Example Usage
 
 ```terraform
-# MTN's cluster layouts, for mtncloud_cluster's layout.
+# MTN's cluster layouts, which the cluster resources build from.
 data "mtncloud_cluster_layouts" "all" {}
 
 output "layouts" {

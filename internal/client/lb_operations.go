@@ -188,6 +188,9 @@ func lbCustomerText(msg string) string {
 		"Octavia", "the load balancer service", "octavia", "the load balancer service", // mtncloud:allow-cloud-name (scrubbing it)
 		"Keystone", "the cloud's sign-in", "keystone", "the cloud's sign-in", // mtncloud:allow-cloud-name (scrubbing it)
 		"Barbican", "the certificate store", "barbican", "the certificate store", // mtncloud:allow-cloud-name (scrubbing it)
+		"Neutron", "the network service", "neutron", "the network service", // mtncloud:allow-cloud-name (scrubbing it)
+		"Amphorae", "load balancer VMs", "amphorae", "load balancer VMs", // mtncloud:allow-cloud-name (scrubbing it)
+		"Amphora", "Load balancer VM", "amphora", "load balancer VM", // mtncloud:allow-cloud-name (scrubbing it)
 	).Replace(msg)
 }
 

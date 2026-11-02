@@ -2,12 +2,12 @@
 page_title: "mtncloud_lamp_stack Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Linux, Apache, MySQL and PHP on one VM. Ordered from MTN Cloud's catalog (MTN LAMP (PHP)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN LAMP (PHP) order form requires and allows (read 2026-10-31); every plan checks the live form.
+  Linux, Apache, MySQL and PHP on one VM. Ordered from MTN Cloud's catalog (MTN LAMP (PHP)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN LAMP (PHP) order form requires and allows (read 2026-11-02); every plan checks the live form.
 ---
 
 # mtncloud_lamp_stack
 
-Linux, Apache, MySQL and PHP on one VM. Ordered from MTN Cloud's catalog (MTN LAMP (PHP)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN LAMP (PHP) order form requires and allows (read 2026-10-31); every plan checks the live form.
+Linux, Apache, MySQL and PHP on one VM. Ordered from MTN Cloud's catalog (MTN LAMP (PHP)). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN LAMP (PHP) order form requires and allows (read 2026-11-02); every plan checks the live form.
 
 ## Example Usage
 
@@ -48,34 +48,34 @@ resource "mtncloud_lamp_stack" "this" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
-- `allowed_cidrs` (List of String) Networks that may connect to the database, as CIDRs. Defaults to `["0.0.0.0/0"]`. Order form: required; pre-filled with `0.0.0.0/0`; must match `^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9])(,\s*((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9]))*$`; for example `10.60.50.0/24, 10.60.40.0/24`. It says: "Comma seperated list of clients that can connect with the DB."
-- `auto_security_updates` (Boolean) Install security updates automatically.
-- `data_volume` (Block List) Extra disks, in order. (see [below for nested schema](#nestedblock--data_volume))
+- `allowed_cidrs` (List of String) Networks that may connect to the database, as CIDRs. Order form: required; pre-filled with `0.0.0.0/0`; must match `^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9])(,\s*((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9]))*$`; for example `10.60.50.0/24, 10.60.40.0/24`. It says: "Comma seperated list of clients that can connect with the DB."
+- `auto_security_updates` (Boolean) Install security updates automatically. Order form: left out, `false` (the form's default).
+- `data_volume` (Block List) Extra disks, in order. MTN's workflow puts every disk on the project's default datastore. (see [below for nested schema](#nestedblock--data_volume))
 - `database_name` (String) Database to create. Order form: must match `(?i)^[a-z_][a-z0-9_\$]{0,62}$`; for example `mydb`.
 - `database_password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) That user's password. Order form: for example `root123`. Write-only: sent with the order, never stored in state.
 - `database_user` (String) Database user to create. Order form: must match `(?i)^[a-z_][a-z0-9_\$]{0,62}$`; for example `dbuser`.
-- `datastore` (String) Datastore (volume type) of the root disk, by name. Left out, the project's default.
 - `environment` (String) Environment, by name or code, for example `Production`.
 - `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
 - `labels` (Set of String) Labels on the instance. It says: "Enter a comma-separated list of labels to group and categorise items for easier filtering in list views."
 - `password_expiry_days` (Number) Days before database passwords expire. Order form: for example `1`.
-- `php_memory_limit` (String) PHP memory limit, for example `256M`. Order form: pre-filled with `256M`; choices: `128M`, `256M`, `512M`, `1G`. It says: "Limits how much RAM a single script can consume." Defaults to `256M`.
-- `php_upload_max` (String) Largest upload PHP accepts, for example `64M`. Order form: pre-filled with `64M`; choices: `2M`, `10M`, `32M`, `64M`, `128M`. It says: "Sets the maximum file size for uploads (Critical for CMS)." Defaults to `64M`.
-- `php_version` (String) PHP version. Order form: not blank; pre-filled with `8.4`; choices: `8.3`, `8.4`, `8.5`. Defaults to `8.4`.
+- `php_memory_limit` (String) PHP memory limit, for example `256M`. Order form: pre-filled with `256M`; choices: `128M`, `256M`, `512M`, `1G`. It says: "Limits how much RAM a single script can consume."
+- `php_upload_max` (String) Largest upload PHP accepts, for example `64M`. Order form: pre-filled with `64M`; choices: `2M`, `10M`, `32M`, `64M`, `128M`. It says: "Sets the maximum file size for uploads (Critical for CMS)."
+- `php_version` (String) PHP version. Order form: not blank; pre-filled with `8.4`; choices: `8.3`, `8.4`, `8.5`.
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
-- `require_ssl` (Boolean) Require TLS for connections.
+- `require_ssl` (Boolean) Require TLS for connections. Order form: left out, `false` (the form's default).
 - `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `use_host_ssl` (Boolean) Use the host's TLS certificate.
-- `user_owns_database` (Boolean) Make the user the database's owner. Order form: pre-filled with `false`. Defaults to `false`.
+- `use_host_ssl` (Boolean) Use the host's TLS certificate. Order form: left out, `false` (the form's default).
+- `user_owns_database` (Boolean) Make the user the database's owner. Order form: left out, `false` (the form's default).
 - `version` (String) MySQL version, as the form lists it. Order form: never blank: left out, its first choice is sent, as the console shows it; choices: `8.4 LTS`, `8.0`.
 - `web_server_port` (Number) Port the web server listens on. Order form: for example `80`. It says: "Site will be reachable on your specified port, 80 is default."
 
 ### Read-Only
 
 - `id` (String) Order ID (Catalog > Inventory).
-- `instance_ids` (List of String) IDs of the instances the order created, found by name in the project.
+- `instance_ids` (List of String) IDs of the instances the order created.
+- `instance_names` (List of String) Names of the instances the order created, in the order of `instance_ids`. Where the form names the VM itself, this is the name MTN gave it (`<initials>-<account>-MTN-CLOUD-<type>-<n>`).
 - `instance_statuses` (Map of String) Status of each instance the order created, by instance ID, for example `running`. A `failed` instance plans a replace: the order is deleted and placed again.
 - `status` (String) The order's workflow result, for example `success`.
 
@@ -85,10 +85,6 @@ resource "mtncloud_lamp_stack" "this" {
 Required:
 
 - `size` (Number) Size in GB.
-
-Optional:
-
-- `datastore` (String) Datastore, by name. Left out, the project's default.
 
 
 <a id="nestedblock--timeouts"></a>

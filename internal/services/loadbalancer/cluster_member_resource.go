@@ -74,7 +74,7 @@ func (r *clusterMemberResource) Schema(ctx context.Context, _ resource.SchemaReq
 			"pool_id": schema.StringAttribute{Required: true, PlanModifiers: replaceStr,
 				Description: "The pool, for example `mtncloud_load_balancer_pool.web.id`. Changing it replaces the members."},
 			"cluster_id": schema.Int64Attribute{Required: true, PlanModifiers: replaceInt, Validators: []validator.Int64{int64validator.AtLeast(1)},
-				Description: "The cluster's ID, for example `data.mtncloud_cluster.k8s.id`. Changing it replaces the members."},
+				Description: "The cluster's ID, for example `data.mtncloud_managed_kubernetes_cluster.k8s.id`. Changing it replaces the members."},
 			"role": schema.StringAttribute{Required: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 				Validators: []validator.String{stringvalidator.RegexMatches(nodeRole, "must be a node type such as kube-worker")},
 				Description: "The nodes' type: `kube-worker` for a Kubernetes cluster's workers, `kube-master` for its masters. " +

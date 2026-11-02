@@ -2,12 +2,12 @@
 page_title: "mtncloud_registries Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Lists the container registries a Kubernetes cluster can pull images from (the console's "Cluster Repo Account"). Use a name as mtncloud_cluster's registry. The public Docker Hub is always listed, and is the default.
+  Lists the container registries a Kubernetes cluster can pull images from (the console's "Cluster Repo Account"). Use a name as mtncloud_managed_kubernetes_cluster's registry. The public Docker Hub is always listed, and is the default.
 ---
 
 # mtncloud_registries (Data Source)
 
-Lists the container registries a Kubernetes cluster can pull images from (the console's "Cluster Repo Account"). Use a name as `mtncloud_cluster`'s `registry`. The public Docker Hub is always listed, and is the default.
+Lists the container registries a Kubernetes cluster can pull images from (the console's "Cluster Repo Account"). Use a name as `mtncloud_managed_kubernetes_cluster`'s `registry`. The public Docker Hub is always listed, and is the default.
 
 ## Example Usage
 

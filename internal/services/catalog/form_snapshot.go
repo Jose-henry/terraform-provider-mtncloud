@@ -56,6 +56,14 @@ func snapshotFor(typeName string) *formSnap {
 	return &s
 }
 
+// formFills reports whether the form pre-fills field key with a value the console sends when it is
+// left out (applyForm): a plain default, not a name template or a disk list.
+func formFills(typeName, key string) bool {
+	f := snapshotFor(typeName).field(key)
+	return f != nil && f.Default != "" && !strings.Contains(f.Default, "${") && !strings.HasPrefix(f.Default, "[") &&
+		scalarField(f.Type)
+}
+
 func (s *formSnap) field(name string) *snapField {
 	if s == nil {
 		return nil
@@ -92,7 +100,15 @@ func (f *snapField) facts() string {
 	case f.NoBlank:
 		p = append(p, "not blank")
 	}
-	if f.Default != "" && !strings.Contains(f.Default, "${") && !strings.HasPrefix(f.Default, "[") {
+	switch {
+	case f.Type == "checkbox" && !f.Hidden:
+		// Left out, the live form's default is sent, else unticked, as the console sends it.
+		on := "false"
+		if checkboxWord(f.Default) == "on" {
+			on = "true"
+		}
+		p = append(p, fmt.Sprintf("left out, `%s` (the form's default)", on))
+	case f.Default != "" && !strings.Contains(f.Default, "${") && !strings.HasPrefix(f.Default, "["):
 		p = append(p, fmt.Sprintf("pre-filled with `%s`", f.Default))
 	}
 	if f.Min != nil || f.Max != nil {

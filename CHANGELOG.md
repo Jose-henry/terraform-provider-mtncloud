@@ -4,6 +4,31 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
 ## Unreleased
 
+- **New: `mtncloud_managed_kubernetes_cluster` and `mtncloud_docker_cluster` replace `mtncloud_cluster`** (owner, 2026-11-02). They come with the data sources `mtncloud_managed_kubernetes_cluster(s)` and `mtncloud_docker_cluster(s)`, which replace `mtncloud_cluster(s)`. Clusters are now built the way MTN's own Managed Kubernetes order builds them:
+  - `layout` is `single`, `ha3` or `ha5`;
+  - every node, Kubernetes or Docker, gets a fixed 100 GB root disk (owner, 2026-11-02), and at least one data disk you size (`root_volume_size` and the root `datastore` are removed; a data disk's `datastore` now goes where the console puts it);
+  - no floating IP on the nodes (`floating_ip_pool` is removed, owner 2026-11-02);
+  - three workers by default;
+  - the `MK8S` label;
+  - security groups that reach the workers too (before, workers got only the project's default group);
+  - the autoscaler always on, held at `worker_count` when `autoscaling` is left out (a cluster built with it off never finished its workers).
+
+  A Docker cluster has `host` and `host_count` instead of `master` and `worker_count`. Move configurations and state with `terraform state rm` and `terraform import`.
+- **Fixed: load balancer messages never name the cloud's network service or its load balancer VMs.** The plugin's errors were already scrubbed of the cloud software's name.
+- **Changed: catalog orders take only what the console lets you set** (owner, 2026-11-02). Arguments for fields the order form hides or locks are removed:
+  - `name` on `mtncloud_fortinet_firewall`, `mtncloud_fortiweb`, `mtncloud_fortimanager`, `mtncloud_fortianalyzer`, `mtncloud_fortiadc`, `mtncloud_sophos_firewall`, `mtncloud_pfsense_vpn`, `mtncloud_wireguard_vpn` and `mtncloud_siem`. MTN names the VM from its template (`<initials>-<account>-MTN-CLOUD-<type>-<n>`), as in the console, and the provider finds it from the workflow's own report. The new `instance_names` shows the name it got (on every catalog order).
+  - `floating_ip_pool` on `mtncloud_managed_database` and `mtncloud_managed_mq`; `worker_floating_ip_pool` on `mtncloud_self_managed_kubernetes`; `node_count` on `mtncloud_managed_mq` (locked at 1); `user_owns_database` on `mtncloud_wordpress` (locked on).
+  - `password` and `password_version` on `mtncloud_nfs_share`: NFS has no password. Existing states load without them.
+
+  Remove these from configurations: Terraform refuses an argument a resource doesn't have.
+- **Fixed: a checkbox left out is sent as the console sends it.** The live form's default, else `off`. Before, a checkbox with no default was left out of the order, and MTN's scripts read a missing value as `on`. Other defaults now also come from the live form instead of copies in the provider.
+- **Fixed: catalog order disks no longer carry a datastore** (`datastore` and `data_volume.datastore` are removed). MTN's order workflows create every disk on the project's default datastore and read a disk's type from it, so a datastore given here was taken for the volume type. Remove `datastore` from catalog order configurations.
+- **Fixed: a list left out is sent as the choice's value.** A form whose default is a choice's shown name (MongoDB's user role, `Read & Write`) now sends its value (`readWrite`), as the console does.
+- **Fixed: orders whose VM MTN names (PfSense, WireGuard, SIEM, the Forti and SOPHOS appliances) no longer fail reading state** after `name` was removed.
+- **Fixed: no "Input not used" warning for a value you didn't set** (for example MongoDB's replica set name without a replica set).
+- **New: `mtncloud_letsencrypt_certificate` checks its instance at plan.** A missing instance is an error. A stopped instance, one with no floating IP, or a domain that doesn't resolve to it yet is a warning. The docs say port 80 must be open for Let's Encrypt's check.
+- **New: `mtncloud_mos_access` says at plan whether it adopts the tenant's keys or orders MOS.** `source` is known at plan, with a warning when apply orders. If the keys change between plan and apply, the apply stops without ordering.
+- **Docs:** `mtncloud_siem`'s `archive_events` lists the form's values, `yes` or `no`.
 - **Changed: the provider address is `jose-henry/mtncloud` again** (D-041). The `mtncloud-mcs/mtncloud` address in the 0.8.0 and 0.9.0 docs was never published on the registry; use `source = "jose-henry/mtncloud"`.
 
 ## 0.9.0 (2026-11-01)

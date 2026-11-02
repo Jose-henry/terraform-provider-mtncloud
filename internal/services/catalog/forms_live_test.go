@@ -46,10 +46,10 @@ func TestAccCatalogForms_MatchSpecs(t *testing.T) {
 				switch {
 				case !ok:
 					t.Errorf("%s: the form has no field %q (argument %s) any more", s.item, f.key, f.attr)
-				case f.required && f.def == "" && !ff.Required && ff.RequireOn == "" && f.key != "volumes":
+				case f.required && !formFills(s.typeName, f.key) && !ff.Required && ff.RequireOn == "" && f.key != "volumes":
 					// The disk is always required here (owner, 2026-10-31), although some forms pre-fill 10 GB.
 					t.Errorf("%s: argument %s is required, the form's %q isn't", s.item, f.attr, f.key)
-				case f.required && f.def == "" && ff.Default != nil && !strings.Contains(fmt.Sprint(ff.Default), "${") && scalarField(ff.Type):
+				case f.required && !formFills(s.typeName, f.key) && ff.Default != nil && !strings.Contains(fmt.Sprint(ff.Default), "${") && scalarField(ff.Type):
 					t.Errorf("%s: argument %s is required, but the form fills %q with %v", s.item, f.attr, f.key, ff.Default)
 				}
 			}

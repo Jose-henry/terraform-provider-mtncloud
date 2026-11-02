@@ -172,7 +172,7 @@ func newRegistries() datasource.DataSource {
 	return &optionListDataSource{spec: optionListSpec{
 		typeName: "registries", listAttr: "registries", what: "registries",
 		description: "Lists the container registries a Kubernetes cluster can pull images from (the console's \"Cluster Repo Account\"). " +
-			"Use a name as `mtncloud_cluster`'s `registry`. The public Docker Hub is always listed, and is the default.",
+			"Use a name as `mtncloud_managed_kubernetes_cluster`'s `registry`. The public Docker Hub is always listed, and is the default.",
 		idDesc:   "Registry ID; 0 for the public Docker Hub.",
 		nameDesc: "Registry name.",
 		list: func(ctx context.Context, c *client.Client, _ int64) ([]client.Option, error) {
@@ -194,7 +194,7 @@ func newClusterLayouts() datasource.DataSource {
 	return &optionListDataSource{spec: optionListSpec{
 		typeName: "cluster_layouts", listAttr: "cluster_layouts", what: "cluster layouts",
 		description: "Lists MTN's cluster layouts: `MTN Kubernetes Single-Master`, `MTN Kubernetes HA (3)`, `MTN Kubernetes HA (5)` " +
-			"and `MTN Docker Cluster`. Use a name as `mtncloud_cluster`'s `layout`.",
+			"and `MTN Docker Cluster`. `mtncloud_managed_kubernetes_cluster`'s `layout` takes `single`, `ha3` or `ha5` for the Kubernetes ones; `mtncloud_docker_cluster` always uses the Docker one.",
 		idDesc:   "Layout ID.",
 		nameDesc: "Layout name.",
 		list: func(ctx context.Context, c *client.Client, _ int64) ([]client.Option, error) {

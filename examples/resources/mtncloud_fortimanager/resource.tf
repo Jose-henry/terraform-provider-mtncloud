@@ -1,5 +1,4 @@
 resource "mtncloud_fortimanager" "this" {
-  name             = "fmg-1"
   project          = "web-prod"
   plan             = "G4S8"
   root_volume_size = 500

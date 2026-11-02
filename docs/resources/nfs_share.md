@@ -35,8 +35,6 @@ resource "mtncloud_nfs_share" "data" {
 ### Read-Only
 
 - `id` (String) ID of the order that created the share.
-- `password` (String) Not used by NFS shares.
-- `password_version` (Number) Not used by NFS shares.
 - `status` (String) Result of the last order, for example `success`.
 
 <a id="nestedblock--timeouts"></a>

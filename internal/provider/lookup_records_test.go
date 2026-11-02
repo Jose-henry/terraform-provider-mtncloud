@@ -68,7 +68,7 @@ provider "mtncloud" {
 `
 	// type name of the list (and its list attribute) -> a text field checked on the first item.
 	many := map[string]string{
-		"apps": "group", "ssl_certificates": "domain_name", "clusters": "cloud",
+		"apps": "group", "ssl_certificates": "domain_name", "managed_kubernetes_clusters": "cloud",
 		"catalog_orders": "catalog_item", "users": "email", "identity_sources": "default_role", "user_roles": "role_type",
 		"network_subnets": "network", "storage_buckets": "bucket_name", "storage_volumes": "datastore", "domains": "fqdn",
 		"key_pairs": "fingerprint", "credentials": "type", "workflows": "type", "jobs": "type", "integrations": "type",
@@ -76,7 +76,7 @@ provider "mtncloud" {
 	}
 	// type name of the single lookup -> its name attribute.
 	one := map[string]string{
-		"app": "name", "ssl_certificate": "name", "cluster": "name", "catalog_order": "name",
+		"app": "name", "ssl_certificate": "name", "managed_kubernetes_cluster": "name", "catalog_order": "name",
 		"user": "username", "identity_source": "name", "datastore": "name", "form": "name",
 	}
 	nameOf := map[string]string{"users": "username", "user_roles": "name", "cyphers": "key"}
@@ -108,6 +108,17 @@ provider "mtncloud" {
 			statecheck.ExpectKnownValue("data.mtncloud_"+ds+".by_id", tfjsonpath.New(n), knownvalue.StringExact("beta")),
 		)
 	}
+	// Clusters share one list: each kind's lookups see only their own (a Docker "alpha", 104, is in it).
+	b.WriteString(`
+data "mtncloud_docker_clusters" "all" {}
+data "mtncloud_docker_cluster" "alpha" {
+  name = "alpha"
+}
+`)
+	checks = append(checks,
+		statecheck.ExpectKnownValue("data.mtncloud_docker_clusters.all", tfjsonpath.New("docker_clusters"), knownvalue.ListSizeExact(1)),
+		statecheck.ExpectKnownValue("data.mtncloud_docker_cluster.alpha", tfjsonpath.New("id"), knownvalue.Int64Exact(104)),
+	)
 	at := func(ds, attr string) tfjsonpath.Path { return tfjsonpath.New(ds).AtSliceIndex(0).AtMapKey(attr) }
 	checks = append(checks,
 		// A list read through a list of objects, a list of numbers, numbers and flags.
@@ -157,11 +168,14 @@ data "mtncloud_workflows" "labels_and_name" {
 		}
 		steps = append(steps,
 			resource.TestStep{Config: lookup("  " + n + ` = "beta"`), ExpectError: regexp.MustCompile(`(?s)Several .* match.*IDs\s+102,\s+103`)},
-			resource.TestStep{Config: lookup("  " + n + ` = "nope"`), ExpectError: regexp.MustCompile(`(?s)No such .*Yours: alpha,\s+beta\.`)},
+			resource.TestStep{Config: lookup("  " + n + ` = "nope"`), ExpectError: regexp.MustCompile(`(?s)No such .*Yours:\s+alpha,\s+beta\.`)},
 			resource.TestStep{Config: lookup("  id = 999"), ExpectError: regexp.MustCompile(`(?s)No such .*999`)},
 			resource.TestStep{Config: lookup(""), ExpectError: regexp.MustCompile(`Exactly one of these attributes must be configured`)},
 		)
 	}
+	// A Kubernetes cluster's ID isn't a Docker cluster's.
+	steps = append(steps, resource.TestStep{Config: cfg + "data \"mtncloud_docker_cluster\" \"x\" {\n  id = 101\n}\n",
+		ExpectError: regexp.MustCompile(`(?s)No such Docker cluster.*101`)})
 	// The test ends on a valid configuration: the destroy that follows re-reads the last one.
 	steps = append(steps, resource.TestStep{Config: cfg})
 	resource.UnitTest(t, resource.TestCase{ProtoV6ProviderFactories: factories(), Steps: steps})

@@ -59,11 +59,14 @@ func (s *clusterStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.next++
 			id := s.next
 			layout := c["layout"].(map[string]any)["id"]
-			typ := map[string]any{"code": c["type"]}
+			typ := map[string]any{"code": c["type"], "name": map[any]string{"kubernetes-cluster": "Kubernetes Cluster", "docker-cluster": "Docker Cluster"}[c["type"]]}
 			s.clusters[id] = map[string]any{"id": id, "name": c["name"], "description": c["description"], "labels": c["labels"],
 				"status": "ok", "serviceUrl": "https://10.0.0.10:6443", "layout": map[string]any{"id": layout}, "type": typ}
-			srv := c["server"].(map[string]any)
-			s.addWorkers(id, int(srv["nodeCount"].(float64)))
+			nodes, _ := c["worker"].(map[string]any)
+			if nodes == nil {
+				nodes = c["server"].(map[string]any) // Docker: the hosts are the server part
+			}
+			s.addWorkers(id, int(nodes["nodeCount"].(float64)))
 			reply(map[string]any{"success": true, "cluster": map[string]any{"id": id}})
 			return
 		}
@@ -146,7 +149,7 @@ func TestCluster(t *testing.T) {
 	f, s := clusterFakes(t)
 	cfg := func(extra, count, scaling string) string {
 		return f.providerConfig() + `
-resource "mtncloud_cluster" "k8s" {
+resource "mtncloud_managed_kubernetes_cluster" "k8s" {
   name          = "apps"
   group         = "MTNNG_CLOUD_AZ_1"
   project       = "web-prod-Acme"
@@ -160,11 +163,9 @@ resource "mtncloud_cluster" "k8s" {
 ` + extra + `
   master = {
     plan             = "G2S4"
-    root_volume_size = 40
     data_volume      = [{ size = 50, datastore = "ENCR_AT_REST" }]
     networks         = ["app-net"]
     security_groups  = ["web"]
-    floating_ip_pool = "public-network-01"
   }
   worker = {
     plan = "G4S16"
@@ -173,7 +174,7 @@ resource "mtncloud_cluster" "k8s" {
 `
 	}
 	scaling := "  autoscaling = {\n    min_nodes = 1\n    max_nodes = 4\n  }\n"
-	addr := "mtncloud_cluster.k8s"
+	addr := "mtncloud_managed_kubernetes_cluster.k8s"
 	check := func(a string, v knownvalue.Check) statecheck.StateCheck {
 		return statecheck.ExpectKnownValue(addr, tfjsonpath.New(a), v)
 	}
@@ -185,8 +186,9 @@ resource "mtncloud_cluster" "k8s" {
 				Config: cfg("", "2", scaling),
 				ConfigStateChecks: []statecheck.StateCheck{
 					check("id", knownvalue.StringExact("9601")),
-					check("type", knownvalue.StringExact("kubernetes")),
-					check("layout", knownvalue.StringExact("MTN Kubernetes Single-Master")),
+					check("layout", knownvalue.StringExact("single")),
+					check("labels", knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("apps")})),
+					check("description", knownvalue.Null()),
 					check("cloud", knownvalue.StringExact("MTNNG_CLOUD_AZ_1")),
 					check("kubernetes_version", knownvalue.StringExact("1.35.3")),
 					check("pod_cidr", knownvalue.StringExact("10.244.0.0/16")),
@@ -200,23 +202,30 @@ resource "mtncloud_cluster" "k8s" {
 					defer s.mu.Unlock()
 					c := s.posted[0]
 					srv := c["server"].(map[string]any)
+					// The shape of MTN's Manage Kubernetes/CreateCluster.sh.
+					node := `"networkInterfaces":[{"network":{"id":9350},"primaryInterface":true}],` +
+						`"securityGroups":["11111111-1111-4111-8111-111111111111","22222222-2222-4222-8222-222222222222"],` +
+						`"volumes":[{"datastoreId":"auto","id":-1,"name":"root","rootVolume":true,"size":100,"storageType":11},` +
+						`{"datastoreId":"414","id":-1,"name":"data-1","rootVolume":false,"size":50,"storageType":11}]`
 					for k, want := range map[string]string{
 						"layout": `{"id":315}`, "group": `{"id":9101}`, "cloud": `{"id":4}`, "type": `"kubernetes-cluster"`,
-						"taskSetId": `61`, "labels": `["apps"]`,
-						"worker": `{"config":{"osExternalNetworkId":"pool-44","resourcePoolId":9201},` +
-							`"networkInterfaces":[{"network":{"id":"network-9350"},"primaryInterface":true}],"plan":{"id":9402},` +
-							`"securityGroups":[{"id":9301},{"id":9302}],"volumes":[{"name":"root","rootVolume":true,"size":40},` +
-							`{"name":"data-1","rootVolume":false,"size":50,"storageType":414}]}`,
+						"taskSetId": `61`, "labels": `["MK8S","apps"]`, "description": `"MK8S Cluster"`, "visibility": `"private"`,
+						"config": `{"autoScalerEnabled":"on","defaultRepoAccount":"9501","initConfig":"","k8s_version":"1.35.3-1.1",` +
+							`"maxNodes":"4","minNodes":"1","podCidr":"10.244.0.0/16","serviceCidr":"10.96.0.0/12","workerCount":2}`,
+						"worker": `{"config":{"createUser":true,"noAgent":false,"resourcePoolId":9201},` +
+							`"networkInterfaces":[{"network":{"id":9350},"primaryInterface":true}],"nodeCount":2,"plan":{"id":9402},` +
+							strings.TrimPrefix(node, `"networkInterfaces":[{"network":{"id":9350},"primaryInterface":true}],`) + `}`,
 					} {
 						if got := jsonOf(c[k]); got != want {
 							t.Errorf("cluster.%s\n got %s\nwant %s", k, got, want)
 						}
 					}
 					for k, want := range map[string]string{
-						"name": `"apps-node"`, "hostname": `"apps"`, "networkDomain": `{"id":16}`, "nodeCount": `2`, "plan": `{"id":9401}`,
-						"config": `{"customOptions":{"k8s_version":"1.35.3-1.1","podCidr":"10.244.0.0/16","serviceCidr":"10.96.0.0/12"},` +
-							`"defaultRepoAccount":9501,"nodeCount":2,"osExternalNetworkId":"pool-44","podCidr":"10.244.0.0/16",` +
-							`"resourcePoolId":9201,"serviceCidr":"10.96.0.0/12"}`,
+						"name": `"apps-node"`, "hostname": `"apps"`, "networkDomain": `{"id":16}`, "plan": `{"id":9401}`, "nodeCount": `null`,
+						"sshKeyPair": `null`, "labels": `["MK8S","apps"]`,
+						"config": `{"autoScalerEnabled":"on","createUser":true,"customOptions":{"k8s_version":"1.35.3-1.1",` +
+							`"podCidr":"10.244.0.0/16","serviceCidr":"10.96.0.0/12"},"maxNodes":"4","minNodes":"1","noAgent":false,` +
+							`"resourcePoolId":9201}`,
 					} {
 						if got := jsonOf(srv[k]); got != want {
 							t.Errorf("cluster.server.%s\n got %s\nwant %s", k, got, want)
@@ -240,14 +249,14 @@ resource "mtncloud_cluster" "k8s" {
 					if jsonOf(a["nodeCount"]) != "1" || jsonOf(a["plan"]) != `{"id":9402}` || jsonOf(a["cloud"]) != `{"id":4}` {
 						t.Errorf("worker add: %s", jsonOf(a))
 					}
-					if got := jsonOf(s.updated[0]); got != `{"description":"apps cluster","labels":["apps"],"name":"apps"}` {
+					if got := jsonOf(s.updated[0]); got != `{"description":"apps cluster","labels":["MK8S","apps"],"name":"apps"}` {
 						t.Errorf("update: %s", got)
 					}
 					return nil
 				},
 			},
 			{
-				// Down to one: the newest two go. The autoscaler is turned off.
+				// Down to one: the newest two go. Without autoscaling, the autoscaler is held at the count.
 				Config: cfg(`  description = "apps cluster"`, "1", ""), ConfigPlanChecks: inPlace,
 				Check: func(*terraform.State) error {
 					s.mu.Lock()
@@ -255,7 +264,7 @@ resource "mtncloud_cluster" "k8s" {
 					if got := jsonOf(s.removed); got != "[9604,9603]" {
 						t.Errorf("removed %s, want the newest two", got)
 					}
-					if got := jsonOf(s.scaler[len(s.scaler)-1]); got != `{"autoScalerEnabled":false}` {
+					if got := jsonOf(s.scaler[len(s.scaler)-1]); got != `{"autoScalerEnabled":true,"autoScalerGroups":[{"maxNodes":1,"minNodes":1}]}` {
 						t.Errorf("autoscaler: %s", got)
 					}
 					return nil
@@ -288,14 +297,13 @@ func TestCluster_CheckedAtPlan(t *testing.T) {
 	f, s := clusterFakes(t)
 	cfg := func(extra, masterPlan string) string {
 		return f.providerConfig() + `
-resource "mtncloud_cluster" "k8s" {
+resource "mtncloud_managed_kubernetes_cluster" "k8s" {
   name    = "apps"
   group   = "MTNNG_CLOUD_AZ_1"
   project = "web-prod-Acme"
 ` + extra + `
   master = {
     plan             = "` + masterPlan + `"
-    root_volume_size = 40
     data_volume      = [{ size = 50 }]
     networks         = ["app-net"]
   }
@@ -306,9 +314,8 @@ resource "mtncloud_cluster" "k8s" {
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
 			{Config: cfg(`  layout = "HKS Kubernetes 1.35 Cluster on Ubuntu 24.04"`, "G2S4"), PlanOnly: true,
-				ExpectError: regexp.MustCompile(`no cluster layout(.|\n)*MTN Kubernetes HA \(3\)`)},
-			{Config: cfg("  type = \"docker\"\n  pod_cidr = \"10.244.0.0/16\"", "G2S4"), PlanOnly: true,
-				ExpectError: regexp.MustCompile(`pod_cidr is for Kubernetes clusters only`)},
+				ExpectError: regexp.MustCompile(`must be one of: \["single" "ha3" "ha5"\]`)},
+			{Config: cfg(`  description = ""`, "G2S4"), PlanOnly: true, ExpectError: regexp.MustCompile(`length must be at least 1`)},
 			{Config: cfg("", "G9S9"), PlanOnly: true, ExpectError: regexp.MustCompile(`no plan "G9S9"(.|\n)*G4S16`)},
 			{Config: cfg(`  kubernetes_version = "1.20"`, "G2S4"), PlanOnly: true, ExpectError: regexp.MustCompile(`1\.35\.3`)},
 			{Config: cfg(`  registry = "quay"`, "G2S4"), PlanOnly: true, ExpectError: regexp.MustCompile(`no registry "quay"`)},
@@ -321,61 +328,128 @@ resource "mtncloud_cluster" "k8s" {
 	}
 }
 
-// A Docker cluster: MTN's layout, no Kubernetes inputs, the hosts from master.
-func TestCluster_Docker(t *testing.T) {
+// A Docker cluster: MTN's Docker layout, its hosts from host, none of the Kubernetes parts; hosts
+// are added in place.
+func TestDockerCluster(t *testing.T) {
 	f, s := clusterFakes(t)
-	cfg := f.providerConfig() + `
-resource "mtncloud_cluster" "docker" {
-  name    = "builds"
-  type    = "docker"
-  group   = "MTNNG_CLOUD_AZ_1"
-  project = "web-prod-Acme"
-  master = {
-    plan             = "G2S4"
-    root_volume_size = 40
-    data_volume      = [{ size = 100 }]
-    networks         = ["app-net"]
+	cfg := func(count string) string {
+		return f.providerConfig() + `
+resource "mtncloud_docker_cluster" "docker" {
+  name       = "builds"
+  group      = "MTNNG_CLOUD_AZ_1"
+  project    = "web-prod-Acme"
+  host_count = ` + count + `
+  host = {
+    plan            = "G2S4"
+    data_volume     = [{ size = 100 }]
+    networks        = ["app-net"]
+    security_groups = ["web"]
   }
 }
 `
+	}
+	addr := "mtncloud_docker_cluster.docker"
+	check := func(a string, v knownvalue.Check) statecheck.StateCheck {
+		return statecheck.ExpectKnownValue(addr, tfjsonpath.New(a), v)
+	}
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
 			{
-				Config: cfg,
+				Config: cfg("1"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue("mtncloud_cluster.docker", tfjsonpath.New("layout"), knownvalue.StringExact("MTN Docker Cluster")),
-					statecheck.ExpectKnownValue("mtncloud_cluster.docker", tfjsonpath.New("worker_count"), knownvalue.Int64Exact(1)),
-					statecheck.ExpectKnownValue("mtncloud_cluster.docker", tfjsonpath.New("pod_cidr"), knownvalue.Null()),
+					check("host_count", knownvalue.Int64Exact(1)),
+					check("host_ids", knownvalue.ListSizeExact(1)),
+					check("status", knownvalue.StringExact("ok")),
 				},
 				Check: func(*terraform.State) error {
 					s.mu.Lock()
 					defer s.mu.Unlock()
 					c := s.posted[0]
-					if jsonOf(c["type"]) != `"docker-cluster"` || jsonOf(c["layout"]) != `{"id":311}` || c["worker"] != nil {
+					if jsonOf(c["type"]) != `"docker-cluster"` || jsonOf(c["layout"]) != `{"id":311}` || c["worker"] != nil ||
+						c["config"] != nil || c["labels"] != nil || c["description"] != nil {
 						t.Errorf("docker cluster: %s", jsonOf(c))
 					}
-					if cfg := c["server"].(map[string]any)["config"].(map[string]any); cfg["customOptions"] != nil || cfg["podCidr"] != nil {
-						t.Errorf("Kubernetes inputs sent for Docker: %s", jsonOf(cfg))
+					srv := c["server"].(map[string]any)
+					for k, want := range map[string]string{
+						"nodeCount": `1`, "sshKeyPair": `null`,
+						"securityGroups": `["11111111-1111-4111-8111-111111111111","22222222-2222-4222-8222-222222222222"]`,
+						"volumes":        `[{"datastoreId":"auto","id":-1,"name":"root","rootVolume":true,"size":100,"storageType":11},{"datastoreId":"auto","id":-1,"name":"data-1","rootVolume":false,"size":100,"storageType":11}]`,
+						"config":         `{"createUser":true,"noAgent":false,"nodeCount":1,"resourcePoolId":9201}`,
+					} {
+						if got := jsonOf(srv[k]); got != want {
+							t.Errorf("cluster.server.%s\n got %s\nwant %s", k, got, want)
+						}
 					}
 					return nil
 				},
 			},
-			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{Config: cfg("1"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				// One more host, in place, built like the first; no autoscaler on a Docker cluster.
+				Config: cfg("2"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)}},
+				ConfigStateChecks: []statecheck.StateCheck{check("host_ids", knownvalue.ListSizeExact(2))},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					a := s.added[0]
+					if jsonOf(a["nodeCount"]) != "1" || jsonOf(a["plan"]) != `{"id":9401}` || a["sshKeyPair"] != nil ||
+						a["config"].(map[string]any)["nodeCount"] != nil {
+						t.Errorf("host add: %s", jsonOf(a))
+					}
+					if len(s.scaler) != 0 {
+						t.Errorf("autoscaler configured on a Docker cluster: %s", jsonOf(s.scaler))
+					}
+					return nil
+				},
+			},
+			{Config: cfg("2"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				Config: cfg("2"), ResourceName: addr, ImportState: true, ImportStateVerify: true,
+				ImportStateVerifyIgnore: []string{"group", "project", "cloud", "host", "timeouts"},
+			},
 		},
+	})
+}
+
+// Each resource manages its own kind only: a Kubernetes cluster can't be imported as a Docker one.
+func TestDockerCluster_WrongKind(t *testing.T) {
+	f, s := clusterFakes(t)
+	s.clusters[9700] = map[string]any{"id": 9700, "name": "apps", "status": "ok", "layout": map[string]any{"id": 315},
+		"type": map[string]any{"code": "kubernetes-cluster", "name": "Kubernetes Cluster"}}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{
+			Config: f.providerConfig() + `
+import {
+  to = mtncloud_docker_cluster.d
+  id = "9700"
+}
+resource "mtncloud_docker_cluster" "d" {
+  name = "apps"
+  host = {
+    plan        = "G2S4"
+    data_volume = [{ size = 100 }]
+    networks    = ["app-net"]
+  }
+}
+`,
+			PlanOnly: true, ExpectError: regexp.MustCompile(`not a Docker Cluster`),
+		}},
 	})
 }
 
 func clusterConfig(f *fakeAPI, top, scaling string) string {
 	return f.providerConfig() + `
-resource "mtncloud_cluster" "k8s" {
+resource "mtncloud_managed_kubernetes_cluster" "k8s" {
   name    = "apps"
   group   = "MTNNG_CLOUD_AZ_1"
   project = "web-prod-Acme"
 ` + top + `
   master = {
     plan             = "G2S4"
-    root_volume_size = 40
     data_volume      = [{ size = 50 }]
     networks         = ["app-net"]
   }
@@ -387,7 +461,7 @@ resource "mtncloud_cluster" "k8s" {
 func TestCluster_AutoscalerMovesWorkers(t *testing.T) {
 	f, s := clusterFakes(t)
 	scaling := "  autoscaling = {\n    min_nodes = 1\n    max_nodes = 4\n  }\n"
-	addr := "mtncloud_cluster.k8s"
+	addr := "mtncloud_managed_kubernetes_cluster.k8s"
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
@@ -415,18 +489,18 @@ func TestCluster_AutoscalerMovesWorkers(t *testing.T) {
 	})
 }
 
-// What you type is kept: a version given as its value, a layout in other casing.
+// What you type is kept: a version given as its value.
 func TestCluster_KeepsWhatYouTyped(t *testing.T) {
 	f, s := clusterFakes(t)
-	cfg := clusterConfig(f, "  layout = \"mtn kubernetes single-master\"\n  kubernetes_version = \"1.35.3-1.1\"", "")
-	addr := "mtncloud_cluster.k8s"
+	cfg := clusterConfig(f, "  layout = \"single\"\n  kubernetes_version = \"1.35.3-1.1\"", "")
+	addr := "mtncloud_managed_kubernetes_cluster.k8s"
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
 			{
 				Config: cfg,
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("layout"), knownvalue.StringExact("mtn kubernetes single-master")),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("layout"), knownvalue.StringExact("single")),
 					statecheck.ExpectKnownValue(addr, tfjsonpath.New("kubernetes_version"), knownvalue.StringExact("1.35.3-1.1")),
 				},
 				Check: func(*terraform.State) error {
@@ -458,7 +532,7 @@ resource "terraform_data" "n" {
 			{
 				Config: cfg,
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue("mtncloud_cluster.k8s", tfjsonpath.New("worker_ids"), knownvalue.ListSizeExact(2)),
+					statecheck.ExpectKnownValue("mtncloud_managed_kubernetes_cluster.k8s", tfjsonpath.New("worker_ids"), knownvalue.ListSizeExact(2)),
 				},
 			},
 			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
@@ -475,7 +549,7 @@ func TestCluster_AutoscalerFailsAndDisappears(t *testing.T) {
 	f, s := clusterFakes(t)
 	s.failScaler = 1
 	cfg := clusterConfig(f, "", "  autoscaling = {\n    min_nodes = 1\n    max_nodes = 4\n  }\n")
-	addr := "mtncloud_cluster.k8s"
+	addr := "mtncloud_managed_kubernetes_cluster.k8s"
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
@@ -505,6 +579,79 @@ func TestCluster_AutoscalerFailsAndDisappears(t *testing.T) {
 				PreConfig: func() { s.mu.Lock(); delete(s.clusters, 9601); s.mu.Unlock() },
 				Config:    cfg, PlanOnly: true, ExpectNonEmptyPlan: true,
 			},
+		},
+	})
+}
+
+// Without autoscaling the autoscaler is still sent on, held at worker_count (MTN's order: a cluster
+// built with it off never finishes its workers), and moves with the count. The root disk is a fixed
+// 100 GB, and three workers are built, as MTN's order does.
+func TestCluster_AutoscalerHeldAtCount(t *testing.T) {
+	f, s := clusterFakes(t)
+	cfg := func(top string) string {
+		return f.providerConfig() + `
+resource "mtncloud_managed_kubernetes_cluster" "k8s" {
+  name    = "apps"
+  group   = "MTNNG_CLOUD_AZ_1"
+  project = "web-prod-Acme"
+` + top + `
+  master = {
+    plan        = "G2S4"
+    data_volume = [{ size = 50 }]
+    networks    = ["app-net"]
+  }
+}
+`
+	}
+	addr := "mtncloud_managed_kubernetes_cluster.k8s"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg(""),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("worker_count"), knownvalue.Int64Exact(3)),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("worker_ids"), knownvalue.ListSizeExact(3)),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("layout"), knownvalue.StringExact("single")),
+				},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					c := s.posted[0]
+					top := c["config"].(map[string]any)
+					if top["autoScalerEnabled"] != "on" || top["minNodes"] != "3" || top["maxNodes"] != "3" || top["workerCount"] != float64(3) {
+						t.Errorf("config: %s", jsonOf(top))
+					}
+					srv := c["server"].(map[string]any)
+					if got := jsonOf(srv["volumes"]); got != `[{"datastoreId":"auto","id":-1,"name":"root","rootVolume":true,"size":100,"storageType":11},{"datastoreId":"auto","id":-1,"name":"data-1","rootVolume":false,"size":50,"storageType":11}]` {
+						t.Errorf("volumes: %s", got)
+					}
+					if got := jsonOf(c["worker"].(map[string]any)["volumes"]); got != jsonOf(srv["volumes"]) {
+						t.Errorf("worker volumes %s, want the master's", got)
+					}
+					if len(s.scaler) != 0 {
+						t.Errorf("autoscaler configured after the build: %s", jsonOf(s.scaler))
+					}
+					return nil
+				},
+			},
+			{Config: cfg(""), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				// The autoscaler moves to the new count before the worker is added, so it doesn't undo it.
+				Config: cfg("  worker_count = 4"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("worker_ids"), knownvalue.ListSizeExact(4)),
+				},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if got := jsonOf(s.scaler); got != `[{"autoScalerEnabled":true,"autoScalerGroups":[{"maxNodes":4,"minNodes":4}]}]` {
+						t.Errorf("autoscaler: %s", got)
+					}
+					return nil
+				},
+			},
+			{Config: cfg("  worker_count = 4"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 		},
 	})
 }

@@ -130,3 +130,20 @@ func TestRefuseInputHidesSecrets(t *testing.T) {
 		}
 	}
 }
+
+// No argument sets a field the order form hides or locks: the console never lets a user set one,
+// so neither does the provider (owner, 2026-11-02). Checked against the form snapshots.
+func TestOrderSpecs_NoHiddenOrLockedArguments(t *testing.T) {
+	for _, s := range orderSpecs() {
+		snap := snapshotFor(s.typeName)
+		if snap == nil {
+			t.Errorf("%s: no form snapshot", s.typeName)
+			continue
+		}
+		for _, f := range s.fields {
+			if sf := snap.field(f.key); sf != nil && (sf.Hidden || sf.Locked) {
+				t.Errorf("%s: argument %s sets the form's %s field %q", s.typeName, f.attr, map[bool]string{true: "hidden", false: "locked"}[sf.Hidden], f.key)
+			}
+		}
+	}
+}

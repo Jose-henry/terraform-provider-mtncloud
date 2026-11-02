@@ -39,16 +39,16 @@ var recordSpecs = []recordSpec{
 		},
 	},
 	{
-		one: "cluster", many: "clusters", noun: "cluster", nouns: "clusters", path: "/api/clusters", key: "clusters",
-		about: "A cluster is a managed group of hosts, for example a Kubernetes cluster.",
-		fields: []field{
-			{"description", "description", text, "Description, or empty."},
-			{"type", "type.name", text, "Cluster type, for example `Kubernetes Cluster`."},
-			{"layout", "layout.name", text, "Layout the cluster was built from, or empty."},
-			{"group", "site.name", text, "Group the cluster belongs to."},
-			{"cloud", "zone.name", text, "Cloud the cluster is in."},
-			{"status", "status", text, "Status, or empty."},
-		},
+		one: "managed_kubernetes_cluster", many: "managed_kubernetes_clusters", noun: "Kubernetes cluster",
+		nouns: "Kubernetes clusters", path: "/api/clusters", key: "clusters", match: map[string]string{"type.name": "Kubernetes Cluster"},
+		about:  "A managed Kubernetes cluster, built with `mtncloud_managed_kubernetes_cluster` or in the console.",
+		fields: clusterFields,
+	},
+	{
+		one: "docker_cluster", many: "docker_clusters", noun: "Docker cluster",
+		nouns: "Docker clusters", path: "/api/clusters", key: "clusters", match: map[string]string{"type.name": "Docker Cluster"},
+		about:  "A Docker cluster, built with `mtncloud_docker_cluster` or in the console.",
+		fields: clusterFields,
 	},
 	{
 		one: "catalog_order", many: "catalog_orders", noun: "catalog order", nouns: "catalog orders",
@@ -245,4 +245,17 @@ var recordSpecs = []recordSpec{
 			{"last_accessed", "lastAccessed", text, "Last read (RFC 3339), or empty."},
 		},
 	},
+}
+
+// clusterFields are what a cluster lookup shows. The list has no type code, only the platform's type
+// name, which the lookups match on (GET /api/clusters, live 2026-11-02).
+var clusterFields = []field{
+	{"description", "description", text, "Description, or empty."},
+	{"labels", "labels", texts, "Labels."},
+	{"layout", "layout.name", text, "Layout the cluster was built from, for example `MTN Kubernetes HA (3)`."},
+	{"group", "site.name", text, "Group the cluster belongs to."},
+	{"cloud", "zone.name", text, "Cloud the cluster is in."},
+	{"status", "status", text, "Status, for example `ok`."},
+	{"api_url", "serviceUrl", text, "Kubernetes API address, or empty."},
+	{"node_ids", "servers.id", numbers, "IDs of the cluster's nodes (masters and workers; Docker: hosts)."},
 }

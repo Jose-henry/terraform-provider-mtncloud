@@ -72,7 +72,7 @@ RESOURCES = [
      "Instances (virtual machines from MTN's OS images), their day-2 settings, power and scale schedules, apps "
      "and their instances, and Kubernetes and Docker clusters from MTN's layouts.",
      ["instance", "instance_settings", "instance_power_schedule", "instance_scale_schedule",
-      "app", "app_instance", "app_settings", "cluster"]),
+      "app", "app_instance", "app_settings", "managed_kubernetes_cluster", "docker_cluster"]),
     ("Networking",
      "MTN Networks and MTN Routers, security groups (instance firewalls) and their rules, IP pools "
      "(static IP ranges for a network) and DNS domains (instance hostnames and domain join).",
@@ -115,7 +115,7 @@ DATA_SOURCES = [
       "load_balancer_l7_policies", "load_balancer_l7_policy",
       "load_balancer_health_monitors", "load_balancer_health_monitor", "load_balancer_floating_ip_pools"]),
     ("Compute",
-     ["instance", "instances", "app", "apps", "cluster", "clusters"]),
+     ["instance", "instances", "app", "apps", "managed_kubernetes_cluster", "managed_kubernetes_clusters", "docker_cluster", "docker_clusters"]),
     ("Images",
      ["image", "virtual_image",
       "virtual_images"]),

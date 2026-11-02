@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 123 | 111 |
-| Usable with a customer (sub-tenant) login | 123 | 106 |
+| Available today | 124 | 113 |
+| Usable with a customer (sub-tenant) login | 124 | 108 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 2 | 0 |
@@ -206,11 +206,12 @@ Instances (virtual machines from MTN's OS images), their day-2 settings, power a
 | [`mtncloud_app`](../docs/resources/app.md) | Yes (read verified) |
 | [`mtncloud_app_instance`](../docs/resources/app_instance.md) | Yes (read verified) |
 | [`mtncloud_app_settings`](../docs/resources/app_settings.md) | Yes (read verified) |
-| [`mtncloud_cluster`](../docs/resources/cluster.md) | Yes (read verified) |
+| [`mtncloud_docker_cluster`](../docs/resources/docker_cluster.md) | Yes (read verified) |
 | [`mtncloud_instance`](../docs/resources/instance.md) | Yes, built for customers |
 | [`mtncloud_instance_power_schedule`](../docs/resources/instance_power_schedule.md) | Yes (read verified) |
 | [`mtncloud_instance_scale_schedule`](../docs/resources/instance_scale_schedule.md) | Yes (read verified) |
 | [`mtncloud_instance_settings`](../docs/resources/instance_settings.md) | Yes (read verified) |
+| [`mtncloud_managed_kubernetes_cluster`](../docs/resources/managed_kubernetes_cluster.md) | Yes (read verified) |
 
 ### Networking
 
@@ -369,10 +370,12 @@ Autoscaling thresholds.
 |---|---|
 | [`mtncloud_app`](../docs/data-sources/app.md) | Yes (read verified) |
 | [`mtncloud_apps`](../docs/data-sources/apps.md) | Yes (read verified) |
-| [`mtncloud_cluster`](../docs/data-sources/cluster.md) | Yes (read verified) |
-| [`mtncloud_clusters`](../docs/data-sources/clusters.md) | Yes (read verified) |
+| [`mtncloud_docker_cluster`](../docs/data-sources/docker_cluster.md) | Yes (read verified) |
+| [`mtncloud_docker_clusters`](../docs/data-sources/docker_clusters.md) | Yes (read verified) |
 | [`mtncloud_instance`](../docs/data-sources/instance.md) | Yes, built for customers |
 | [`mtncloud_instances`](../docs/data-sources/instances.md) | Yes, built for customers |
+| [`mtncloud_managed_kubernetes_cluster`](../docs/data-sources/managed_kubernetes_cluster.md) | Yes (read verified) |
+| [`mtncloud_managed_kubernetes_clusters`](../docs/data-sources/managed_kubernetes_clusters.md) | Yes (read verified) |
 
 ### Images
 

@@ -1,5 +1,4 @@
 resource "mtncloud_wireguard_vpn" "this" {
-  name             = "wg-1"
   project          = "web-prod"
   plan             = "G2S4"
   root_volume_size = 40

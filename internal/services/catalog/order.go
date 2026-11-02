@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
@@ -63,7 +65,7 @@ func (r *orderResource) inputs() map[string]field {
 	}
 	for _, f := range r.spec.fields {
 		if f.kind == kVolumes {
-			for _, a := range []string{"root_volume_size", "datastore", "data_volume"} {
+			for _, a := range []string{"root_volume_size", "data_volume"} {
 				out[f.attr+a] = f
 			}
 			continue
@@ -94,10 +96,13 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 		desc += " **Slow:** MTN's workflow builds the VM through a Heat stack, then waits for MTN Cloud to discover it, " +
 			"so an order takes about an hour (the create timeout defaults to 3 hours). Use a login that outlasts the apply: " +
 			"`username` and `password` (the provider logs in again when a token expires), or a token that lasts longer " +
-			"than the apply; or order it in the console instead. The workflow names the VM itself " +
-			"(`<initials>-<account>-MTN-CLOUD-<type>-<n>`) and reports it, so `instance_ids` is the VM it reported, " +
-			"whatever `name` says. Destroy deletes that VM, but not its Heat stack, whose port and floating IP stay " +
-			"until MTN removes the stack."
+			"than the apply; or order it in the console instead. Destroy deletes its VM, but not its Heat stack, " +
+			"whose port and floating IP stay until MTN removes the stack."
+	}
+	if r.spec.reports {
+		desc += " The order form doesn't let you name the VM: MTN names it from its template " +
+			"(`<initials>-<account>-MTN-CLOUD-<type>-<n>`), as in the console, and the provider finds it from the " +
+			"workflow's own report. `instance_names` shows the name it got."
 	}
 	if r.spec.target {
 		desc = r.spec.about + " Ordered from MTN Cloud's catalog (" + r.spec.item + "). Changing an input orders it " +
@@ -115,13 +120,17 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 			Description: "ID of the instance to install the certificate on, for example `mtncloud_instance.web.id`."}
 	} else {
 		attrs["instance_ids"] = schema.ListAttribute{Computed: true, ElementType: types.StringType,
-			Description:   "IDs of the instances the order created, found by name in the project.",
+			Description:   "IDs of the instances the order created.",
 			PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()}}
 		if r.spec.app {
 			attrs["app_id"] = schema.StringAttribute{Computed: true, PlanModifiers: keep,
 				Description: "ID of the app the order made (under Apps in the console). Destroy deletes this app, even " +
 					"after it is renamed; an instance added to it later is taken out of it first and left running."}
 		}
+		attrs["instance_names"] = schema.ListAttribute{Computed: true, ElementType: types.StringType,
+			Description: "Names of the instances the order created, in the order of `instance_ids`. Where the form " +
+				"names the VM itself, this is the name MTN gave it (`<initials>-<account>-MTN-CLOUD-<type>-<n>`).",
+			PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()}}
 		attrs["instance_statuses"] = schema.MapAttribute{Computed: true, ElementType: types.StringType,
 			Description: "Status of each instance the order created, by instance ID, for example `running`. A `failed` " +
 				"instance plans a replace: the order is deleted and placed again.",
@@ -138,13 +147,10 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 		case kVolumes:
 			attrs[f.attr+"root_volume_size"] = schema.Int64Attribute{Optional: !f.required, Required: f.required,
 				Description: r.rootDiskDescription(), Validators: []validator.Int64{int64validator.AtLeast(1)}}
-			attrs[f.attr+"datastore"] = schema.StringAttribute{Optional: true,
-				Description: "Datastore (volume type) of the root disk, by name. Left out, the project's default."}
 			blocks[f.attr+"data_volume"] = schema.ListNestedBlock{
-				Description: "Extra disks, in order.",
+				Description: "Extra disks, in order. MTN's workflow puts every disk on the project's default datastore.",
 				NestedObject: schema.NestedBlockObject{Attributes: map[string]schema.Attribute{
-					"size":      schema.Int64Attribute{Required: true, Description: "Size in GB.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
-					"datastore": schema.StringAttribute{Optional: true, Description: "Datastore, by name. Left out, the project's default."},
+					"size": schema.Int64Attribute{Required: true, Description: "Size in GB.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
 				}},
 			}
 		default:
@@ -161,16 +167,10 @@ func (r *orderResource) attribute(f field) schema.Attribute {
 		desc = "Name of the app the order creates, shown under Apps. It must be unique among your apps: the provider " +
 			"finds the app, and the VMs in it, by this name (MTN names the VMs itself)."
 	}
-	if f.attr == "name" && r.spec.heat {
-		desc = "Not used: MTN's workflow names the VM itself (`<initials>-<account>-MTN-CLOUD-<type>-<n>`), and the " +
-			"provider finds the VM from the workflow's own report. Optional; kept for configurations that set it."
-	}
 	d := desc + snapshotFor(r.spec.typeName).field(f.key).facts()
-	if f.def != "" && !strings.Contains(d, "Defaults") {
-		d += " Defaults to `" + f.def + "`."
-	}
-	// A required form field with a default is optional here: the default is sent, as the console does.
-	req := f.required && f.def == "" && (f.attr != "name" || !r.spec.heat)
+	// A required form field the form pre-fills is optional here: the live form's value is sent, as
+	// the console does.
+	req := f.required && !formFills(r.spec.typeName, f.key)
 	opt := !req
 	switch f.kind {
 	case kGroup:
@@ -241,8 +241,8 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 			var before, after attr.Value
 			resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(name), &before)...)
 			resp.Diagnostics.Append(resp.Plan.GetAttribute(ctx, path.Root(name), &after)...)
-			if adopting || after == nil || (r.spec.heat && name == "name") {
-				continue // MTN's workflow names a heat order's VM itself: its name is never sent
+			if adopting || after == nil {
+				continue
 			}
 			switch inputChange(name, before, after) {
 			case noChange:
@@ -276,6 +276,7 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 			if len(ids) == 0 {
 				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("instance_ids"), types.ListUnknown(types.StringType))...)
 				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("instance_statuses"), types.MapUnknown(types.StringType))...)
+				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("instance_names"), types.ListUnknown(types.StringType))...)
 			}
 			if r.spec.app && r.appIDOf(ctx, req.State, &resp.Diagnostics) == 0 {
 				resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("app_id"), types.StringUnknown())...)
@@ -288,6 +289,54 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		return
 	}
 	r.build(ctx, resp.Plan, req.Config, true, &resp.Diagnostics) // resolves every name; errors point at the attribute
+	if r.spec.target {
+		r.checkTarget(ctx, resp.Plan, &resp.Diagnostics)
+	}
+}
+
+// checkTarget checks, at plan, the instance a certificate is installed on: it must exist; it
+// should be running, with a public IP the domain points at, for Let's Encrypt's HTTP challenge on
+// port 80. Otherwise the order would only fail once placed.
+func (r *orderResource) checkTarget(ctx context.Context, p source, diags *diag.Diagnostics) {
+	var target, domain types.String
+	diags.Append(p.GetAttribute(ctx, path.Root("instance_id"), &target)...)
+	diags.Append(p.GetAttribute(ctx, path.Root("domain_name"), &domain)...)
+	at := path.Root("instance_id")
+	id, err := strconv.ParseInt(target.ValueString(), 10, 64)
+	if err != nil {
+		diags.AddAttributeError(at, "Invalid instance ID", fmt.Sprintf("%q is not an instance ID.", target.ValueString()))
+		return
+	}
+	in, err := r.client.GetInstance(ctx, id)
+	switch {
+	case client.IsNotFound(err):
+		diags.AddAttributeError(at, "No such instance",
+			fmt.Sprintf("Instance %d doesn't exist, or this login can't see it. Nothing was ordered.", id))
+		return
+	case err != nil:
+		diags.AddAttributeWarning(at, "Instance not checked", fmt.Sprintf("Instance %d couldn't be read: %s.", id, err))
+		return
+	}
+	if !strings.EqualFold(in.Status, "running") {
+		diags.AddAttributeWarning(at, "Instance not running",
+			fmt.Sprintf("Instance %d (%s) is %q. The certificate is installed by logging in to it, so it must be running "+
+				"when the order runs.", id, in.Name, in.Status))
+	}
+	if in.PublicIP == "" {
+		diags.AddAttributeWarning(at, "Instance has no public IP",
+			fmt.Sprintf("Instance %d (%s) has no floating IP. Let's Encrypt checks the domain over the internet on port 80, "+
+				"so the order fails without one: attach one (mtncloud_instance_settings) and allow port 80 in its security group.", id, in.Name))
+		return
+	}
+	if domain.IsNull() || domain.IsUnknown() {
+		return
+	}
+	addrs, err := net.DefaultResolver.LookupHost(ctx, domain.ValueString())
+	if err != nil || !slices.Contains(addrs, in.PublicIP) {
+		diags.AddAttributeWarning(path.Root("domain_name"), "Domain doesn't point at the instance yet",
+			fmt.Sprintf("%s doesn't resolve to instance %d's public IP yet. Let's Encrypt refuses the certificate until "+
+				"it does: create the DNS record first, and allow port 80.", domain.ValueString(), id))
+	}
 }
 
 func planKnown(ctx context.Context, p source, inputs map[string]field) bool {
@@ -334,9 +383,11 @@ func emptyOrNull(v attr.Value) bool {
 	return false
 }
 
+// volume is an extra disk. It has no datastore: MTN's order workflows create every disk with
+// datastoreId "auto" and pass the disk's storageType on as the volume type (CreateApacheInstance.sh
+// and the other Create*.sh, 2026-11-02), so a datastore sent there was taken for a volume type.
 type volume struct {
-	Size      types.Int64  `tfsdk:"size"`
-	Datastore types.String `tfsdk:"datastore"`
+	Size types.Int64 `tfsdk:"size"`
 }
 
 // build resolves every input to what the order form takes. Secrets come from cfg: they are never
@@ -404,9 +455,6 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 		case kText, kSelect:
 			v := str(p, f.attr)
 			if v == "" {
-				v = f.def
-			}
-			if v == "" {
 				continue
 			}
 			if f.kind == kSelect {
@@ -430,12 +478,7 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 		case kNumber, kBytes:
 			var v types.Int64
 			diags.Append(p.GetAttribute(ctx, path.Root(f.attr), &v)...)
-			n, set := v.ValueInt64(), !v.IsNull()
-			if !set && f.def != "" {
-				n, _ = strconv.ParseInt(f.def, 10, 64)
-				set = true
-			}
-			if set {
+			if n := v.ValueInt64(); !v.IsNull() {
 				if f.kind == kBytes {
 					n *= 1 << 30
 				}
@@ -445,23 +488,17 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 			var v types.Bool
 			diags.Append(p.GetAttribute(ctx, path.Root(f.attr), &v)...)
 			// A checkbox is sent as the console sends it, "on" or "off": MTN's scripts test
-			// `== "on"`, and their `?: "on"` defaults turn a false into "on" (2026-10-31).
-			switch {
-			case !v.IsNull():
+			// `== "on"`, and their `?: "on"` defaults turn a false into "on" (2026-10-31). Left out,
+			// the live form decides (applyForm): its default, else "off", as the console sends.
+			if !v.IsNull() {
 				out[f.key] = checkbox(v.ValueBool())
-			case f.def != "":
-				out[f.key] = checkbox(f.def == "true" || f.def == "on")
 			}
 		case kList, kLabels:
 			if v := strs(f.attr); len(v) > 0 {
 				out[f.key] = strings.Join(v, ",")
 			}
 		case kLines:
-			v := strs(f.attr)
-			if len(v) == 0 && f.def != "" {
-				v = []string{f.def}
-			}
-			if len(v) > 0 {
+			if v := strs(f.attr); len(v) > 0 {
 				// Comma-separated, as the form's help and pattern ask ("10.60.50.0/24, 10.60.40.0/24"):
 				// one per line failed its pattern (review, 2026-10-31).
 				out[f.key] = strings.Join(v, ", ")
@@ -555,29 +592,21 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 			var data []volume
 			diags.Append(p.GetAttribute(ctx, path.Root(f.attr+"data_volume"), &data)...)
 			if root.IsNull() {
-				if len(data) > 0 || str(p, f.attr+"datastore") != "" {
+				if len(data) > 0 {
 					diags.AddAttributeError(path.Root(f.attr+"root_volume_size"), "Root disk size missing",
-						"Set "+f.attr+"root_volume_size too: extra disks and a datastore are ordered with the root disk.")
+						"Set "+f.attr+"root_volume_size too: extra disks are ordered with the root disk.")
 				}
 				continue
 			}
 			if place == nil {
 				continue
 			}
-			all := append([]volume{{Size: root, Datastore: types.StringValue(str(p, f.attr+"datastore"))}}, data...)
+			all := append([]volume{{Size: root}}, data...)
 			var vols []any
 			for i, v := range all {
 				vol := map[string]any{"name": "root", "rootVolume": i == 0, "size": v.Size.ValueInt64()}
 				if i > 0 {
 					vol["name"] = "data-" + strconv.Itoa(i)
-				}
-				if ds := v.Datastore.ValueString(); ds != "" {
-					o, err := r.client.DatastoreByName(ctx, place, projectID, ds)
-					if err != nil {
-						fail(f.attr+"datastore", err)
-						continue
-					}
-					vol["storageType"] = o.ID
 				}
 				vols = append(vols, vol)
 			}
@@ -606,8 +635,7 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 	return out
 }
 
-// poolNetwork is the primary network a floating IP pool attribute is attached through: the first
-// network of the attribute with the same prefix (worker_floating_ip_pool: worker_networks), or 0.
+// checkbox is a checkbox's value as the console sends it.
 func checkbox(on bool) string {
 	if on {
 		return "on"
@@ -615,6 +643,8 @@ func checkbox(on bool) string {
 	return "off"
 }
 
+// poolNetwork is the primary network a floating IP pool attribute is attached through: the first
+// network of the attribute with the same prefix (worker_floating_ip_pool: worker_networks), or 0.
 func poolNetwork(attr string, primary map[string]int64) int64 {
 	return primary[strings.TrimSuffix(attr, "floating_ip_pool")]
 }
@@ -676,8 +706,7 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("status"), executionStatus(item))...)
 	if !r.spec.target {
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), types.ListValueMust(types.StringType, nil))...)
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), types.MapValueMust(types.StringType, nil))...)
+		setVMs(ctx, &resp.State, nil, nil, nil, &resp.Diagnostics)
 	}
 	if r.spec.app {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), types.StringNull())...)
@@ -694,8 +723,8 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 		// A workflow can fail after its VM is up (MTN's SOPHOS workflow, QA 2026-10-31): kept in state,
 		// tainted by the error, so the next apply deletes it before ordering again, and destroy deletes it.
 		if left := r.leftovers(ctx, &resp.State, &resp.Diagnostics); len(left) > 0 {
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(left))...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(r.statusesOf(ctx, left)))...)
+			st, names := r.statusesOf(ctx, left)
+			setVMs(ctx, &resp.State, left, st, names, &resp.Diagnostics)
 			resp.Diagnostics.AddError(r.spec.item+" order failed",
 				fmt.Sprintf("Order %d ended with %q%s. It left instance %s, kept in state: the next apply deletes it and orders "+
 					"again, and terraform destroy deletes it.", item.ID, executionStatus(item), why, joinIDs(left)))
@@ -739,7 +768,7 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 		ids, err = r.instancesNamed(ctx, resp.State, &resp.Diagnostics)
 		return len(ids) > 0, err
 	})
-	if werr != nil && r.spec.heat {
+	if werr != nil && r.spec.reports {
 		resp.Diagnostics.AddError(r.spec.item+" instance not found",
 			fmt.Sprintf("Order %d's workflow succeeded, but the VM it reported isn't in the project (%s). MTN's workflow names "+
 				"the VM itself (<initials>-<account>-MTN-CLOUD-<type>-<n>): check Instances in the console. The next apply "+
@@ -747,18 +776,20 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	if werr != nil {
-		var name types.String
-		resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("name"), &name)...)
+		name := r.nameOf(ctx, req.Plan, &resp.Diagnostics)
 		resp.Diagnostics.AddError(r.spec.item+" instance not found",
 			fmt.Sprintf("Order %d's workflow succeeded, but no instance named %q is in the project (%s). MTN's workflow may "+
 				"have named it itself: check Instances in the console. The next apply deletes the order and orders it again; "+
 				"raise timeouts.create if the VM is only slow to appear.", item.ID, name.ValueString(), werr))
 		return
 	}
-	statuses := map[string]string{}
+	statuses, names := map[string]string{}, map[string]string{}
 	for _, id := range ids {
 		in, err := r.client.WaitForInstance(ctx, id)
 		key := strconv.FormatInt(id, 10)
+		if in != nil {
+			names[key] = in.Name
+		}
 		switch {
 		case err != nil:
 			statuses[key] = "provisioning"
@@ -778,8 +809,7 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 			statuses[key] = in.Status
 		}
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(ids))...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(statuses))...)
+	setVMs(ctx, &resp.State, ids, statuses, names, &resp.Diagnostics)
 }
 
 // createTimeout is the default create timeout: a workflow that builds through a Heat stack waits for
@@ -801,8 +831,7 @@ func statusMap(m map[string]string) types.Map {
 
 // findInstances finds the instances an order made, by name in its project (instancesNamed).
 func (r *orderResource) findInstances(ctx context.Context, p source, diags *diag.Diagnostics) []int64 {
-	var name types.String
-	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
+	name := r.nameOf(ctx, p, diags)
 	ids, err := r.instancesNamed(ctx, p, diags)
 	if err != nil {
 		diags.AddWarning("Unable to find the order's instances", err.Error()+". The next refresh looks again.")
@@ -817,8 +846,8 @@ func (r *orderResource) findInstances(ctx context.Context, p source, diags *diag
 
 // instancesNamed lists the instances in the order's project named after it (madeBy).
 func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *diag.Diagnostics) ([]int64, error) {
-	var name, project types.String
-	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
+	var project types.String
+	name := r.nameOf(ctx, p, diags)
 	diags.Append(p.GetAttribute(ctx, path.Root("project"), &project)...)
 	all, err := r.client.ListInstances(ctx)
 	if err != nil {
@@ -828,7 +857,7 @@ func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *dia
 	if err != nil {
 		return nil, fmt.Errorf("the project couldn't be read: %w", err)
 	}
-	if r.spec.heat {
+	if r.spec.reports {
 		return r.reportedInstance(ctx, p, pr.ID, all, diags)
 	}
 	var ids []int64
@@ -884,6 +913,17 @@ func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *dia
 	return ids, nil
 }
 
+// nameOf is the order's name argument: null for an item whose VM MTN names itself (spec reports),
+// which has no name argument.
+func (r *orderResource) nameOf(ctx context.Context, p source, diags *diag.Diagnostics) types.String {
+	if r.spec.reports {
+		return types.StringNull()
+	}
+	var name types.String
+	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
+	return name
+}
+
 // templateNamed reports whether an instance has the name MTN's order workflows give their VMs,
 // "<initials>-<account>-MTN-CLOUD-<type>-<n>".
 func templateNamed(name string) bool {
@@ -904,8 +944,7 @@ func (r *orderResource) appIDOf(ctx context.Context, p source, diags *diag.Diagn
 // appFor is the order's app, for a state that has none saved (made before app_id, or imported):
 // the app named after the order that holds one of its instances. Null when there is none.
 func (r *orderResource) appFor(ctx context.Context, p source, ids []int64, diags *diag.Diagnostics) types.String {
-	var name types.String
-	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
+	name := r.nameOf(ctx, p, diags)
 	apps, err := r.client.ListApps(ctx)
 	if err != nil || name.IsNull() {
 		return types.StringNull()
@@ -920,7 +959,7 @@ func (r *orderResource) appFor(ctx context.Context, p source, ids []int64, diags
 	return types.StringNull()
 }
 
-// reportedInstance is the VM a workflow that names it itself reported (spec heat): by the ID it
+// reportedInstance is the VM a workflow that names it itself reported (spec reports): by the ID it
 // printed, else by the name, and only in the order's project. Nothing before the order exists.
 func (r *orderResource) reportedInstance(ctx context.Context, p source, projectID int64, all []*client.Instance, diags *diag.Diagnostics) ([]int64, error) {
 	var idv types.String
@@ -956,8 +995,7 @@ func (r *orderResource) reportedInstance(ctx context.Context, p source, projectI
 // one of them for the new app. One already in the order's project stops the order: its VMs would
 // be taken for this order's, and deleted with it.
 func (r *orderResource) appsBefore(ctx context.Context, p source, diags *diag.Diagnostics) (map[int64]bool, bool) {
-	var name types.String
-	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
+	name := r.nameOf(ctx, p, diags)
 	if ids, err := r.instancesNamed(ctx, p, diags); err != nil {
 		diags.AddError("Unable to check the name", err.Error()+". Nothing was ordered; apply again.")
 		return nil, false
@@ -1002,8 +1040,7 @@ func (r *orderResource) secretValues(ctx context.Context, p source, config map[s
 // ends once it has asked for the app. False, with an error, when it didn't come up running; the
 // app, when one appeared, either way (it is the order's, and destroy deletes it).
 func (r *orderResource) appReady(ctx context.Context, p source, orderID int64, before map[int64]bool, diags *diag.Diagnostics) (*client.App, bool) {
-	var name types.String
-	diags.Append(p.GetAttribute(ctx, path.Root("name"), &name)...)
+	name := r.nameOf(ctx, p, diags)
 	a, err := r.client.WaitForApp(ctx, name.ValueString(), before)
 	switch {
 	case err != nil && a == nil && errors.Is(err, context.DeadlineExceeded):
@@ -1074,8 +1111,8 @@ func (r *orderResource) Read(ctx context.Context, req resource.ReadRequest, resp
 				fmt.Sprintf("Order %d ended with %q%s, and left instance %s. The next apply deletes it and orders again; "+
 					"terraform destroy deletes it.", id, executionStatus(item), message(item), joinIDs(left)))
 			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("status"), executionStatus(item))...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(left))...)
-			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(r.statusesOf(ctx, left)))...)
+			st, names := r.statusesOf(ctx, left)
+			setVMs(ctx, &resp.State, left, st, names, &resp.Diagnostics)
 			return
 		}
 		resp.Diagnostics.AddWarning(r.spec.item+" order failed",
@@ -1090,11 +1127,10 @@ func (r *orderResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	var ids []string
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("instance_ids"), &ids)...)
 	var found []int64
-	statuses := map[string]string{}
+	statuses, names := map[string]string{}, map[string]string{}
 	if len(ids) == 0 {
-		var name types.String
-		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("name"), &name)...)
-		if !name.IsNull() || r.spec.heat {
+		name := r.nameOf(ctx, req.State, &resp.Diagnostics)
+		if !name.IsNull() || r.spec.reports {
 			found = r.findInstances(ctx, req.State, &resp.Diagnostics)
 		}
 	} else {
@@ -1108,7 +1144,7 @@ func (r *orderResource) Read(ctx context.Context, req resource.ReadRequest, resp
 				return
 			default:
 				found = append(found, n)
-				statuses[s] = in.Status
+				statuses[s], names[s] = in.Status, in.Name
 			}
 		}
 		if len(found) == 0 {
@@ -1118,13 +1154,12 @@ func (r *orderResource) Read(ctx context.Context, req resource.ReadRequest, resp
 		}
 	}
 	if len(ids) == 0 {
-		statuses = r.statusesOf(ctx, found)
+		statuses, names = r.statusesOf(ctx, found)
 	}
 	if r.spec.app && r.appIDOf(ctx, req.State, &resp.Diagnostics) == 0 && len(found) > 0 {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), r.appFor(ctx, req.State, found, &resp.Diagnostics))...)
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(found))...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(statuses))...)
+	setVMs(ctx, &resp.State, found, statuses, names, &resp.Diagnostics)
 }
 
 // statusesOf reads each instance's status; one that can't be read is left out.
@@ -1147,10 +1182,10 @@ func (r *orderResource) leftovers(ctx context.Context, st source, diags *diag.Di
 	if len(ids) > 0 {
 		return out
 	}
-	var name, project types.String
-	diags.Append(st.GetAttribute(ctx, path.Root("name"), &name)...)
+	var project types.String
+	name := r.nameOf(ctx, st, diags)
 	diags.Append(st.GetAttribute(ctx, path.Root("project"), &project)...)
-	if project.ValueString() == "" || (name.ValueString() == "" && !r.spec.heat) {
+	if project.ValueString() == "" || (name.ValueString() == "" && !r.spec.reports) {
 		return nil
 	}
 	found, err := r.instancesNamed(ctx, st, &diag.Diagnostics{})
@@ -1160,14 +1195,27 @@ func (r *orderResource) leftovers(ctx context.Context, st source, diags *diag.Di
 	return found
 }
 
-func (r *orderResource) statusesOf(ctx context.Context, ids []int64) map[string]string {
-	out := map[string]string{}
+// statusesOf reads each instance's status and name, by ID; one that can't be read is left out.
+func (r *orderResource) statusesOf(ctx context.Context, ids []int64) (statuses, names map[string]string) {
+	statuses, names = map[string]string{}, map[string]string{}
 	for _, id := range ids {
 		if in, err := r.client.GetInstance(ctx, id); err == nil {
-			out[strconv.FormatInt(id, 10)] = in.Status
+			key := strconv.FormatInt(id, 10)
+			statuses[key], names[key] = in.Status, in.Name
 		}
 	}
-	return out
+	return statuses, names
+}
+
+// setVMs saves what an order made: its instance IDs, and their statuses and names by ID.
+func setVMs(ctx context.Context, st *tfsdk.State, ids []int64, statuses, names map[string]string, diags *diag.Diagnostics) {
+	list := make([]attr.Value, 0, len(ids))
+	for _, id := range ids {
+		list = append(list, types.StringValue(names[strconv.FormatInt(id, 10)]))
+	}
+	diags.Append(st.SetAttribute(ctx, path.Root("instance_ids"), idList(ids))...)
+	diags.Append(st.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(statuses))...)
+	diags.Append(st.SetAttribute(ctx, path.Root("instance_names"), types.ListValueMust(types.StringType, list))...)
 }
 
 // Update only runs when an imported order adopts its configuration (any other change is a
@@ -1193,10 +1241,9 @@ func (r *orderResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if len(found) == 0 && r.ready(&resp.Diagnostics) {
 		found = r.findInstances(ctx, req.Plan, &resp.Diagnostics)
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_ids"), idList(found))...)
-	statuses := map[string]string{}
+	statuses, names := map[string]string{}, map[string]string{}
 	if r.ready(&resp.Diagnostics) {
-		statuses = r.statusesOf(ctx, found)
+		statuses, names = r.statusesOf(ctx, found)
 	}
 	if r.spec.app {
 		appID := types.StringNull()
@@ -1206,7 +1253,7 @@ func (r *orderResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), appID)...)
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_statuses"), statusMap(statuses))...)
+	setVMs(ctx, &resp.State, found, statuses, names, &resp.Diagnostics)
 }
 
 // Delete deletes what the order made (owner, D-029), then its inventory record. An app order
@@ -1229,7 +1276,7 @@ func (r *orderResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	}
 	var to timeouts.Value
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("timeouts"), &to)...)
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("name"), &name)...)
+	name = r.nameOf(ctx, req.State, &resp.Diagnostics)
 	timeout, d := to.Delete(ctx, orderTimeout)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
@@ -1243,7 +1290,7 @@ func (r *orderResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 			why+" Nothing was deleted. To stop managing it without deleting anything, use a removed block "+
 				"(lifecycle { destroy = false }) or terraform state rm.")
 	}
-	if name.IsNull() && !r.spec.heat {
+	if name.IsNull() && !r.spec.reports {
 		refuse("It was imported and not applied since, so the instances it made aren't known yet: run terraform apply first.")
 		return
 	}
@@ -1292,7 +1339,7 @@ func (r *orderResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	// No execution on the record doesn't mean nothing was made (FortiADC QA, 2026-10-31: its record
 	// showed none while its workflow had made a VM), so nothing found is always refused, never
 	// taken as withdrawn: deleting the record would orphan what the workflow made.
-	if len(plan.apps) == 0 && len(plan.instances) == 0 && r.spec.heat {
+	if len(plan.apps) == 0 && len(plan.instances) == 0 && r.spec.reports {
 		refuse("Nothing it made was found: the VM its workflow reported isn't in its project. Check Instances in the console.")
 		return
 	}

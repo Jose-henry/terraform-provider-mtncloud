@@ -1,7 +1,7 @@
 {
   "item": "MTN MariaDB",
   "code": "MariaDB2378",
-  "read": "2026-10-31",
+  "read": "2026-11-02",
   "fields": [
     {
       "name": "autoSecurityUpdates",

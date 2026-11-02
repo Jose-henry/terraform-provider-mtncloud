@@ -1,0 +1,54 @@
+---
+page_title: "mtncloud_managed_kubernetes_cluster Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_managed_kubernetes_cluster
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_managed_kubernetes_cluster/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_managed_kubernetes_cluster/import.sh" }}
+
+MTN Cloud doesn't report what the nodes were built with (plans, disks, networks, versions), so after
+an import those come from your configuration. The first apply after an import records them, and only changes
+what can change in place (name, description, labels, worker count, autoscaling). A Docker cluster can't be
+imported here: use `mtncloud_docker_cluster`.
+
+## Notes
+
+- **Built like MTN's own order.** The cluster is built the way MTN's Managed Kubernetes catalog order builds it:
+  a fixed 100 GB root disk on every node, your disks (at least one) as data disks, the `MK8S` label (added for you,
+  not shown in `labels`), the description `MK8S Cluster` when you set none, your user created on every node, and
+  the same networks and security groups on masters and workers unless `worker` says otherwise. The nodes get no
+  public IP.
+- **Disks.** The root disk is always 100 GB on the project's default datastore and can't be changed. Each data disk
+  can name a datastore of the project (for example `ENCR_AT_REST`; `mtncloud_datastores` lists them).
+- **Layouts.** `single` is `MTN Kubernetes Single-Master` (1 master), `ha3` is `MTN Kubernetes HA (3)` and `ha5`
+  is `MTN Kubernetes HA (5)`. The layout sets the number of masters; `worker_count` sets the workers (3 if left out).
+- **Security groups.** List groups that allow the Kubernetes API (TCP 6443) and the kubelet (TCP 10250) between the
+  nodes. The project's default group is always applied. A group must be synced to the project.
+- **Autoscaler.** It is always on. With `autoscaling`, it moves the worker count between `min_nodes` and
+  `max_nodes`; `worker_count` is then only the starting count, and the current workers are in `worker_ids`.
+  Without it, the autoscaler is held at `worker_count` (MTN's order does the same: a cluster built with it off
+  never finishes its workers), and changing `worker_count` moves it first.
+- **In place:** `name`, `description`, `labels`, `worker_count` (workers are added with the worker settings, and
+  removed newest first), the `worker` settings (used for workers added later) and `autoscaling`. Everything else
+  builds a new cluster.
+- **Names are checked when you plan:** project, plans, networks, security groups, datastores, domain, registry,
+  workflow and Kubernetes version. An unknown name lists the valid ones.
+- **kubectl from the console** needs a Customer Admin or Power User login.
+- **Timeouts.** Create waits up to 90 minutes, updates and destroy up to 45 (see `timeouts`). If the cluster isn't
+  ready when the wait ends, it is kept with a warning and never built twice.
+- **Destroy** deletes the cluster with its nodes.

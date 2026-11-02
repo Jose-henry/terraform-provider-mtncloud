@@ -377,7 +377,9 @@ func instanceSettled(status string) bool {
 	return InstanceFailed(status)
 }
 
-func volumesBody(vs []VolumeSpec) []map[string]any {
+// VolumesBody is volumes as the provisioning APIs take them: storage type 11 (MTN's scripts send
+// nothing else) and the datastore's ID, or "auto" for the project's default.
+func VolumesBody(vs []VolumeSpec) []map[string]any {
 	out := make([]map[string]any, 0, len(vs))
 	for _, v := range vs {
 		id := v.ID
@@ -464,7 +466,7 @@ func (c *Client) CreateInstance(ctx context.Context, in InstanceInput) (int64, e
 			"createUser":     in.CreateUser,
 			"noAgent":        in.NoAgent,
 		},
-		"volumes":           volumesBody(in.Volumes),
+		"volumes":           VolumesBody(in.Volumes),
 		"networkInterfaces": nics,
 		"securityGroups":    sgs,
 		"layoutSize":        layoutSize,
@@ -576,7 +578,7 @@ func (c *Client) ResizeInstance(ctx context.Context, id int64, r ResizeInput) er
 	}
 	body := map[string]any{
 		"instance":              map[string]any{"id": id, "plan": map[string]any{"id": r.PlanID}},
-		"volumes":               volumesBody(r.Volumes),
+		"volumes":               VolumesBody(r.Volumes),
 		"deleteOriginalVolumes": false,
 	}
 	// Only when the cards change: the platform adds every card sent without an ID (live QA

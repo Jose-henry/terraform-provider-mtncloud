@@ -457,6 +457,24 @@ run would make the result differ from the plan ("inconsistent result"). The know
 copy it, unless they use `replace_triggered_by` (the documented way). Create adopts an existing schedule
 only when times, zone and copied values all match, so it never takes over another config's schedule.
 
+## D-042 Catalog orders take only what the console lets a user set (owner, 2026-11-02)
+A field the order form hides or locks has no argument. The console never lets a user set one, so
+neither does the provider. A test against the form snapshots enforces it
+(`TestOrderSpecs_NoHiddenOrLockedArguments`). Defaults come from the live form only, never from
+copies in the provider, and are sent as the console sends them:
+- **Checkboxes:** a checkbox left out is the form's default, else `off`.
+- **Name templates:** a hidden or locked name template (`${userInitials}-${accountId}-MTN-CLOUD-${type}-${sequence+0}`)
+  is sent as it is, and the platform expands it when the workflow creates the VM (API reference: instance
+  name patterns).
+
+Without the template, MTN's scripts fall back to one fixed name ("Firewall", `FortiFirewall.sh` L14).
+Such an item (spec `reports`) finds its VM from the workflow's output. Read live on 2026-11-02 from job
+executions 32109, 32159–32161, 32359, 32362 and 32364, all seven scripts echo their
+`POST /api/instances` response (`{"instance":{"id":N,...`) three times with one ID; SOPHOS prints the
+console link. Supersedes B-034 #10's name-matching approach, and the backlog note that "Fortinet,
+PfSense and WireGuard use the name sent": they do, but only because a name was sent that the console
+never sends.
+
 ## D-041 Registry address back to `jose-henry/mtncloud` (owner, 2026-11-01)
 Supersedes D-037. The registry never published 0.8.0 or 0.9.0 from the `mtncloud-mcs` organisation:
 its listing is `jose-henry/mtncloud`, tied to `github.com/Jose-henry/terraform-provider-mtncloud`, and

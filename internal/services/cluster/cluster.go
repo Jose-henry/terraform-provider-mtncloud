@@ -1,5 +1,5 @@
-// Package cluster holds mtncloud_cluster: Kubernetes and Docker clusters built from MTN's own
-// cluster layouts.
+// Package cluster holds mtncloud_managed_kubernetes_cluster and mtncloud_docker_cluster: clusters
+// built from MTN's own cluster layouts, as MTN's `Manage Kubernetes/CreateCluster.sh` builds them.
 package cluster
 
 import (
@@ -42,20 +42,20 @@ const (
 
 // Resources lists this package's resources.
 func Resources() []func() resource.Resource {
-	return []func() resource.Resource{func() resource.Resource { return &clusterResource{} }}
+	return []func() resource.Resource{
+		func() resource.Resource { return &clusterResource{kind: kube} },
+		func() resource.Resource { return &clusterResource{kind: docker} },
+	}
 }
 
-type clusterResource struct{ client *client.Client }
-
-// typeCodes maps the type argument to the platform's cluster type code.
-var typeCodes = map[string]string{"kubernetes": "kubernetes-cluster", "docker": "docker-cluster"}
-
-var defaultLayouts = map[string]string{"kubernetes": "MTN Kubernetes Single-Master", "docker": "MTN Docker Cluster"}
+type clusterResource struct {
+	client *client.Client
+	kind   string // kube or docker
+}
 
 type model struct {
 	ID                types.String   `tfsdk:"id"`
 	Name              types.String   `tfsdk:"name"`
-	Type              types.String   `tfsdk:"type"`
 	Layout            types.String   `tfsdk:"layout"`
 	Group             types.String   `tfsdk:"group"`
 	Cloud             types.String   `tfsdk:"cloud"`
@@ -84,12 +84,9 @@ type model struct {
 // node is the master block, and the worker block's overrides (every field optional there).
 type node struct {
 	Plan           types.String `tfsdk:"plan"`
-	RootVolumeSize types.Int64  `tfsdk:"root_volume_size"`
-	Datastore      types.String `tfsdk:"datastore"`
 	DataVolumes    []volume     `tfsdk:"data_volume"`
 	Networks       []string     `tfsdk:"networks"`
 	SecurityGroups []string     `tfsdk:"security_groups"`
-	FloatingIPPool types.String `tfsdk:"floating_ip_pool"`
 }
 
 type volume struct {
@@ -103,7 +100,11 @@ type autoscaling struct {
 }
 
 func (r *clusterResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_cluster"
+	if r.kind == kube {
+		resp.TypeName = req.ProviderTypeName + "_managed_kubernetes_cluster"
+		return
+	}
+	resp.TypeName = req.ProviderTypeName + "_docker_cluster"
 }
 
 // replaceIfSet replaces the cluster when a value it was built with changes. An imported cluster has
@@ -129,7 +130,16 @@ func (objectReplaceIfSet) PlanModifyObject(_ context.Context, req planmodifier.O
 }
 
 func nodeAttrs(master bool) map[string]schema.Attribute {
-	who := "master"
+	return nodeAttrsFor(master, "master")
+}
+
+// rootGB is the fixed root disk of every node, Kubernetes and Docker alike (owner, 2026-11-02:
+// 100 GB, CreateCluster.sh moves from 50 to match); what a user sizes are the data disks.
+const rootGB = 100
+
+// nodeAttrsFor is a node block's attributes; who names the nodes ("master" or "host"; a worker
+// block is always "worker").
+func nodeAttrsFor(master bool, who string) map[string]schema.Attribute {
 	if !master {
 		who = "worker"
 	}
@@ -137,21 +147,16 @@ func nodeAttrs(master bool) map[string]schema.Attribute {
 	if !master {
 		inherit = " Left out, the master's is used."
 	}
-	ds := func(what string) schema.StringAttribute {
-		return schema.StringAttribute{Optional: true, Description: "Datastore (storage type) of the " + what + ", by name. Left out, the project's default."}
-	}
 	return map[string]schema.Attribute{
 		"plan": schema.StringAttribute{Required: master, Optional: !master,
 			Description: "Plan (size) of each " + who + " node, by name, for example `G4S16`." + inherit},
-		"root_volume_size": schema.Int64Attribute{Required: master, Optional: !master,
-			Description: "Root disk size in GB." + inherit, Validators: []validator.Int64{int64validator.AtLeast(1)}},
-		"datastore": ds("root disk"),
 		"data_volume": schema.ListNestedAttribute{Required: master, Optional: !master,
-			Description: "Data disks, at least one (MTN's layouts keep container data on it)." + inherit,
+			Description: "Data disks, at least one: container data lives on them. The root disk is always 100 GB." + inherit,
 			Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
 			NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
-				"size":      schema.Int64Attribute{Required: true, Description: "Size in GB.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
-				"datastore": ds("disk"),
+				"size": schema.Int64Attribute{Required: true, Description: "Size in GB.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
+				"datastore": schema.StringAttribute{Optional: true,
+					Description: "Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default."},
 			}}},
 		"networks": schema.ListAttribute{Required: master, Optional: !master, ElementType: types.StringType,
 			Description: "MTN Networks of the project, by name; the first is the primary interface." + inherit,
@@ -159,8 +164,6 @@ func nodeAttrs(master bool) map[string]schema.Attribute {
 		"security_groups": schema.ListAttribute{Optional: true, ElementType: types.StringType,
 			Description: "Security groups, by name, in addition to the project's default group, which is always applied. " +
 				"Listing the default too changes nothing." + inherit},
-		"floating_ip_pool": schema.StringAttribute{Optional: true,
-			Description: "Floating IP pool (public network) to give each node a public IP from, for example `public-network-01`." + inherit},
 	}
 }
 
@@ -174,54 +177,81 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 		return schema.StringAttribute{Optional: true, Computed: true, Description: desc, Validators: v,
 			PlanModifiers: []planmodifier.String{replaceIfSet(), stringplanmodifier.UseStateForUnknown()}}
 	}
+	nodes := "nodes"
+	if r.kind == docker {
+		nodes = "hosts"
+	}
+	attrs := map[string]schema.Attribute{
+		"id":    schema.StringAttribute{Computed: true, Description: "Cluster ID.", PlanModifiers: keep},
+		"name":  schema.StringAttribute{Required: true, Description: "Cluster name. Changing it renames the cluster in place."},
+		"group": defaulted("Group, by name. Left out, the provider's `group` (or `MTNCLOUD_GROUP`)."),
+		"cloud": defaulted("Cloud, by name. Left out, the provider's `cloud` (or `MTNCLOUD_CLOUD`); it must be the group's cloud."),
+		"project": defaulted("Project the " + nodes + " are built in, by name. Left out, the provider's `project` (or " +
+			"`MTNCLOUD_PROJECT`)."),
+		"description": schema.StringAttribute{Optional: true, Description: "Description. Changes in place.",
+			Validators: []validator.String{stringvalidator.LengthAtLeast(1)}},
+		"labels": schema.ListAttribute{Optional: true, ElementType: types.StringType,
+			Description: "Labels, on the cluster and its " + nodes + ". Change in place (the " + nodes + " keep the labels they were built with)."},
+		"resource_name": built("Name the " + nodes + " are given (MTN adds the role and a number). Left out, the cluster name."),
+		"hostname":      built("Host name prefix of the " + nodes + ". Left out, the resource name."),
+		"domain":        built("Network domain of the " + nodes + ", by name, for example `localdomain`."),
+		"workflow":      built("Workflow to run on each node after it is built, by name."),
+		"create_user": schema.BoolAttribute{Optional: true,
+			Description:   "Create your user on the " + nodes + ". Left out, `true`, as MTN's own cluster order does. Changing it builds a new cluster.",
+			PlanModifiers: []planmodifier.Bool{boolReplaceIfSet{}}},
+		"status": schema.StringAttribute{Computed: true, Description: "Status, for example `ok`."},
+	}
+	blocks := map[string]schema.Block{"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Update: true, Delete: true})}
+	if r.kind == docker {
+		attrs["host"] = schema.SingleNestedAttribute{Required: true, Attributes: nodeAttrsFor(true, "host"),
+			Description:   "The Docker hosts. Changing it builds a new cluster.",
+			PlanModifiers: []planmodifier.Object{objectReplaceIfSet{}}}
+		attrs["host_count"] = schema.Int64Attribute{Optional: true, Computed: true,
+			Description: "Number of hosts. Left out, the layout's default (1). Changing it adds or removes hosts in place (removal takes the newest).",
+			Validators:  []validator.Int64{int64validator.AtLeast(1)}}
+		attrs["host_ids"] = schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "IDs of the hosts now in the cluster."}
+		resp.Schema = schema.Schema{
+			Description: "A Docker cluster, built from MTN's Docker layout (`MTN Docker Cluster`): a set of Docker hosts " +
+				"built from `host`. The hosts' security groups must allow what your containers serve.",
+			Attributes: attrs,
+			Blocks:     blocks,
+		}
+		return
+	}
 	cidr := validators.IPv4CIDR()
-	resp.Schema = schema.Schema{
-		Description: "A Kubernetes or Docker cluster, built from MTN's cluster layouts. The masters (Docker: the hosts) are built " +
-			"from `master`; workers use `worker` where it is set and the master's settings otherwise.",
+	attrs["layout"] = defaulted("`single` (one master, the default), `ha3` (three masters) or `ha5` (five masters): MTN's "+
+		"layouts `MTN Kubernetes Single-Master`, `MTN Kubernetes HA (3)` and `MTN Kubernetes HA (5)`. Changing it builds a new cluster.",
+		stringvalidator.OneOf("single", "ha3", "ha5"))
+	attrs["kubernetes_version"] = defaulted("Kubernetes version, as the layout lists it, for example `1.35.3`. Left out, the layout's default.")
+	attrs["pod_cidr"] = defaulted("Pod network. Left out, the layout's default (`10.244.0.0/16`).", cidr)
+	attrs["service_cidr"] = defaulted("Service network. Left out, the layout's default (`10.96.0.0/12`).", cidr)
+	attrs["registry"] = built("Registry the cluster pulls images from, by name (see `mtncloud_registries`). Left out, the public Docker Hub.")
+	attrs["master"] = schema.SingleNestedAttribute{Required: true, Attributes: nodeAttrs(true),
+		Description:   "The masters. Changing any of it builds a new cluster.",
+		PlanModifiers: []planmodifier.Object{objectReplaceIfSet{}}}
+	attrs["worker_count"] = schema.Int64Attribute{Optional: true, Computed: true,
+		Description: "Number of workers. Left out, 3, as MTN's own cluster order does. Changing it adds or removes workers in place " +
+			"(removal takes the newest). With `autoscaling`, it is only the starting count.",
+		Validators: []validator.Int64{int64validator.AtLeast(1)}}
+	attrs["worker"] = schema.SingleNestedAttribute{Optional: true, Attributes: nodeAttrs(false),
+		Description: "Worker settings that differ from the master's: plan, data disks, networks, security groups. " +
+			"Changing them applies to workers added later; existing workers keep theirs."}
+	attrs["autoscaling"] = schema.SingleNestedAttribute{Optional: true,
+		Description: "Scale workers automatically between these counts. Changes in place. Left out, the autoscaler is held at " +
+			"`worker_count`, as MTN's own cluster order does (a cluster built with it off never finishes its workers).",
 		Attributes: map[string]schema.Attribute{
-			"id":   schema.StringAttribute{Computed: true, Description: "Cluster ID.", PlanModifiers: keep},
-			"name": schema.StringAttribute{Required: true, Description: "Cluster name. Changing it renames the cluster in place."},
-			"type": defaulted("`kubernetes` (default) or `docker`. Changing it builds a new cluster.",
-				stringvalidator.OneOf("kubernetes", "docker")),
-			"layout": defaulted("MTN layout, by name: `MTN Kubernetes Single-Master` (default for Kubernetes), `MTN Kubernetes HA (3)`, " +
-				"`MTN Kubernetes HA (5)` or `MTN Docker Cluster` (Docker). Changing it builds a new cluster."),
-			"group":       defaulted("Group, by name. Left out, the provider's `group` (or `MTNCLOUD_GROUP`)."),
-			"cloud":       defaulted("Cloud, by name. Left out, the provider's `cloud` (or `MTNCLOUD_CLOUD`); it must be the group's cloud."),
-			"project":     defaulted("Project the nodes are built in, by name. Left out, the provider's `project` (or `MTNCLOUD_PROJECT`)."),
-			"description": schema.StringAttribute{Optional: true, Description: "Description. Changes in place."},
-			"labels": schema.ListAttribute{Optional: true, ElementType: types.StringType,
-				Description: "Labels, on the cluster and its nodes. Change in place (the nodes keep the labels they were built with)."},
-			"resource_name":      built("Name the nodes are given (the layout adds `-master`, `-worker` and a number). Left out, the cluster name."),
-			"hostname":           built("Host name prefix of the nodes. Left out, the resource name."),
-			"domain":             built("Network domain of the nodes, by name, for example `localdomain`."),
-			"kubernetes_version": defaulted("Kubernetes only: version, as the layout lists it, for example `1.35.3`. Left out, the layout's default."),
-			"pod_cidr":           defaulted("Kubernetes only: pod network. Left out, the layout's default (`10.244.0.0/16`).", cidr),
-			"service_cidr":       defaulted("Kubernetes only: service network. Left out, the layout's default (`10.96.0.0/12`).", cidr),
-			"registry":           built("Kubernetes only: registry the cluster pulls images from, by name (see `mtncloud_registries`). Left out, the public Docker Hub."),
-			"workflow":           built("Workflow to run on each node after it is built, by name."),
-			"create_user": schema.BoolAttribute{Optional: true,
-				Description:   "Create your user on the nodes. Changing it builds a new cluster.",
-				PlanModifiers: []planmodifier.Bool{boolReplaceIfSet{}}},
-			"master": schema.SingleNestedAttribute{Required: true, Attributes: nodeAttrs(true),
-				Description:   "The masters (Docker: the hosts). Changing any of it builds a new cluster.",
-				PlanModifiers: []planmodifier.Object{objectReplaceIfSet{}}},
-			"worker_count": schema.Int64Attribute{Optional: true, Computed: true,
-				Description: "Kubernetes workers (Docker: hosts). Left out, the layout's default (3 for Kubernetes, 1 for Docker). Changing it adds " +
-					"or removes workers in place (removal takes the newest). With `autoscaling`, it is only the starting count.",
-				Validators: []validator.Int64{int64validator.AtLeast(1)}},
-			"worker": schema.SingleNestedAttribute{Optional: true, Attributes: nodeAttrs(false),
-				Description: "Worker settings that differ from the master's. Changing them applies to workers added later; existing workers keep theirs."},
-			"autoscaling": schema.SingleNestedAttribute{Optional: true,
-				Description: "Scale workers automatically between these counts. Changes in place; removing it turns the autoscaler off.",
-				Attributes: map[string]schema.Attribute{
-					"min_nodes": schema.Int64Attribute{Required: true, Description: "Fewest workers.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
-					"max_nodes": schema.Int64Attribute{Required: true, Description: "Most workers.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
-				}},
-			"status":     schema.StringAttribute{Computed: true, Description: "Status, for example `ok`."},
-			"api_url":    schema.StringAttribute{Computed: true, Description: "Kubernetes API address, when MTN Cloud reports one."},
-			"worker_ids": schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "IDs of the workers (Docker: hosts) now in the cluster."},
-		},
-		Blocks: map[string]schema.Block{"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Update: true, Delete: true})},
+			"min_nodes": schema.Int64Attribute{Required: true, Description: "Fewest workers.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
+			"max_nodes": schema.Int64Attribute{Required: true, Description: "Most workers.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
+		}}
+	attrs["api_url"] = schema.StringAttribute{Computed: true, Description: "Kubernetes API address, when MTN Cloud reports one."}
+	attrs["worker_ids"] = schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "IDs of the workers now in the cluster."}
+	resp.Schema = schema.Schema{
+		Description: "A managed Kubernetes cluster, built from MTN's Kubernetes layouts as MTN's own cluster order builds it: " +
+			"the masters from `master`, the workers from `worker` where it is set and the master's settings otherwise, every node " +
+			"with a fixed 100 GB root disk and no public IP, and the `MK8S` label. The security groups must allow the Kubernetes API (TCP 6443) " +
+			"and the kubelet (TCP 10250) between the nodes. Only a Customer Admin or Power User login can run kubectl on it from the console.",
+		Attributes: attrs,
+		Blocks:     blocks,
 	}
 }
 
@@ -271,23 +301,17 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 		return
 	}
 	var plan, config model
-	resp.Diagnostics.Append(resp.Plan.Get(ctx, &plan)...)
-	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	resp.Diagnostics.Append(r.get(ctx, resp.Plan, &plan)...)
+	resp.Diagnostics.Append(r.get(ctx, req.Config, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 	creating := req.State.Raw.IsNull()
 	var state model
 	if !creating {
-		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+		resp.Diagnostics.Append(r.get(ctx, req.State, &state)...)
 	}
 	adopting := !creating && state.Master.IsNull() // imported: what it was built with is unknown
-	if config.Type.IsNull() {
-		plan.Type = types.StringValue("kubernetes")
-		if !creating && !state.Type.IsNull() {
-			plan.Type = state.Type
-		}
-	}
 	if !creating && !adopting {
 		// Only name, description, labels, worker settings and autoscaling change in place; the
 		// rest keeps its planned (state) value or replaces the cluster through its modifier.
@@ -297,21 +321,21 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 			resp.Diagnostics.Append(d...)
 			plan.Status, plan.WorkerIDs = types.StringUnknown(), types.ListUnknown(types.StringType)
 		}
-		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		resp.Diagnostics.Append(r.set(ctx, &resp.Plan, &plan)...)
 		return
 	}
 	if adopting {
 		// Nothing is built: values left to their default keep what the import read (or nothing).
 		keepUnset(&plan, config, state)
-		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+		resp.Diagnostics.Append(r.set(ctx, &resp.Plan, &plan)...)
 		return
 	}
 	// A value only known after apply stays unknown: a default planned in its place would contradict
 	// the configuration. The apply checks its names.
-	for _, v := range []attr.Value{config.Type, config.Layout, config.Cloud, config.KubernetesVersion, config.PodCIDR,
+	for _, v := range []attr.Value{config.Layout, config.Cloud, config.KubernetesVersion, config.PodCIDR,
 		config.ServiceCIDR, config.WorkerCount} {
 		if v.IsUnknown() {
-			resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+			resp.Diagnostics.Append(r.set(ctx, &resp.Plan, &plan)...)
 			return
 		}
 	}
@@ -319,8 +343,11 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if b == nil || resp.Diagnostics.HasError() {
 		return
 	}
-	plan.Status, plan.APIURL, plan.WorkerIDs = types.StringUnknown(), types.StringUnknown(), types.ListUnknown(types.StringType)
-	resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+	plan.Status, plan.WorkerIDs = types.StringUnknown(), types.ListUnknown(types.StringType)
+	if r.kind == kube {
+		plan.APIURL = types.StringUnknown()
+	}
+	resp.Diagnostics.Append(r.set(ctx, &resp.Plan, &plan)...)
 }
 
 // planUpdate checks an in-place change: worker settings and autoscaling are resolved now, so a
@@ -373,10 +400,10 @@ func (r *clusterResource) checkAutoscaling(ctx context.Context, m *model, diags 
 		return
 	}
 	if a.MinNodes.ValueInt64() > a.MaxNodes.ValueInt64() {
-		diags.AddAttributeError(path.Root("autoscaling"), "Invalid autoscaling", "min_nodes can't be more than max_nodes.")
+		r.addError(diags, "autoscaling", "Invalid autoscaling", "min_nodes can't be more than max_nodes.")
 	}
 	if n := m.WorkerCount; !n.IsNull() && !n.IsUnknown() && (n.ValueInt64() < a.MinNodes.ValueInt64() || n.ValueInt64() > a.MaxNodes.ValueInt64()) {
-		diags.AddAttributeError(path.Root("worker_count"), "Worker count outside the autoscaling range",
+		r.addError(diags, "worker_count", "Worker count outside the autoscaling range",
 			fmt.Sprintf("worker_count %d must be between min_nodes %d and max_nodes %d.", n.ValueInt64(), a.MinNodes.ValueInt64(), a.MaxNodes.ValueInt64()))
 	}
 }
@@ -403,35 +430,30 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 	for _, v := range []attr.Value{m.Name, m.Group, m.Project, m.Master, m.Worker, m.Labels, m.Description, m.Autoscaling,
 		m.ResourceName, m.Hostname, m.Domain, m.Registry, m.Workflow, m.CreateUser} {
 		if !fullyKnown(ctx, v) {
-			if m.Layout.IsUnknown() || m.Layout.IsNull() {
+			if r.kind == kube && (m.Layout.IsUnknown() || m.Layout.IsNull()) {
 				m.Layout = types.StringUnknown()
 			}
 			return nil
 		}
 	}
-	kind := m.Type.ValueString()
-	kube := kind == "kubernetes"
+	isKube := r.kind == kube
 	fail := func(a string, err error) {
-		diags.AddAttributeError(path.Root(a), "Invalid "+strings.ReplaceAll(a, "_", " "), err.Error())
+		r.addError(diags, a, "Invalid "+strings.ReplaceAll(r.attrName(a), "_", " "), err.Error())
 	}
-	if !kube {
-		for a, v := range map[string]types.String{"kubernetes_version": m.KubernetesVersion, "pod_cidr": m.PodCIDR, "service_cidr": m.ServiceCIDR, "registry": m.Registry} {
-			if !v.IsNull() && v.ValueString() != "" && !v.IsUnknown() {
-				fail(a, fmt.Errorf("%s is for Kubernetes clusters only", a))
-			}
+	want := dockerLayout
+	if isKube {
+		if m.Layout.IsNull() || m.Layout.IsUnknown() {
+			m.Layout = types.StringValue("single")
+		}
+		var ok bool
+		if want, ok = kubeLayouts[m.Layout.ValueString()]; !ok {
+			want = mtnLayout{name: m.Layout.ValueString()} // imported from a layout other than MTN's three
 		}
 	}
-	layoutName := m.Layout.ValueString()
-	if m.Layout.IsNull() || m.Layout.IsUnknown() {
-		layoutName = defaultLayouts[kind]
-	}
-	layout, err := r.client.ClusterLayoutByName(ctx, typeCodes[kind], layoutName)
+	layout, err := r.client.ClusterLayoutByCode(ctx, typeCodes[r.kind], want.code, want.name)
 	if err != nil {
 		fail("layout", err)
 		return nil
-	}
-	if m.Layout.IsNull() || m.Layout.IsUnknown() {
-		m.Layout = types.StringValue(layout.Name) // set by the user, it is kept as typed
 	}
 	place, err := r.client.PlacementForGroup(ctx, m.Group.ValueString())
 	if err != nil {
@@ -452,7 +474,11 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 	}
 	b := &built{place: place, projectID: pr.ID}
 	if m.WorkerCount.IsNull() || m.WorkerCount.IsUnknown() {
+		// Kubernetes: 3, MTN's order's default whatever the layout says (CreateCluster.sh workerCount).
 		m.WorkerCount = types.Int64Value(max(layout.Workers, 1))
+		if isKube {
+			m.WorkerCount = types.Int64Value(3)
+		}
 	}
 	r.checkAutoscaling(ctx, m, diags)
 
@@ -471,8 +497,11 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 	}
 	count := m.WorkerCount.ValueInt64()
 	config := server["config"].(map[string]any)
-	config["nodeCount"] = count
-	server["nodeCount"] = count
+	if !isKube {
+		// Docker: the hosts are the server part, nodeCount of them.
+		config["nodeCount"] = count
+		server["nodeCount"] = count
+	}
 	server["visibility"] = "private"
 	if v := m.ResourceName.ValueString(); v != "" {
 		server["name"] = v
@@ -490,13 +519,19 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 	}
 	var labels []string
 	diags.Append(m.Labels.ElementsAs(ctx, &labels, false)...)
+	if isKube {
+		labels = withMK8S(labels)
+	}
 	if len(labels) > 0 {
 		server["labels"] = labels
 	}
-	if !m.CreateUser.IsNull() {
-		config["createUser"] = m.CreateUser.ValueBool()
+	// MTN's order always creates the user, with the agent (CreateCluster.sh).
+	createUser := m.CreateUser.IsNull() || m.CreateUser.ValueBool()
+	for _, c := range []map[string]any{config, b.worker["config"].(map[string]any)} {
+		c["createUser"], c["noAgent"] = createUser, false
 	}
-	if kube {
+	top := map[string]any{}
+	if isKube {
 		custom := map[string]any{}
 		for _, o := range []struct {
 			v   *types.String
@@ -530,26 +565,37 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 			*o.v = types.StringValue(want)
 		}
 		config["customOptions"] = custom
-		// The platform's own MKS clients send the networks at config level too.
-		config["podCidr"], config["serviceCidr"] = custom["podCidr"], custom["serviceCidr"]
+		repo := ""
 		if v := m.Registry.ValueString(); v != "" {
 			reg, err := r.client.RegistryByName(ctx, place, v)
 			if err != nil {
 				fail("registry", err)
 			} else if reg.ID != 0 {
-				config["defaultRepoAccount"] = reg.ID
+				repo = strconv.FormatInt(reg.ID, 10)
 			}
 		}
-	} else {
-		m.KubernetesVersion, m.PodCIDR, m.ServiceCIDR = types.StringNull(), types.StringNull(), types.StringNull()
+		// The autoscaler is always sent on: pinned to the worker count when autoscaling is left out.
+		// A cluster built with it off never finishes its workers (CreateCluster.sh, clusters 131 and
+		// 139). The values are strings, as the console's wizard sends them.
+		lo, hi := scalerRange(ctx, *m, diags)
+		config["autoScalerEnabled"], config["minNodes"], config["maxNodes"] = "on", lo, hi
+		top = map[string]any{"workerCount": count, "defaultRepoAccount": repo, "k8s_version": custom["k8s_version"],
+			"podCidr": custom["podCidr"], "serviceCidr": custom["serviceCidr"], "initConfig": "",
+			"autoScalerEnabled": "on", "minNodes": lo, "maxNodes": hi}
 	}
 	body := map[string]any{
-		"name": m.Name.ValueString(), "type": typeCodes[kind], "layout": map[string]any{"id": layout.ID},
+		"name": m.Name.ValueString(), "type": typeCodes[r.kind], "layout": map[string]any{"id": layout.ID},
 		"group": map[string]any{"id": place.GroupID}, "cloud": map[string]any{"id": place.CloudID},
-		"server": server,
+		"visibility": "private", "server": server,
 	}
-	if v := m.Description.ValueString(); v != "" {
+	if len(top) > 0 {
+		body["config"] = top
+	}
+	switch v := m.Description.ValueString(); {
+	case v != "":
 		body["description"] = v
+	case isKube:
+		body["description"] = mk8sDescription
 	}
 	if len(labels) > 0 {
 		body["labels"] = labels
@@ -562,12 +608,12 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 			body["taskSetId"] = wf.ID
 		}
 	}
-	if !m.Worker.IsNull() {
-		w := map[string]any{}
+	if isKube {
+		// Always sent, with its own security groups: with them on the server only, the workers get
+		// the project's default group (CreateCluster.sh, verified on cluster 131).
+		w := map[string]any{"nodeCount": count}
 		for k, v := range b.worker {
-			if k != "nodeCount" {
-				w[k] = v
-			}
+			w[k] = v
 		}
 		body["worker"] = w
 	}
@@ -587,9 +633,6 @@ func inherit(w, m node) node {
 	if w.Plan.IsNull() {
 		w.Plan = m.Plan
 	}
-	if w.RootVolumeSize.IsNull() {
-		w.RootVolumeSize, w.Datastore = m.RootVolumeSize, m.Datastore
-	}
 	if w.DataVolumes == nil {
 		w.DataVolumes = m.DataVolumes
 	}
@@ -599,18 +642,19 @@ func inherit(w, m node) node {
 	if w.SecurityGroups == nil {
 		w.SecurityGroups = m.SecurityGroups
 	}
-	if w.FloatingIPPool.IsNull() {
-		w.FloatingIPPool = m.FloatingIPPool
-	}
 	return w
 }
 
 // nodeConfig builds the server part shared by masters and workers: plan, disks, networks,
-// security groups, floating IP and project. what is "master" or "worker", for errors.
+// security groups and project. what is "master" or "worker", for errors.
 func (r *clusterResource) nodeConfig(ctx context.Context, b *built, layout client.ClusterLayout, what string, n node, diags *diag.Diagnostics) map[string]any {
-	at := func(a string) path.Path { return path.Root(what).AtName(a) }
+	block := r.attrName(what)
+	if block == "" {
+		block = r.attrName("master") // a Docker cluster's added hosts are its host block's
+	}
+	at := func(a string) path.Path { return path.Root(block).AtName(a) }
 	fail := func(a string, err error) {
-		diags.AddAttributeError(at(a), "Invalid "+what+" "+strings.ReplaceAll(a, "_", " "), err.Error())
+		diags.AddAttributeError(at(a), "Invalid "+block+" "+strings.ReplaceAll(a, "_", " "), err.Error())
 	}
 	config := map[string]any{"resourcePoolId": b.projectID}
 	out := map[string]any{"config": config}
@@ -619,23 +663,22 @@ func (r *clusterResource) nodeConfig(ctx context.Context, b *built, layout clien
 	} else {
 		out["plan"] = map[string]any{"id": pl.ID}
 	}
-	vols := []any{}
-	all := append([]volume{{Size: n.RootVolumeSize, Datastore: n.Datastore}}, n.DataVolumes...)
-	for i, v := range all {
-		vol := map[string]any{"name": "root", "rootVolume": i == 0, "size": v.Size.ValueInt64()}
-		if i > 0 {
-			vol["name"] = "data-" + strconv.Itoa(i)
-		}
+	// The fixed root disk, then the data disks, as the instance API takes them (CreateCluster.sh:
+	// root of a fixed size, storage type 11, datastore "auto").
+	specs := []client.VolumeSpec{{Root: true, Name: "root", Size: rootGB, DatastoreID: "auto"}}
+	for i, v := range n.DataVolumes {
+		spec := client.VolumeSpec{Name: "data-" + strconv.Itoa(i+1), Size: v.Size.ValueInt64(), DatastoreID: "auto"}
 		if ds := v.Datastore.ValueString(); ds != "" {
 			o, err := r.client.DatastoreByName(ctx, b.place, b.projectID, ds)
 			if err != nil {
-				fail("datastore", err)
+				fail("data_volume", err)
 				continue
 			}
-			vol["storageType"] = o.ID
+			spec.DatastoreID = strconv.FormatInt(o.ID, 10)
 		}
-		vols = append(vols, vol)
+		specs = append(specs, spec)
 	}
+	vols := client.VolumesBody(specs)
 	out["volumes"] = vols
 	nets := []any{}
 	for i, name := range n.Networks {
@@ -647,25 +690,14 @@ func (r *clusterResource) nodeConfig(ctx context.Context, b *built, layout clien
 			fail("networks", err)
 			continue
 		}
-		nets = append(nets, map[string]any{"primaryInterface": i == 0, "network": map[string]any{"id": "network-" + strconv.FormatInt(nw.ID, 10)}})
+		// Numeric: the cluster API's worker path refuses "network-40" (CreateCluster.sh).
+		nets = append(nets, map[string]any{"primaryInterface": i == 0, "network": map[string]any{"id": nw.ID}})
 	}
 	out["networkInterfaces"] = nets
-	if ids, err := r.client.SecurityGroupIDs(ctx, b.place, b.projectID, n.SecurityGroups); err != nil {
+	if ids, err := r.client.SecurityGroupExternalIDs(ctx, b.place, b.projectID, n.SecurityGroups); err != nil {
 		fail("security_groups", err)
 	} else if len(ids) > 0 {
-		sgs := make([]any, len(ids))
-		for i, id := range ids {
-			sgs[i] = map[string]any{"id": id}
-		}
-		out["securityGroups"] = sgs
-	}
-	if v := n.FloatingIPPool.ValueString(); v != "" {
-		pool, err := r.client.ClusterFloatingIPPoolByName(ctx, b.place, b.projectID, v)
-		if err != nil {
-			fail("floating_ip_pool", err)
-		} else {
-			config["osExternalNetworkId"] = pool
-		}
+		out["securityGroups"] = ids // the cloud's IDs: the cluster API refuses console IDs
 	}
 	return out
 }
@@ -675,7 +707,7 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 	var m model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &m)...)
+	resp.Diagnostics.Append(r.get(ctx, req.Plan, &m)...)
 	timeout, d := m.Timeouts.Create(ctx, createTimeout)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
@@ -709,7 +741,7 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 	// Saved before the wait: a timeout never leads to a second cluster.
 	m.ID, m.Status, m.APIURL, m.WorkerIDs = types.StringValue(strconv.FormatInt(id, 10)), types.StringValue("provisioning"),
 		types.StringNull(), types.ListValueMust(types.StringType, nil)
-	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+	resp.Diagnostics.Append(r.set(ctx, &resp.State, &m)...)
 	c, err := r.client.WaitForCluster(ctx, id)
 	if err != nil {
 		// A warning, not an error: an error would taint the cluster, and the next apply would rebuild it.
@@ -723,25 +755,60 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 		resp.Diagnostics.AddError("Cluster failed", fmt.Sprintf("Cluster %d ended with %q: %s. The next apply replaces it.", id, c.Status, c.StatusMessage))
 		return
 	}
-	if err := r.applyAutoscaling(ctx, id, m, &resp.Diagnostics); err != nil {
-		// A warning: an error would taint a cluster that was built fine. Left out of state, the
-		// autoscaler is configured by the next apply.
-		resp.Diagnostics.AddWarning("Autoscaler not configured",
-			fmt.Sprintf("Cluster %d was built, but configuring its autoscaler failed: %s. The next apply tries again.", id, err))
-		resp.Diagnostics.Append(resp.Private.SetKey(ctx, scalerPending, []byte("true"))...)
+	// The create sent the range. A range you set is configured again, the way the console's Edit
+	// Cluster stores it; held at worker_count, the create's own is enough.
+	if !m.Autoscaling.IsNull() {
+		if err := r.applyAutoscaling(ctx, id, m, &resp.Diagnostics); err != nil {
+			// A warning: an error would taint a cluster that was built fine. Left out of state, the
+			// autoscaler is configured by the next apply.
+			resp.Diagnostics.AddWarning("Autoscaler not configured",
+				fmt.Sprintf("Cluster %d was built, but configuring its autoscaler failed: %s. The next apply tries again.", id, err))
+			resp.Diagnostics.Append(resp.Private.SetKey(ctx, scalerPending, []byte("true"))...)
+		}
 	}
 	r.refresh(ctx, &m, c, false, &resp.Diagnostics)
-	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+	resp.Diagnostics.Append(r.set(ctx, &resp.State, &m)...)
 }
 
+// applyAutoscaling sets a Kubernetes cluster's autoscaler: its range, or held at worker_count when
+// autoscaling is left out (as MTN's order builds it). Docker clusters have none.
 func (r *clusterResource) applyAutoscaling(ctx context.Context, id int64, m model, diags *diag.Diagnostics) error {
-	if m.Autoscaling.IsNull() {
+	if r.kind != kube {
 		return nil
+	}
+	lo, hi := scalerRange(ctx, m, diags)
+	least, _ := strconv.ParseInt(lo, 10, 64)
+	most, _ := strconv.ParseInt(hi, 10, 64)
+	return r.client.ConfigureAutoscaler(ctx, id, true, least, most)
+}
+
+// scalerRange is the autoscaler's range, as strings: autoscaling's, else worker_count both ways.
+func scalerRange(ctx context.Context, m model, diags *diag.Diagnostics) (string, string) {
+	n := strconv.FormatInt(m.WorkerCount.ValueInt64(), 10)
+	if m.Autoscaling.IsNull() || m.Autoscaling.IsUnknown() {
+		return n, n
 	}
 	var a autoscaling
 	diags.Append(m.Autoscaling.As(ctx, &a, basetypes.ObjectAsOptions{})...)
-	return r.client.ConfigureAutoscaler(ctx, id, true, a.MinNodes.ValueInt64(), a.MaxNodes.ValueInt64())
+	return strconv.FormatInt(a.MinNodes.ValueInt64(), 10), strconv.FormatInt(a.MaxNodes.ValueInt64(), 10)
 }
+
+// withMK8S is labels with MTN's marker label (CreateCluster.sh) in front, or as given when they
+// already have it: what is sent is what the plan holds.
+func withMK8S(labels []string) []string {
+	if slices.ContainsFunc(labels, func(l string) bool { return strings.EqualFold(l, mk8sLabel) }) {
+		return labels
+	}
+	return append([]string{mk8sLabel}, labels...)
+}
+
+// mk8sLabel and mk8sDescription are what MTN's own order puts on every managed Kubernetes cluster
+// (CreateCluster.sh). The label is added for you and never shown in labels; the description is
+// used when you set none.
+const (
+	mk8sLabel       = "MK8S"
+	mk8sDescription = "MK8S Cluster"
+)
 
 // refresh copies what MTN Cloud reports. What the nodes were built with isn't readable, so it stays.
 // readCount takes worker_count from the workers listed. Only a plain refresh does: after a create
@@ -752,23 +819,34 @@ func (r *clusterResource) refresh(ctx context.Context, m *model, c *client.Clust
 	if c.ServiceURL != "" {
 		m.APIURL = types.StringValue(c.ServiceURL)
 	}
-	if c.Description != "" || !m.Description.IsNull() {
+	// MTN's own description, put there for you, isn't shown unless you set one.
+	ours := m.Description.IsNull() && c.Description == mk8sDescription && r.kind == kube
+	if (c.Description != "" || !m.Description.IsNull()) && !ours {
 		m.Description = types.StringValue(c.Description)
 	}
-	if len(c.Labels) > 0 || len(m.Labels.Elements()) > 0 {
-		l, d := types.ListValueFrom(ctx, types.StringType, c.Labels)
+	labels := c.Labels
+	if r.kind == kube && !slices.ContainsFunc(m.Labels.Elements(), func(v attr.Value) bool {
+		s, ok := v.(types.String)
+		return ok && strings.EqualFold(s.ValueString(), mk8sLabel)
+	}) {
+		// MTN's marker label, added for you: shown only if your configuration lists it.
+		labels = slices.DeleteFunc(slices.Clone(labels), func(l string) bool { return strings.EqualFold(l, mk8sLabel) })
+	}
+	if len(labels) > 0 || len(m.Labels.Elements()) > 0 {
+		l, d := types.ListValueFrom(ctx, types.StringType, labels)
 		diags.Append(d...)
 		m.Labels = l
 	}
-	for k, code := range typeCodes {
-		if code == c.TypeCode {
-			m.Type = types.StringValue(k)
-		}
-	}
-	if layouts, err := r.client.ClusterLayouts(ctx); err == nil {
-		for _, l := range layouts {
-			if l.ID == c.LayoutID && !strings.EqualFold(m.Layout.ValueString(), l.Name) {
-				m.Layout = types.StringValue(l.Name)
+	if r.kind == kube {
+		if layouts, err := r.client.ClusterLayouts(ctx); err == nil {
+			for _, l := range layouts {
+				if l.ID == c.LayoutID {
+					key := layoutKey(l)
+					if key == "" {
+						key = l.Name // a layout other than MTN's three, made in the console
+					}
+					m.Layout = types.StringValue(key)
+				}
 			}
 		}
 	}
@@ -800,7 +878,7 @@ func (r *clusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 	var m model
-	resp.Diagnostics.Append(req.State.Get(ctx, &m)...)
+	resp.Diagnostics.Append(r.get(ctx, req.State, &m)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -818,8 +896,9 @@ func (r *clusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 		resp.Diagnostics.AddError("Unable to read the cluster", err.Error())
 		return
 	}
-	if _, ok := map[string]bool{"kubernetes-cluster": true, "docker-cluster": true}[c.TypeCode]; !ok && c.TypeCode != "" {
-		resp.Diagnostics.AddError("Unsupported cluster type", fmt.Sprintf("Cluster %d is a %q cluster; only Kubernetes and Docker clusters can be managed.", id, c.TypeCode))
+	if !c.IsType(typeCodes[r.kind], typeNames[r.kind]) {
+		resp.Diagnostics.AddError("Wrong kind of cluster",
+			fmt.Sprintf("Cluster %d is a %q, not a %s. Import it with the resource for its kind.", id, c.TypeName, typeNames[r.kind]))
 		return
 	}
 	if m.Timeouts.IsNull() {
@@ -827,7 +906,7 @@ func (r *clusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 			"create": types.StringType, "update": types.StringType, "delete": types.StringType})}
 	}
 	r.refresh(ctx, &m, c, true, &resp.Diagnostics)
-	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+	resp.Diagnostics.Append(r.set(ctx, &resp.State, &m)...)
 }
 
 func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -835,8 +914,8 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 	var plan, state model
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	resp.Diagnostics.Append(r.get(ctx, req.Plan, &plan)...)
+	resp.Diagnostics.Append(r.get(ctx, req.State, &state)...)
 	timeout, d := plan.Timeouts.Update(ctx, changeTimeout)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
@@ -852,19 +931,29 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 	if !plan.Name.Equal(state.Name) || !plan.Description.Equal(state.Description) || !plan.Labels.Equal(state.Labels) {
 		var labels []string
 		resp.Diagnostics.Append(plan.Labels.ElementsAs(ctx, &labels, false)...)
-		if err := r.client.UpdateCluster(ctx, id, plan.Name.ValueString(), plan.Description.ValueString(), labels); err != nil {
+		if r.kind == kube {
+			labels = withMK8S(labels)
+		}
+		desc := plan.Description.ValueString()
+		if desc == "" && r.kind == kube {
+			desc = mk8sDescription
+		}
+		if err := r.client.UpdateCluster(ctx, id, plan.Name.ValueString(), desc, labels); err != nil {
 			resp.Diagnostics.AddError("Unable to update the cluster", err.Error())
 			return
 		}
 	}
+	// Without autoscaling the autoscaler is held at worker_count (MTN's order never turns it off): it
+	// moves to the new count first, so it doesn't undo the scaling.
 	scalerOff := !state.Autoscaling.IsNull() && plan.Autoscaling.IsNull()
-	if scalerOff {
-		if err := r.client.ConfigureAutoscaler(ctx, id, false, 0, 0); err != nil {
-			resp.Diagnostics.AddError("Unable to turn the autoscaler off", err.Error())
+	pinned := plan.Autoscaling.IsNull() && (scalerOff || !plan.WorkerCount.Equal(state.WorkerCount))
+	if pinned {
+		if err := r.applyAutoscaling(ctx, id, plan, &resp.Diagnostics); err != nil {
+			resp.Diagnostics.AddError("Unable to hold the autoscaler at worker_count", err.Error())
 			return
 		}
 	}
-	// With the autoscaler off, worker_count is the count again, wherever the autoscaler left it.
+	// Held at worker_count, the autoscaler leaves the count to it, wherever it was before.
 	if !plan.WorkerCount.Equal(state.WorkerCount) || scalerOff {
 		r.scale(ctx, id, plan, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
@@ -889,7 +978,7 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	plan.ID = state.ID
 	r.refresh(ctx, &plan, c, false, &resp.Diagnostics)
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	resp.Diagnostics.Append(r.set(ctx, &resp.State, &plan)...)
 }
 
 // scale adds or removes workers to reach worker_count. New workers use the worker settings in plan.
@@ -910,7 +999,14 @@ func (r *clusterResource) scale(ctx context.Context, id int64, plan model, diags
 			return
 		}
 		body := b.worker
+		if r.kind == docker {
+			body = b.body["server"].(map[string]any)
+			delete(body, "visibility")
+		}
 		body["nodeCount"] = want - len(workers)
+		// The create's config.nodeCount is the total (Docker); adding hosts takes only the outer
+		// nodeCount, as the CLI's add-worker sends it (clusters.rb add_worker, POST .../servers).
+		delete(body["config"].(map[string]any), "nodeCount")
 		body["cloud"] = map[string]any{"id": b.place.CloudID}
 		// The add-worker reference names config.resourcePool; the create form uses resourcePoolId. Both are sent.
 		body["config"].(map[string]any)["resourcePool"] = map[string]any{"id": b.projectID}
@@ -941,7 +1037,7 @@ func (r *clusterResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 	var m model
-	resp.Diagnostics.Append(req.State.Get(ctx, &m)...)
+	resp.Diagnostics.Append(r.get(ctx, req.State, &m)...)
 	timeout, d := m.Timeouts.Delete(ctx, changeTimeout)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {

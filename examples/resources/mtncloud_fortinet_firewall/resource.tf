@@ -1,5 +1,4 @@
 resource "mtncloud_fortinet_firewall" "this" {
-  name             = "fw-1"
   project          = "web-prod"
   plan             = "G2S4"
   root_volume_size = 40

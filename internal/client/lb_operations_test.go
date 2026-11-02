@@ -304,6 +304,17 @@ func TestRunLB_MessagesNeverNameTheCloudSoftware(t *testing.T) {
 	}
 }
 
+// Every service name the plugin can pass on is replaced (owner, 2026-11-02).
+func TestLBCustomerText_EveryName(t *testing.T) {
+	in := "OpenStack said: Octavia amphora failed; Amphorae down; Neutron port busy; Keystone 401; Barbican secret missing" // mtncloud:allow-cloud-name (the plugin's wording)
+	got := strings.ToLower(lbCustomerText(in))
+	for _, w := range []string{"openstack", "octavia", "amphora", "neutron", "keystone", "barbican"} { // mtncloud:allow-cloud-name (checking it is gone)
+		if strings.Contains(got, w) {
+			t.Errorf("%q still names %s", got, w)
+		}
+	}
+}
+
 func TestIsLBMissing(t *testing.T) {
 	for msg, want := range map[string]bool{
 		"Load Balancer 00000000-0000-4000-8000-000000000009 not found.":                  true,

@@ -2,6 +2,9 @@ package provider
 
 import (
 	"encoding/json"
+	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -17,13 +20,21 @@ import (
 // PfSense (item 53, renamed from "MTN VPN Service"; found by its code) fixes its disks in hidden
 // form fields, names its plans its own way, and needs two networks (its help text).
 func TestPfSenseOrder(t *testing.T) {
-	f, s, _ := orderFakes(t)
+	f, s, insts := orderFakes(t)
+	// MTN's workflow names the VM from its template and reports it; the order finds it from the report.
+	const vm = "ab-42-MTN-CLOUD-VPN-1"
+	s.made = func(item map[string]any) {
+		cfg, _ := item["config"].(map[string]any)
+		insts.mu.Lock()
+		defer insts.mu.Unlock()
+		insts.insts[4650] = map[string]any{"id": 4650, "name": vm, "status": "running", "config": map[string]any{"resourcePoolId": cfg["resourcepool"]}}
+		s.output = "Creating stack ...\n Instance name : " + vm + "\n   Console          : https://console.example/provisioning/instances/4650\n"
+	}
 	f.net.(*netStore).networks[9351] = map[string]any{"id": 9351, "name": "dmz-net", "status": "ACTIVE",
 		"zonePool": map[string]any{"id": 9201, "name": "web-prod-Acme"}}
 	cfg := func(plan, nets string) string {
 		return f.providerConfig() + `
 resource "mtncloud_pfsense_vpn" "vpn" {
-  name             = "vpn-1"
   group            = "MTNNG_CLOUD_AZ_1"
   project          = "web-prod-Acme"
   plan             = "` + plan + `"
@@ -45,8 +56,15 @@ resource "mtncloud_pfsense_vpn" "vpn" {
 			{Config: cfg("XL", two), PlanOnly: true,
 				ExpectError: regexp.MustCompile(wrapped(`(?s)no plan "XL": choose one of Small \(G2S4\), Medium \(G4S4\), Large\s+\(G4S8\)`))},
 			{
-				// "G2S4" picks "Small (G2S4)": the size code inside the form's own name.
+				// "G2S4" picks "Small (G2S4)": the size code inside the form's own name. The VM is the
+				// one the workflow reported, under the name MTN gave it.
 				Config: cfg("G2S4", two),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("mtncloud_pfsense_vpn.vpn", tfjsonpath.New("instance_ids"),
+						knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("4650")})),
+					statecheck.ExpectKnownValue("mtncloud_pfsense_vpn.vpn", tfjsonpath.New("instance_names"),
+						knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact(vm)})),
+				},
 				Check: func(*terraform.State) error {
 					s.mu.Lock()
 					defer s.mu.Unlock()
@@ -55,7 +73,7 @@ resource "mtncloud_pfsense_vpn" "vpn" {
 					if name, _ := item["type"].(map[string]any)["name"].(string); name != "MTN PfSense VPN" {
 						t.Errorf("ordered %q, want the item's name now", name)
 					}
-					if cfg["plan"] != float64(13107) || cfg["name"] != "vpn-1" || cfg["volume"] != float64(53687091200) {
+					if cfg["plan"] != float64(13107) || cfg["name"] != "${userInitials}-${accountId}-MTN-CLOUD-${type}-${sequence+0}" || cfg["volume"] != float64(53687091200) {
 						t.Errorf("plan %v, name %v, volume %v", cfg["plan"], cfg["name"], cfg["volume"])
 					}
 					vols, _ := json.Marshal(cfg["volumes"])
@@ -74,6 +92,43 @@ resource "mtncloud_pfsense_vpn" "vpn" {
 // MongoDB: a field required only while another is on (adminPassword while enableAuth), a field
 // used only while another is on (replicaSetName), the form's pre-filled values, and a required
 // field this provider has no argument for (extra_inputs).
+// A list's default that can't be matched to its choice because the choices can't be read stops the
+// plan: its shown name ("Read & Write") must never be sent instead of its value (review, 2026-11-02).
+func TestOrder_DefaultChoiceUnreadable(t *testing.T) {
+	f, s, _ := orderFakes(t)
+	f.extra = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("optionTypeId") == "5502" { // mongoUserRole
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		body, err := os.ReadFile(filepath.Join("..", "client", "testdata", "lookups", "options_list_"+r.URL.Query().Get("optionTypeId")+".json"))
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write(body)
+	})
+	f.extraFor = func(p string) bool { return p == "/api/options/list" }
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{Config: f.providerConfig() + `
+resource "mtncloud_mongodb" "db" {
+  name             = "mongo-1"
+  group            = "MTNNG_CLOUD_AZ_1"
+  project          = "web-prod-Acme"
+  plan             = "G2S4"
+  root_volume_size = 40
+  networks         = ["app-net"]
+  enable_auth      = false
+  extra_inputs     = { newField = "x" }
+}
+`, PlanOnly: true, ExpectError: regexp.MustCompile(wrapped(`(?s)Cannot read the form's choices.*mongoUserRole`))}},
+	})
+	if s.orders != 0 {
+		t.Errorf("%d orders placed", s.orders)
+	}
+}
+
 func TestOrder_FormRules(t *testing.T) {
 	f, s, _ := orderFakes(t)
 	cfg := func(extra string) string {
@@ -519,7 +574,6 @@ func TestSophosOrder(t *testing.T) {
 	}
 	cfg := f.providerConfig() + `
 resource "mtncloud_sophos_firewall" "fw" {
-  name             = "fw-1"
   group            = "MTNNG_CLOUD_AZ_1"
   project          = "web-prod-Acme"
   plan             = "G2S4"
@@ -528,7 +582,6 @@ resource "mtncloud_sophos_firewall" "fw" {
   floating_ip_pool = "public-network-01"
 }
 `
-	noName := strings.Replace(cfg, "  name             = \"fw-1\"\n", "", 1)
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		CheckDestroy: func(*terraform.State) error {
@@ -548,20 +601,22 @@ resource "mtncloud_sophos_firewall" "fw" {
 			{Config: cfg, ConfigStateChecks: []statecheck.StateCheck{
 				statecheck.ExpectKnownValue("mtncloud_sophos_firewall.fw", tfjsonpath.New("instance_ids"),
 					knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("4639")})),
+				// The name MTN gave the VM, from the workflow's report.
+				statecheck.ExpectKnownValue("mtncloud_sophos_firewall.fw", tfjsonpath.New("instance_names"),
+					knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact(vm)})),
 			}},
 			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
-			// name isn't used: removing it changes nothing, rather than ordering a new firewall.
-			{Config: noName, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
-				plancheck.ExpectResourceAction("mtncloud_sophos_firewall.fw", plancheck.ResourceActionUpdate)}}},
-			{Config: noName, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 			// An order whose apply was cut off is imported by its inventory ID, and finds its VM again.
 			{Config: forget(f, "mtncloud_sophos_firewall.fw")},
-			{Config: noName, ResourceName: "mtncloud_sophos_firewall.fw", ImportState: true, ImportStateId: "9801", ImportStatePersist: true},
-			{Config: noName, ConfigStateChecks: []statecheck.StateCheck{
+			{Config: cfg, ResourceName: "mtncloud_sophos_firewall.fw", ImportState: true, ImportStateId: "9801", ImportStatePersist: true},
+			{Config: cfg, ConfigStateChecks: []statecheck.StateCheck{
 				statecheck.ExpectKnownValue("mtncloud_sophos_firewall.fw", tfjsonpath.New("instance_ids"),
 					knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("4639")})),
+				// The name MTN gave the VM, from the workflow's report.
+				statecheck.ExpectKnownValue("mtncloud_sophos_firewall.fw", tfjsonpath.New("instance_names"),
+					knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact(vm)})),
 			}},
-			{Config: noName, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 		},
 	})
 }

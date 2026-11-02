@@ -2,12 +2,12 @@
 page_title: "mtncloud_nginx_web_server Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  An Nginx web server on its own VM. Ordered from MTN Cloud's catalog (MTN Nginx Web Server). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN Nginx Web Server order form requires and allows (read 2026-10-31); every plan checks the live form. The form fills labelss itself, and they are sent as it fills them.
+  An Nginx web server on its own VM. Ordered from MTN Cloud's catalog (MTN Nginx Web Server). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN Nginx Web Server order form requires and allows (read 2026-11-02); every plan checks the live form. The form fills labelss itself, and they are sent as it fills them.
 ---
 
 # mtncloud_nginx_web_server
 
-An Nginx web server on its own VM. Ordered from MTN Cloud's catalog (MTN Nginx Web Server). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN Nginx Web Server order form requires and allows (read 2026-10-31); every plan checks the live form. The form fills `labelss` itself, and they are sent as it fills them.
+An Nginx web server on its own VM. Ordered from MTN Cloud's catalog (MTN Nginx Web Server). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN Nginx Web Server order form requires and allows (read 2026-11-02); every plan checks the live form. The form fills `labelss` itself, and they are sent as it fills them.
 
 ## Example Usage
 
@@ -35,15 +35,14 @@ resource "mtncloud_nginx_web_server" "this" {
 
 ### Optional
 
-- `data_volume` (Block List) Extra disks, in order. (see [below for nested schema](#nestedblock--data_volume))
-- `datastore` (String) Datastore (volume type) of the root disk, by name. Left out, the project's default.
+- `data_volume` (Block List) Extra disks, in order. MTN's workflow puts every disk on the project's default datastore. (see [below for nested schema](#nestedblock--data_volume))
 - `environment` (String) Environment, by name or code, for example `Production`.
 - `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`. Order form: choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
 - `labels` (Set of String) Labels on the instance. It says: "Enter a comma-separated list of labels to group and categorise items for easier filtering in list views."
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
-- `scale_factor` (Number) Number of VMs. Defaults to 1. Order form: pre-filled with `1`; from 1 to any; for example `1`. It says: "Scale Factor sets how many horizontally scaled nodes to start off with on creation of an Instance."
+- `scale_factor` (Number) Number of VMs. Order form: pre-filled with `1`; from 1 to any; for example `1`. It says: "Scale Factor sets how many horizontally scaled nodes to start off with on creation of an Instance."
 - `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `web_server_port` (Number) Port the web server listens on. Order form: for example `80`. It says: "Site will be reachable on your specified port, 80 is default."
@@ -51,7 +50,8 @@ resource "mtncloud_nginx_web_server" "this" {
 ### Read-Only
 
 - `id` (String) Order ID (Catalog > Inventory).
-- `instance_ids` (List of String) IDs of the instances the order created, found by name in the project.
+- `instance_ids` (List of String) IDs of the instances the order created.
+- `instance_names` (List of String) Names of the instances the order created, in the order of `instance_ids`. Where the form names the VM itself, this is the name MTN gave it (`<initials>-<account>-MTN-CLOUD-<type>-<n>`).
 - `instance_statuses` (Map of String) Status of each instance the order created, by instance ID, for example `running`. A `failed` instance plans a replace: the order is deleted and placed again.
 - `status` (String) The order's workflow result, for example `success`.
 
@@ -61,10 +61,6 @@ resource "mtncloud_nginx_web_server" "this" {
 Required:
 
 - `size` (Number) Size in GB.
-
-Optional:
-
-- `datastore` (String) Datastore, by name. Left out, the project's default.
 
 
 <a id="nestedblock--timeouts"></a>

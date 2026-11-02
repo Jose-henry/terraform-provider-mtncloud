@@ -1,4 +1,4 @@
-# MTN's cluster layouts, for mtncloud_cluster's layout.
+# MTN's cluster layouts, which the cluster resources build from.
 data "mtncloud_cluster_layouts" "all" {}
 
 output "layouts" {

@@ -17,6 +17,7 @@ import (
 type ClusterLayout struct {
 	ID              int64
 	Name            string
+	Code            string // stable across renames, for example "8b84f285-..." (MTN Kubernetes Single-Master)
 	TypeCode        string // "kubernetes-cluster" or "docker-cluster"
 	ProvisionTypeID int64
 	Masters         int64 // fixed master nodes; 0 for Docker
@@ -28,6 +29,7 @@ type ClusterLayout struct {
 type wireClusterLayout struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
+	Code      string `json:"code"`
 	GroupType *struct {
 		Code string `json:"code"`
 	} `json:"groupType"`
@@ -62,7 +64,7 @@ func (c *Client) ClusterLayouts(ctx context.Context) ([]ClusterLayout, error) {
 				(w.GroupType.Code != "kubernetes-cluster" && w.GroupType.Code != "docker-cluster") {
 				continue
 			}
-			l := ClusterLayout{ID: w.ID, Name: w.Name, TypeCode: w.GroupType.Code, ProvisionTypeID: w.ProvisionType.ID,
+			l := ClusterLayout{ID: w.ID, Name: w.Name, Code: w.Code, TypeCode: w.GroupType.Code, ProvisionTypeID: w.ProvisionType.ID,
 				Options: map[string]FormField{}, Defaults: map[string]string{}}
 			for _, o := range w.OptionTypes {
 				l.Options[o.FieldName] = FormField{ID: o.ID, Name: o.FieldName, Type: o.Type}
@@ -104,6 +106,21 @@ func (c *Client) ClusterLayoutByName(ctx context.Context, typeCode, name string)
 	return ClusterLayout{}, &NoMatchError{msg: fmt.Sprintf("no cluster layout %q: choose one of %s", name, strings.Join(names, ", "))}
 }
 
+// ClusterLayoutByCode finds one of MTN's layouts of a cluster type by its code, else by its name
+// (B-033: a code survives a rename, a name survives a re-created layout).
+func (c *Client) ClusterLayoutByCode(ctx context.Context, typeCode, code, name string) (ClusterLayout, error) {
+	all, err := c.ClusterLayouts(ctx)
+	if err != nil {
+		return ClusterLayout{}, err
+	}
+	for _, l := range all {
+		if code != "" && l.TypeCode == typeCode && strings.EqualFold(l.Code, code) {
+			return l, nil
+		}
+	}
+	return c.ClusterLayoutByName(ctx, typeCode, name)
+}
+
 // ClusterPlanByName resolves a plan for a cluster layout in a project. The list is only filtered
 // when the project is given: without it the platform answers every plan of every price set.
 func (c *Client) ClusterPlanByName(ctx context.Context, p *Placement, l ClusterLayout, projectID int64, name string) (Option, error) {
@@ -127,26 +144,6 @@ func (c *Client) ClusterPlanByName(ctx context.Context, p *Placement, l ClusterL
 		}
 	}
 	return Option{}, &NoMatchError{msg: fmt.Sprintf("no plan %q for clusters in this project: choose one of %s", name, strings.Join(names, ", "))}
-}
-
-// ClusterFloatingIPPoolByName resolves a floating IP pool for cluster nodes to its "pool-<id>" value.
-func (c *Client) ClusterFloatingIPPoolByName(ctx context.Context, p *Placement, projectID int64, name string) (string, error) {
-	opts, err := c.namedValues(ctx, "/api/options/openStack/openstackFloatingIpOptions", // mtncloud:allow-cloud-name (API path)
-		url.Values{"zoneId": {itoa(p.CloudID)}, "resourcePoolId": {itoa(projectID)}})
-	if err != nil {
-		return "", err
-	}
-	var names []string
-	for _, o := range opts {
-		if !strings.HasPrefix(o.Value, "pool-") { // headings and single addresses
-			continue
-		}
-		if strings.EqualFold(o.Name, name) {
-			return o.Value, nil
-		}
-		names = append(names, fmt.Sprintf("%q", o.Name))
-	}
-	return "", &NoMatchError{msg: fmt.Sprintf("no floating IP pool %q: choose one of %s", name, strings.Join(names, ", "))}
 }
 
 // Registry is a container registry a Kubernetes cluster can pull from. The public Docker Hub has
@@ -248,6 +245,16 @@ type Cluster struct {
 	ServiceURL    string
 	LayoutID      int64
 	TypeCode      string
+	TypeName      string // the list carries only the name, a single read the code too
+}
+
+// IsType reports whether the cluster is of the type with this code or name; a cluster that says
+// neither is taken to be of it.
+func (c *Cluster) IsType(code, name string) bool {
+	if c.TypeCode == "" && c.TypeName == "" {
+		return true
+	}
+	return strings.EqualFold(c.TypeCode, code) || (c.TypeCode == "" && strings.EqualFold(c.TypeName, name))
 }
 
 type wireCluster struct {
@@ -263,6 +270,7 @@ type wireCluster struct {
 	} `json:"layout"`
 	Type *struct {
 		Code string `json:"code"`
+		Name string `json:"name"`
 	} `json:"type"`
 }
 
@@ -273,7 +281,7 @@ func (w wireCluster) cluster() *Cluster {
 		c.LayoutID = w.Layout.ID
 	}
 	if w.Type != nil {
-		c.TypeCode = w.Type.Code
+		c.TypeCode, c.TypeName = w.Type.Code, w.Type.Name
 	}
 	return c
 }

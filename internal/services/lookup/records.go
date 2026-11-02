@@ -49,6 +49,28 @@ type recordSpec struct {
 	nameSrc     string // JSON path of the name; default "name"
 	about       string // one or two sentences on what the objects are and what to use them for
 	fields      []field
+	// match keeps only the objects whose JSON path has this value (case ignored), for a lookup of
+	// one kind from a shared list, for example Kubernetes clusters: {"type.name": "Kubernetes Cluster"}.
+	match map[string]string
+}
+
+// list reads the spec's objects, those that match only.
+func (s recordSpec) list(ctx context.Context, c *client.Client) ([]client.Record, error) {
+	all, err := c.ListRecords(ctx, s.path, s.key, nil)
+	if err != nil || len(s.match) == 0 {
+		return all, err
+	}
+	out := all[:0:0]
+	for _, r := range all {
+		keep := true
+		for k, v := range s.match {
+			keep = keep && strings.EqualFold(asText(at(r, k)), v)
+		}
+		if keep {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 func (s recordSpec) nameA() string { return cmp.Or(s.nameAttr, "name") }
@@ -269,7 +291,7 @@ func (d *recordOne) Read(ctx context.Context, req datasource.ReadRequest, resp *
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	all, err := d.client.ListRecords(ctx, s.path, s.key, nil)
+	all, err := s.list(ctx, d.client)
 	if err != nil {
 		apiError(&resp.Diagnostics, s.nouns, err)
 		return
@@ -434,7 +456,7 @@ func (d *recordMany) Read(ctx context.Context, req datasource.ReadRequest, resp 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	all, err := d.client.ListRecords(ctx, s.path, s.key, nil)
+	all, err := s.list(ctx, d.client)
 	if err != nil {
 		apiError(&resp.Diagnostics, s.nouns, err)
 		return

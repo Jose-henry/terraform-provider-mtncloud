@@ -4,7 +4,6 @@ variable "admin_password" {
 }
 
 resource "mtncloud_siem" "this" {
-  name             = "siem-1"
   project          = "web-prod"
   plan             = "G2S4"
   root_volume_size = 100

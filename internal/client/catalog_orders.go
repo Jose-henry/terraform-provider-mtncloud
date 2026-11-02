@@ -281,14 +281,21 @@ func (c *Client) ExecutionOutput(ctx context.Context, executionID int64) (string
 var (
 	reportedID   = regexp.MustCompile(`/provisioning/instances/(\d+)`)
 	reportedName = regexp.MustCompile(`(?m)^\s*Instance name\s*:\s*(\S+)\s*$`)
+	// echoedID is the ID in an echoed POST /api/instances response.
+	echoedID = regexp.MustCompile(`"instance"\s*:\s*\{\s*"id"\s*:\s*(\d+)`)
 )
 
 // WorkflowInstance is the VM a workflow that names it itself reports in its output: its ID, from
-// the console link it prints last, and its name (MTN's SOPHOS script, `Sophos/sophosheat.sh`:
-// " Instance name : <name>", and the instance's console link "<url>/provisioning/instances/<id>"). Zero and ""
-// when it printed neither.
+// the console link it prints last, else from the instance create response it echoes, and its name
+// (MTN's SOPHOS script, `Sophos/sophosheat.sh`: " Instance name : <name>" and the console link
+// "<url>/provisioning/instances/<id>"; the Fortinet, PfSense, WireGuard and Wazuh scripts echo
+// `{"instance":{"id":<id>,...`, live job executions 2026-11-02). Zero and "" when it printed neither.
 func WorkflowInstance(output string) (id int64, name string) {
-	if m := reportedID.FindAllStringSubmatch(output, -1); len(m) > 0 {
+	m := reportedID.FindAllStringSubmatch(output, -1)
+	if len(m) == 0 {
+		m = echoedID.FindAllStringSubmatch(output, -1)
+	}
+	if len(m) > 0 {
 		id, _ = strconv.ParseInt(m[len(m)-1][1], 10, 64)
 	}
 	if m := reportedName.FindAllStringSubmatch(output, -1); len(m) > 0 {

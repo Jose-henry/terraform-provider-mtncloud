@@ -78,6 +78,13 @@ func TestWorkflowInstance(t *testing.T) {
 		{"Validating\nDone", 0, ""},
 		// A name mentioned mid-line isn't the report.
 		{"checked Instance name : x-1 earlier", 0, ""},
+		// The Fortinet, PfSense, WireGuard and Wazuh scripts echo the create response (live 2026-11-02).
+		{"Executing Request\n{\"instance\":{\"id\":4677,\"uuid\":\"u\",\"accountId\":9,\"name\":\"ab-42-MTN-CLOUD-FFW-1\"}}\nDone", 4677, ""},
+		{"{\"instance\": { \"id\": 12, \"name\":\"a\"}}\n{\"instance\":{\"id\":13}}", 13, ""},
+		// The console link wins over an echoed response.
+		{"{\"instance\":{\"id\":5}}\n https://console.example/provisioning/instances/6\n", 6, ""},
+		// Another object's id isn't the instance's.
+		{"{\"instanceType\":{\"id\":7},\"layout\":{\"id\":8}}", 0, ""},
 	}
 	for _, tc := range cases {
 		id, name := WorkflowInstance(tc.out)

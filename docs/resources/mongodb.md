@@ -2,12 +2,12 @@
 page_title: "mtncloud_mongodb Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A MongoDB server on its own VM. Ordered from MTN Cloud's catalog (MTN MongoDB). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN MongoDB order form requires and allows (read 2026-10-31); every plan checks the live form.
+  A MongoDB server on its own VM. Ordered from MTN Cloud's catalog (MTN MongoDB). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN MongoDB order form requires and allows (read 2026-11-02); every plan checks the live form.
 ---
 
 # mtncloud_mongodb
 
-A MongoDB server on its own VM. Ordered from MTN Cloud's catalog (MTN MongoDB). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN MongoDB order form requires and allows (read 2026-10-31); every plan checks the live form.
+A MongoDB server on its own VM. Ordered from MTN Cloud's catalog (MTN MongoDB). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN MongoDB order form requires and allows (read 2026-11-02); every plan checks the live form.
 
 ## Example Usage
 
@@ -46,39 +46,39 @@ resource "mtncloud_mongodb" "this" {
 
 - `admin_password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Administrator password. Required while `enable_auth` is on. Order form: required; used only when enableAuth is on; for example `********`. It says: "Password for the global administrator. Required if enableAuth is checked." Write-only: sent with the order, never stored in state.
 - `admin_username` (String) Administrator user name. Left out, the form's default (`Admin`). Order form: required; pre-filled with `Admin`; must match `(?i)^[a-z_][a-z0-9_\$]{0,62}$`; for example `Admin`. It says: "Username for the global administrator."
-- `allowed_cidrs` (List of String) Networks that may connect, as CIDRs. Defaults to `["0.0.0.0/0"]`. Order form: required; pre-filled with `0.0.0.0/0`; must match `^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9])(,\s*((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9]))*$`; for example `10.60.50.0/24, 10.60.40.0/24`. It says: "Comma seperated list of clients that can connect with the DB."
-- `auto_security_updates` (Boolean) Install security updates automatically.
+- `allowed_cidrs` (List of String) Networks that may connect, as CIDRs. Order form: required; pre-filled with `0.0.0.0/0`; must match `^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9])(,\s*((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9]))*$`; for example `10.60.50.0/24, 10.60.40.0/24`. It says: "Comma seperated list of clients that can connect with the DB."
+- `auto_security_updates` (Boolean) Install security updates automatically. Order form: left out, `false` (the form's default).
 - `cache_size_gb` (Number) Storage engine cache size in GB; 0 lets MongoDB choose. Order form: pre-filled with `0`; for example `0`. It says: "Default "0" (lets MongoDB manage automatically). Sets the wired tiger cache size in GB."
-- `data_volume` (Block List) Extra disks, in order. (see [below for nested schema](#nestedblock--data_volume))
+- `data_volume` (Block List) Extra disks, in order. MTN's workflow puts every disk on the project's default datastore. (see [below for nested schema](#nestedblock--data_volume))
 - `database_name` (String) Database to create. Order form: must match `(?i)^[a-z_][a-z0-9_\$]{0,62}$`; for example `mydb`.
 - `database_password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) That user's password. Order form: for example `root123`. Write-only: sent with the order, never stored in state.
 - `database_user` (String) Database user to create. Order form: must match `(?i)^[a-z_][a-z0-9_\$]{0,62}$`; for example `dbuser`.
-- `datastore` (String) Datastore (volume type) of the root disk, by name. Left out, the project's default.
-- `enable_auth` (Boolean) Turn on authentication. Defaults to true. Order form: pre-filled with `on`.
+- `enable_auth` (Boolean) Turn on authentication. Order form: left out, `true` (the form's default).
 - `environment` (String) Environment, by name or code, for example `Production`.
 - `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`. Order form: choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
 - `group` (String) Group, by name. Defaults to the provider's `group` (or `MTNCLOUD_GROUP`).
-- `install_atlas_cli` (Boolean) Install the Atlas CLI.
-- `install_bi_connector` (Boolean) Install the BI connector.
-- `install_database_tools` (Boolean) Install the database tools. Defaults to true. Order form: pre-filled with `on`.
-- `install_mcp_server` (Boolean) Install the MongoDB MCP server.
-- `install_mongosh` (Boolean) Install the MongoDB shell. Defaults to true. Order form: pre-filled with `on`.
-- `install_mongosync` (Boolean) Install mongosync.
+- `install_atlas_cli` (Boolean) Install the Atlas CLI. Order form: left out, `false` (the form's default).
+- `install_bi_connector` (Boolean) Install the BI connector. Order form: left out, `false` (the form's default).
+- `install_database_tools` (Boolean) Install the database tools. Order form: left out, `true` (the form's default).
+- `install_mcp_server` (Boolean) Install the MongoDB MCP server. Order form: left out, `false` (the form's default).
+- `install_mongosh` (Boolean) Install the MongoDB shell. Order form: left out, `true` (the form's default).
+- `install_mongosync` (Boolean) Install mongosync. Order form: left out, `false` (the form's default).
 - `labels` (Set of String) Labels on the instance. It says: "Enter a comma-separated list of labels to group and categorise items for easier filtering in list views."
 - `project` (String) Project, by name. Defaults to the provider's `project` (or `MTNCLOUD_PROJECT`).
-- `replica_set` (Boolean) Start a replica set.
-- `replica_set_name` (String) Replica set name. Defaults to `rs0`. Order form: used only when initReplicaSet is on; pre-filled with `rs0`; for example `rs0`. It says: "The name of the replica set if init-Replica-Set is on."
-- `require_ssl` (Boolean) Require TLS for connections.
+- `replica_set` (Boolean) Start a replica set. Order form: left out, `false` (the form's default).
+- `replica_set_name` (String) Replica set name, used when `replica_set` is on. Left out, the form's default (`rs0`). Order form: used only when initReplicaSet is on; pre-filled with `rs0`; for example `rs0`. It says: "The name of the replica set if init-Replica-Set is on."
+- `require_ssl` (Boolean) Require TLS for connections. Order form: left out, `false` (the form's default).
 - `security_groups` (Set of String) Security groups in the project, by name, in addition to the project's default group, which is always applied.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `user_role` (String) The user's role, for example `Read & Write`. Order form: not blank; pre-filled with `Read & Write`; choices: `Read & Write`, `Read`, `DB Admin`, `DB Owner`. It says: "readWrite : read/write on named DB only (default, safe) dbOwner : full owner of named DB (create indexes, etc.) dbAdmin : admin (no data read/write, only admin tasks)." Defaults to `Read & Write`.
-- `version` (String) MongoDB version, as the form lists it. Order form: required; not blank; pre-filled with `8.2`; choices: `6.0 (Legacy)`, `7.0`, `8.0`, `8.2 (Recommended)`. Defaults to `8.2`.
+- `user_role` (String) The user's role, for example `Read & Write`. Order form: not blank; pre-filled with `Read & Write`; choices: `Read & Write`, `Read`, `DB Admin`, `DB Owner`. It says: "readWrite : read/write on named DB only (default, safe) dbOwner : full owner of named DB (create indexes, etc.) dbAdmin : admin (no data read/write, only admin tasks)."
+- `version` (String) MongoDB version, as the form lists it. Order form: required; not blank; pre-filled with `8.2`; choices: `6.0 (Legacy)`, `7.0`, `8.0`, `8.2 (Recommended)`.
 
 ### Read-Only
 
 - `id` (String) Order ID (Catalog > Inventory).
-- `instance_ids` (List of String) IDs of the instances the order created, found by name in the project.
+- `instance_ids` (List of String) IDs of the instances the order created.
+- `instance_names` (List of String) Names of the instances the order created, in the order of `instance_ids`. Where the form names the VM itself, this is the name MTN gave it (`<initials>-<account>-MTN-CLOUD-<type>-<n>`).
 - `instance_statuses` (Map of String) Status of each instance the order created, by instance ID, for example `running`. A `failed` instance plans a replace: the order is deleted and placed again.
 - `status` (String) The order's workflow result, for example `success`.
 
@@ -88,10 +88,6 @@ resource "mtncloud_mongodb" "this" {
 Required:
 
 - `size` (Number) Size in GB.
-
-Optional:
-
-- `datastore` (String) Datastore, by name. Left out, the project's default.
 
 
 <a id="nestedblock--timeouts"></a>

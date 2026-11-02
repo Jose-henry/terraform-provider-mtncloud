@@ -13,7 +13,7 @@ One role of a cluster's nodes in a load balancer pool, for example a Kubernetes 
 ## Example Usage
 
 ```terraform
-data "mtncloud_cluster" "k8s" {
+data "mtncloud_managed_kubernetes_cluster" "k8s" {
   name = "k8s-prod"
 }
 
@@ -23,7 +23,7 @@ resource "mtncloud_load_balancer_cluster_member" "workers" {
   network_id       = mtncloud_network.app.id
   load_balancer_id = mtncloud_load_balancer.web.id
   pool_id          = mtncloud_load_balancer_pool.web.id
-  cluster_id       = data.mtncloud_cluster.k8s.id
+  cluster_id       = data.mtncloud_managed_kubernetes_cluster.k8s.id
   role             = "kube-worker"
   port             = 30080
 }
@@ -38,7 +38,7 @@ output "worker_members" {
 
 ### Required
 
-- `cluster_id` (Number) The cluster's ID, for example `data.mtncloud_cluster.k8s.id`. Changing it replaces the members.
+- `cluster_id` (Number) The cluster's ID, for example `data.mtncloud_managed_kubernetes_cluster.k8s.id`. Changing it replaces the members.
 - `load_balancer_id` (String) ID of the load balancer, for example `mtncloud_load_balancer.web.id`. Changing it replaces the resource.
 - `network_id` (Number) ID of the MTN Network the load balancer is on, for example `mtncloud_network.app.id`. Your tenant must own it: a network shared with you is read-only. Changing it replaces the resource.
 - `pool_id` (String) The pool, for example `mtncloud_load_balancer_pool.web.id`. Changing it replaces the members.

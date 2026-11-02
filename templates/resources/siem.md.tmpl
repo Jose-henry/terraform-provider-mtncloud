@@ -22,13 +22,14 @@ Import is supported using the following syntax:
 {{codefile "shell" "examples/resources/mtncloud_siem/import.sh" }}
 
 The order doesn't show what it was placed with, so the inputs come from your configuration: write them
-exactly as ordered. The first apply after an import records them, finds the instances by name, and orders nothing.
+exactly as ordered. The first apply after an import records them, finds the instance from the order's workflow report, and orders nothing.
 
 ## Notes
 
 - **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
-  finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
-  they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
+  finish, finds the VM it made from the workflow's own report (`instance_ids`), and waits until
+  it is running (`instance_statuses`). The order form doesn't let you name the VM: MTN names it
+  `<initials>-<account>-MTN-CLOUD-<type>-<n>`, as in the console, shown in `instance_names`. An instance that fails fails the apply with MTN Cloud's
   message; the resource is then tainted, so the next apply deletes it and orders again.
 - **Placed once: a changed input is refused.** An order can't be edited, and Terraform won't
   delete what an order made to order it again, so a changed input stops the plan with

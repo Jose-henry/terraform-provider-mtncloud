@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -42,20 +44,51 @@ func (r *orderResource) applyForm(ctx context.Context, form *client.CatalogForm,
 	planNames map[string]string, atPlan bool, diags *diag.Diagnostics) {
 	r.extraInputs(ctx, form, p, out, diags)
 
-	// What the console sends without asking: a hidden field's default, and a pre-filled value the
-	// configuration doesn't set. A name template ("${userInitials}...") is the console's own.
+	// What the console sends without asking: a hidden or locked field's default, and a pre-filled
+	// value the configuration doesn't set. A name template ("${userInitials}-${accountId}-MTN-CLOUD-
+	// ${type}-${sequence+0}") is sent as it is only where the user can't change it, as the console
+	// does: the platform expands it when the workflow creates the VM (API reference, instance name
+	// patterns). Without it, MTN's scripts fall back to one fixed name ("Firewall", FortiFirewall.sh).
+	// filled are the values taken from the form itself: never "locked" against the user.
+	filled := map[string]bool{}
 	for key, ff := range form.Fields {
 		if _, set := out[key]; set || ff.Default == nil || !conditionMet(ff.VisibleOn, out) {
 			continue
 		}
-		if s, ok := ff.Default.(string); ok && strings.Contains(s, "${") {
+		filled[key] = true
+		if s, ok := ff.Default.(string); ok && strings.Contains(s, "${") && !ff.Hidden && !ff.Locked {
 			continue
 		}
 		switch {
+		case ff.Type == "checkbox":
+			out[key] = checkbox(checkboxWord(fmt.Sprint(ff.Default)) == "on")
 		case ff.Hidden:
 			out[key] = defaultValue(ff.Default)
+		case (ff.Type == "select" || ff.Type == "radio") && ff.ID != 0:
+			// A list's default can be a choice's shown name ("Read & Write"); the console sends the
+			// choice's value ("readWrite"). Matched as a typed value would be; sent as it is if no choice
+			// matches.
+			c, err := r.client.FormChoice(ctx, ff, key, fmt.Sprint(ff.Default))
+			var none *client.NoMatchError
+			switch {
+			case err == nil:
+				out[key] = c.Value
+			case errors.As(err, &none):
+				out[key] = ff.Default
+			default:
+				diags.AddAttributeError(r.formPath(key), "Cannot read the form's choices",
+					fmt.Sprintf("Reading the choices of %s on the %s form failed: %s. Set it to skip the lookup.", label(ff), r.spec.item, err))
+				return
+			}
 		case scalarField(ff.Type):
 			out[key] = ff.Default
+		}
+	}
+	// A shown checkbox with no default is sent unticked: the console sends "off" for it, and an
+	// absent value turns into "on" in MTN's scripts (`?: "on"`, 2026-10-31).
+	for key, ff := range form.Fields {
+		if _, set := out[key]; !set && ff.Type == "checkbox" && !ff.Hidden && conditionMet(ff.VisibleOn, out) {
+			out[key] = checkbox(false)
 		}
 	}
 
@@ -87,7 +120,7 @@ func (r *orderResource) applyForm(ctx context.Context, form *client.CatalogForm,
 			continue
 		}
 		delete(out, key)
-		if atPlan {
+		if atPlan && r.userSet(ctx, p, key) {
 			diags.AddAttributeWarning(r.formPath(key), "Input not used",
 				fmt.Sprintf("The %s form uses %s only when %s, so it isn't sent.", r.spec.item, label(ff), shownCondition(ff.VisibleOn)))
 		}
@@ -117,10 +150,27 @@ func (r *orderResource) applyForm(ctx context.Context, form *client.CatalogForm,
 	}
 	for _, key := range keys {
 		if v, set := out[key]; set {
-			r.checkField(form.Fields[key], v, diags)
+			r.checkField(form.Fields[key], v, filled[key], diags)
 		}
 	}
 	r.checkRules(form, out, planNames, diags)
+}
+
+// userSet reports whether the configuration gives the form field key a value (its argument, or
+// extra_inputs), rather than a default filling it. Unknown counts as set.
+func (r *orderResource) userSet(ctx context.Context, p source, key string) bool {
+	at := r.formPath(key)
+	if at.Equal(path.Root("extra_inputs")) {
+		var m map[string]string
+		p.GetAttribute(ctx, at, &m)
+		_, ok := m[key]
+		return ok
+	}
+	var v attr.Value
+	if d := p.GetAttribute(ctx, at, &v); d.HasError() || v == nil {
+		return true
+	}
+	return !v.IsNull()
 }
 
 // formValues are the form values a list may be built for, as the console sends them: the item, its
@@ -150,13 +200,12 @@ func sortedKeys(fields map[string]client.FormField) []string {
 
 // checkField checks a value against the console's own rules for the field: locked, not blank, its
 // pattern and its number limits. The order would be refused, or the workflow fail, otherwise.
-func (r *orderResource) checkField(ff client.FormField, v any, diags *diag.Diagnostics) {
+func (r *orderResource) checkField(ff client.FormField, v any, filled bool, diags *diag.Diagnostics) {
 	at, what := r.formPath(ff.Name), label(ff)
-	// The name is locked on some forms (the console names the VM itself); the order still sends it,
-	// as orders are found by it.
 	// A hidden field, or a disk or network list, is what the form itself fills (PfSense's fixed
-	// disks, QA 2026-10-31): only a plain value a user gives is compared.
-	if ff.Locked && ff.Name != "name" && !ff.Hidden && scalarField(ff.Type) && ff.Default != nil && !sameValue(v, ff.Default) {
+	// disks, QA 2026-10-31): only a plain value a user gives is compared. A locked name has no
+	// argument (spec reports), so it is always the form's own.
+	if ff.Locked && !ff.Hidden && !filled && scalarField(ff.Type) && ff.Default != nil && !sameValue(v, ff.Default) {
 		diags.AddAttributeError(at, "Input locked by the form",
 			fmt.Sprintf("The %s form locks %s at %v: it can't be changed. Leave it out.%s", r.spec.item, what, ff.Default, helpOf(ff)))
 		return

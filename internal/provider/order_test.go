@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -59,8 +60,7 @@ func TestMySQLOrder(t *testing.T) {
   password_expiry_days = 90
 
   data_volume {
-    size      = 100
-    datastore = "ENCR_AT_REST"
+    size = 100
   }
 `
 	cfg := func(b string) string {
@@ -81,11 +81,12 @@ func TestMySQLOrder(t *testing.T) {
 					s.mu.Lock()
 					defer s.mu.Unlock()
 					got, _ := json.Marshal(s.sent[9801]["config"])
-					want := `{"cloud":"4","environment":"production","floatingip":"pool-44","group-vpn":"9101","hostCIDRs":"0.0.0.0/0",` +
+					// Checkboxes left out go as "off", as the console sends them.
+					want := `{"autoSecurityUpdates":"off","requireSSL":"off","useHostSSL":"off","cloud":"4","environment":"production","floatingip":"pool-44","group-vpn":"9101","hostCIDRs":"0.0.0.0/0",` +
 						`"labels":"db","makeUserDbOwner":"off","mysqlVersion":"8.4","name":"db-1",` +
 						`"networks":[{"network":{"id":"network-9350"},"primaryInterface":true}],"passwordExpiryDays":90,"plan":13107,` +
 						`"resourcepool":"pool-9201","securitygroups":[{"id":9301},{"id":9302}],` +
-						`"volumes":[{"name":"root","rootVolume":true,"size":40},{"name":"data-1","rootVolume":false,"size":100,"storageType":414}],` +
+						`"volumes":[{"name":"root","rootVolume":true,"size":40},{"name":"data-1","rootVolume":false,"size":100}],` +
 						`"dbName":"shop","dbPassword":"s3cret-value","dbUsername":"shop"}`
 					var a, b map[string]any
 					_ = json.Unmarshal(got, &a)
@@ -356,7 +357,11 @@ func TestOrder_PoolCheckedAgainstRouter(t *testing.T) {
 }
 
 func TestLetsEncryptOrder(t *testing.T) {
-	f, s, _ := orderFakes(t)
+	f, s, insts := orderFakes(t)
+	// The target instances, checked at plan: running, without a public IP (a warning, not an error).
+	for _, id := range []int64{9705, 9706} {
+		insts.insts[id] = map[string]any{"id": id, "name": "web-" + strconv.FormatInt(id, 10), "status": "running"}
+	}
 	cfg := f.providerConfig() + `
 resource "mtncloud_letsencrypt_certificate" "web" {
   instance_id = "9705"
@@ -382,6 +387,9 @@ resource "mtncloud_letsencrypt_certificate" "web" {
 				},
 			},
 			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// An instance that doesn't exist is refused at plan: nothing is ordered for it.
+			{Config: strings.Replace(cfg, `"9705"`, `"9999"`, 1), PlanOnly: true,
+				ExpectError: regexp.MustCompile(`(?s)No such instance.*Instance 9999 doesn't exist`)},
 			// An input added after the order is refused: never ordered again.
 			{Config: strings.Replace(cfg, "staging     = true", "staging     = true\n  admin_email = \"ops@example.com\"", 1), PlanOnly: true,
 				ExpectError: regexp.MustCompile(`(?s)admin_email can't change.*Remove\s+it:\s+the\s+order\s+was\s+placed\s+without\s+it`)},

@@ -1,0 +1,37 @@
+---
+page_title: "mtncloud_docker_cluster Resource - terraform-provider-mtncloud"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# mtncloud_docker_cluster
+
+{{ .Description | trimspace }}
+
+## Example Usage
+
+{{tffile "examples/resources/mtncloud_docker_cluster/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is supported using the following syntax:
+
+{{codefile "shell" "examples/resources/mtncloud_docker_cluster/import.sh" }}
+
+MTN Cloud doesn't report what the hosts were built with (plan, disks, networks), so after an import
+those come from your configuration. A Kubernetes cluster can't be imported here: use
+`mtncloud_managed_kubernetes_cluster`.
+
+## Notes
+
+- **Hosts.** Every host is built from `host`: a fixed 100 GB root disk, at least one data disk (each can name a
+  datastore of the project) and at least one network. Your user is created on every host. Hosts get no public IP.
+- **In place:** `name`, `description`, `labels` and `host_count` (hosts are added with the `host` settings, and
+  removed newest first). Everything else builds a new cluster.
+- **Names are checked when you plan:** project, plan, networks, security groups, datastores, domain and workflow. An unknown name lists the valid ones.
+- **Timeouts.** Create waits up to 90 minutes, updates and destroy up to 45 (see `timeouts`). If the cluster isn't
+  ready when the wait ends, it is kept with a warning and never built twice.
+- **Destroy** deletes the cluster with its hosts.

@@ -2,12 +2,12 @@
 page_title: "mtncloud_siem Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A security information and event management (SIEM) server. Ordered from MTN Cloud's catalog (MTN SIEM Service). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN SIEM Service order form requires and allows (read 2026-10-31); every plan checks the live form.
+  A security information and event management (SIEM) server. Ordered from MTN Cloud's catalog (MTN SIEM Service). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. The order form doesn't let you name the VM: MTN names it from its template (<initials>-<account>-MTN-CLOUD-<type>-<n>), as in the console, and the provider finds it from the workflow's own report. instance_names shows the name it got. Each argument says what the MTN SIEM Service order form requires and allows (read 2026-11-02); every plan checks the live form. The form fills name itself, and they are sent as it fills them.
 ---
 
 # mtncloud_siem
 
-A security information and event management (SIEM) server. Ordered from MTN Cloud's catalog (MTN SIEM Service). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN SIEM Service order form requires and allows (read 2026-10-31); every plan checks the live form.
+A security information and event management (SIEM) server. Ordered from MTN Cloud's catalog (MTN SIEM Service). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. The order form doesn't let you name the VM: MTN names it from its template (`<initials>-<account>-MTN-CLOUD-<type>-<n>`), as in the console, and the provider finds it from the workflow's own report. `instance_names` shows the name it got. Each argument says what the MTN SIEM Service order form requires and allows (read 2026-11-02); every plan checks the live form. The form fills `name` itself, and they are sent as it fills them.
 
 ## Example Usage
 
@@ -18,7 +18,6 @@ variable "admin_password" {
 }
 
 resource "mtncloud_siem" "this" {
-  name             = "siem-1"
   project          = "web-prod"
   plan             = "G2S4"
   root_volume_size = 100
@@ -38,8 +37,7 @@ resource "mtncloud_siem" "this" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `admin_password` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Administrator password. Order form: required; must match `^[A-Za-z0-9.*+?-]{12,64}$`; for example `********`. It says: "Password for the global administrator. Recoomended: 12-64 char. '.', '*', '+', '?' are allowed special characters." Write-only: sent with the order, never stored in state.
-- `archive_events` (String) Keep every event, `Yes` or `No`. Order form: required; choices: `yes`, `no`.
-- `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it. Order form: required.
+- `archive_events` (String) Keep every event: `yes` or `no`. Order form: required; choices: `yes`, `no`.
 - `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists. Order form: required.
 - `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices. Order form: required. It says: "Note: G4S8 (recommended)."
 - `root_volume_size` (Number) Root disk size in GB. At least 100 GB (the order form's minimum). Order form: required. It says: "Minimum 100 GB. A required 60 GB data disk is added automatically from the backend, for 160 GB total."
@@ -48,8 +46,7 @@ resource "mtncloud_siem" "this" {
 
 ### Optional
 
-- `data_volume` (Block List) Extra disks, in order. (see [below for nested schema](#nestedblock--data_volume))
-- `datastore` (String) Datastore (volume type) of the root disk, by name. Left out, the project's default.
+- `data_volume` (Block List) Extra disks, in order. MTN's workflow puts every disk on the project's default datastore. (see [below for nested schema](#nestedblock--data_volume))
 - `environment` (String) Environment, by name or code, for example `Production`.
 - `extra_inputs` (Map of String, Sensitive) Other inputs of the item's order form, by the form's field name, for fields this resource has no argument for yet (MTN adds and changes form fields). A choice is given by its shown name or value. `data.mtncloud_catalog_item` lists the form's fields. Sensitive, as a field can be a password; the values are kept in state. Changing them orders again.
 - `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`. Order form: choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
@@ -61,7 +58,8 @@ resource "mtncloud_siem" "this" {
 ### Read-Only
 
 - `id` (String) Order ID (Catalog > Inventory).
-- `instance_ids` (List of String) IDs of the instances the order created, found by name in the project.
+- `instance_ids` (List of String) IDs of the instances the order created.
+- `instance_names` (List of String) Names of the instances the order created, in the order of `instance_ids`. Where the form names the VM itself, this is the name MTN gave it (`<initials>-<account>-MTN-CLOUD-<type>-<n>`).
 - `instance_statuses` (Map of String) Status of each instance the order created, by instance ID, for example `running`. A `failed` instance plans a replace: the order is deleted and placed again.
 - `status` (String) The order's workflow result, for example `success`.
 
@@ -71,10 +69,6 @@ resource "mtncloud_siem" "this" {
 Required:
 
 - `size` (Number) Size in GB.
-
-Optional:
-
-- `datastore` (String) Datastore, by name. Left out, the project's default.
 
 
 <a id="nestedblock--timeouts"></a>
@@ -95,13 +89,14 @@ terraform import mtncloud_siem.this 9801
 ```
 
 The order doesn't show what it was placed with, so the inputs come from your configuration: write them
-exactly as ordered. The first apply after an import records them, finds the instances by name, and orders nothing.
+exactly as ordered. The first apply after an import records them, finds the instance from the order's workflow report, and orders nothing.
 
 ## Notes
 
 - **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
-  finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
-  they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
+  finish, finds the VM it made from the workflow's own report (`instance_ids`), and waits until
+  it is running (`instance_statuses`). The order form doesn't let you name the VM: MTN names it
+  `<initials>-<account>-MTN-CLOUD-<type>-<n>`, as in the console, shown in `instance_names`. An instance that fails fails the apply with MTN Cloud's
   message; the resource is then tainted, so the next apply deletes it and orders again.
 - **Placed once: a changed input is refused.** An order can't be edited, and Terraform won't
   delete what an order made to order it again, so a changed input stops the plan with

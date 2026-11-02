@@ -5,7 +5,7 @@
    "name": "alpha",
    "description": "description-101",
    "type": {
-    "name": "type-101"
+    "name": "Kubernetes Cluster"
    },
    "layout": {
     "name": "layout-101"
@@ -23,7 +23,7 @@
    "name": "beta",
    "description": "description-102",
    "type": {
-    "name": "type-102"
+    "name": "Kubernetes Cluster"
    },
    "layout": {
     "name": "layout-102"
@@ -41,7 +41,7 @@
    "name": "beta",
    "description": "description-103",
    "type": {
-    "name": "type-103"
+    "name": "Kubernetes Cluster"
    },
    "layout": {
     "name": "layout-103"
@@ -53,12 +53,30 @@
     "name": "cloud-103"
    },
    "status": "status-103"
+  },
+  {
+   "id": 104,
+   "name": "alpha",
+   "description": "description-104",
+   "type": {
+    "name": "Docker Cluster"
+   },
+   "layout": {
+    "name": "MTN Docker Cluster"
+   },
+   "site": {
+    "name": "group-104"
+   },
+   "zone": {
+    "name": "cloud-104"
+   },
+   "status": "ok"
   }
  ],
  "meta": {
   "offset": 0,
   "max": 200,
-  "size": 3,
-  "total": 3
+  "size": 4,
+  "total": 4
  }
 }

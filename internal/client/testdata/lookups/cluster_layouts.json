@@ -2,6 +2,7 @@
  "layouts": [
   {
    "id": 315,
+   "code": "8b84f285-45f9-408a-8266-7d07b1431794",
    "name": "MTN Kubernetes Single-Master",
    "groupType": {
     "code": "kubernetes-cluster"
@@ -47,6 +48,7 @@
   },
   {
    "id": 313,
+   "code": "0f0e59cc-3f26-4017-9584-acc8b197c24e",
    "name": "MTN Kubernetes HA (3)",
    "groupType": {
     "code": "kubernetes-cluster"
@@ -100,6 +102,7 @@
   },
   {
    "id": 311,
+   "code": "254b4278-d04f-4341-b53b-c3e1a04c652a",
    "name": "MTN Docker Cluster",
    "groupType": {
     "code": "docker-cluster"

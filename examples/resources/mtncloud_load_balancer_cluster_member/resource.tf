@@ -1,4 +1,4 @@
-data "mtncloud_cluster" "k8s" {
+data "mtncloud_managed_kubernetes_cluster" "k8s" {
   name = "k8s-prod"
 }
 
@@ -8,7 +8,7 @@ resource "mtncloud_load_balancer_cluster_member" "workers" {
   network_id       = mtncloud_network.app.id
   load_balancer_id = mtncloud_load_balancer.web.id
   pool_id          = mtncloud_load_balancer_pool.web.id
-  cluster_id       = data.mtncloud_cluster.k8s.id
+  cluster_id       = data.mtncloud_managed_kubernetes_cluster.k8s.id
   role             = "kube-worker"
   port             = 30080
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/mtn/terraform-provider-mtncloud/internal/client"
@@ -43,14 +44,53 @@ func newNFSShare() resource.Resource { return &shareResource{item: nfsItem} }
 func newSMBShare() resource.Resource { return &shareResource{item: smbItem, smb: true} }
 
 type shareModel struct {
-	ID              types.String   `tfsdk:"id"`
-	Name            types.String   `tfsdk:"name"`
-	QuotaGB         types.Int64    `tfsdk:"quota_gb"`
-	ClientIPs       types.List     `tfsdk:"client_ips"`
-	Password        types.String   `tfsdk:"password"`
-	PasswordVersion types.Int64    `tfsdk:"password_version"`
-	Status          types.String   `tfsdk:"status"`
-	Timeouts        timeouts.Value `tfsdk:"timeouts"`
+	ID        types.String   `tfsdk:"id"`
+	Name      types.String   `tfsdk:"name"`
+	QuotaGB   types.Int64    `tfsdk:"quota_gb"`
+	ClientIPs types.List     `tfsdk:"client_ips"`
+	Status    types.String   `tfsdk:"status"`
+	Timeouts  timeouts.Value `tfsdk:"timeouts"`
+}
+
+// smbModel is an SMB share: the NFS form has no password (live, 2026-11-02).
+type smbModel struct {
+	shareModel
+	Password        types.String `tfsdk:"password"` // write-only: always null in state
+	PasswordVersion types.Int64  `tfsdk:"password_version"`
+}
+
+type getter interface {
+	Get(context.Context, any) diag.Diagnostics
+}
+
+// load reads a share from a plan or state, with SMB's password_version (null for NFS).
+func (r *shareResource) load(ctx context.Context, src getter, diags *diag.Diagnostics) (shareModel, types.Int64) {
+	if !r.smb {
+		var m shareModel
+		diags.Append(src.Get(ctx, &m)...)
+		return m, types.Int64Null()
+	}
+	var m smbModel
+	diags.Append(src.Get(ctx, &m)...)
+	return m.shareModel, m.PasswordVersion
+}
+
+// save writes a share to state; the write-only password never is.
+func (r *shareResource) save(ctx context.Context, st *tfsdk.State, m shareModel, version types.Int64, diags *diag.Diagnostics) {
+	if !r.smb {
+		diags.Append(st.Set(ctx, &m)...)
+		return
+	}
+	diags.Append(st.Set(ctx, &smbModel{shareModel: m, Password: types.StringNull(), PasswordVersion: version})...)
+}
+
+// password is the configured SMB password, write-only so read from the configuration; "" for NFS.
+func (r *shareResource) password(ctx context.Context, cfg tfsdk.Config, diags *diag.Diagnostics) types.String {
+	var pw types.String
+	if r.smb {
+		diags.Append(cfg.GetAttribute(ctx, path.Root("password"), &pw)...)
+	}
+	return pw
 }
 
 func (r *shareResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -98,9 +138,6 @@ func (r *shareResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 			Validators: []validator.String{validators.MixedPassword(8)}}
 		attrs["password_version"] = schema.Int64Attribute{Optional: true,
 			Description: "Any number; changing it sends `password` again. Write-only values can't be compared, so this is how a new password is noticed."}
-	} else {
-		attrs["password"] = schema.StringAttribute{Computed: true, Description: "Not used by NFS shares.", PlanModifiers: keep}
-		attrs["password_version"] = schema.Int64Attribute{Computed: true, Description: "Not used by NFS shares."}
 	}
 	resp.Schema = schema.Schema{
 		Description: "An " + kind + " file share, ordered from MTN Cloud's catalog (" + r.item.Name() + "). Quota and client changes are ordered as " +
@@ -167,10 +204,8 @@ func (r *shareResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if !r.ready(&resp.Diagnostics) {
 		return
 	}
-	var m shareModel
-	var pw types.String
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &m)...)
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("password"), &pw)...)
+	m, version := r.load(ctx, req.Plan, &resp.Diagnostics)
+	pw := r.password(ctx, req.Config, &resp.Diagnostics)
 	timeout, d := m.Timeouts.Create(ctx, shareTimeout)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
@@ -187,22 +222,19 @@ func (r *shareResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if !r.withUpdateType(ctx, cfg, mode, "create the share", &resp.Diagnostics) {
 		return
 	}
-	if !r.smb {
-		m.PasswordVersion = types.Int64Null()
-	}
 	// Saved as soon as the order is placed, so a timeout never leads to a second order. A failed
 	// workflow drops it: nothing was made, and the next apply orders again.
-	m.Password, m.Status = types.StringNull(), types.StringValue("ordered")
+	m.Status = types.StringValue("ordered")
 	item := r.order(ctx, cfg, "create the share", &resp.Diagnostics, func(id int64) {
 		m.ID = types.StringValue(strconv.FormatInt(id, 10))
-		resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+		r.save(ctx, &resp.State, m, version, &resp.Diagnostics)
 	})
 	if item == nil {
 		resp.State.RemoveResource(ctx)
 		return
 	}
 	m.Status = types.StringValue(executionStatus(item))
-	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+	r.save(ctx, &resp.State, m, version, &resp.Diagnostics)
 }
 
 // Read keeps state: no API reads a share. It drops the share only when its order is gone.
@@ -210,8 +242,7 @@ func (r *shareResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if !r.ready(&resp.Diagnostics) {
 		return
 	}
-	var m shareModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &m)...)
+	m, version := r.load(ctx, req.State, &resp.Diagnostics)
 	id, err := strconv.ParseInt(m.ID.ValueString(), 10, 64)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid share ID", fmt.Sprintf("%q is not a catalog order ID.", m.ID.ValueString()))
@@ -233,21 +264,16 @@ func (r *shareResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if m.QuotaGB.IsNull() {
 		m.QuotaGB = types.Int64Value(10) // imported: the order's form isn't readable
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, &m)...)
+	r.save(ctx, &resp.State, m, version, &resp.Diagnostics)
 }
 
 func (r *shareResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	if !r.ready(&resp.Diagnostics) {
 		return
 	}
-	var plan, state shareModel
-	var pw types.String
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("password"), &pw)...)
-	if !r.smb {
-		plan.PasswordVersion = types.Int64Null()
-	}
+	plan, version := r.load(ctx, req.Plan, &resp.Diagnostics)
+	state, before := r.load(ctx, req.State, &resp.Diagnostics)
+	pw := r.password(ctx, req.Config, &resp.Diagnostics)
 	timeout, d := plan.Timeouts.Update(ctx, shareTimeout)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
@@ -257,11 +283,11 @@ func (r *shareResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	defer cancel()
 	quota := !plan.QuotaGB.Equal(state.QuotaGB)
 	clients := !plan.ClientIPs.Equal(state.ClientIPs) && (len(plan.ClientIPs.Elements()) != 0 || len(state.ClientIPs.Elements()) != 0)
-	password := r.smb && !plan.PasswordVersion.Equal(state.PasswordVersion) && pw.ValueString() != ""
+	password := r.smb && !version.Equal(before) && pw.ValueString() != ""
 	if state.ID.IsNull() || state.Name.IsNull() || (!quota && !clients && !password) {
 		// An import adopting its configuration, or nothing the share's order changes.
-		plan.ID, plan.Status, plan.Password = state.ID, state.Status, types.StringNull()
-		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		plan.ID, plan.Status = state.ID, state.Status
+		r.save(ctx, &resp.State, plan, version, &resp.Diagnostics)
 		return
 	}
 	cfg := r.config(ctx, plan, pw, &resp.Diagnostics)
@@ -287,16 +313,15 @@ func (r *shareResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if item == nil {
 		return
 	}
-	plan.ID, plan.Status, plan.Password = state.ID, types.StringValue(executionStatus(item)), types.StringNull()
-	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	plan.ID, plan.Status = state.ID, types.StringValue(executionStatus(item))
+	r.save(ctx, &resp.State, plan, version, &resp.Diagnostics)
 }
 
 func (r *shareResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	if !r.ready(&resp.Diagnostics) {
 		return
 	}
-	var m shareModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &m)...)
+	m, _ := r.load(ctx, req.State, &resp.Diagnostics)
 	timeout, d := m.Timeouts.Delete(ctx, shareTimeout)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {

@@ -107,10 +107,7 @@ func (r *accessResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 	var plan accessModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if req.State.Raw.IsNull() {
-		if plan.Rotate.ValueBool() {
-			resp.Diagnostics.AddWarning("MOS keys will be rotated",
-				"rotate = true: if the tenant already has MOS keys, this apply orders new ones, which replaces them for the whole tenant.")
-		}
+		r.planSource(ctx, plan, resp)
 		return
 	}
 	var state accessModel
@@ -132,6 +129,34 @@ func (r *accessResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 	}
 }
 
+// planSource says at plan time whether a create adopts the tenant's keys or orders them, so the plan
+// reads "nothing will be ordered" when that is so. Create refuses if the keys change before it runs.
+func (r *accessResource) planSource(ctx context.Context, plan accessModel, resp *resource.ModifyPlanResponse) {
+	if r.client == nil {
+		return // an unconfigured provider: decided at apply
+	}
+	keys, err := r.client.MOSKeys(ctx)
+	switch {
+	case err != nil:
+		resp.Diagnostics.AddWarning("MOS keys not checked",
+			"The tenant's MOS keys couldn't be read ("+err.Error()+"), so the plan can't say whether apply adopts them or orders "+
+				"new ones. Apply orders MTN Object Storage (MOS) only if the tenant has none, or with rotate = true.")
+		return
+	case keys == nil:
+		resp.Diagnostics.AddWarning("MOS will be ordered",
+			"This tenant has no MOS keys: apply orders MTN Object Storage (MOS), which creates them for the whole tenant.")
+	case plan.Rotate.ValueBool():
+		resp.Diagnostics.AddWarning("MOS keys will be rotated",
+			"rotate = true: this apply orders new MOS keys, which replaces them for the whole tenant. Every tool and user of the "+
+				"old keys loses access until it takes the new ones from Cypher.")
+	default:
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("source"), "adopted")...)
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("order_id"), "")...)
+		return
+	}
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("source"), "ordered")...)
+}
+
 func (r *accessResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	if !r.ready(&resp.Diagnostics) {
 		return
@@ -150,8 +175,17 @@ func (r *accessResource) Create(ctx context.Context, req resource.CreateRequest,
 		resp.Diagnostics.AddError("Unable to read the MOS keys", err.Error())
 		return
 	}
+	// The plan said whether it adopts or orders: a change since is refused, never acted on, as an
+	// order rotates the tenant's keys (D-007).
+	ordering := keys == nil || m.Rotate.ValueBool()
+	if planned := m.Source.ValueString(); !m.Source.IsUnknown() && planned != "" && (planned == "ordered") != ordering {
+		resp.Diagnostics.AddError("MOS keys changed since the plan",
+			fmt.Sprintf("The plan said this apply's MOS keys would be %s, but the tenant's keys have changed since. Nothing "+
+				"was ordered: run terraform plan again.", planned))
+		return
+	}
 	m.OrderID, m.Source = types.StringValue(""), types.StringValue("adopted")
-	if keys == nil || m.Rotate.ValueBool() {
+	if ordering {
 		old := keys
 		if keys, err = r.order(ctx, &m); err != nil {
 			if !r.pending(ctx, err, &m, old, &resp.Diagnostics) {

@@ -2,12 +2,12 @@
 page_title: "mtncloud_pfsense_vpn Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk). Ordered from MTN Cloud's catalog (MTN PfSense VPN). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN PfSense VPN order form requires and allows (read 2026-10-31); every plan checks the live form. The form fills volumes itself, and they are sent as it fills them. Its other fields, which no argument sets, go in extra_inputs: volume.
+  A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk). Ordered from MTN Cloud's catalog (MTN PfSense VPN). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with mtncloud_instance_settings. terraform apply -replace=<address> orders it again; add lifecycle { prevent_destroy = true } to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. terraform destroy deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. The order form doesn't let you name the VM: MTN names it from its template (<initials>-<account>-MTN-CLOUD-<type>-<n>), as in the console, and the provider finds it from the workflow's own report. instance_names shows the name it got. Each argument says what the MTN PfSense VPN order form requires and allows (read 2026-11-02); every plan checks the live form. The form fills name, volumes itself, and they are sent as it fills them. Its other fields, which no argument sets, go in extra_inputs: volume.
 ---
 
 # mtncloud_pfsense_vpn
 
-A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk). Ordered from MTN Cloud's catalog (MTN PfSense VPN). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. Each argument says what the MTN PfSense VPN order form requires and allows (read 2026-10-31); every plan checks the live form. The form fills `volumes` itself, and they are sent as it fills them. Its other fields, which no argument sets, go in `extra_inputs`: `volume`.
+A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk). Ordered from MTN Cloud's catalog (MTN PfSense VPN). An order is placed once: a changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. `terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked at plan time against the item's live order form: what the form requires, its choices and its stated minimums. `terraform destroy` deletes what it made, shown under Instances in the console, with its disks and floating IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are sent with the order and never stored. The order form doesn't let you name the VM: MTN names it from its template (`<initials>-<account>-MTN-CLOUD-<type>-<n>`), as in the console, and the provider finds it from the workflow's own report. `instance_names` shows the name it got. Each argument says what the MTN PfSense VPN order form requires and allows (read 2026-11-02); every plan checks the live form. The form fills `name`, `volumes` itself, and they are sent as it fills them. Its other fields, which no argument sets, go in `extra_inputs`: `volume`.
 
 ## Example Usage
 
@@ -15,7 +15,6 @@ A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB ro
 # PfSense needs two networks (inside and outside). Its disks are fixed by MTN Cloud (a 50 GB root
 # disk), and it has its own plans: "Small (G2S4)", "Medium (G4S4)" or "Large (G4S8)", by name or code.
 resource "mtncloud_pfsense_vpn" "this" {
-  name             = "vpn-1"
   project          = "web-prod"
   plan             = "G2S4"
   networks         = ["app-net", "dmz-net"]
@@ -34,7 +33,6 @@ resource "mtncloud_pfsense_vpn" "this" {
 ### Required
 
 - `floating_ip_pool` (String) External network to take a public (floating) IP from, by name, for example `public-network-01`. Order form: required; choices: `public-network-01`, `public-network-02`, `public-network-03`, `public-network-04`.
-- `name` (String) Name of the instance the order creates. It must be unique in the project: the provider finds the instance by it. Order form: required; locked (not editable).
 - `networks` (List of String) MTN Networks in the project, by name or ID. The first is the primary interface. For a network made in the same apply, give its ID (`mtncloud_network.x.id`): its name is known at plan, before the network exists. Order form: required. It says: "Note: Service requires at least 2 interfaces with the same floating IPs selected (two internal/ one internal, one external)."
 - `plan` (String) Plan (size), from the order form's own list: its name, or the size code in it (`G2S4` picks `Small (G2S4)`). An unknown plan lists the form's choices. Order form: required.
 
@@ -51,7 +49,8 @@ resource "mtncloud_pfsense_vpn" "this" {
 ### Read-Only
 
 - `id` (String) Order ID (Catalog > Inventory).
-- `instance_ids` (List of String) IDs of the instances the order created, found by name in the project.
+- `instance_ids` (List of String) IDs of the instances the order created.
+- `instance_names` (List of String) Names of the instances the order created, in the order of `instance_ids`. Where the form names the VM itself, this is the name MTN gave it (`<initials>-<account>-MTN-CLOUD-<type>-<n>`).
 - `instance_statuses` (Map of String) Status of each instance the order created, by instance ID, for example `running`. A `failed` instance plans a replace: the order is deleted and placed again.
 - `status` (String) The order's workflow result, for example `success`.
 
@@ -73,13 +72,14 @@ terraform import mtncloud_pfsense_vpn.this 9801
 ```
 
 The order doesn't show what it was placed with, so the inputs come from your configuration: write them
-exactly as ordered. The first apply after an import records them, finds the instances by name, and orders nothing.
+exactly as ordered. The first apply after an import records them, finds the instance from the order's workflow report, and orders nothing.
 
 ## Notes
 
 - **An order, not a live object.** Create places the catalog order, waits for MTN's workflow to
-  finish, finds the instances it made by `name` in the project (`instance_ids`), and waits until
-  they are running (`instance_statuses`). An instance that fails fails the apply with MTN Cloud's
+  finish, finds the VM it made from the workflow's own report (`instance_ids`), and waits until
+  it is running (`instance_statuses`). The order form doesn't let you name the VM: MTN names it
+  `<initials>-<account>-MTN-CLOUD-<type>-<n>`, as in the console, shown in `instance_names`. An instance that fails fails the apply with MTN Cloud's
   message; the resource is then tainted, so the next apply deletes it and orders again.
 - **Placed once: a changed input is refused.** An order can't be edited, and Terraform won't
   delete what an order made to order it again, so a changed input stops the plan with
