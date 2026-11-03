@@ -2,7 +2,7 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
-## Unreleased
+## 0.10.0 (2026-11-03)
 
 - **New: `mtncloud_managed_kubernetes_cluster` and `mtncloud_docker_cluster` replace `mtncloud_cluster`** (owner, 2026-11-02). They come with the data sources `mtncloud_managed_kubernetes_cluster(s)` and `mtncloud_docker_cluster(s)`, which replace `mtncloud_cluster(s)`. Clusters are now built the way MTN's own Managed Kubernetes order builds them:
   - `layout` is `single`, `ha3` or `ha5`;
