@@ -319,12 +319,13 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 		// Only name, description, labels, worker settings and autoscaling change in place; the
 		// rest keeps its planned (state) value or replaces the cluster through its modifier.
 		changed := r.planUpdate(ctx, &plan, config, state, &resp.Diagnostics)
-		// Changes in place need a healthy cluster (owner, 2026-11-03), checked here so the plan says so, and
-		// again at apply against a fresh read. A replacement and a destroy work in any state. The
-		// framework fills RequiresReplace only after this method, so a replacement is found here.
+		// Changes in place need a healthy cluster (owner, 2026-11-03). The plan only warns: terraform
+		// destroy plans the configuration first, and an error there would stop a destroy (QA t135). The
+		// apply refuses, on a fresh read. A replacement works in any state; the framework fills
+		// RequiresReplace only after this method, so a replacement is found here.
 		if changed && !replacing(plan, state) && !strings.EqualFold(state.Status.ValueString(), "ok") {
-			resp.Diagnostics.AddError(notHealthy(state.ID.ValueString(), state.Status.ValueString()))
-			return
+			summary, detail := notHealthy(state.ID.ValueString(), state.Status.ValueString())
+			resp.Diagnostics.AddWarning(summary, detail+" Applying this plan fails unless the cluster is healthy by then.")
 		}
 		if pending, d := req.Private.GetKey(ctx, scalerPending); len(pending) > 0 && !plan.Autoscaling.IsNull() &&
 			strings.EqualFold(state.Status.ValueString(), "ok") {
@@ -361,24 +362,20 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	resp.Diagnostics.Append(r.set(ctx, &resp.Plan, &plan)...)
 }
 
-// planUpdate checks an in-place change: worker settings and autoscaling are resolved now, so a
-// wrong name fails the plan, not the apply. It reports whether anything changes in place.
+// planUpdate plans an in-place change and reports whether anything changes in place. Its checks only
+// warn: terraform destroy plans the configuration first, and an error there would stop the destroy (QA
+// t135). The apply runs them again (checkChange) before it writes anything.
 func (r *clusterResource) planUpdate(ctx context.Context, plan *model, config, state model, diags *diag.Diagnostics) bool {
 	keepUnset(plan, config, state)
-	r.checkAutoscaling(ctx, plan, diags)
-	// With autoscaling, the autoscaler owns the count: worker_count is only where it started, and moving
-	// it by hand would fight the autoscaler (owner, 2026-11-03).
-	if !plan.Autoscaling.IsNull() && !plan.WorkerCount.IsUnknown() && !plan.WorkerCount.Equal(state.WorkerCount) {
-		r.addError(diags, "worker_count", "Worker count is set by the autoscaler",
-			"With autoscaling, the autoscaler sets the worker count, so worker_count can't change after the cluster is built. "+
-				"Change autoscaling.min_nodes or max_nodes instead, or remove autoscaling to set the count yourself. To add "+
-				"autoscaling at a new count, change worker_count in one apply and add autoscaling in the next.")
-	}
-	if (!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount)) && !plan.WorkerCount.IsUnknown() {
-		// Checked on a copy: building fills defaults (version, CIDRs) the cluster may not have.
-		check := *plan
-		if r.build(ctx, &check, diags) == nil {
-			return false
+	var checks diag.Diagnostics
+	r.checkChange(ctx, plan, state, &checks)
+	for _, d := range checks {
+		if d.Severity() != diag.SeverityError {
+			diags.Append(d)
+		} else if p, ok := d.(diag.DiagnosticWithPath); ok {
+			diags.AddAttributeWarning(p.Path(), d.Summary(), d.Detail()+" Applying this plan fails.")
+		} else {
+			diags.AddWarning(d.Summary(), d.Detail()+" Applying this plan fails.")
 		}
 	}
 	changed := !plan.Name.Equal(state.Name) || !plan.Description.Equal(state.Description) || !plan.Labels.Equal(state.Labels) ||
@@ -391,6 +388,25 @@ func (r *clusterResource) planUpdate(ctx context.Context, plan *model, config, s
 	}
 	plan.APIURL = state.APIURL
 	return changed
+}
+
+// checkChange checks an in-place change: the autoscaling range, who owns the count, and the worker
+// settings, resolved by name.
+func (r *clusterResource) checkChange(ctx context.Context, plan *model, state model, diags *diag.Diagnostics) {
+	r.checkAutoscaling(ctx, plan, diags)
+	// With autoscaling, the autoscaler owns the count: worker_count is only where it started, and moving
+	// it by hand would fight the autoscaler (owner, 2026-11-03).
+	if !plan.Autoscaling.IsNull() && !plan.WorkerCount.IsUnknown() && !plan.WorkerCount.Equal(state.WorkerCount) {
+		r.addError(diags, "worker_count", "Worker count is set by the autoscaler",
+			"With autoscaling, the autoscaler sets the worker count, so worker_count can't change after the cluster is built. "+
+				"Change autoscaling.min_nodes or max_nodes instead, or remove autoscaling to set the count yourself. To add "+
+				"autoscaling at a new count, change worker_count in one apply and add autoscaling in the next.")
+	}
+	if (!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount)) && !plan.WorkerCount.IsUnknown() {
+		// Checked on a copy: building fills defaults (version, CIDRs) the cluster may not have.
+		check := *plan
+		r.build(ctx, &check, diags)
+	}
 }
 
 // keepUnset gives what the configuration leaves out the value the cluster already has. A value only
@@ -1039,8 +1055,13 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 	// Checked again on a fresh read when something on the cluster changes: the plan's status can be old
 	// (-refresh=false), and an import's first plan isn't checked. A timeouts edit alone changes nothing.
 	touches := !plan.Name.Equal(state.Name) || !plan.Description.Equal(state.Description) || !plan.Labels.Equal(state.Labels) ||
-		!plan.WorkerCount.Equal(state.WorkerCount) || !plan.Autoscaling.Equal(state.Autoscaling) || scalerOff || len(pending) > 0
+		!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount) || !plan.Autoscaling.Equal(state.Autoscaling) ||
+		scalerOff || len(pending) > 0
 	if touches {
+		// The plan only warned about these (planUpdate).
+		if r.checkChange(ctx, &plan, state, &resp.Diagnostics); resp.Diagnostics.HasError() {
+			return
+		}
 		if now, err := r.client.GetCluster(ctx, id); err != nil {
 			resp.Diagnostics.AddError("Unable to read the cluster", err.Error())
 			return

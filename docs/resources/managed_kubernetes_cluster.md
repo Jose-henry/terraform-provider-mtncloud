@@ -193,7 +193,8 @@ imported here: use `mtncloud_docker_cluster`.
   apply replaces it, and a destroy deletes it. With `worker_count` set in your configuration (with `autoscaling`, the autoscaler handles its workers), a worker that has failed isn't counted once the
   cluster settles: the next plan shows the cluster short, and its apply removes the failed worker and builds a new one.
 - **Changes need a healthy cluster.** While `status` isn't `ok` (still building, failed, or warning), the plan
-  refuses any in-place change, and the apply checks again. A destroy works in any state, and
+  warns about an in-place change and its apply fails, changing nothing. A destroy works in any state, whatever
+  the configuration says, and
   `terraform apply -replace` (with no other change) rebuilds the cluster. A cluster that settles in `warning` is
   never healthy: its create fails when the wait ends, whatever the timeout.
 - **Timeouts.** Create waits up to 90 minutes, updates and destroy up to 45 (see `timeouts`). If MTN Cloud is only

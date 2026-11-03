@@ -265,9 +265,8 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 			},
 			{Config: cfg("", "2", scaling), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 			{
-				// With autoscaling, the autoscaler owns the count.
-				Config: cfg("", "3", scaling), PlanOnly: true, ExpectError: regexp.MustCompile(`Worker count is set by the autoscaler`),
-			},
+				// With autoscaling, the autoscaler owns the count: the plan warns, the apply refuses.
+				Config: cfg("", "3", scaling), ExpectError: regexp.MustCompile(`Worker count is set by the autoscaler`)},
 			{
 				// Autoscaling off, one more worker with the worker settings, and a description: all in place.
 				Config: cfg(`  description = "apps cluster"`, "3", ""), ConfigPlanChecks: inPlace,
@@ -489,8 +488,8 @@ resource "mtncloud_docker_cluster" "docker" {
 	}
 }
 
-// A cluster that isn't healthy can't be changed: the plan says so, and nothing is sent. A destroy still
-// works.
+// A cluster that isn't healthy can't be changed: the plan warns, the apply refuses on a fresh read, and
+// nothing is sent. A destroy still works, whatever the configuration says.
 func TestCluster_ChangesNeedHealthy(t *testing.T) {
 	f, s := clusterFakes(t)
 	cfg := func(desc string) string {
@@ -506,6 +505,16 @@ func TestCluster_ChangesNeedHealthy(t *testing.T) {
 				ExpectError: regexp.MustCompile(`(?s)Cluster not healthy.*Cluster 9601 is "warning"`),
 			},
 			{Config: cfg("one"), PlanOnly: true}, // no change: nothing to refuse
+			// A destroy plans the configuration first: a change there doesn't stop it (QA t135).
+			{Config: cfg("two"), Destroy: true},
+		},
+		CheckDestroy: func(*terraform.State) error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if _, ok := s.clusters[9601]; ok {
+				return fmt.Errorf("cluster 9601 not destroyed")
+			}
+			return nil
 		},
 	})
 	if len(s.updated) != 0 {
@@ -933,5 +942,31 @@ func TestCluster_ApplyChecksHealth(t *testing.T) {
 	})
 	if len(s.updated) != 1 {
 		t.Errorf("%d updates, want 1: none while it wasn't healthy", len(s.updated))
+	}
+}
+
+// A destroy plans the configuration first: a change the apply would refuse doesn't stop it (QA t135).
+func TestCluster_DestroyIgnoresRefusedChange(t *testing.T) {
+	f, s := clusterFakes(t)
+	cfg := func(n string) string {
+		return clusterConfig(f, "  worker_count = "+n+"\n  autoscaling = {\n    min_nodes = 1\n    max_nodes = 4\n  }", "")
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("1")},
+			{Config: cfg("3"), Destroy: true},
+		},
+		CheckDestroy: func(*terraform.State) error {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if _, ok := s.clusters[9601]; ok {
+				return fmt.Errorf("cluster 9601 not destroyed")
+			}
+			return nil
+		},
+	})
+	if len(s.added) != 0 {
+		t.Errorf("workers added: %s", jsonOf(s.added))
 	}
 }

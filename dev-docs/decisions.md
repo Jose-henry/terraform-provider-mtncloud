@@ -465,8 +465,9 @@ said `error` with every worker `provisioned`, and a cluster stays `ok` while a w
   The cluster stays in state, tainted, so the next apply replaces it (owner's option A; option B, keep it
   untainted and check again, was declined). Docs tell users to raise `timeouts.create` when MTN Cloud is slow.
 - **In-place changes** (name, description, labels, worker count, worker settings, autoscaling) are refused at
-  plan time unless `status` is `ok`, and again at apply on a fresh read (a `-refresh=false` plan, or an
-  import's first apply, isn't checked at plan time). Destroy works in any state, and so does a replacement:
+  apply, on a fresh read, unless `status` is `ok`. The plan only warns: `terraform destroy` first plans the
+  configuration, and a plan error there stopped a destroy (QA t135: a config with `host_count = 2` against a
+  `syncing` cluster). Destroy works in any state, and so does a replacement:
   the plan finds it itself, because the framework fills `RequiresReplace` only after the resource's
   ModifyPlan. `-replace` together with an in-place edit is refused while unhealthy.
 - **Scaling** ends only when the cluster is healthy again with every new node ready. A node that fails ends

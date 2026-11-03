@@ -653,6 +653,16 @@ Live QA rerun, 2026-11-03 (clusters 151 Kubernetes single, 152 Docker, one worke
 - Deleting both took longer than the 45-minute timeout: their servers were gone 5 minutes after the
   delete, but the clusters stayed `deprovisioning` behind the hung provisioning.
 
+Live QA, D-043 rules, 2026-11-03 (t135: clusters 153 Kubernetes single, 154 Docker):
+- **Kubernetes:** worker `tf-acc-k8s-45xbg-worker-1` failed, so the cluster went `failed`. The create failed
+  with "Cluster failed ... Failed workers: tf-acc-k8s-45xbg-worker-1" and the cluster was tainted, as designed.
+  The Kubernetes worker join is still open on MTN Cloud's side.
+- **Docker:** healthy (`ok`, host provisioned) in 6m27s. A few minutes later it read `syncing`: `ok` isn't
+  a resting state.
+- **Found: the destroy stopped** at the plan-time health check: `terraform destroy` plans the configuration
+  first, and that one had `host_count = 2`. The plan now only warns; the apply refuses (D-043).
+- **Forced delete works live:** failed 153 was gone in 32 seconds, syncing 154 in 77 seconds (404 for both).
+
 Docker, per the CLI (`/api/cluster-types` read by the owner, and the 9.0.0 CLI's `clusters.rb`, 2026-11-02):
 - the Docker type has no masters; its only node type is the worker type "Docker Host";
 - the create sends the host count as `server.nodeCount` and `server.config.nodeCount`, with no worker block;
