@@ -847,6 +847,9 @@ func TestPoll_RidesOutAnOutage(t *testing.T) {
 				}
 				_, _ = w.Write([]byte(`{"cluster":{"id":7,"status":"ok"}}`))
 			})
+			f.route("GET", "/api/clusters/7/workers", func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(`{"workers":[{"id":70,"name":"w","status":"provisioned"}]}`))
+			})
 			c := f.client(t, func(cfg *Config) { cfg.PollMin, cfg.PollMax = time.Millisecond, 2*time.Millisecond })
 			ctx := t.Context()
 			if tc.deadline > 0 {
@@ -854,12 +857,12 @@ func TestPoll_RidesOutAnOutage(t *testing.T) {
 				ctx, cancel = context.WithTimeout(ctx, tc.deadline)
 				defer cancel()
 			}
-			cl, err := c.WaitForCluster(ctx, 7)
+			h, err := c.WaitForClusterHealthy(ctx, 7, 1, true)
 			switch {
 			case tc.wantErr == "" && err != nil:
 				t.Fatalf("err = %v", err)
-			case tc.wantErr == "" && cl.Status != "ok":
-				t.Errorf("status %q, want ok", cl.Status)
+			case tc.wantErr == "" && !h.Healthy(1):
+				t.Errorf("not healthy: %+v", h)
 			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr) || errors.Is(err, context.DeadlineExceeded)):
 				t.Errorf("err = %v, want the API's %s", err, tc.wantErr)
 			}
@@ -904,5 +907,87 @@ func TestCreateCluster_LabelRace(t *testing.T) {
 				t.Errorf("%d creates sent, want %d", got, tc.wantPosts)
 			}
 		})
+	}
+}
+
+// A cluster is healthy only when it is "ok" with every worker ready, and the count asked for. Cluster 143
+// (2026-11-03) said "error" with every worker "provisioned"; a cluster stays "ok" while a worker is added.
+func TestClusterHealth(t *testing.T) {
+	ws := func(st ...string) []ClusterNode {
+		var out []ClusterNode
+		for i, s := range st {
+			out = append(out, ClusterNode{ID: int64(i), Name: fmt.Sprint("w", i), Status: s})
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name            string
+		status          string
+		workers         []ClusterNode
+		want            int
+		healthy, failed bool
+	}{
+		{"ok, all ready", "ok", ws("provisioned", "provisioned"), 2, true, false},
+		{"ok, any count", "ok", ws("provisioned"), -1, true, false},
+		{"ok, one still building", "ok", ws("provisioned", "provisioning"), 2, false, false},
+		{"ok, one short", "ok", ws("provisioned"), 2, false, false},
+		{"still provisioning", "provisioning", ws("provisioned"), 1, false, false},
+		{"error with every worker ready", "error", ws("provisioned"), 1, false, true},
+		{"a worker failed", "ok", ws("provisioned", "failed"), 2, false, true},
+		{"warning", "warning", ws("provisioned"), 1, false, false},
+	} {
+		h := &ClusterHealth{Cluster: &Cluster{ID: 1, Status: tc.status}, Workers: tc.workers}
+		if got := h.Healthy(tc.want); got != tc.healthy {
+			t.Errorf("%s: healthy %v, want %v", tc.name, got, tc.healthy)
+		}
+		if got := h.Failed(); got != tc.failed {
+			t.Errorf("%s: failed %v, want %v", tc.name, got, tc.failed)
+		}
+	}
+	var none *ClusterHealth
+	if none.Failed() || none.Healthy(-1) {
+		t.Error("a cluster never read is neither failed nor healthy")
+	}
+}
+
+// After the create, a 404 is read again; later, it means the cluster is gone and the wait ends at once.
+func TestWaitForClusterHealthy_NotFound(t *testing.T) {
+	f := newFakeAPI(t)
+	var n atomic.Int32
+	f.route("GET", "/api/clusters/7", func(w http.ResponseWriter, _ *http.Request) {
+		if n.Add(1) <= 2 {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"cluster":{"id":7,"status":"ok"}}`))
+	})
+	f.route("GET", "/api/clusters/7/workers", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"workers":[]}`))
+	})
+	c := f.client(t, func(cfg *Config) { cfg.PollMin, cfg.PollMax = time.Millisecond, 2*time.Millisecond })
+	if h, err := c.WaitForClusterHealthy(t.Context(), 7, 0, true); err != nil || !h.Healthy(0) {
+		t.Fatalf("just created: %+v, %v", h, err)
+	}
+	n.Store(0)
+	if _, err := c.WaitForClusterHealthy(t.Context(), 7, 0, false); !IsNotFound(err) || n.Load() != 1 {
+		t.Errorf("later: err %v after %d reads, want a 404 at once", err, n.Load())
+	}
+}
+
+// A cluster destroy force-deletes it with its infrastructure and associated instances (owner,
+// 2026-11-03), as the CLI's `clusters remove --remove-resources on --remove-instances on -f` sends it.
+func TestDeleteCluster_Forced(t *testing.T) {
+	f := newFakeAPI(t)
+	var q string
+	f.route("DELETE", "/api/clusters/7", func(w http.ResponseWriter, r *http.Request) {
+		q = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"success":true}`))
+	})
+	if err := f.client(t).DeleteCluster(t.Context(), 7); err != nil {
+		t.Fatal(err)
+	}
+	if q != "force=on&removeInstances=on&removeResources=on" {
+		t.Errorf("query %q", q)
 	}
 }

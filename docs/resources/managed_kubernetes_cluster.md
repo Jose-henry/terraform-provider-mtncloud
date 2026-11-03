@@ -55,7 +55,7 @@ resource "mtncloud_managed_kubernetes_cluster" "apps" {
 
 ### Optional
 
-- `autoscaling` (Attributes) Scale workers automatically between these counts. Changes in place. Left out, the autoscaler is held at `worker_count`, as MTN's own cluster order does (a cluster built with it off never finishes its workers). (see [below for nested schema](#nestedatt--autoscaling))
+- `autoscaling` (Attributes) Scale workers automatically between these counts. Changes in place. The autoscaler then owns the count, so `worker_count` can't change. Left out, the autoscaler is held at `worker_count`, as MTN's own cluster order does (a cluster built with it off never finishes its workers). (see [below for nested schema](#nestedatt--autoscaling))
 - `cloud` (String) Cloud, by name. Left out, the provider's `cloud` (or `MTNCLOUD_CLOUD`); it must be the group's cloud.
 - `create_user` (Boolean) Create your user on the nodes. Left out, `true`, as MTN's own cluster order does. Changing it builds a new cluster.
 - `description` (String) Description. Changes in place.
@@ -72,14 +72,14 @@ resource "mtncloud_managed_kubernetes_cluster" "apps" {
 - `service_cidr` (String) Service network. Left out, the layout's default (`10.96.0.0/12`).
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `worker` (Attributes) Worker settings that differ from the master's: plan, data disks, networks, security groups. Changing them applies to workers added later; existing workers keep theirs. (see [below for nested schema](#nestedatt--worker))
-- `worker_count` (Number) Number of workers. Left out, 3, as MTN's own cluster order does. Changing it adds or removes workers in place (removal takes the newest). With `autoscaling`, it is only the starting count.
+- `worker_count` (Number) Number of workers. Left out, 3, as MTN's own cluster order does. Changing it adds or removes workers in place (removal takes the newest), and the apply ends when the new workers are ready. With `autoscaling`, it is only the starting count and can't change after the cluster is built: change `autoscaling` instead.
 - `workflow` (String) Workflow to run on each node after it is built, by name.
 
 ### Read-Only
 
 - `api_url` (String) Kubernetes API address, when MTN Cloud reports one.
 - `id` (String) Cluster ID.
-- `status` (String) Status, for example `ok`.
+- `status` (String) Status: `ok` when healthy. The cluster can be changed in place only while it is `ok`.
 - `worker_ids` (List of String) IDs of the workers now in the cluster.
 
 <a id="nestedatt--master"></a>
@@ -158,7 +158,7 @@ terraform import mtncloud_managed_kubernetes_cluster.apps 42
 ```
 
 MTN Cloud doesn't report what the nodes were built with (plans, disks, networks, versions), so after
-an import those come from your configuration. The first apply after an import records them, and only changes
+an import those come from your configuration. The first apply after an import (which needs the cluster `ok`) records them, and only changes
 what can change in place (name, description, labels, worker count, autoscaling). A Docker cluster can't be
 imported here: use `mtncloud_docker_cluster`.
 
@@ -176,15 +176,27 @@ imported here: use `mtncloud_docker_cluster`.
 - **Security groups.** List groups that allow the Kubernetes API (TCP 6443) and the kubelet (TCP 10250) between the
   nodes. The project's default group is always applied. A group must be synced to the project.
 - **Autoscaler.** It is always on. With `autoscaling`, it moves the worker count between `min_nodes` and
-  `max_nodes`; `worker_count` is then only the starting count, and the current workers are in `worker_ids`.
-  Without it, the autoscaler is held at `worker_count` (MTN's order does the same: a cluster built with it off
-  never finishes its workers), and changing `worker_count` moves it first.
-- **In place:** `name`, `description`, `labels`, `worker_count` (workers are added with the worker settings, and
-  removed newest first), the `worker` settings (used for workers added later) and `autoscaling`. Everything else
+  `max_nodes` and owns the count: `worker_count` is only the starting count, can't change after the build, and the
+  current workers are in `worker_ids`. To scale, change `min_nodes` or `max_nodes`, or remove `autoscaling` to set
+  the count yourself. Without it, the autoscaler is held at `worker_count` (MTN's order does the same: a cluster
+  built with it off never finishes its workers, and `min_nodes` can't be left empty), and changing `worker_count`
+  moves it first, so it never removes a worker you added.
+- **In place:** `name`, `description`, `labels`, `worker_count` without `autoscaling` (workers are added with the
+  worker settings, and removed newest first), the `worker` settings (used for workers added later) and `autoscaling`. Everything else
   builds a new cluster.
 - **Names are checked when you plan:** project, plans, networks, security groups, datastores, domain, registry,
   workflow and Kubernetes version. An unknown name lists the valid ones.
 - **kubectl from the console** needs a Customer Admin or Power User login.
-- **Timeouts.** Create waits up to 90 minutes, updates and destroy up to 45 (see `timeouts`). If the cluster isn't
-  ready when the wait ends, it is kept with a warning and never built twice.
-- **Destroy** deletes the cluster with its nodes.
+- **Built only when healthy.** An apply that creates or scales the cluster ends only when the cluster is `ok` and
+  every worker is ready. If the cluster or a worker fails, the apply fails with MTN Cloud's message and names the failed
+  workers. A create that fails, or isn't healthy when its wait ends, is kept in state and marked tainted: the next
+  apply replaces it, and a destroy deletes it. With `worker_count` set in your configuration (with `autoscaling`, the autoscaler handles its workers), a worker that has failed isn't counted once the
+  cluster settles: the next plan shows the cluster short, and its apply removes the failed worker and builds a new one.
+- **Changes need a healthy cluster.** While `status` isn't `ok` (still building, failed, or warning), the plan
+  refuses any in-place change, and the apply checks again. A destroy works in any state, and
+  `terraform apply -replace` (with no other change) rebuilds the cluster. A cluster that settles in `warning` is
+  never healthy: its create fails when the wait ends, whatever the timeout.
+- **Timeouts.** Create waits up to 90 minutes, updates and destroy up to 45 (see `timeouts`). If MTN Cloud is only
+  slow, raise `timeouts.create` rather than letting the cluster be replaced.
+- **Destroy** force-deletes the cluster with its infrastructure and associated instances (volumes too), in any
+  state, including one still building.

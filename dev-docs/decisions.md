@@ -457,6 +457,35 @@ run would make the result differ from the plan ("inconsistent result"). The know
 copy it, unless they use `replace_triggered_by` (the documented way). Create adopts an existing schedule
 only when times, zone and copied values all match, so it never takes over another config's schedule.
 
+## D-043 Clusters: built only when healthy, changed only when healthy (owner, 2026-11-03)
+A cluster resource finishes only when everything is done and working: the cluster `ok` and every worker
+(Docker: host) `provisioned`, with the count asked for. The cluster's own status isn't enough: cluster 143
+said `error` with every worker `provisioned`, and a cluster stays `ok` while a worker is added.
+- **Create** fails on a failed cluster or node (MTN Cloud's message, the failed nodes named), and on a timeout.
+  The cluster stays in state, tainted, so the next apply replaces it (owner's option A; option B, keep it
+  untainted and check again, was declined). Docs tell users to raise `timeouts.create` when MTN Cloud is slow.
+- **In-place changes** (name, description, labels, worker count, worker settings, autoscaling) are refused at
+  plan time unless `status` is `ok`, and again at apply on a fresh read (a `-refresh=false` plan, or an
+  import's first apply, isn't checked at plan time). Destroy works in any state, and so does a replacement:
+  the plan finds it itself, because the framework fills `RequiresReplace` only after the resource's
+  ModifyPlan. `-replace` together with an in-place edit is refused while unhealthy.
+- **Scaling** ends only when the cluster is healthy again with every new node ready. A node that fails ends
+  the apply. A failed node isn't counted in `worker_count` (refresh), so the next plan shows the cluster
+  short, and its apply removes the failed node and builds a new one.
+- **One owner of the worker count.** Without `autoscaling` you own it: the autoscaler is held at min = max =
+  `worker_count`, moved before workers are added, so it never removes one you added. With `autoscaling` the
+  autoscaler owns it, and `worker_count` can't change after the build (a manual change would fight it),
+  nor in the apply that adds `autoscaling` (the count moves first, in its own apply).
+- **`min_nodes` is always sent.** The owner asked whether it could be left unset when autoscaling isn't
+  chosen. No: MTN's `CreateCluster.sh` records that empty `minNodes`/`maxNodes` leave every worker's Cluster
+  Finalize job queued forever (clusters 131 and 139), so min = max = `worker_count` stays.
+- **Destroy** force-deletes, with infrastructure and associated instances (owner, 2026-11-03):
+  `DELETE /api/clusters/{id}?removeResources=on&removeInstances=on&force=on`, taken from a CLI 9.0.0 dry run of
+  `clusters remove --remove-resources on --remove-instances on -f` (`--curl`). `preserveVolumes` stays off.
+  QA clusters 151 and 152 stayed `deprovisioning` for over 2 hours after a delete without `force`.
+Supersedes the 2026-11-03 interim behaviour: a create timeout kept the cluster with a warning, and a scale on a
+cluster without its autoscaler warned and carried on.
+
 ## D-042 Catalog orders take only what the console lets a user set (owner, 2026-11-02)
 A field the order form hides or locks has no argument. The console never lets a user set one, so
 neither does the provider. A test against the form snapshots enforces it

@@ -355,22 +355,6 @@ func (c *Client) FindClustersNamed(ctx context.Context, name string) ([]*Cluster
 	return out, nil
 }
 
-// WaitForCluster polls a cluster until it is no longer provisioning, retrying a 404 just after the
-// create (rule 13). A failed cluster is returned with no error.
-func (c *Client) WaitForCluster(ctx context.Context, id int64) (*Cluster, error) {
-	return poll(ctx, c, func(ctx context.Context) (*Cluster, error) { return c.GetCluster(ctx, id) },
-		func(cl *Cluster, err error) (bool, error) {
-			switch {
-			case IsNotFound(err):
-				return false, nil
-			case err != nil:
-				return false, err
-			}
-			s := strings.ToLower(cl.Status)
-			return s == "ok" || s == "warning" || ClusterFailed(s), nil
-		})
-}
-
 // UpdateCluster changes a cluster's name, description and labels.
 func (c *Client) UpdateCluster(ctx context.Context, id int64, name, description string, labels []string) error {
 	if labels == nil {
@@ -380,9 +364,11 @@ func (c *Client) UpdateCluster(ctx context.Context, id int64, name, description 
 	return c.do(ctx, http.MethodPut, "/api/clusters/"+itoa(id), nil, body, nil)
 }
 
-// DeleteCluster deletes a cluster with its nodes; one already gone is not an error.
+// DeleteCluster force-deletes a cluster with its infrastructure and associated instances, volumes
+// included (owner, 2026-11-03): the CLI's `clusters remove --remove-resources on --remove-instances on -f`
+// (dry run, 9.0.0). Force lets a cluster stuck building be deleted. One already gone is not an error.
 func (c *Client) DeleteCluster(ctx context.Context, id int64) error {
-	q := url.Values{"removeResources": {"on"}}
+	q := url.Values{"removeResources": {"on"}, "removeInstances": {"on"}, "force": {"on"}}
 	return ignoreNotFound(c.do(ctx, http.MethodDelete, "/api/clusters/"+itoa(id), q, nil, nil))
 }
 
@@ -449,6 +435,21 @@ func (c *Client) DeleteClusterWorker(ctx context.Context, id, serverID int64) er
 	return ignoreNotFound(c.do(ctx, http.MethodDelete, "/api/clusters/"+itoa(id)+"/servers/"+itoa(serverID), q, nil, nil))
 }
 
+// WaitForWorkersGone waits until none of these workers is listed any more (none: returns at once).
+func (c *Client) WaitForWorkersGone(ctx context.Context, id int64, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := poll(ctx, c, func(ctx context.Context) ([]ClusterNode, error) { return c.ClusterWorkers(ctx, id) },
+		func(ws []ClusterNode, err error) (bool, error) {
+			if err != nil {
+				return false, err
+			}
+			return !slices.ContainsFunc(ws, func(w ClusterNode) bool { return slices.Contains(ids, w.ID) }), nil
+		})
+	return err
+}
+
 // ConfigureAutoscaler turns the cluster's worker autoscaler on (with its node range) or off.
 func (c *Client) ConfigureAutoscaler(ctx context.Context, id int64, enabled bool, minNodes, maxNodes int64) error {
 	cl := map[string]any{"autoScalerEnabled": enabled}
@@ -458,9 +459,65 @@ func (c *Client) ConfigureAutoscaler(ctx context.Context, id int64, enabled bool
 	return c.do(ctx, http.MethodPost, "/api/clusters/"+itoa(id)+"/configure-autoscaler", nil, map[string]any{"cluster": cl}, nil)
 }
 
-// WaitForClusterWorkers waits until the cluster lists exactly n workers.
-func (c *Client) WaitForClusterWorkers(ctx context.Context, id int64, n int) error {
-	_, err := poll(ctx, c, func(ctx context.Context) ([]ClusterNode, error) { return c.ClusterWorkers(ctx, id) },
-		func(ws []ClusterNode, err error) (bool, error) { return err == nil && len(ws) == n, err })
-	return err
+// ClusterHealth is a cluster and its workers (Docker: its hosts), read together.
+type ClusterHealth struct {
+	Cluster *Cluster
+	Workers []ClusterNode
+}
+
+// Failed reports the cluster, or one of its workers, ending in a failed state.
+func (h *ClusterHealth) Failed() bool {
+	if h == nil || h.Cluster == nil {
+		return false
+	}
+	if ClusterFailed(h.Cluster.Status) {
+		return true
+	}
+	return slices.ContainsFunc(h.Workers, func(w ClusterNode) bool { return ClusterFailed(w.Status) })
+}
+
+// FailedWorkers names the workers that failed.
+func (h *ClusterHealth) FailedWorkers() []string {
+	var out []string
+	for _, w := range h.Workers {
+		if ClusterFailed(w.Status) {
+			out = append(out, w.Name)
+		}
+	}
+	return out
+}
+
+// Healthy reports a cluster that finished building and works: the cluster "ok" and want workers, every
+// one "provisioned" (want < 0: any number). A cluster's own status isn't enough: on 2026-11-03 cluster
+// 143 said "error" with every worker "provisioned", and a cluster stays "ok" while a worker is added.
+func (h *ClusterHealth) Healthy(want int) bool {
+	if h == nil || h.Cluster == nil || !strings.EqualFold(h.Cluster.Status, "ok") || (want >= 0 && len(h.Workers) != want) {
+		return false
+	}
+	return !slices.ContainsFunc(h.Workers, func(w ClusterNode) bool { return !strings.EqualFold(w.Status, "provisioned") })
+}
+
+// WaitForClusterHealthy polls the cluster and its workers until it is healthy with want workers, or it
+// or a worker fails. A 404 is read again only just after the create (created, rule 13); otherwise the
+// cluster is gone and the wait ends.
+func (c *Client) WaitForClusterHealthy(ctx context.Context, id int64, want int, created bool) (*ClusterHealth, error) {
+	return poll(ctx, c, func(ctx context.Context) (*ClusterHealth, error) {
+		cl, err := c.GetCluster(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		ws, err := c.ClusterWorkers(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		return &ClusterHealth{Cluster: cl, Workers: ws}, nil
+	}, func(h *ClusterHealth, err error) (bool, error) {
+		switch {
+		case IsNotFound(err) && created:
+			return false, nil
+		case err != nil:
+			return false, err
+		}
+		return h.Failed() || h.Healthy(want), nil
+	})
 }

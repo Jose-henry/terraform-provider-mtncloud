@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -29,11 +30,14 @@ type clusterStore struct {
 	scaler     []map[string]any // each configure-autoscaler's "cluster"
 	updated    []map[string]any // each PUT's "cluster"
 	failScaler int              // the next n configure-autoscaler calls fail with a 400
+	noScaler   int              // the next n find no autoscaler installed, as on a cluster still building
 	stuck      bool             // new clusters stay "provisioning", as MTN Cloud's did on 2026-11-03
+	failAdd    bool             // workers added from now on fail to build
+	failed     map[int64]bool   // workers that failed
 }
 
 func newClusterStore() *clusterStore {
-	return &clusterStore{next: 9600, clusters: map[int64]map[string]any{}, workers: map[int64][]int64{}}
+	return &clusterStore{next: 9600, clusters: map[int64]map[string]any{}, workers: map[int64][]int64{}, failed: map[int64]bool{}}
 }
 
 func (s *clusterStore) addWorkers(id int64, n int) {
@@ -105,7 +109,11 @@ func (s *clusterStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case parts[1] == "workers":
 		var list []any
 		for _, wid := range s.workers[id] {
-			list = append(list, map[string]any{"id": wid, "name": "w-" + strconv.FormatInt(wid, 10), "status": "provisioned"})
+			status := "provisioned"
+			if s.failed[wid] {
+				status = "failed"
+			}
+			list = append(list, map[string]any{"id": wid, "name": "w-" + strconv.FormatInt(wid, 10), "status": status})
 		}
 		reply(map[string]any{"workers": list})
 	case parts[1] == "servers" && r.Method == http.MethodPost:
@@ -117,6 +125,9 @@ func (s *clusterStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		s.added = append(s.added, b)
 		s.addWorkers(id, int(b["nodeCount"].(float64)))
+		if s.failAdd {
+			s.failed[s.next] = true
+		}
 		reply(map[string]any{"success": true})
 	case parts[1] == "servers" && r.Method == http.MethodDelete:
 		sid, _ := strconv.ParseInt(parts[2], 10, 64)
@@ -133,6 +144,10 @@ func (s *clusterStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.failScaler--
 		w.WriteHeader(http.StatusBadRequest)
 		reply(map[string]any{"success": false, "msg": "autoscaler unavailable"})
+	case parts[1] == "configure-autoscaler" && s.noScaler > 0:
+		s.noScaler--
+		w.WriteHeader(http.StatusBadRequest)
+		reply(map[string]any{"success": false, "msg": "Unable to find autoscaler package mks-autoscaler-1-0-0-package"})
 	case parts[1] == "configure-autoscaler":
 		s.scaler = append(s.scaler, body("cluster"))
 		reply(map[string]any{"success": true})
@@ -250,8 +265,12 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 			},
 			{Config: cfg("", "2", scaling), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 			{
-				// One more worker, with the worker settings, and a description: both in place.
-				Config: cfg(`  description = "apps cluster"`, "3", scaling), ConfigPlanChecks: inPlace,
+				// With autoscaling, the autoscaler owns the count.
+				Config: cfg("", "3", scaling), PlanOnly: true, ExpectError: regexp.MustCompile(`Worker count is set by the autoscaler`),
+			},
+			{
+				// Autoscaling off, one more worker with the worker settings, and a description: all in place.
+				Config: cfg(`  description = "apps cluster"`, "3", ""), ConfigPlanChecks: inPlace,
 				ConfigStateChecks: []statecheck.StateCheck{check("worker_ids", knownvalue.ListSizeExact(3))},
 				Check: func(*terraform.State) error {
 					s.mu.Lock()
@@ -429,9 +448,9 @@ resource "mtncloud_docker_cluster" "docker" {
 	})
 }
 
-// A cluster still building when the create's timeout runs out is kept, with a warning, and state
-// holds the hosts made so far: the next plan has nothing to catch up on (QA cluster 148).
-func TestDockerCluster_TimeoutKeepsHosts(t *testing.T) {
+// A cluster still building when the create's timeout runs out fails the apply (D-043). It stays in state,
+// tainted, so the next apply replaces it.
+func TestDockerCluster_TimeoutFails(t *testing.T) {
 	f, s := clusterFakes(t)
 	s.stuck = true
 	cfg := f.providerConfig() + `
@@ -455,14 +474,81 @@ resource "mtncloud_docker_cluster" "docker" {
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
+			{Config: cfg, ExpectError: regexp.MustCompile(`(?s)Cluster not healthy in time.*status "provisioning",\s+1\s+of\s+1\s+hosts\s+ready`)},
 			{
-				Config: cfg,
+				// Kept in state, tainted: the next apply replaces it.
+				PreConfig: func() { s.mu.Lock(); s.stuck = false; s.mu.Unlock() },
+				Config:    cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(addr, plancheck.ResourceActionDestroyBeforeCreate)}},
+			},
+		},
+	})
+	if len(s.posted) != 2 {
+		t.Errorf("%d clusters built, want 2: the stuck one, then its replacement", len(s.posted))
+	}
+}
+
+// A cluster that isn't healthy can't be changed: the plan says so, and nothing is sent. A destroy still
+// works.
+func TestCluster_ChangesNeedHealthy(t *testing.T) {
+	f, s := clusterFakes(t)
+	cfg := func(desc string) string {
+		return clusterConfig(f, "  worker_count = 1\n  description = \""+desc+"\"", "")
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("one")},
+			{
+				PreConfig:   func() { s.mu.Lock(); s.clusters[9601]["status"] = "warning"; s.mu.Unlock() },
+				Config:      cfg("two"),
+				ExpectError: regexp.MustCompile(`(?s)Cluster not healthy.*Cluster 9601 is "warning"`),
+			},
+			{Config: cfg("one"), PlanOnly: true}, // no change: nothing to refuse
+		},
+	})
+	if len(s.updated) != 0 {
+		t.Errorf("updates sent to an unhealthy cluster: %s", jsonOf(s.updated))
+	}
+}
+
+// Scaling is done only when the new workers are ready: one that fails ends the apply with its name. It
+// doesn't count, so the next plan shows the cluster short, and its apply replaces the failed worker.
+func TestCluster_ScaleWaitsForWorkers(t *testing.T) {
+	f, s := clusterFakes(t)
+	cfg := func(n string) string { return clusterConfig(f, "  worker_count = "+n, "") }
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("1")},
+			{
+				PreConfig:   func() { s.mu.Lock(); s.failAdd = true; s.mu.Unlock() },
+				Config:      cfg("2"),
+				ExpectError: regexp.MustCompile(`(?s)Cluster failed.*Failed workers: w-9603`),
+			},
+			{
+				// The failed worker doesn't count: the plan shows the cluster short again.
+				Config: cfg("2"), PlanOnly: true, ExpectNonEmptyPlan: true,
+			},
+			{
+				// The apply removes the failed worker and builds a new one.
+				PreConfig: func() { s.mu.Lock(); s.failAdd = false; s.mu.Unlock() },
+				Config:    cfg("2"),
 				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("host_ids"), knownvalue.ListSizeExact(1)),
-					statecheck.ExpectKnownValue(addr, tfjsonpath.New("status"), knownvalue.StringExact("provisioning")),
+					statecheck.ExpectKnownValue("mtncloud_managed_kubernetes_cluster.k8s", tfjsonpath.New("worker_ids"),
+						knownvalue.ListExact([]knownvalue.Check{knownvalue.StringExact("9602"), knownvalue.StringExact("9604")})),
+				},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if got := jsonOf(s.removed); got != "[9603]" {
+						t.Errorf("removed %s, want the failed worker", got)
+					}
+					return nil
 				},
 			},
-			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{Config: cfg("2"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 		},
 	})
 }
@@ -707,4 +793,145 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 			{Config: cfg("  worker_count = 4"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 		},
 	})
+}
+
+// MTN Cloud refusing the autoscaler change because its software isn't on the cluster (QA cluster 151,
+// 2026-11-03) stops the scaling with a plain error; the next apply finishes the change.
+func TestCluster_ScaleNeedsAutoscaler(t *testing.T) {
+	f, s := clusterFakes(t)
+	cfg := func(top string) string {
+		return f.providerConfig() + `
+resource "mtncloud_managed_kubernetes_cluster" "k8s" {
+  name    = "apps"
+  group   = "MTNNG_CLOUD_AZ_1"
+  project = "web-prod-Acme"
+` + top + `
+  master = {
+    plan        = "G2S4"
+    data_volume = [{ size = 50 }]
+    networks    = ["app-net"]
+  }
+}
+`
+	}
+	addr := "mtncloud_managed_kubernetes_cluster.k8s"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("  worker_count = 1")},
+			{
+				PreConfig:   func() { s.mu.Lock(); s.noScaler = 1; s.mu.Unlock() },
+				Config:      cfg("  worker_count = 2"),
+				ExpectError: regexp.MustCompile(`(?s)Unable to hold the autoscaler.*hasn't installed the autoscaler on\s+cluster 9601`),
+			},
+			{
+				Config: cfg("  worker_count = 2"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("worker_ids"), knownvalue.ListSizeExact(2)),
+				},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if len(s.added) != 1 {
+						t.Errorf("%d adds, want 1: none before the autoscaler was held", len(s.added))
+					}
+					return nil
+				},
+			},
+			{Config: cfg("  worker_count = 2"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+// With autoscaling set, a refused range change is an error; the next apply stores it.
+func TestCluster_AutoscalingWaitsForAutoscaler(t *testing.T) {
+	f, s := clusterFakes(t)
+	scaling := func(hi int) string {
+		return clusterConfig(f, "", fmt.Sprintf("  autoscaling = {\n    min_nodes = 1\n    max_nodes = %d\n  }\n", hi))
+	}
+	addr := "mtncloud_managed_kubernetes_cluster.k8s"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: scaling(4)},
+			{
+				PreConfig:   func() { s.mu.Lock(); s.noScaler, s.scaler = 1, nil; s.mu.Unlock() },
+				Config:      scaling(5),
+				ExpectError: regexp.MustCompile(`Unable to configure the autoscaler`),
+			},
+			{
+				Config: scaling(5),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)}},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if got := jsonOf(s.scaler); got != `[{"autoScalerEnabled":true,"autoScalerGroups":[{"maxNodes":5,"minNodes":1}]}]` {
+						t.Errorf("autoscaler: %s", got)
+					}
+					return nil
+				},
+			},
+			{Config: scaling(5), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
+// An unhealthy cluster can still be rebuilt: a change that builds a new cluster plans a replacement even
+// with an in-place change beside it (review, 2026-11-03).
+func TestCluster_UnhealthyCanBeReplaced(t *testing.T) {
+	f, s := clusterFakes(t)
+	cfg := func(extra string) string {
+		return clusterConfig(f, "  worker_count = 1\n  description = \"two\"\n"+extra, "")
+	}
+	addr := "mtncloud_managed_kubernetes_cluster.k8s"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: clusterConfig(f, "  worker_count = 1", "")},
+			{
+				PreConfig: func() { s.mu.Lock(); s.clusters[9601]["status"] = "warning"; s.mu.Unlock() },
+				Config:    cfg(`  pod_cidr = "10.200.0.0/16"`), PlanOnly: true, ExpectNonEmptyPlan: true,
+			},
+			{
+				Config: cfg(`  pod_cidr = "10.200.0.0/16"`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(addr, plancheck.ResourceActionDestroyBeforeCreate)}},
+			},
+		},
+	})
+	if len(s.posted) != 2 {
+		t.Errorf("%d clusters built, want 2", len(s.posted))
+	}
+}
+
+// The apply checks health again on a fresh read: an imported cluster's first plan isn't checked, and the
+// plan's status can be old.
+func TestCluster_ApplyChecksHealth(t *testing.T) {
+	f, s := clusterFakes(t)
+	s.clusters[9700] = map[string]any{"id": 9700, "name": "apps", "status": "ok", "layout": map[string]any{"id": 315},
+		"type": map[string]any{"code": "kubernetes-cluster", "name": "Kubernetes Cluster"}}
+	s.addWorkers(9700, 1)
+	cfg := func(name string) string {
+		return strings.Replace(clusterConfig(f, "  worker_count = 1", ""), `name    = "apps"`, `name    = "`+name+`"`, 1)
+	}
+	addr := "mtncloud_managed_kubernetes_cluster.k8s"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("apps"), ResourceName: addr, ImportState: true, ImportStateId: "9700", ImportStatePersist: true},
+			{
+				PreConfig:   func() { s.mu.Lock(); s.clusters[9700]["status"] = "provisioning"; s.mu.Unlock() },
+				Config:      cfg("apps2"),
+				ExpectError: regexp.MustCompile(`(?s)Cluster not healthy.*Cluster 9700 is "provisioning"`),
+			},
+			{
+				PreConfig: func() { s.mu.Lock(); s.clusters[9700]["status"] = "ok"; s.mu.Unlock() },
+				Config:    cfg("apps2"),
+			},
+		},
+	})
+	if len(s.updated) != 1 {
+		t.Errorf("%d updates, want 1: none while it wasn't healthy", len(s.updated))
+	}
 }

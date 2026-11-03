@@ -639,6 +639,20 @@ Live QA retest, 2026-11-03 (clusters 148 Docker `host_count = 1`, 149 Kubernetes
   `openstackKubeWorker`, Docker hosts 135 `openstackLinux`; masters 136 aren't dynamic). The provider
   now reads it from `/api/library/cluster-layouts` and sends it; the fake API refuses an add without it.
 
+Live QA rerun, 2026-11-03 (clusters 151 Kubernetes single, 152 Docker, one worker or host each):
+- MTN Cloud hung again: both stopped at `provisionFinalize` (Docker `finalizeHost queued`) and stayed
+  `provisioning` past the 90 and 60 minute create timeouts. Each create ended with the warning and saved
+  its hosts; the next plan printed `No changes.`
+- **Docker scaling works live:** `host_count` 1 → 2 added host 6628 in 3 seconds (the `serverType` fix).
+- **Found: the Kubernetes scale stopped** at the autoscaler hold, `400 Unable to find autoscaler package
+  mks-autoscaler-1-0-0-package`: the autoscaler setting is stored at create, but its software is installed
+  onto the cluster late in the build (`CreateCluster.sh`: Cluster-Autoscaler-Configure), and 151 never got
+  there. Owner's rule (D-043): a cluster is changed only once it is `ok`, so the plan now refuses the change,
+  and the refusal itself reads plainly. Still open: the hold, and the worker join, on a cluster that reaches
+  `ok`; if an `ok` cluster still has no package, it is missing platform-wide.
+- Deleting both took longer than the 45-minute timeout: their servers were gone 5 minutes after the
+  delete, but the clusters stayed `deprovisioning` behind the hung provisioning.
+
 Docker, per the CLI (`/api/cluster-types` read by the owner, and the 9.0.0 CLI's `clusters.rb`, 2026-11-02):
 - the Docker type has no masters; its only node type is the worker type "Docker Host";
 - the create sends the host count as `server.nodeCount` and `server.config.nodeCount`, with no worker block;

@@ -42,7 +42,7 @@ resource "mtncloud_docker_cluster" "builds" {
 - `description` (String) Description. Changes in place.
 - `domain` (String) Network domain of the hosts, by name, for example `localdomain`.
 - `group` (String) Group, by name. Left out, the provider's `group` (or `MTNCLOUD_GROUP`).
-- `host_count` (Number) Number of hosts. Left out, the layout's default (1). Changing it adds or removes hosts in place (removal takes the newest).
+- `host_count` (Number) Number of hosts. Left out, the layout's default (1). Changing it adds or removes hosts in place (removal takes the newest), and the apply ends when the new hosts are ready.
 - `hostname` (String) Host name prefix of the hosts. Left out, the resource name.
 - `labels` (List of String) Labels, on the cluster and its hosts. Change in place (the hosts keep the labels they were built with).
 - `project` (String) Project the hosts are built in, by name. Left out, the provider's `project` (or `MTNCLOUD_PROJECT`).
@@ -54,7 +54,7 @@ resource "mtncloud_docker_cluster" "builds" {
 
 - `host_ids` (List of String) IDs of the hosts now in the cluster.
 - `id` (String) Cluster ID.
-- `status` (String) Status, for example `ok`.
+- `status` (String) Status: `ok` when healthy. The cluster can be changed in place only while it is `ok`.
 
 <a id="nestedatt--host"></a>
 ### Nested Schema for `host`
@@ -111,6 +111,16 @@ those come from your configuration. A Kubernetes cluster can't be imported here:
 - **In place:** `name`, `description`, `labels` and `host_count` (hosts are added with the `host` settings, and
   removed newest first). Everything else builds a new cluster.
 - **Names are checked when you plan:** project, plan, networks, security groups, datastores, domain and workflow. An unknown name lists the valid ones.
-- **Timeouts.** Create waits up to 90 minutes, updates and destroy up to 45 (see `timeouts`). If the cluster isn't
-  ready when the wait ends, it is kept with a warning and never built twice.
-- **Destroy** deletes the cluster with its hosts.
+- **Built only when healthy.** An apply that creates or scales the cluster ends only when the cluster is `ok` and
+  every host is ready. If the cluster or a host fails, the apply fails with MTN Cloud's message and names the failed
+  hosts. A create that fails, or isn't healthy when its wait ends, is kept in state and marked tainted: the next
+  apply replaces it, and a destroy deletes it. With `host_count` set in your configuration, a host that has failed isn't counted once the
+  cluster settles: the next plan shows the cluster short, and its apply removes the failed host and builds a new one.
+- **Changes need a healthy cluster.** While `status` isn't `ok` (still building, failed, or warning), the plan
+  refuses any in-place change, and the apply checks again. A destroy works in any state, and
+  `terraform apply -replace` (with no other change) rebuilds the cluster. A cluster that settles in `warning` is
+  never healthy: its create fails when the wait ends, whatever the timeout.
+- **Timeouts.** Create waits up to 90 minutes, updates and destroy up to 45 (see `timeouts`). If MTN Cloud is only
+  slow, raise `timeouts.create` rather than letting the cluster be replaced.
+- **Destroy** force-deletes the cluster with its infrastructure and associated instances (volumes too), in any
+  state, including one still building.

@@ -97,6 +97,15 @@ func IsRefused(err error) bool {
 // IsBadRequest reports whether err is an API 400.
 func IsBadRequest(err error) bool { return hasStatus(err, http.StatusBadRequest) }
 
+// IsNoAutoscaler reports MTN Cloud turning down an autoscaler change because the cluster has no
+// autoscaler installed yet: "400 Unable to find autoscaler package mks-autoscaler-1-0-0-package"
+// (QA cluster 151, still provisioning, 2026-11-03).
+func IsNoAutoscaler(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusBadRequest &&
+		strings.Contains(strings.ToLower(apiErr.Message), "autoscaler package")
+}
+
 // IsConflict reports whether err is an API 409.
 func IsConflict(err error) bool { return hasStatus(err, http.StatusConflict) }
 

@@ -199,7 +199,7 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 		"create_user": schema.BoolAttribute{Optional: true,
 			Description:   "Create your user on the " + nodes + ". Left out, `true`, as MTN's own cluster order does. Changing it builds a new cluster.",
 			PlanModifiers: []planmodifier.Bool{boolReplaceIfSet{}}},
-		"status": schema.StringAttribute{Computed: true, Description: "Status, for example `ok`."},
+		"status": schema.StringAttribute{Computed: true, Description: "Status: `ok` when healthy. The cluster can be changed in place only while it is `ok`."},
 	}
 	blocks := map[string]schema.Block{"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Update: true, Delete: true})}
 	if r.kind == docker {
@@ -207,8 +207,9 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 			Description:   "The Docker hosts. Changing it builds a new cluster.",
 			PlanModifiers: []planmodifier.Object{objectReplaceIfSet{}}}
 		attrs["host_count"] = schema.Int64Attribute{Optional: true, Computed: true,
-			Description: "Number of hosts. Left out, the layout's default (1). Changing it adds or removes hosts in place (removal takes the newest).",
-			Validators:  []validator.Int64{int64validator.AtLeast(1)}}
+			Description: "Number of hosts. Left out, the layout's default (1). Changing it adds or removes hosts in place (removal takes " +
+				"the newest), and the apply ends when the new hosts are ready.",
+			Validators: []validator.Int64{int64validator.AtLeast(1)}}
 		attrs["host_ids"] = schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "IDs of the hosts now in the cluster."}
 		resp.Schema = schema.Schema{
 			Description: "A Docker cluster, built from MTN's Docker layout (`MTN Docker Cluster`): a set of Docker hosts " +
@@ -231,14 +232,16 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 		PlanModifiers: []planmodifier.Object{objectReplaceIfSet{}}}
 	attrs["worker_count"] = schema.Int64Attribute{Optional: true, Computed: true,
 		Description: "Number of workers. Left out, 3, as MTN's own cluster order does. Changing it adds or removes workers in place " +
-			"(removal takes the newest). With `autoscaling`, it is only the starting count.",
+			"(removal takes the newest), and the apply ends when the new workers are ready. With `autoscaling`, it is only the starting " +
+			"count and can't change after the cluster is built: change `autoscaling` instead.",
 		Validators: []validator.Int64{int64validator.AtLeast(1)}}
 	attrs["worker"] = schema.SingleNestedAttribute{Optional: true, Attributes: nodeAttrs(false),
 		Description: "Worker settings that differ from the master's: plan, data disks, networks, security groups. " +
 			"Changing them applies to workers added later; existing workers keep theirs."}
 	attrs["autoscaling"] = schema.SingleNestedAttribute{Optional: true,
-		Description: "Scale workers automatically between these counts. Changes in place. Left out, the autoscaler is held at " +
-			"`worker_count`, as MTN's own cluster order does (a cluster built with it off never finishes its workers).",
+		Description: "Scale workers automatically between these counts. Changes in place. The autoscaler then owns the count, so " +
+			"`worker_count` can't change. Left out, the autoscaler is held at `worker_count`, as MTN's own cluster order does " +
+			"(a cluster built with it off never finishes its workers).",
 		Attributes: map[string]schema.Attribute{
 			"min_nodes": schema.Int64Attribute{Required: true, Description: "Fewest workers.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
 			"max_nodes": schema.Int64Attribute{Required: true, Description: "Most workers.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
@@ -315,9 +318,17 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if !creating && !adopting {
 		// Only name, description, labels, worker settings and autoscaling change in place; the
 		// rest keeps its planned (state) value or replaces the cluster through its modifier.
-		r.planUpdate(ctx, &plan, config, state, &resp.Diagnostics)
-		if pending, d := req.Private.GetKey(ctx, scalerPending); len(pending) > 0 && !plan.Autoscaling.IsNull() {
-			// The autoscaler was never configured: an update does it.
+		changed := r.planUpdate(ctx, &plan, config, state, &resp.Diagnostics)
+		// Changes in place need a healthy cluster (owner, 2026-11-03), checked here so the plan says so, and
+		// again at apply against a fresh read. A replacement and a destroy work in any state. The
+		// framework fills RequiresReplace only after this method, so a replacement is found here.
+		if changed && !replacing(plan, state) && !strings.EqualFold(state.Status.ValueString(), "ok") {
+			resp.Diagnostics.AddError(notHealthy(state.ID.ValueString(), state.Status.ValueString()))
+			return
+		}
+		if pending, d := req.Private.GetKey(ctx, scalerPending); len(pending) > 0 && !plan.Autoscaling.IsNull() &&
+			strings.EqualFold(state.Status.ValueString(), "ok") {
+			// The autoscaler was never configured: an update does it, once the cluster is healthy.
 			resp.Diagnostics.Append(d...)
 			plan.Status, plan.WorkerIDs = types.StringUnknown(), types.ListUnknown(types.StringType)
 		}
@@ -351,15 +362,23 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 }
 
 // planUpdate checks an in-place change: worker settings and autoscaling are resolved now, so a
-// wrong name fails the plan, not the apply.
-func (r *clusterResource) planUpdate(ctx context.Context, plan *model, config, state model, diags *diag.Diagnostics) {
+// wrong name fails the plan, not the apply. It reports whether anything changes in place.
+func (r *clusterResource) planUpdate(ctx context.Context, plan *model, config, state model, diags *diag.Diagnostics) bool {
 	keepUnset(plan, config, state)
 	r.checkAutoscaling(ctx, plan, diags)
+	// With autoscaling, the autoscaler owns the count: worker_count is only where it started, and moving
+	// it by hand would fight the autoscaler (owner, 2026-11-03).
+	if !plan.Autoscaling.IsNull() && !plan.WorkerCount.IsUnknown() && !plan.WorkerCount.Equal(state.WorkerCount) {
+		r.addError(diags, "worker_count", "Worker count is set by the autoscaler",
+			"With autoscaling, the autoscaler sets the worker count, so worker_count can't change after the cluster is built. "+
+				"Change autoscaling.min_nodes or max_nodes instead, or remove autoscaling to set the count yourself. To add "+
+				"autoscaling at a new count, change worker_count in one apply and add autoscaling in the next.")
+	}
 	if (!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount)) && !plan.WorkerCount.IsUnknown() {
 		// Checked on a copy: building fills defaults (version, CIDRs) the cluster may not have.
 		check := *plan
 		if r.build(ctx, &check, diags) == nil {
-			return
+			return false
 		}
 	}
 	changed := !plan.Name.Equal(state.Name) || !plan.Description.Equal(state.Description) || !plan.Labels.Equal(state.Labels) ||
@@ -371,6 +390,7 @@ func (r *clusterResource) planUpdate(ctx context.Context, plan *model, config, s
 		plan.Status, plan.WorkerIDs = state.Status, state.WorkerIDs
 	}
 	plan.APIURL = state.APIURL
+	return changed
 }
 
 // keepUnset gives what the configuration leaves out the value the cluster already has. A value only
@@ -746,15 +766,14 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 	m.ID, m.Status, m.APIURL, m.WorkerIDs = types.StringValue(strconv.FormatInt(id, 10)), types.StringValue("provisioning"),
 		types.StringNull(), types.ListValueMust(types.StringType, nil)
 	resp.Diagnostics.Append(r.set(ctx, &resp.State, &m)...)
-	c, err := r.client.WaitForCluster(ctx, id)
-	if err != nil {
-		// A warning, not an error: an error would taint the cluster, and the next apply would rebuild it.
-		resp.Diagnostics.AddWarning("Cluster not ready yet", fmt.Sprintf("Cluster %d was created but isn't ready: %s. A later refresh reads its status.", id, err))
-		if !m.Autoscaling.IsNull() {
-			resp.Diagnostics.Append(resp.Private.SetKey(parent, scalerPending, []byte("true"))...)
-		}
-		// One last read, with a minute of its own, so state holds the hosts made so far and the next
-		// plan has nothing to catch up on. Skipped when you stop the run.
+	h, err := r.client.WaitForClusterHealthy(ctx, id, wantWorkers(m), true)
+	if err != nil || h.Failed() {
+		// A cluster is built only once it is healthy (owner, 2026-11-03). An error, so Terraform marks
+		// it tainted and the next apply replaces it; state keeps it, so a destroy finds it.
+		resp.Diagnostics.AddError(r.unhealthy(id, h, err,
+			"The next apply replaces it. If MTN Cloud is only slow, raise timeouts.create."))
+		// One last read, with a minute of its own, so state holds the nodes made so far. Skipped when
+		// you stop the run.
 		if parent.Err() == nil {
 			rctx, rcancel := context.WithTimeout(parent, time.Minute)
 			defer rcancel()
@@ -766,10 +785,7 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 		return
 	}
-	if client.ClusterFailed(c.Status) {
-		resp.Diagnostics.AddError("Cluster failed", fmt.Sprintf("Cluster %d ended with %q: %s. The next apply replaces it.", id, c.Status, c.StatusMessage))
-		return
-	}
+	c := h.Cluster
 	// The create sent the range. A range you set is configured again, the way the console's Edit
 	// Cluster stores it; held at worker_count, the create's own is enough.
 	if !m.Autoscaling.IsNull() {
@@ -785,6 +801,72 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.Diagnostics.Append(r.set(ctx, &resp.State, &m)...)
 }
 
+// replacing reports a plan that builds a new cluster: an argument that can't change in place differs from
+// state (an unknown one counts, so the check never blocks a replacement).
+func replacing(plan, state model) bool {
+	for _, p := range [][2]attr.Value{
+		{plan.Group, state.Group}, {plan.Cloud, state.Cloud}, {plan.Project, state.Project},
+		{plan.ResourceName, state.ResourceName}, {plan.Hostname, state.Hostname}, {plan.Domain, state.Domain},
+		{plan.Workflow, state.Workflow}, {plan.CreateUser, state.CreateUser}, {plan.Master, state.Master},
+		{plan.Layout, state.Layout}, {plan.KubernetesVersion, state.KubernetesVersion}, {plan.PodCIDR, state.PodCIDR},
+		{plan.ServiceCIDR, state.ServiceCIDR}, {plan.Registry, state.Registry},
+	} {
+		if !p[0].Equal(p[1]) {
+			return true
+		}
+	}
+	return false
+}
+
+// notHealthy is the refusal of a change to a cluster that isn't "ok".
+func notHealthy(id, status string) (string, string) {
+	return "Cluster not healthy", fmt.Sprintf("Cluster %s is %q. It can be changed in place only once it is healthy (\"ok\"). "+
+		"A destroy works in any state; terraform apply -replace, with no other change, rebuilds it.", id, status)
+}
+
+// wantWorkers is how many workers a healthy cluster has: worker_count, or any number (-1) while the
+// autoscaler moves them.
+func wantWorkers(m model) int {
+	if !m.Autoscaling.IsNull() || m.WorkerCount.IsNull() || m.WorkerCount.IsUnknown() {
+		return -1
+	}
+	return int(m.WorkerCount.ValueInt64())
+}
+
+// unhealthy explains a cluster that didn't become healthy, from the wait's last read (h may be nil):
+// what failed, with the platform's own message, or where it stood when the wait ended. then says what
+// happens next.
+func (r *clusterResource) unhealthy(id int64, h *client.ClusterHealth, err error, then string) (string, string) {
+	node := "worker"
+	if r.kind == docker {
+		node = "host"
+	}
+	if h.Failed() {
+		detail := fmt.Sprintf("Cluster %d failed", id)
+		if client.ClusterFailed(h.Cluster.Status) {
+			detail += fmt.Sprintf(" (status %q)", h.Cluster.Status)
+			if h.Cluster.StatusMessage != "" {
+				detail += ": " + h.Cluster.StatusMessage
+			}
+		}
+		if f := h.FailedWorkers(); len(f) > 0 {
+			detail += fmt.Sprintf(". Failed %ss: %s", node, strings.Join(f, ", "))
+		}
+		return "Cluster failed", detail + ". " + then
+	}
+	stood := "it was never read"
+	if h != nil && h.Cluster != nil {
+		ready := 0
+		for _, w := range h.Workers {
+			if strings.EqualFold(w.Status, "provisioned") {
+				ready++
+			}
+		}
+		stood = fmt.Sprintf("status %q, %d of %d %ss ready", h.Cluster.Status, ready, len(h.Workers), node)
+	}
+	return "Cluster not healthy in time", fmt.Sprintf("Cluster %d wasn't healthy when the wait ended (%s): %s. %s", id, stood, err, then)
+}
+
 // applyAutoscaling sets a Kubernetes cluster's autoscaler: its range, or held at worker_count when
 // autoscaling is left out (as MTN's order builds it). Docker clusters have none.
 func (r *clusterResource) applyAutoscaling(ctx context.Context, id int64, m model, diags *diag.Diagnostics) error {
@@ -794,7 +876,12 @@ func (r *clusterResource) applyAutoscaling(ctx context.Context, id int64, m mode
 	lo, hi := scalerRange(ctx, m, diags)
 	least, _ := strconv.ParseInt(lo, 10, 64)
 	most, _ := strconv.ParseInt(hi, 10, 64)
-	return r.client.ConfigureAutoscaler(ctx, id, true, least, most)
+	err := r.client.ConfigureAutoscaler(ctx, id, true, least, most)
+	if client.IsNoAutoscaler(err) {
+		// The setting is stored at create; the software is installed onto the cluster later in its build.
+		return fmt.Errorf("MTN Cloud hasn't installed the autoscaler on cluster %d (%w)", id, err)
+	}
+	return err
 }
 
 // scalerRange is the autoscaler's range, as strings: autoscaling's, else worker_count both ways.
@@ -884,7 +971,9 @@ func (r *clusterResource) refresh(ctx context.Context, m *model, c *client.Clust
 	// building lists only some of its workers, so its count isn't read either.
 	settled := map[string]bool{"ok": true, "warning": true}[strings.ToLower(c.Status)] || client.ClusterFailed(c.Status)
 	if m.WorkerCount.IsNull() || (readCount && settled && m.Autoscaling.IsNull()) {
-		m.WorkerCount = types.Int64Value(int64(len(workers)))
+		// A failed worker isn't counted, so the plan shows the cluster short and the apply replaces it.
+		ok := slices.DeleteFunc(slices.Clone(workers), func(w client.ClusterNode) bool { return client.ClusterFailed(w.Status) })
+		m.WorkerCount = types.Int64Value(int64(len(ok)))
 	}
 }
 
@@ -936,12 +1025,29 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	id, err := strconv.ParseInt(state.ID.ValueString(), 10, 64)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid cluster ID", fmt.Sprintf("%q is not a cluster ID.", state.ID.ValueString()))
 		return
+	}
+	pending, d := req.Private.GetKey(ctx, scalerPending)
+	resp.Diagnostics.Append(d...)
+	scalerOff := !state.Autoscaling.IsNull() && plan.Autoscaling.IsNull()
+	// Checked again on a fresh read when something on the cluster changes: the plan's status can be old
+	// (-refresh=false), and an import's first plan isn't checked. A timeouts edit alone changes nothing.
+	touches := !plan.Name.Equal(state.Name) || !plan.Description.Equal(state.Description) || !plan.Labels.Equal(state.Labels) ||
+		!plan.WorkerCount.Equal(state.WorkerCount) || !plan.Autoscaling.Equal(state.Autoscaling) || scalerOff || len(pending) > 0
+	if touches {
+		if now, err := r.client.GetCluster(ctx, id); err != nil {
+			resp.Diagnostics.AddError("Unable to read the cluster", err.Error())
+			return
+		} else if !strings.EqualFold(now.Status, "ok") {
+			resp.Diagnostics.AddError(notHealthy(state.ID.ValueString(), now.Status))
+			return
+		}
 	}
 	if !plan.Name.Equal(state.Name) || !plan.Description.Equal(state.Description) || !plan.Labels.Equal(state.Labels) {
 		var labels []string
@@ -960,7 +1066,6 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 	// Without autoscaling the autoscaler is held at worker_count (MTN's order never turns it off): it
 	// moves to the new count first, so it doesn't undo the scaling.
-	scalerOff := !state.Autoscaling.IsNull() && plan.Autoscaling.IsNull()
 	pinned := plan.Autoscaling.IsNull() && (scalerOff || !plan.WorkerCount.Equal(state.WorkerCount))
 	if pinned {
 		if err := r.applyAutoscaling(ctx, id, plan, &resp.Diagnostics); err != nil {
@@ -972,11 +1077,23 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 	if !plan.WorkerCount.Equal(state.WorkerCount) || scalerOff {
 		r.scale(ctx, id, plan, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
+			// State still gets the workers made or removed so far, so the next plan starts from them: once
+			// the cluster has settled, a failed worker doesn't count (until then the planned count stays,
+			// and the next refresh corrects it). The autoscaling not yet applied isn't saved. A minute of
+			// its own, skipped when you stop the run.
+			if parent.Err() == nil {
+				rctx, rcancel := context.WithTimeout(parent, time.Minute)
+				defer rcancel()
+				if c, err := r.client.GetCluster(rctx, id); err == nil {
+					plan.ID, plan.Autoscaling = state.ID, state.Autoscaling
+					var quiet diag.Diagnostics
+					r.refresh(rctx, &plan, c, true, &quiet)
+					resp.Diagnostics.Append(r.set(rctx, &resp.State, &plan)...)
+				}
+			}
 			return
 		}
 	}
-	pending, d := req.Private.GetKey(ctx, scalerPending)
-	resp.Diagnostics.Append(d...)
 	if !plan.Autoscaling.IsNull() && (!plan.Autoscaling.Equal(state.Autoscaling) || len(pending) > 0) {
 		if err := r.applyAutoscaling(ctx, id, plan, &resp.Diagnostics); err != nil {
 			resp.Diagnostics.AddError("Unable to configure the autoscaler", err.Error())
@@ -1003,6 +1120,24 @@ func (r *clusterResource) scale(ctx context.Context, id int64, plan model, diags
 		diags.AddError("Unable to list the cluster's workers", err.Error())
 		return
 	}
+	// A failed worker doesn't count (a refresh leaves it out of worker_count): it is removed, and a new one
+	// is built in its place.
+	var gone []int64
+	for _, w := range workers {
+		if client.ClusterFailed(w.Status) {
+			if err := r.client.DeleteClusterWorker(ctx, id, w.ID); err != nil {
+				diags.AddError("Unable to remove failed worker "+w.Name, err.Error())
+				return
+			}
+			gone = append(gone, w.ID)
+		}
+	}
+	// A delete returns before the worker goes: the health wait would see it, still failed, and stop.
+	if err := r.client.WaitForWorkersGone(ctx, id, gone); err != nil {
+		diags.AddError("Failed workers not removed", fmt.Sprintf("Cluster %d still lists them: %s.", id, err))
+		return
+	}
+	workers = slices.DeleteFunc(workers, func(w client.ClusterNode) bool { return client.ClusterFailed(w.Status) })
 	want := int(plan.WorkerCount.ValueInt64())
 	switch {
 	case want > len(workers):
@@ -1044,13 +1179,11 @@ func (r *clusterResource) scale(ctx context.Context, id int64, plan model, diags
 				return
 			}
 		}
-	default:
-		return
 	}
-	// The cluster can stay "ok" while workers come and go: wait for the list itself.
-	if err := r.client.WaitForClusterWorkers(ctx, id, want); err != nil {
-		diags.AddWarning("Workers still changing",
-			fmt.Sprintf("The cluster didn't reach %d workers before the wait ended: %s. A later refresh reads the count.", want, err))
+	// Done only when the cluster is healthy again with every worker ready: it can stay "ok" while
+	// workers come and go, so the workers are read too.
+	if h, err := r.client.WaitForClusterHealthy(ctx, id, want, false); err != nil || h.Failed() {
+		diags.AddError(r.unhealthy(id, h, err, "A failed one isn't counted once the cluster settles, so with worker_count set, the next apply replaces it."))
 	}
 }
 

@@ -22,7 +22,7 @@ Import is supported using the following syntax:
 {{codefile "shell" "examples/resources/mtncloud_managed_kubernetes_cluster/import.sh" }}
 
 MTN Cloud doesn't report what the nodes were built with (plans, disks, networks, versions), so after
-an import those come from your configuration. The first apply after an import records them, and only changes
+an import those come from your configuration. The first apply after an import (which needs the cluster `ok`) records them, and only changes
 what can change in place (name, description, labels, worker count, autoscaling). A Docker cluster can't be
 imported here: use `mtncloud_docker_cluster`.
 
@@ -40,15 +40,27 @@ imported here: use `mtncloud_docker_cluster`.
 - **Security groups.** List groups that allow the Kubernetes API (TCP 6443) and the kubelet (TCP 10250) between the
   nodes. The project's default group is always applied. A group must be synced to the project.
 - **Autoscaler.** It is always on. With `autoscaling`, it moves the worker count between `min_nodes` and
-  `max_nodes`; `worker_count` is then only the starting count, and the current workers are in `worker_ids`.
-  Without it, the autoscaler is held at `worker_count` (MTN's order does the same: a cluster built with it off
-  never finishes its workers), and changing `worker_count` moves it first.
-- **In place:** `name`, `description`, `labels`, `worker_count` (workers are added with the worker settings, and
-  removed newest first), the `worker` settings (used for workers added later) and `autoscaling`. Everything else
+  `max_nodes` and owns the count: `worker_count` is only the starting count, can't change after the build, and the
+  current workers are in `worker_ids`. To scale, change `min_nodes` or `max_nodes`, or remove `autoscaling` to set
+  the count yourself. Without it, the autoscaler is held at `worker_count` (MTN's order does the same: a cluster
+  built with it off never finishes its workers, and `min_nodes` can't be left empty), and changing `worker_count`
+  moves it first, so it never removes a worker you added.
+- **In place:** `name`, `description`, `labels`, `worker_count` without `autoscaling` (workers are added with the
+  worker settings, and removed newest first), the `worker` settings (used for workers added later) and `autoscaling`. Everything else
   builds a new cluster.
 - **Names are checked when you plan:** project, plans, networks, security groups, datastores, domain, registry,
   workflow and Kubernetes version. An unknown name lists the valid ones.
 - **kubectl from the console** needs a Customer Admin or Power User login.
-- **Timeouts.** Create waits up to 90 minutes, updates and destroy up to 45 (see `timeouts`). If the cluster isn't
-  ready when the wait ends, it is kept with a warning and never built twice.
-- **Destroy** deletes the cluster with its nodes.
+- **Built only when healthy.** An apply that creates or scales the cluster ends only when the cluster is `ok` and
+  every worker is ready. If the cluster or a worker fails, the apply fails with MTN Cloud's message and names the failed
+  workers. A create that fails, or isn't healthy when its wait ends, is kept in state and marked tainted: the next
+  apply replaces it, and a destroy deletes it. With `worker_count` set in your configuration (with `autoscaling`, the autoscaler handles its workers), a worker that has failed isn't counted once the
+  cluster settles: the next plan shows the cluster short, and its apply removes the failed worker and builds a new one.
+- **Changes need a healthy cluster.** While `status` isn't `ok` (still building, failed, or warning), the plan
+  refuses any in-place change, and the apply checks again. A destroy works in any state, and
+  `terraform apply -replace` (with no other change) rebuilds the cluster. A cluster that settles in `warning` is
+  never healthy: its create fails when the wait ends, whatever the timeout.
+- **Timeouts.** Create waits up to 90 minutes, updates and destroy up to 45 (see `timeouts`). If MTN Cloud is only
+  slow, raise `timeouts.create` rather than letting the cluster be replaced.
+- **Destroy** force-deletes the cluster with its infrastructure and associated instances (volumes too), in any
+  state, including one still building.
