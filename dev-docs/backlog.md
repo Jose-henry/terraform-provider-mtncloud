@@ -663,6 +663,14 @@ Live QA, D-043 rules, 2026-11-03 (t135: clusters 153 Kubernetes single, 154 Dock
   first, and that one had `host_count = 2`. The plan now only warns; the apply refuses (D-043).
 - **Forced delete works live:** failed 153 was gone in 32 seconds, syncing 154 in 77 seconds (404 for both).
 
+Live QA rerun after the fix (t136: clusters 155 Docker, 156 Kubernetes single):
+- Docker 155 healthy in 3m22s; `host_count` 1 → 2 took 4m16s (waits for the new host), then `No changes.`
+- Kubernetes 156 was still `provisioning` when the run stopped (session ended); it was imported.
+- `terraform destroy` with a changed configuration (`workers = 2`) deleted both in 32 seconds each,
+  156 while still provisioning (404 for both).
+- The QA network's delete was refused for a while afterwards ("in use by 3 servers"), though no QA
+  server was listed: the forced delete returns before MTN Cloud lets go of the network.
+
 Docker, per the CLI (`/api/cluster-types` read by the owner, and the 9.0.0 CLI's `clusters.rb`, 2026-11-02):
 - the Docker type has no masters; its only node type is the worker type "Docker Host";
 - the create sends the host count as `server.nodeCount` and `server.config.nodeCount`, with no worker block;
