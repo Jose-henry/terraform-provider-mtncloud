@@ -38,11 +38,19 @@
    "computeServers": [
     {
      "nodeType": "master",
-     "nodeCount": 1
+     "nodeCount": 1,
+     "dynamicCount": false,
+     "computeServerType": {
+      "id": 136
+     }
     },
     {
      "nodeType": "worker",
-     "nodeCount": 3
+     "nodeCount": 3,
+     "dynamicCount": true,
+     "computeServerType": {
+      "id": 137
+     }
     }
    ]
   },
@@ -84,19 +92,35 @@
    "computeServers": [
     {
      "nodeType": "master",
-     "nodeCount": 1
+     "nodeCount": 1,
+     "dynamicCount": false,
+     "computeServerType": {
+      "id": 136
+     }
     },
     {
      "nodeType": "master",
-     "nodeCount": 1
+     "nodeCount": 1,
+     "dynamicCount": false,
+     "computeServerType": {
+      "id": 136
+     }
     },
     {
      "nodeType": "worker",
-     "nodeCount": 3
+     "nodeCount": 3,
+     "dynamicCount": true,
+     "computeServerType": {
+      "id": 137
+     }
     },
     {
      "nodeType": "master",
-     "nodeCount": 1
+     "nodeCount": 1,
+     "dynamicCount": false,
+     "computeServerType": {
+      "id": 136
+     }
     }
    ]
   },
@@ -116,7 +140,11 @@
    "computeServers": [
     {
      "nodeType": "worker",
-     "nodeCount": 1
+     "nodeCount": 1,
+     "dynamicCount": true,
+     "computeServerType": {
+      "id": 135
+     }
     }
    ]
   },

@@ -15,6 +15,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 
   A Docker cluster has `host` and `host_count` instead of `master` and `worker_count`. Move configurations and state with `terraform state rm` and `terraform import`.
 - **Fixed: a Kubernetes cluster gets the workers you ask for** (live QA, 2026-11-03). The count is now also sent where the platform reads it (`server.nodeCount`, as its own CLI sends it); before, every cluster got its layout's 3 workers while the autoscaler was held at `worker_count`.
+- **Fixed: adding workers or Docker hosts to a cluster works** (live QA, 2026-11-03). MTN Cloud refused every add with `serverType: Server type not specified`; the add now names the layout's node type, as the platform's CLI does.
 - **Fixed: a cluster still building when its create times out is saved with the hosts made so far**, so the next plan has nothing to catch up on.
 - **Fixed: clusters created together with the same new label no longer fail** (`Duplicate entry ... for key 'label...'`). MTN Cloud refuses the second of two simultaneous inserts of a new label; the cluster create is sent again once a lookup shows no cluster was made.
 - **Fixed: a wait no longer ends when MTN Cloud stops answering for a while.** Clusters, instances, orders and load balancers keep waiting through a dropped connection or a gateway error until their timeout, instead of finishing the apply without seeing the result. A wait that times out during the outage reports MTN Cloud's error.

@@ -110,6 +110,11 @@ func (s *clusterStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(map[string]any{"workers": list})
 	case parts[1] == "servers" && r.Method == http.MethodPost:
 		b := body("server")
+		if b["serverType"] == nil { // as MTN Cloud answers it (QA cluster 148)
+			w.WriteHeader(http.StatusBadRequest)
+			reply(map[string]any{"success": false, "msg": "Validation failed", "errors": map[string]any{"serverType": "Server type not specified or not available"}})
+			return
+		}
 		s.added = append(s.added, b)
 		s.addWorkers(id, int(b["nodeCount"].(float64)))
 		reply(map[string]any{"success": true})
@@ -254,7 +259,8 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 					a := s.added[0]
 					// The count added goes outside config only: the create's server.config.nodeCount isn't sent.
 					cfg, _ := a["config"].(map[string]any)
-					if jsonOf(a["nodeCount"]) != "1" || jsonOf(a["plan"]) != `{"id":9402}` || jsonOf(a["cloud"]) != `{"id":4}` || cfg["nodeCount"] != nil {
+					if jsonOf(a["nodeCount"]) != "1" || jsonOf(a["plan"]) != `{"id":9402}` || jsonOf(a["cloud"]) != `{"id":4}` || cfg["nodeCount"] != nil ||
+						jsonOf(a["serverType"]) != `{"id":137}` {
 						t.Errorf("worker add: %s", jsonOf(a))
 					}
 					if got := jsonOf(s.updated[0]); got != `{"description":"apps cluster","labels":["MK8S","apps"],"name":"apps"}` {
@@ -404,6 +410,7 @@ resource "mtncloud_docker_cluster" "docker" {
 					defer s.mu.Unlock()
 					a := s.added[0]
 					if jsonOf(a["nodeCount"]) != "1" || jsonOf(a["plan"]) != `{"id":9401}` || a["sshKeyPair"] != nil ||
+						jsonOf(a["serverType"]) != `{"id":135}` ||
 						a["config"].(map[string]any)["nodeCount"] != nil {
 						t.Errorf("host add: %s", jsonOf(a))
 					}

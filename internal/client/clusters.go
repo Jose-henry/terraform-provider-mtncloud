@@ -22,8 +22,11 @@ type ClusterLayout struct {
 	ProvisionTypeID int64
 	Masters         int64 // fixed master nodes; 0 for Docker
 	Workers         int64 // default worker (Docker: host) count
-	Options         map[string]FormField
-	Defaults        map[string]string // option default values by field name
+	// AddServerType is the server type of the layout's first node set that can grow (its workers,
+	// a Docker cluster's hosts): adding nodes must name it, as the CLI's add-worker does. 0 if none.
+	AddServerType int64
+	Options       map[string]FormField
+	Defaults      map[string]string // option default values by field name
 }
 
 type wireClusterLayout struct {
@@ -44,8 +47,12 @@ type wireClusterLayout struct {
 		DefaultValue any    `json:"defaultValue"`
 	} `json:"optionTypes"`
 	ComputeServers []struct {
-		NodeType  string `json:"nodeType"`
-		NodeCount int64  `json:"nodeCount"`
+		NodeType          string `json:"nodeType"`
+		NodeCount         int64  `json:"nodeCount"`
+		DynamicCount      bool   `json:"dynamicCount"`
+		ComputeServerType *struct {
+			ID int64 `json:"id"`
+		} `json:"computeServerType"`
 	} `json:"computeServers"`
 }
 
@@ -77,6 +84,9 @@ func (c *Client) ClusterLayouts(ctx context.Context) ([]ClusterLayout, error) {
 					l.Masters += s.NodeCount
 				} else {
 					l.Workers += s.NodeCount
+				}
+				if s.DynamicCount && s.ComputeServerType != nil && l.AddServerType == 0 {
+					l.AddServerType = s.ComputeServerType.ID
 				}
 			}
 			out = append(out, l)

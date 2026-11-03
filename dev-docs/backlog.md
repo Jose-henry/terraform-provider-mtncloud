@@ -631,6 +631,13 @@ Live QA retest, 2026-11-03 (clusters 148 Docker `host_count = 1`, 149 Kubernetes
   found` on 146) is **not yet retested**: open until the platform provisions again.
 - Found: a create that timed out saved `host_ids = []`, and the next plan showed the hosts as changed
   outside Terraform. The provider now reads the cluster once more (one minute) after the timeout.
+- Provisioning came back later that morning: 148 reached `ok` with 1 host, and its plan showed no
+  resource change.
+- **Found: every worker or host add failed** with `400 Validation failed; serverType: Server type not
+  specified or not available`. The CLI's `add_worker` (clusters.rb) sends `serverType: {id}`, the
+  server type of the layout's first `dynamicCount` node set (live layouts: Kubernetes workers 137
+  `openstackKubeWorker`, Docker hosts 135 `openstackLinux`; masters 136 aren't dynamic). The provider
+  now reads it from `/api/library/cluster-layouts` and sends it; the fake API refuses an add without it.
 
 Docker, per the CLI (`/api/cluster-types` read by the owner, and the 9.0.0 CLI's `clusters.rb`, 2026-11-02):
 - the Docker type has no masters; its only node type is the worker type "Docker Host";

@@ -414,6 +414,8 @@ type built struct {
 	place     *client.Placement
 	projectID int64
 	worker    map[string]any // the server config new workers are added with
+	addType   int64          // the server type new workers (Docker: hosts) are added as
+	layout    string
 }
 
 // fullyKnown reports whether v, and everything inside it, is known.
@@ -472,7 +474,7 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 		fail("project", err)
 		return nil
 	}
-	b := &built{place: place, projectID: pr.ID}
+	b := &built{place: place, projectID: pr.ID, addType: layout.AddServerType, layout: layout.Name}
 	if m.WorkerCount.IsNull() || m.WorkerCount.IsUnknown() {
 		// Kubernetes: 3, MTN's order's default whatever the layout says (CreateCluster.sh workerCount).
 		m.WorkerCount = types.Int64Value(max(layout.Workers, 1))
@@ -1016,6 +1018,13 @@ func (r *clusterResource) scale(ctx context.Context, id int64, plan model, diags
 			body = b.body["server"].(map[string]any)
 			delete(body, "visibility")
 		}
+		if b.addType == 0 {
+			diags.AddError("Unable to add workers", fmt.Sprintf("Layout %q has no node set that can grow, so MTN Cloud can't add nodes to this cluster.", b.layout))
+			return
+		}
+		// MTN Cloud refuses an add without the node set's server type ("serverType: Server type not
+		// specified", QA cluster 148, 2026-11-03); the CLI's add-worker sends the layout's.
+		body["serverType"] = map[string]any{"id": b.addType}
 		body["nodeCount"] = want - len(workers)
 		// The create's config.nodeCount is the total (Docker); adding hosts takes only the outer
 		// nodeCount, as the CLI's add-worker sends it (clusters.rb add_worker, POST .../servers).
