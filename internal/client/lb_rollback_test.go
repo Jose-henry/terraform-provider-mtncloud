@@ -98,3 +98,48 @@ func TestCreateLBPool_PendingStillThere(t *testing.T) {
 		t.Errorf("%d runs, want the create and two reads: the wait's last read is the check", f.runs.Load())
 	}
 }
+
+// A create whose piece settled in ERROR fails with the piece attached: its ID is kept, with no
+// read to look for it (plugin, 2026-11-03).
+func TestCreateLBL7Policy_InError(t *testing.T) {
+	b, _ := json.Marshal(map[string]any{"success": false, "pending": false, "action": "l7policy-create", "existing": true,
+		"piece": map[string]any{"id": "pol-9", "provisioning_status": "ERROR"},
+		"error": "L7 rule PATH REGEX '^/x' is in ERROR: the load balancer could not apply it."})
+	f := newLBFake(t, string(b))
+	id, err := f.client(t, fastPoll).CreateLBL7Policy(t.Context(), 114, "lb-1", "l-1", LBL7PolicySpec{Action: "REJECT", Position: 1})
+	if id != "pol-9" || err == nil || !strings.Contains(err.Error(), "is in ERROR") {
+		t.Fatalf("id %q, err %v", id, err)
+	}
+	if f.runs.Load() != 1 {
+		t.Errorf("%d runs, want 1: no retry and no read", f.runs.Load())
+	}
+}
+
+// A policy update that left an L7 rule in ERROR succeeds with a warning, collected for the caller.
+func TestUpdateLBL7Policy_Warning(t *testing.T) {
+	f := newLBFake(t,
+		lbAnswerTop("l7policy-update", map[string]any{"success": true, "steps": []any{}},
+			map[string]any{"warning": "L7 rule 'old' on OpenStack is in ERROR."}), // mtncloud:allow-cloud-name (checking it is scrubbed)
+		lbReadAs("ACTIVE"))
+	ctx, w := WithLBWarnings(t.Context())
+	if err := f.client(t, fastPoll).UpdateLBL7Policy(ctx, 114, "lb-1", "l-1", "pol-1", LBL7PolicySpec{Action: "REJECT", Position: 1}, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.List(); len(got) != 1 || got[0] != "L7 rule 'old' on the cloud is in ERROR." {
+		t.Errorf("warnings %q", got)
+	}
+}
+
+// A delete the load balancer undid fails once, without a retry.
+func TestDeleteLBL7Policy_NotRemoved(t *testing.T) {
+	b, _ := json.Marshal(map[string]any{"success": false, "action": "l7policy-delete",
+		"error": "L7 policy 'api' was not removed: the load balancer could not apply the delete."})
+	f := newLBFake(t, string(b))
+	err := f.client(t, fastPoll).DeleteLBL7Policy(t.Context(), 114, "lb-1", "l-1", "pol-1")
+	if err == nil || !strings.Contains(err.Error(), "was not removed") {
+		t.Fatalf("err %v", err)
+	}
+	if f.runs.Load() != 1 {
+		t.Errorf("%d runs, want 1", f.runs.Load())
+	}
+}

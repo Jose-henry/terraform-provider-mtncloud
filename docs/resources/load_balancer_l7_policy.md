@@ -3,12 +3,12 @@
 page_title: "mtncloud_load_balancer_l7_policy Resource - mtncloud"
 subcategory: ""
 description: |-
-  A layer 7 policy on an HTTP or TERMINATED_HTTPS listener: requests that match all its rules are sent to another pool, redirected, or rejected. A listener tries its policies in position order, and the first that matches acts; requests no policy matches go to the listener's default pool. The policy and its rules are created together: if a rule is refused, the policy is not left behind.
+  A layer 7 policy on an HTTP or TERMINATED_HTTPS listener: requests that match all its rules are sent to another pool, redirected, or rejected. A listener tries its policies in position order, and the first that matches acts; requests no policy matches go to the listener's default pool. The policy and its rules are created together: if a rule is refused, the policy is not left behind. Give each policy a name: the load balancer's errors identify an unnamed policy only by its position.
 ---
 
 # mtncloud_load_balancer_l7_policy (Resource)
 
-A layer 7 policy on an `HTTP` or `TERMINATED_HTTPS` listener: requests that match all its rules are sent to another pool, redirected, or rejected. A listener tries its policies in `position` order, and the first that matches acts; requests no policy matches go to the listener's default pool. The policy and its rules are created together: if a rule is refused, the policy is not left behind.
+A layer 7 policy on an `HTTP` or `TERMINATED_HTTPS` listener: requests that match all its rules are sent to another pool, redirected, or rejected. A listener tries its policies in `position` order, and the first that matches acts; requests no policy matches go to the listener's default pool. The policy and its rules are created together: if a rule is refused, the policy is not left behind. Give each policy a `name`: the load balancer's errors identify an unnamed policy only by its position.
 
 ## Example Usage
 
@@ -86,7 +86,7 @@ Required:
 
 - `compare_type` (String) How: `EQUAL_TO`, `STARTS_WITH`, `ENDS_WITH`, `CONTAINS` or `REGEX`.
 - `type` (String) What is compared: `HOST_NAME`, `PATH`, `FILE_TYPE`, `HEADER`, `COOKIE`, `SSL_CONN_HAS_CERT`, `SSL_VERIFY_RESULT` or `SSL_DN_FIELD`.
-- `value` (String) The value to compare with, for example `/api` or `api.example.com`.
+- `value` (String) The value to compare with, for example `/api` or `api.example.com`. A `REGEX` value uses Python regex syntax and is checked at plan time: named groups (`(?P<name>...)`), back-references (`\1`, `(?P=name)`), lookbehinds (`(?<=...)`, `(?<!...)`), `\p{...}` classes and `\x{...}` escapes are refused, because the load balancer cannot apply them. Use plain groups `(...)` or `(?:...)`.
 
 Optional:
 

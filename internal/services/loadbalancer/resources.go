@@ -65,6 +65,18 @@ func (b *rbase) ready(diags *diag.Diagnostics) bool {
 	return true
 }
 
+// lbWarnings collects the warnings of the saves made with the returned context; done adds them to
+// diags. A save that succeeded can warn about something it didn't fail for, such as an L7 rule in
+// ERROR on a policy it changed.
+func lbWarnings(ctx context.Context, diags *diag.Diagnostics) (context.Context, func()) {
+	ctx, w := client.WithLBWarnings(ctx)
+	return ctx, func() {
+		for _, m := range w.List() {
+			diags.AddWarning("Load balancer warning", m)
+		}
+	}
+}
+
 // replaceStr and replaceInt are for references to a parent (network, load balancer, pool, listener,
 // instance): when the parent is replaced, its pieces follow. What the cloud can't change on the piece
 // itself is fixed (owner, 2026-10-31): refused at plan time, never replaced.

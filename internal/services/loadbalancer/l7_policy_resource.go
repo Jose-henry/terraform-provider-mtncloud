@@ -80,7 +80,8 @@ func (r *l7PolicyResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 		Description: "A layer 7 policy on an `HTTP` or `TERMINATED_HTTPS` listener: requests that match all its rules are sent to " +
 			"another pool, redirected, or rejected. A listener tries its policies in `position` order, and the first that matches " +
 			"acts; requests no policy matches go to the listener's default pool. The policy and its rules are created together: " +
-			"if a rule is refused, the policy is not left behind.",
+			"if a rule is refused, the policy is not left behind. Give each policy a `name`: the load balancer's errors " +
+			"identify an unnamed policy only by its position.",
 		Attributes: map[string]schema.Attribute{
 			"id":               idAttr(l7Kind),
 			"network_id":       networkAttr(),
@@ -122,7 +123,10 @@ func (r *l7PolicyResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 					"key": schema.StringAttribute{Optional: true, Validators: []validator.String{stringvalidator.LengthAtLeast(1)},
 						Description: "The header or cookie name, for `HEADER` and `COOKIE` rules (required there)."},
 					"value": schema.StringAttribute{Required: true, Validators: []validator.String{stringvalidator.LengthAtLeast(1)},
-						Description: "The value to compare with, for example `/api` or `api.example.com`."},
+						Description: "The value to compare with, for example `/api` or `api.example.com`. A `REGEX` value uses Python " +
+							"regex syntax and is checked at plan time: named groups (`(?P<name>...)`), back-references (`\\1`, " +
+							"`(?P=name)`), lookbehinds (`(?<=...)`, `(?<!...)`), `\\p{...}` classes and `\\x{...}` escapes are refused, because the load balancer cannot " +
+							"apply them. Use plain groups `(...)` or `(?:...)`."},
 					// Optional+Computed: false when left out, so a rule read back after import matches either way.
 					"invert": schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false),
 						Description: "Match when the comparison fails instead. Defaults to `false`."},
@@ -166,6 +170,14 @@ func (r *l7PolicyResource) ValidateConfig(ctx context.Context, req resource.Vali
 		t := rule.Type.ValueString()
 		if (t == "HEADER" || t == "COOKIE") && rule.Key.IsNull() && !rule.Type.IsUnknown() {
 			resp.Diagnostics.AddAttributeError(path.Root("rules"), "Missing key", fmt.Sprintf("A %s rule needs key: the %s name.", t, strings.ToLower(t)))
+		}
+		// Refused before anything is sent: a rule the load balancer can't apply goes to ERROR and
+		// blocks later changes to the load balancer until it is removed.
+		if rule.CompareType.ValueString() == "REGEX" && !rule.Value.IsUnknown() && !rule.Value.IsNull() {
+			if p := l7RegexProblem(rule.Value.ValueString()); p != "" {
+				resp.Diagnostics.AddAttributeError(path.Root("rules"), "Regex the load balancer cannot apply",
+					fmt.Sprintf("The %s rule's value %s: %s.", strings.TrimSpace(t+" REGEX"), rule.Value.ValueString(), p))
+			}
 		}
 	}
 	if len(rules) == 0 && !m.Rules.IsNull() {
@@ -272,6 +284,8 @@ func (r *l7PolicyResource) Create(ctx context.Context, req resource.CreateReques
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	ctx, warn := lbWarnings(ctx, &resp.Diagnostics)
+	defer warn()
 	id, err := r.client.CreateLBL7Policy(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.ListenerID.ValueString(), s)
 	if id != "" {
 		plan.ID = types.StringValue(id)
@@ -316,6 +330,8 @@ func (r *l7PolicyResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	ctx, warn := lbWarnings(ctx, &resp.Diagnostics)
+	defer warn()
 	plan.ID = state.ID
 	if err := r.client.UpdateLBL7Policy(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.ListenerID.ValueString(), plan.ID.ValueString(), s, !plan.Position.Equal(state.Position)); err != nil {
 		resp.Diagnostics.AddError("Unable to change the L7 policy", err.Error())

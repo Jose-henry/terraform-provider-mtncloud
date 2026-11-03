@@ -31,6 +31,8 @@ type LBError struct {
 	// counts the pieces it couldn't take back, or had already changed.
 	RolledBack bool
 	LeftBehind int
+	// PieceID is the piece a failed create made anyway: it settled in ERROR (plugin, 2026-11-03).
+	PieceID string
 }
 
 func (e *LBError) Error() string { return e.Msg }
@@ -83,6 +85,9 @@ type lbEnvelope struct {
 	// as the cloud has it (only once the load balancer has settled).
 	Pending bool            `json:"pending"`
 	Piece   json.RawMessage `json:"piece"`
+	// Warning comes on a save that succeeded but left something in ERROR that the save didn't fail
+	// for: an L7 rule on an updated policy (plugin, 2026-11-03).
+	Warning string `json:"warning"`
 	// A failed save takes back the pools and listeners it created (rolledBack); what it couldn't
 	// take back, or had already changed, is in leftBehind (plugin, 2026-11-02).
 	RolledBack bool `json:"rolledBack"`
@@ -306,7 +311,15 @@ func (c *Client) runLBEnv(ctx context.Context, action string, in map[string]any)
 			return nil, &LBError{Action: action, Msg: fmt.Sprintf("The load balancer %s operation ended (%s) without an answer. Try again.", action, status)}
 		}
 		if !env.Success {
-			return nil, &LBError{Action: action, Msg: env.failureText(action), RolledBack: env.rolledBack(), LeftBehind: len(env.LeftBehind)}
+			e := &LBError{Action: action, Msg: env.failureText(action), RolledBack: env.rolledBack(), LeftBehind: len(env.LeftBehind)}
+			// A create whose piece settled in ERROR answers with the piece attached.
+			var piece struct {
+				ID string `json:"id"`
+			}
+			if lbCreate(action) && len(env.Piece) > 0 && json.Unmarshal(env.Piece, &piece) == nil {
+				e.PieceID = piece.ID
+			}
+			return nil, e
 		}
 		if len(env.Result) == 0 || string(env.Result) == "null" {
 			return nil, &LBError{Action: action, Msg: fmt.Sprintf("The load balancer %s operation answered without a result. Try again.", action)}

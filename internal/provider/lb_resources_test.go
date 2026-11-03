@@ -34,6 +34,10 @@ type lbPlugin struct {
 	released []string                  // fip-detach's release, per detach
 	held     map[string]map[string]any // addresses detached and kept in the project, by ID
 	failAt   int                       // the member-update run that fails (0: none)
+	// l7Error makes the next L7 policy create settle in ERROR (kept, success:false, piece attached);
+	// l7Warning is the warning an L7 policy update answers with (plugin, 2026-11-03).
+	l7Error   bool
+	l7Warning string
 }
 
 func newLBPlugin() *lbPlugin {
@@ -431,6 +435,12 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 					"result": map[string]any{"steps": []any{map[string]any{"kind": "L7 policy", "rolledBack": true}}}}
 			}
 			l["l7policies_expanded"] = placePolicy(pols, pol)
+			if p.l7Error {
+				p.l7Error = false
+				pol["provisioning_status"] = "ERROR"
+				return map[string]any{"success": false, "pending": false, "action": action, "piece": pol,
+					"error": "L7 rule PATH REGEX '^/x' is in ERROR: the load balancer could not apply it."}
+			}
 			return made("L7 policy", pol)
 		}
 		pol, i := find(pols, fmt.Sprint(o["l7policyId"]))
@@ -447,6 +457,9 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 		l["l7policies_expanded"] = placePolicy(append(pols[:i:i], pols[i+1:]...), pol)
 		out := ok(map[string]any{"success": true, "steps": []any{}})
 		out["piece"] = pol
+		if p.l7Warning != "" {
+			out["warning"] = p.l7Warning
+		}
 		return out
 	case "fip-attach":
 		if fip, _ := lb["fip"].(map[string]any); fip != nil {

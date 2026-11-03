@@ -367,8 +367,14 @@ func (c *Client) pieceCreate(ctx context.Context, networkID int64, lbID, action,
 	in["requestId"] = req
 	ans, err := c.lbWrite(ctx, networkID, lbID, action, in)
 	var lbe *LBError
-	if ans == nil && errors.As(err, &lbe) && lbe.RolledBack && lbe.LeftBehind == 0 {
-		return "", err // the plugin took the piece back: there is nothing to look for
+	if ans == nil && errors.As(err, &lbe) {
+		switch {
+		case lbe.RolledBack && lbe.LeftBehind == 0:
+			return "", err // the plugin took the piece back: there is nothing to look for
+		case lbe.PieceID != "":
+			// The piece settled in ERROR: kept with the error, so Terraform replaces it next time.
+			return lbe.PieceID, err
+		}
 	}
 	if ans == nil {
 		// No answer at all (every attempt ran out of time, or a retry was refused while the first
@@ -577,6 +583,9 @@ func (c *Client) lbWrite(ctx context.Context, networkID int64, lbID, action stri
 	c.lbChanged(networkID)
 	if err != nil {
 		return nil, err
+	}
+	if env.Warning != "" {
+		c.lbWarn(ctx, action, env.Warning)
 	}
 	ans := &writeAnswer{result: env.Result, piece: env.Piece, pending: env.Pending}
 	lb, err := c.waitLB(ctx, networkID, lbID, action, ans.pending)
