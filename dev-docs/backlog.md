@@ -610,6 +610,28 @@ from the console's view but settable through the API. When that lands, bring bac
 `data_volume.datastore` on catalog orders, sent in that new field (not `storageType`). This is an
 owner-approved exception to "catalog orders take only what the console lets you set".
 
+Live QA, 2026-11-03 (cluster 146, single master, `worker_count = 1`):
+- MTN Cloud built the layout's 3 workers: `worker.nodeCount` and `config.workerCount` are ignored for the
+  count. The platform's CLI (`clusters.rb` add) sends it as `server.nodeCount` and
+  `server.config.nodeCount` for every cluster type; the provider now does too. **`CreateCluster.sh` has
+  the same gap** (it sends only `worker.nodeCount`; unnoticed because its default is 3): tell the owner.
+- The workers then failed their join script with `bash: line 1: null: command not found` (the master's
+  join command still null), with the autoscaler stored at min = max = 1 against 3 workers.
+- A Docker cluster created at the same time failed with `400 Duplicate entry '72-tf-acc' for key
+  'label.UK...'`: two creates adding the same new label. Retried in the client now.
+- An outage at the end of the 30-minute wait ended it with a warning; waits now read again through it.
+
+Live QA retest, 2026-11-03 (clusters 148 Docker `host_count = 1`, 149 Kubernetes single, `worker_count = 1`):
+- Docker 148 got exactly 1 host: the count fix works for Docker.
+- **MTN Cloud's provisioning hung, not the clusters' payload.** Both clusters' server-provision
+  processes started 33 minutes after the create (04:09 → 04:42 UTC), then stopped updating at the same
+  second (04:47:34, `provisionResources` running, `provisionFinalize` pending) and never moved again. The
+  owner's own console-built `testHA2-master-2` has been stuck in `finalizing` at 59% since 2026-11-02
+  19:25 too. Kubernetes workers are made only after the master, so the worker join (`null: command not
+  found` on 146) is **not yet retested**: open until the platform provisions again.
+- Found: a create that timed out saved `host_ids = []`, and the next plan showed the hosts as changed
+  outside Terraform. The provider now reads the cluster once more (one minute) after the timeout.
+
 Docker, per the CLI (`/api/cluster-types` read by the owner, and the 9.0.0 CLI's `clusters.rb`, 2026-11-02):
 - the Docker type has no masters; its only node type is the worker type "Docker Host";
 - the create sends the host count as `server.nodeCount` and `server.config.nodeCount`, with no worker block;

@@ -239,16 +239,19 @@ func TestRetry(t *testing.T) {
 		name      string
 		method    string
 		statuses  []int
+		body      string // the error body; {} when empty
 		wantCalls int
 		wantErr   bool
 	}{
-		{"GET 503 then ok", "GET", []int{503, 503, 200}, 3, false},
-		{"GET 429 then ok", "GET", []int{429, 200}, 2, false},
-		{"GET 500 gives up", "GET", []int{500, 500, 500, 500, 500, 500}, 5, true},
-		{"GET 400 never retried", "GET", []int{400, 200}, 1, true},
-		{"GET 404 never retried", "GET", []int{404, 200}, 1, true},
-		{"POST 500 not retried", "POST", []int{500, 200}, 1, true},
-		{"POST 429 retried", "POST", []int{429, 200}, 2, false},
+		{"GET 503 then ok", "GET", []int{503, 503, 200}, "", 3, false},
+		{"GET 429 then ok", "GET", []int{429, 200}, "", 2, false},
+		{"GET 500 gives up", "GET", []int{500, 500, 500, 500, 500, 500}, "", 5, true},
+		{"GET 400 never retried", "GET", []int{400, 200}, "", 1, true},
+		{"GET 404 never retried", "GET", []int{404, 200}, "", 1, true},
+		{"POST 500 not retried", "POST", []int{500, 200}, "", 1, true},
+		{"POST 429 retried", "POST", []int{429, 200}, "", 2, false},
+		// A label race isn't retried here: only a cluster create retries it, after a lookup.
+		{"POST 400 label race not retried", "POST", []int{400, 200}, `{"success":false,"msg":"Duplicate entry '72-tf-acc' for key 'label.UK1'"}`, 1, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -256,7 +259,12 @@ func TestRetry(t *testing.T) {
 			var n atomic.Int32
 			f.route(tc.method, "/api/thing", func(w http.ResponseWriter, _ *http.Request) {
 				i := int(n.Add(1)) - 1
-				w.WriteHeader(tc.statuses[min(i, len(tc.statuses)-1)])
+				st := tc.statuses[min(i, len(tc.statuses)-1)]
+				w.WriteHeader(st)
+				if st >= 400 && tc.body != "" {
+					_, _ = w.Write([]byte(tc.body))
+					return
+				}
 				_, _ = w.Write([]byte(`{}`))
 			})
 			c := f.client(t)
@@ -799,5 +807,102 @@ func TestTokenFile_ReloadOn401(t *testing.T) {
 	c = stale.client(t, func(c *Config) { c.Token, c.TokenFile = "", file })
 	if _, err := c.WhoAmI(t.Context()); err == nil || !strings.Contains(err.Error(), "refused the access token in") {
 		t.Errorf("err = %v, want the file's token refused", err)
+	}
+}
+
+// A wait rides out an outage: reads MTN Cloud doesn't answer (503 after the client's own retries, a
+// refused connection) don't end a wait that has a deadline, so the apply never reports a cluster it
+// couldn't see settle (QA cluster 146). A wait that ends during the outage returns the platform's
+// error, not a timeout. An answered error, or a wait without a deadline, still ends at once.
+func TestPoll_RidesOutAnOutage(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		status   int // during the outage; 0 refuses the connection
+		down     int32
+		deadline time.Duration // 0: none
+		wantErr  string        // "" for success
+		maxReads int32         // 0: unchecked
+	}{
+		{"503s, then ok", http.StatusServiceUnavailable, 8, time.Minute, "", 0},
+		{"refused, then ok", 0, 12, time.Minute, "", 0},
+		{"down past the deadline: the API's error", http.StatusServiceUnavailable, 1 << 30, 300 * time.Millisecond, "503", 0},
+		{"no deadline: ends at once", http.StatusServiceUnavailable, 1 << 30, 0, "503", 5},
+		{"403 ends the wait", http.StatusForbidden, 8, time.Minute, "403", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeAPI(t)
+			var n atomic.Int32
+			f.route("GET", "/api/clusters/7", func(w http.ResponseWriter, _ *http.Request) {
+				if n.Add(1) <= tc.down {
+					if tc.status == 0 {
+						if hj, ok := w.(http.Hijacker); ok {
+							conn, _, _ := hj.Hijack()
+							_ = conn.Close()
+							return
+						}
+					}
+					w.WriteHeader(tc.status)
+					_, _ = w.Write([]byte(`{}`))
+					return
+				}
+				_, _ = w.Write([]byte(`{"cluster":{"id":7,"status":"ok"}}`))
+			})
+			c := f.client(t, func(cfg *Config) { cfg.PollMin, cfg.PollMax = time.Millisecond, 2*time.Millisecond })
+			ctx := t.Context()
+			if tc.deadline > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tc.deadline)
+				defer cancel()
+			}
+			cl, err := c.WaitForCluster(ctx, 7)
+			switch {
+			case tc.wantErr == "" && err != nil:
+				t.Fatalf("err = %v", err)
+			case tc.wantErr == "" && cl.Status != "ok":
+				t.Errorf("status %q, want ok", cl.Status)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr) || errors.Is(err, context.DeadlineExceeded)):
+				t.Errorf("err = %v, want the API's %s", err, tc.wantErr)
+			}
+			if got := n.Load(); tc.maxReads > 0 && got > tc.maxReads {
+				t.Errorf("%d reads, want at most %d", got, tc.maxReads)
+			}
+		})
+	}
+}
+
+// A cluster create refused by a label race (QA, 2026-11-03) is sent again only once a lookup by name
+// shows nothing was made, so a retry can never make a second cluster.
+func TestCreateCluster_LabelRace(t *testing.T) {
+	const race = `{"success":false,"msg":"Hibernate operation: could not execute statement; SQL [n/a]; ` +
+		`Duplicate entry '72-tf-acc' for key 'label.UK33de5cd9712c08acd93649417773'"}`
+	for _, tc := range []struct {
+		name      string
+		existing  string // the lookup's answer
+		wantPosts int
+		wantErr   bool
+	}{
+		{"nothing made: sent again", `{"clusters":[],"meta":{"total":0}}`, 2, false},
+		{"one made after all: not sent again", `{"clusters":[{"id":9,"name":"k8s"}],"meta":{"total":1}}`, 1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeAPI(t)
+			var posts atomic.Int32
+			f.route("POST", "/api/clusters", func(w http.ResponseWriter, _ *http.Request) {
+				if posts.Add(1) == 1 {
+					w.WriteHeader(http.StatusBadRequest)
+					_, _ = w.Write([]byte(race))
+					return
+				}
+				_, _ = w.Write([]byte(`{"success":true,"cluster":{"id":9}}`))
+			})
+			f.route("GET", "/api/clusters", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(tc.existing)) })
+			id, err := f.client(t).CreateCluster(t.Context(), map[string]any{"name": "k8s"})
+			if (err != nil) != tc.wantErr || (!tc.wantErr && id != 9) {
+				t.Fatalf("id %d, err %v", id, err)
+			}
+			if got := int(posts.Load()); got != tc.wantPosts {
+				t.Errorf("%d creates sent, want %d", got, tc.wantPosts)
+			}
+		})
 	}
 }

@@ -1,9 +1,11 @@
 package client
 
 import (
+	"errors"
 	"math/rand/v2"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -17,6 +19,16 @@ func retryable(status int, idempotent bool) bool {
 		return idempotent // a write may have been applied, so only reads are repeated
 	}
 	return false
+}
+
+// labelRace reports a 400 from two requests creating the same new label at once: the platform adds
+// a label row per tenant, and the second insert breaks its unique key ("Duplicate entry '72-tf-acc'
+// for key 'label.UK…'", QA 2026-11-03, a Kubernetes and a Docker cluster created together). Only a
+// cluster create retries it, after checking no cluster was made (CreateCluster).
+func labelRace(err error) bool {
+	var api *APIError
+	return errors.As(err, &api) && api.StatusCode == http.StatusBadRequest &&
+		strings.Contains(api.Message, "Duplicate entry") && strings.Contains(api.Message, "for key 'label.")
 }
 
 // backoff returns the wait before attempt n (n >= 1): exponential from base, capped, with full

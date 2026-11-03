@@ -497,11 +497,12 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 	}
 	count := m.WorkerCount.ValueInt64()
 	config := server["config"].(map[string]any)
-	if !isKube {
-		// Docker: the hosts are the server part, nodeCount of them.
-		config["nodeCount"] = count
-		server["nodeCount"] = count
-	}
+	// The worker (Docker: host) count goes in the server part for every cluster type, as the
+	// platform's own CLI sends it (clusters.rb add: server.nodeCount and server.config.nodeCount).
+	// The worker block's nodeCount alone is ignored: QA cluster 146 (2026-11-03) asked for 1 worker
+	// and got the layout's 3, with the autoscaler held at 1.
+	config["nodeCount"] = count
+	server["nodeCount"] = count
 	server["visibility"] = "private"
 	if v := m.ResourceName.ValueString(); v != "" {
 		server["name"] = v
@@ -713,6 +714,7 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	b := r.build(ctx, &m, &resp.Diagnostics)
@@ -747,7 +749,18 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 		// A warning, not an error: an error would taint the cluster, and the next apply would rebuild it.
 		resp.Diagnostics.AddWarning("Cluster not ready yet", fmt.Sprintf("Cluster %d was created but isn't ready: %s. A later refresh reads its status.", id, err))
 		if !m.Autoscaling.IsNull() {
-			resp.Diagnostics.Append(resp.Private.SetKey(ctx, scalerPending, []byte("true"))...)
+			resp.Diagnostics.Append(resp.Private.SetKey(parent, scalerPending, []byte("true"))...)
+		}
+		// One last read, with a minute of its own, so state holds the hosts made so far and the next
+		// plan has nothing to catch up on. Skipped when you stop the run.
+		if parent.Err() == nil {
+			rctx, rcancel := context.WithTimeout(parent, time.Minute)
+			defer rcancel()
+			if last, gerr := r.client.GetCluster(rctx, id); gerr == nil {
+				var quiet diag.Diagnostics
+				r.refresh(rctx, &m, last, false, &quiet)
+				resp.Diagnostics.Append(r.set(parent, &resp.State, &m)...)
+			}
 		}
 		return
 	}

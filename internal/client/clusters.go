@@ -292,16 +292,31 @@ func ClusterFailed(status string) bool {
 }
 
 // CreateCluster posts {"cluster": body} and returns the new cluster's ID.
+//
+// Two creates adding the same new label at once make the platform refuse the second (labelRace). It
+// is sent again, a few times, only once a lookup by name shows no cluster was made.
 func (c *Client) CreateCluster(ctx context.Context, body map[string]any) (int64, error) {
-	var resp struct {
-		Cluster struct {
-			ID int64 `json:"id"`
-		} `json:"cluster"`
+	name, _ := body["name"].(string)
+	for attempt := 1; ; attempt++ {
+		var resp struct {
+			Cluster struct {
+				ID int64 `json:"id"`
+			} `json:"cluster"`
+		}
+		err := c.do(ctx, http.MethodPost, "/api/clusters", nil, map[string]any{"cluster": body}, &resp)
+		if err == nil {
+			return resp.Cluster.ID, nil
+		}
+		if !labelRace(err) || attempt >= 3 || name == "" {
+			return 0, err
+		}
+		if same, ferr := c.FindClustersNamed(ctx, name); ferr != nil || len(same) > 0 {
+			return 0, err
+		}
+		if serr := sleep(ctx, backoff(attempt, c.cfg.BackoffBase, c.cfg.BackoffMax, "")); serr != nil {
+			return 0, serr
+		}
 	}
-	if err := c.do(ctx, http.MethodPost, "/api/clusters", nil, map[string]any{"cluster": body}, &resp); err != nil {
-		return 0, err
-	}
-	return resp.Cluster.ID, nil
 }
 
 // GetCluster reads one cluster.

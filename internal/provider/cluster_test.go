@@ -29,6 +29,7 @@ type clusterStore struct {
 	scaler     []map[string]any // each configure-autoscaler's "cluster"
 	updated    []map[string]any // each PUT's "cluster"
 	failScaler int              // the next n configure-autoscaler calls fail with a 400
+	stuck      bool             // new clusters stay "provisioning", as MTN Cloud's did on 2026-11-03
 }
 
 func newClusterStore() *clusterStore {
@@ -62,6 +63,9 @@ func (s *clusterStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			typ := map[string]any{"code": c["type"], "name": map[any]string{"kubernetes-cluster": "Kubernetes Cluster", "docker-cluster": "Docker Cluster"}[c["type"]]}
 			s.clusters[id] = map[string]any{"id": id, "name": c["name"], "description": c["description"], "labels": c["labels"],
 				"status": "ok", "serviceUrl": "https://10.0.0.10:6443", "layout": map[string]any{"id": layout}, "type": typ}
+			if s.stuck {
+				s.clusters[id]["status"] = "provisioning"
+			}
 			nodes, _ := c["worker"].(map[string]any)
 			if nodes == nil {
 				nodes = c["server"].(map[string]any) // Docker: the hosts are the server part
@@ -220,12 +224,14 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 							t.Errorf("cluster.%s\n got %s\nwant %s", k, got, want)
 						}
 					}
+					// The worker count goes in the server part too, as the platform's CLI sends it: the
+					// worker block's alone is ignored (QA cluster 146).
 					for k, want := range map[string]string{
-						"name": `"apps-node"`, "hostname": `"apps"`, "networkDomain": `{"id":16}`, "plan": `{"id":9401}`, "nodeCount": `null`,
+						"name": `"apps-node"`, "hostname": `"apps"`, "networkDomain": `{"id":16}`, "plan": `{"id":9401}`, "nodeCount": `2`,
 						"sshKeyPair": `null`, "labels": `["MK8S","apps"]`,
 						"config": `{"autoScalerEnabled":"on","createUser":true,"customOptions":{"k8s_version":"1.35.3-1.1",` +
 							`"podCidr":"10.244.0.0/16","serviceCidr":"10.96.0.0/12"},"maxNodes":"4","minNodes":"1","noAgent":false,` +
-							`"resourcePoolId":9201}`,
+							`"nodeCount":2,"resourcePoolId":9201}`,
 					} {
 						if got := jsonOf(srv[k]); got != want {
 							t.Errorf("cluster.server.%s\n got %s\nwant %s", k, got, want)
@@ -246,7 +252,9 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 					s.mu.Lock()
 					defer s.mu.Unlock()
 					a := s.added[0]
-					if jsonOf(a["nodeCount"]) != "1" || jsonOf(a["plan"]) != `{"id":9402}` || jsonOf(a["cloud"]) != `{"id":4}` {
+					// The count added goes outside config only: the create's server.config.nodeCount isn't sent.
+					cfg, _ := a["config"].(map[string]any)
+					if jsonOf(a["nodeCount"]) != "1" || jsonOf(a["plan"]) != `{"id":9402}` || jsonOf(a["cloud"]) != `{"id":4}` || cfg["nodeCount"] != nil {
 						t.Errorf("worker add: %s", jsonOf(a))
 					}
 					if got := jsonOf(s.updated[0]); got != `{"description":"apps cluster","labels":["MK8S","apps"],"name":"apps"}` {
@@ -410,6 +418,44 @@ resource "mtncloud_docker_cluster" "docker" {
 				Config: cfg("2"), ResourceName: addr, ImportState: true, ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{"group", "project", "cloud", "host", "timeouts"},
 			},
+		},
+	})
+}
+
+// A cluster still building when the create's timeout runs out is kept, with a warning, and state
+// holds the hosts made so far: the next plan has nothing to catch up on (QA cluster 148).
+func TestDockerCluster_TimeoutKeepsHosts(t *testing.T) {
+	f, s := clusterFakes(t)
+	s.stuck = true
+	cfg := f.providerConfig() + `
+resource "mtncloud_docker_cluster" "docker" {
+  name       = "builds"
+  group      = "MTNNG_CLOUD_AZ_1"
+  project    = "web-prod-Acme"
+  host_count = 1
+  host = {
+    plan            = "G2S4"
+    data_volume     = [{ size = 100 }]
+    networks        = ["app-net"]
+    security_groups = ["web"]
+  }
+  timeouts {
+    create = "5s"
+  }
+}
+`
+	addr := "mtncloud_docker_cluster.docker"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("host_ids"), knownvalue.ListSizeExact(1)),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("status"), knownvalue.StringExact("provisioning")),
+				},
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 		},
 	})
 }
