@@ -38,7 +38,7 @@ resource "mtncloud_load_balancer_pool" "web" {
 - `algorithm` (String) How a member is picked: `ROUND_ROBIN`, `LEAST_CONNECTIONS`, `SOURCE_IP` or `SOURCE_IP_PORT`.
 - `load_balancer_id` (String) ID of the load balancer, for example `mtncloud_load_balancer.web.id`. Changing it replaces the resource.
 - `network_id` (Number) ID of the MTN Network the load balancer is on, for example `mtncloud_network.app.id`. Your tenant must own it: a network shared with you is read-only. Changing it replaces the resource.
-- `protocol` (String) How the load balancer talks to the members: `HTTP`, `HTTPS`, `PROXY`, `PROXYV2`, `TCP`, `UDP` or `SCTP`. Set at create: the cloud can't change it, so a change is refused at plan time.
+- `protocol` (String) How the load balancer talks to the members: `HTTP`, `HTTPS`, `PROXY`, `PROXYV2`, `TCP`, `UDP` or `SCTP`. Set at create: the cloud can't change it, so a change is refused at plan time. `PROXY` (version 1, text) and `PROXYV2` (version 2, binary) send each member a PROXY protocol header with the real client IP and port, for `HTTP`, `HTTPS`, `TERMINATED_HTTPS` and `TCP` listeners (not `UDP` or `SCTP`). The members must expect the header (for example `proxy_protocol` in nginx, `accept-proxy` in HAProxy), or they reject every connection; use a `TCP` or `PING` health monitor.
 
 ### Optional
 

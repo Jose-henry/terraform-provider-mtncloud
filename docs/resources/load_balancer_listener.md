@@ -44,7 +44,7 @@ resource "mtncloud_load_balancer_listener" "http" {
 
 - `load_balancer_id` (String) ID of the load balancer, for example `mtncloud_load_balancer.web.id`. Changing it replaces the resource.
 - `network_id` (Number) ID of the MTN Network the load balancer is on, for example `mtncloud_network.app.id`. Your tenant must own it: a network shared with you is read-only. Changing it replaces the resource.
-- `port` (Number) The port, 1 to 65535. Set at create: the cloud can't change it, so a change is refused at plan time.
+- `port` (Number) The port, 1 to 65535. Set at create: the cloud can't change it, so a change is refused at plan time. A port is unique per transport on a load balancer: `HTTP`, `HTTPS`, `TERMINATED_HTTPS` and `TCP` listeners share one set of ports, `UDP` and `SCTP` each have their own. A port another listener holds is refused at plan.
 - `protocol` (String) `HTTP`, `HTTPS` (passed through, still encrypted), `TERMINATED_HTTPS` (decrypted here with `tls_certificate_ref`), `TCP`, `UDP` or `SCTP`. Set at create: the cloud can't change it, so a change is refused at plan time.
 
 ### Optional
@@ -52,7 +52,7 @@ resource "mtncloud_load_balancer_listener" "http" {
 - `allowed_cidrs` (Set of String) Only these source ranges may connect, for example `["203.0.113.0/24"]`. Unset: anyone.
 - `client_data_timeout` (Number) How long a client may be idle, in milliseconds. The cloud's default applies when it isn't set on create. Taken out of the configuration, it keeps its last value.
 - `connection_limit` (Number) The most connections at once; `-1` (the default) is no limit. Taken out of the configuration, it keeps its last value.
-- `default_pool_id` (String) The pool that gets this listener's traffic, for example `mtncloud_load_balancer_pool.web.id`. Leave it unset for none.
+- `default_pool_id` (String) The pool that gets this listener's traffic, for example `mtncloud_load_balancer_pool.web.id`. Leave it unset for none. One pool may be the default pool of several listeners: they all send traffic to its members.
 - `description` (String) A description.
 - `enabled` (Boolean) Whether the listener takes traffic (administrative state). Defaults to `true`.
 - `member_connect_timeout` (Number) How long to wait for a member to accept a connection, in milliseconds. The cloud's default applies when it isn't set on create. Taken out of the configuration, it keeps its last value.

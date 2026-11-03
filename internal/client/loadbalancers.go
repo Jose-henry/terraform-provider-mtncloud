@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // LoadBalancerSummary is one row of a network's load balancer list.
@@ -50,6 +51,27 @@ type LoadBalancer struct {
 	UpdatedAt          string       `json:"updated_at"`
 	Listeners          []LBListener `json:"listeners"`
 	Pools              []LBPool     `json:"pools"`
+}
+
+// ListenerTransport is the set of ports a listener protocol draws from: HTTP, HTTPS,
+// TERMINATED_HTTPS and TCP share one ("TCP"); UDP and SCTP each have their own (plugin, 2026-11-02).
+func ListenerTransport(protocol string) string {
+	switch p := strings.ToUpper(protocol); p {
+	case "UDP", "SCTP":
+		return p
+	default:
+		return "TCP"
+	}
+}
+
+// ListenerOnPort is the listener already holding this port for this protocol's transport, or nil.
+func (lb *LoadBalancer) ListenerOnPort(protocol string, port int64) *LBListener {
+	for i, l := range lb.Listeners {
+		if l.Port == port && ListenerTransport(l.Protocol) == ListenerTransport(protocol) {
+			return &lb.Listeners[i]
+		}
+	}
+	return nil
 }
 
 // LBListener is a port the load balancer listens on.

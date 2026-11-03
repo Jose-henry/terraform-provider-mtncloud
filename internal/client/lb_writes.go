@@ -260,15 +260,18 @@ type lbStep struct {
 	Kind    string `json:"kind"`
 	Name    string `json:"name"`
 	Applied bool   `json:"applied"`
-	Created bool   `json:"created"`
-	ID      string `json:"id"`
-	Error   string `json:"error"`
+	// RolledBack: this piece was made and taken back again (plugin, 2026-11-02).
+	RolledBack bool   `json:"rolledBack"`
+	Created    bool   `json:"created"`
+	ID         string `json:"id"`
+	Error      string `json:"error"`
 }
 
 // writeAnswer is what a write answered: its result, and beside it the piece and the pending flag.
 type writeAnswer struct {
 	result, piece json.RawMessage
 	pending       bool
+	settled       *LoadBalancer // the last read of the wait, once the load balancer settled
 }
 
 // createdID picks the ID of the new piece of this kind ("listener", "pool", "health monitor",
@@ -302,6 +305,22 @@ var errNoID = errors.New("the answer names no new piece")
 // which lbWrite has already waited for, by what makes it unique (find).
 func (c *Client) newPieceID(ctx context.Context, networkID int64, lbID, kind string, ans *writeAnswer, find func(*LoadBalancer) string) (string, error) {
 	id, err := createdID(ans, kind)
+	if err == nil && ans.pending {
+		// A save that answered pending can still fail and be taken back (plugin, 2026-11-02): once the
+		// load balancer has settled, the piece must still be there.
+		lb := ans.settled // the wait's last read: no need to read it again
+		if lb == nil {
+			var rerr error
+			if lb, _, rerr = c.GetLoadBalancer(ctx, networkID, lbID, ""); rerr != nil {
+				return id, fmt.Errorf("load balancer %s create: the %s was made, but reading it back failed: %w", kind, kind, rerr)
+			}
+		}
+		if !lbHasPiece(lb, id) {
+			return "", fmt.Errorf("load balancer %s create: the save failed after it answered, and MTN Cloud removed the new %s again. "+
+				"Nothing was kept: the next apply creates it again", kind, kind)
+		}
+		return id, nil
+	}
 	if !errors.Is(err, errNoID) {
 		return id, err
 	}
@@ -347,6 +366,10 @@ func (c *Client) pieceCreate(ctx context.Context, networkID int64, lbID, action,
 	req := newRequestID()
 	in["requestId"] = req
 	ans, err := c.lbWrite(ctx, networkID, lbID, action, in)
+	var lbe *LBError
+	if ans == nil && errors.As(err, &lbe) && lbe.RolledBack && lbe.LeftBehind == 0 {
+		return "", err // the plugin took the piece back: there is nothing to look for
+	}
 	if ans == nil {
 		// No answer at all (every attempt ran out of time, or a retry was refused while the first
 		// save still ran): the piece may exist anyway. Only its request tag can prove it is ours.
@@ -399,6 +422,32 @@ func (c *Client) taggedPieceID(ctx context.Context, networkID int64, lbID, tag s
 		}
 	}
 	return ""
+}
+
+// lbHasPiece reports whether a listener, L7 policy, pool, health monitor or member with this ID is
+// on the load balancer.
+func lbHasPiece(lb *LoadBalancer, id string) bool {
+	for _, l := range lb.Listeners {
+		if l.ID == id {
+			return true
+		}
+		for _, pol := range l.L7Policies {
+			if pol.ID == id {
+				return true
+			}
+		}
+	}
+	for _, p := range lb.Pools {
+		if p.ID == id || (p.HealthMonitor != nil && p.HealthMonitor.ID == id) {
+			return true
+		}
+		for _, m := range p.Members {
+			if m.ID == id {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func poolOf(lb *LoadBalancer, poolID string) *LBPool {
@@ -530,9 +579,11 @@ func (c *Client) lbWrite(ctx context.Context, networkID int64, lbID, action stri
 		return nil, err
 	}
 	ans := &writeAnswer{result: env.Result, piece: env.Piece, pending: env.Pending}
-	if _, err := c.waitLB(ctx, networkID, lbID, action, ans.pending); err != nil {
+	lb, err := c.waitLB(ctx, networkID, lbID, action, ans.pending)
+	if err != nil {
 		return ans, err
 	}
+	ans.settled = lb
 	c.lbChanged(networkID) // the waiting reads are not the state to keep
 	return ans, nil
 }
@@ -565,7 +616,7 @@ func isPieceGone(err error) bool {
 
 func (c *Client) CreateLBListener(ctx context.Context, networkID int64, lbID string, s LBListenerSpec) (string, error) {
 	return c.pieceCreate(ctx, networkID, lbID, "listener-create", "listener", map[string]any{"spec": s.body()}, func(lb *LoadBalancer, tag string) string {
-		for _, l := range lb.Listeners { // protocol and port are unique on a load balancer
+		for _, l := range lb.Listeners { // a port is unique per transport on a load balancer
 			if hasTag(l.Tags, tag) || (l.Port == s.Port && strings.EqualFold(l.Protocol, s.Protocol)) {
 				return l.ID
 			}

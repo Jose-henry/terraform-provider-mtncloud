@@ -947,3 +947,57 @@ func TestLoadBalancerResources_PlanTimeChecks(t *testing.T) {
 		})
 	}
 }
+
+// Listener ports are unique per transport (plugin, 2026-11-02): a TCP listener can't take a port an
+// HTTP one holds, and the plan says so; a UDP listener on the same port is fine. One pool may be the
+// default pool of several listeners.
+func TestLoadBalancerListener_PortsPerTransport(t *testing.T) {
+	f := newFakeAPI(t)
+	plugin := newLBPlugin()
+	f.lb = plugin
+	base := f.providerConfig() + `
+resource "mtncloud_load_balancer" "web" {
+  network_id = 114
+  name       = "web"
+}
+resource "mtncloud_load_balancer_pool" "web" {
+  network_id       = 114
+  load_balancer_id = mtncloud_load_balancer.web.id
+  name             = "web-pool"
+  protocol         = "PROXY"
+  algorithm        = "ROUND_ROBIN"
+}
+resource "mtncloud_load_balancer_listener" "http" {
+  network_id       = 114
+  load_balancer_id = mtncloud_load_balancer.web.id
+  protocol         = "HTTP"
+  port             = 80
+  default_pool_id  = mtncloud_load_balancer_pool.web.id
+}
+`
+	second := func(protocol string) string {
+		return base + `
+resource "mtncloud_load_balancer_listener" "second" {
+  network_id       = 114
+  load_balancer_id = mtncloud_load_balancer.web.id
+  protocol         = "` + protocol + `"
+  port             = 80
+  default_pool_id  = mtncloud_load_balancer_pool.web.id
+}
+`
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: base},
+			{Config: second("TCP"), PlanOnly: true, ExpectError: regexp.MustCompile(`(?s)Port in use.*Listener l-\d+ \(HTTP\) already uses\s+port 80`)},
+			{Config: second("UDP")},
+			// A replacement plans its new half with no prior state while the old listener still holds the
+			// port: it isn't refused (review, 2026-11-03).
+			{Config: second("UDP"), Taint: []string{"mtncloud_load_balancer_listener.http"}},
+		},
+	})
+	if plugin.runs["listener-create"] != 3 {
+		t.Errorf("%d listener creates, want 3: none for the refused TCP one, one for the replacement", plugin.runs["listener-create"])
+	}
+}

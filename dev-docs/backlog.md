@@ -25,7 +25,8 @@
 8. ~~Catalog orders~~ done, one resource per catalog item.
 9. ~~MOS~~ done (buckets, archives, `mtncloud_mos_access`).
 10. ~~`mtncloud_ssl_certificate`~~, ~~`mtncloud_load_balancer`~~ (D-031) and ~~day-2 settings~~ (B-028) done;
-    `mtncloud_app` (B-017) and `mtncloud_cluster` (B-016) are open. `mtncloud_datastore` was dropped:
+    ~~`mtncloud_app`~~ (B-017) done; clusters (B-016) split into `mtncloud_managed_kubernetes_cluster` and
+    `mtncloud_docker_cluster`, released in v0.10.0 (D-043). `mtncloud_datastore` was dropped:
     customers pick datastores by name (`mtncloud_datastores`).
 
 ## B-001 Real bugs inherited in legacy (done)

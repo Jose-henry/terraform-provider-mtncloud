@@ -16,22 +16,32 @@ provider and renamed throughout.
    - **Plan before code.** Propose files, schema, API source and tests, then wait for the owner's
      approval before writing Go.
    - The rule file says branch → PR → merge; the owner currently has work pushed straight to `main`.
-     Ask which applies before your first commit.
+     Every slice still runs all gates, the `mtncloud-code-reviewer` agent and mutation checks, and a
+     push waits for that slice's live QA. Never add a Co-Authored-By line.
    - Never run acceptance tests or any write call against MTN Cloud without explicit permission.
      Never print or commit secrets, tfvars, state, or real tenant IDs/IPs.
 3. `.claude/rules/terraform-provider.md`, `testing.md`, `isolation.md`: the engineering bar. After
    `apply`, `plan` must say `No changes.`
-4. `dev-docs/status.md`: what's done and what's next. Then `backlog.md` (open questions Q1–Q6),
+4. `dev-docs/status.md`: what's done and what's next, then `backlog-open.md` (the open list). Then `backlog.md` (open questions Q1–Q6),
    `prerequisites.md` (project name → pool ID resolution, synced default security group),
    `catalog-lookups.md` (names, not IDs), `api-research.md` (payloads P1–P10 still needed),
-   `mtn-cloud-domain.md` (catalog items, images, MOS), `decisions.md` (D-001…D-029), and
-   `qa-2026-10-28.md` (the live QA run).
+   `mtn-cloud-domain.md` (catalog items, images, MOS), `decisions.md` (D-001…D-043), and
+   `catalog-forms.md` (each order form's inputs).
 
-**Where things stand:** v0.4.0 is tagged; `main` is ahead with instance power control, catalog
-order destroy (D-029) and the `mtncloud_instances` network filter. 89 resources and 86 data sources,
-all for customer logins. Live QA ran on 2026-10-28 in the dev test tenant. The remaining work, in
-order, is `dev-docs/backlog.md` B-018 (live power and order-destroy tests, MOS, `mtncloud_app`, the
-web firewall error, a QA pass of automation and users).
+**Where things stand (2026-11-03):** v0.10.0 is released (registry `jose-henry/mtncloud`); 124
+resources and 108 data sources, all for customer logins. `main` is ahead with the load balancer plugin
+update of 2026-11-02 (see `CHANGELOG.md`, Unreleased). Live QA runs in the dev test tenant: `tf-acc-*`
+objects in project `admin`, each logged, deleted and checked with an API 404.
+
+- **Clusters** (`mtncloud_managed_kubernetes_cluster`, `mtncloud_docker_cluster`, D-043): built and
+  changed in place only when healthy (cluster `ok`, every node `provisioned`); a failed or timed-out
+  create fails the apply and is replaced on the next one. Plan-time checks on a change only warn,
+  because `terraform destroy` plans the configuration first; the apply checks again on a fresh read.
+  Destroy force-deletes (`removeResources`, `removeInstances`, `force`) in any state. Docker is proven
+  live; Kubernetes workers fail to join on MTN's side, so a healthy Kubernetes build is unproven.
+- **Load balancers** run through the console task `lboperate.terraform` (D-031); the plugin's own
+  guide is `../Octavia-Load-Balancer-Plugin/docs/TERRAFORM-AGENT-GUIDE.md`. Read it before changing
+  anything there; the plugin's owner sends updates as short notes.
 
 **Domain facts you must not get wrong:**
 - Customers type a **project name**. Its resource pool is named `<project>-<tenant account name>`.
@@ -53,7 +63,8 @@ web firewall error, a QA pass of automation and users).
 - The platform CLI runs only through `scripts/cli/capture.ps1`: reads, and `-d` dry runs for
   anything that writes.
 
-**Your first task:** read the files above, then take the next open item in B-018. Propose its plan
+**Your first task:** read the files above, then take the next open item in `backlog-open.md`
+(Kubernetes clusters once MTN fixes the worker join, or the next item the owner names). Propose its plan
 (schema with every attribute's Required/Optional/Computed and why, client methods with their Context7
 source, tests, docs) and wait for approval before writing Go. Use the `ship-check` skill before
 calling anything done, and the `mtncloud-code-reviewer` agent on every diff.

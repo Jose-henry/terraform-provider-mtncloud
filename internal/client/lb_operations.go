@@ -27,6 +27,10 @@ var ErrLBAccess = errors.New("your role is not allowed to run load balancer oper
 type LBError struct {
 	Action string
 	Msg    string
+	// RolledBack: the plugin took back what the failed save created (guide, 2026-11-02). LeftBehind
+	// counts the pieces it couldn't take back, or had already changed.
+	RolledBack bool
+	LeftBehind int
 }
 
 func (e *LBError) Error() string { return e.Msg }
@@ -79,6 +83,71 @@ type lbEnvelope struct {
 	// as the cloud has it (only once the load balancer has settled).
 	Pending bool            `json:"pending"`
 	Piece   json.RawMessage `json:"piece"`
+	// A failed save takes back the pools and listeners it created (rolledBack); what it couldn't
+	// take back, or had already changed, is in leftBehind (plugin, 2026-11-02).
+	RolledBack bool `json:"rolledBack"`
+	// Steps of a refused save. An L7 policy taken back after one of its rules failed is marked on
+	// its step only (live, t137).
+	Steps      []lbStep `json:"steps"`
+	LeftBehind []struct {
+		Kind  string `json:"kind"`
+		Name  string `json:"name"`
+		ID    string `json:"id"`
+		Error string `json:"error"`
+		Kept  bool   `json:"kept"`
+	} `json:"leftBehind"`
+}
+
+// rolledBack reports a refused save that took back what it created: marked on the answer, or on a
+// step (in the answer or its result).
+func (e *lbEnvelope) rolledBack() bool {
+	if e.RolledBack {
+		return true
+	}
+	steps := e.Steps
+	var res struct {
+		Steps []lbStep `json:"steps"`
+	}
+	if len(e.Result) > 0 && json.Unmarshal(e.Result, &res) == nil {
+		steps = append(steps, res.Steps...)
+	}
+	for _, s := range steps {
+		if s.RolledBack {
+			return true
+		}
+	}
+	return false
+}
+
+// failureText is a refused save's message, with what it took back and what it left behind.
+func (e *lbEnvelope) failureText(action string) string {
+	msg := e.Error
+	if msg == "" {
+		msg = fmt.Sprintf("The load balancer %s operation failed without a message.", action)
+	}
+	msg = lbCustomerText(msg)
+	if (e.rolledBack() || len(e.LeftBehind) > 0) && !strings.HasSuffix(msg, ".") {
+		msg += "." // the cloud's own reasons often end without one (live, t137)
+	}
+	if e.rolledBack() && len(e.LeftBehind) == 0 {
+		msg += " What this save created was removed again, so the next apply starts clean."
+	}
+	if len(e.LeftBehind) > 0 {
+		var left []string
+		for _, p := range e.LeftBehind {
+			s := fmt.Sprintf("%s %q (%s)", p.Kind, p.Name, p.ID)
+			if p.Kept {
+				s += ", kept"
+			}
+			if p.Error != "" {
+				s += ": " + lbCustomerText(p.Error)
+			}
+			left = append(left, s)
+		}
+		msg += " Left on the load balancer: " + strings.Join(left, "; ") +
+			". Check the load balancer before the next apply; import or remove what Terraform doesn't manage."
+	}
+	return msg
 }
 
 type lbJobExecution struct {
@@ -237,11 +306,7 @@ func (c *Client) runLBEnv(ctx context.Context, action string, in map[string]any)
 			return nil, &LBError{Action: action, Msg: fmt.Sprintf("The load balancer %s operation ended (%s) without an answer. Try again.", action, status)}
 		}
 		if !env.Success {
-			msg := env.Error
-			if msg == "" {
-				msg = fmt.Sprintf("The load balancer %s operation failed without a message.", action)
-			}
-			return nil, &LBError{Action: action, Msg: lbCustomerText(msg)}
+			return nil, &LBError{Action: action, Msg: env.failureText(action), RolledBack: env.rolledBack(), LeftBehind: len(env.LeftBehind)}
 		}
 		if len(env.Result) == 0 || string(env.Result) == "null" {
 			return nil, &LBError{Action: action, Msg: fmt.Sprintf("The load balancer %s operation answered without a result. Try again.", action)}

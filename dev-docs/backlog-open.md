@@ -6,9 +6,13 @@ Everything still open in [backlog.md](backlog.md). Item numbers (B-NNN, Q-N) poi
 
 ### 1.1 Kubernetes clusters (B-016)
 
-- [ ] Finish live: scaling, autoscaling, in-place edits and import. A build took more than 24 minutes, which is longer than the 24-hour token lasts, so these need a longer-lived token.
-- [ ] Confirm the `worker` block, and the request bodies for adding workers and for the autoscaler.
-- [ ] Document in the guide and on the cluster page that a cluster apply needs a longer-lived token.
+Split into `mtncloud_managed_kubernetes_cluster` and `mtncloud_docker_cluster`, released in v0.10.0 (D-043).
+- [X] Request bodies for adding workers (`serverType` named) and for the autoscaler: from the CLI, live 2026-11-03.
+- [X] Docker live: create, scale 1 → 2, `No changes.`, forced destroy (t135/t136, 2026-11-03).
+- [X] Forced destroy live, also of a cluster still provisioning (32 s).
+- [X] Long builds: `access_token_file` reads a refreshed token (QA ran 90-minute creates on it).
+- [ ] Kubernetes live, once MTN fixes the worker join: a healthy build, scaling 1 → 2, the autoscaler
+  hold on an `ok` cluster (unknown whether `mks-autoscaler-1-0-0-package` is missing platform-wide).
 
 ### 1.2 Apps, resources and groups (B-026, B-017)
 

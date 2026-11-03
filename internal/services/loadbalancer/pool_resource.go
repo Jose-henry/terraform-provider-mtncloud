@@ -58,8 +58,11 @@ func (r *poolResource) Schema(ctx context.Context, _ resource.SchemaRequest, res
 			"name":             nameAttr(poolKind),
 			"description":      descriptionAttr(),
 			"protocol": schema.StringAttribute{Required: true, PlanModifiers: fixedStr("pool"),
-				Validators:  []validator.String{stringvalidator.OneOf("HTTP", "HTTPS", "PROXY", "PROXYV2", "SCTP", "TCP", "UDP")},
-				Description: "How the load balancer talks to the members: `HTTP`, `HTTPS`, `PROXY`, `PROXYV2`, `TCP`, `UDP` or `SCTP`. Set at create: the cloud can't change it, so a change is refused at plan time."},
+				Validators: []validator.String{stringvalidator.OneOf("HTTP", "HTTPS", "PROXY", "PROXYV2", "SCTP", "TCP", "UDP")},
+				Description: "How the load balancer talks to the members: `HTTP`, `HTTPS`, `PROXY`, `PROXYV2`, `TCP`, `UDP` or `SCTP`. Set at create: the cloud can't change it, so a change is refused at plan time. " +
+					"`PROXY` (version 1, text) and `PROXYV2` (version 2, binary) send each member a PROXY protocol header with the real client IP and port, " +
+					"for `HTTP`, `HTTPS`, `TERMINATED_HTTPS` and `TCP` listeners (not `UDP` or `SCTP`). The members must expect the header " +
+					"(for example `proxy_protocol` in nginx, `accept-proxy` in HAProxy), or they reject every connection; use a `TCP` or `PING` health monitor."},
 			"algorithm": schema.StringAttribute{Required: true,
 				Validators:  []validator.String{stringvalidator.OneOf("ROUND_ROBIN", "LEAST_CONNECTIONS", "SOURCE_IP", "SOURCE_IP_PORT")},
 				Description: "How a member is picked: `ROUND_ROBIN`, `LEAST_CONNECTIONS`, `SOURCE_IP` or `SOURCE_IP_PORT`."},

@@ -1,0 +1,100 @@
+package client
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+// A failed save that took back what it created says so, and a create doesn't look for the piece.
+func TestLBWrite_RolledBack(t *testing.T) {
+	b, _ := json.Marshal(map[string]any{"success": false, "action": "pool-create", "error": "OpenStack refused the members.",
+		"rolledBack": true})
+	f := newLBFake(t, string(b))
+	id, err := f.client(t, fastPoll).CreateLBPool(t.Context(), 114, "lb-1", LBPoolSpec{Protocol: "HTTP", Algorithm: "ROUND_ROBIN"})
+	if id != "" || err == nil || !strings.Contains(err.Error(), "removed again, so the next apply starts clean") ||
+		strings.Contains(err.Error(), "OpenStack") { // mtncloud:allow-cloud-name (checking it is scrubbed)
+		t.Fatalf("id %q, err %v", id, err)
+	}
+	if f.runs.Load() != 1 {
+		t.Errorf("%d runs: nothing to look up after a clean rollback", f.runs.Load())
+	}
+}
+
+// What a failed save left behind is listed, and the create still looks for its piece by tag.
+func TestLBWrite_LeftBehind(t *testing.T) {
+	b, _ := json.Marshal(map[string]any{"success": false, "action": "listener-create", "error": "Port refused.", "rolledBack": true,
+		"leftBehind": []any{map[string]any{"kind": "pool", "name": "web", "id": "pool-3", "error": "still in use"},
+			map[string]any{"kind": "listener", "name": "http", "id": "l-4", "kept": true}}})
+	f := newLBFake(t, string(b), lbReadAs("ACTIVE"))
+	_, err := f.client(t, fastPoll).CreateLBListener(t.Context(), 114, "lb-1", LBListenerSpec{Protocol: "HTTP", Port: 80})
+	if err == nil || !strings.Contains(err.Error(), `Left on the load balancer: pool "web" (pool-3): still in use; listener "http" (l-4), kept.`) ||
+		strings.Contains(err.Error(), "starts clean") {
+		t.Fatalf("err %v", err)
+	}
+	if f.runs.Load() != 2 {
+		t.Errorf("%d runs, want the create and one read for its tag", f.runs.Load())
+	}
+}
+
+// A create that answered pending can still be taken back: once settled, a piece that isn't there
+// fails the create instead of being kept in state.
+func TestCreateLBPool_PendingThenRolledBack(t *testing.T) {
+	f := newLBFake(t,
+		lbAnswerTop("pool-create", map[string]any{"success": true, "steps": []any{}},
+			map[string]any{"pending": true, "piece": map[string]any{"id": "pool-7"}}),
+		lbReadAs("PENDING_UPDATE"), lbReadAs("ACTIVE"), lbReadAs("ACTIVE"))
+	id, err := f.client(t, fastPoll).CreateLBPool(t.Context(), 114, "lb-1", LBPoolSpec{Protocol: "HTTP", Algorithm: "ROUND_ROBIN"})
+	if id != "" || err == nil || !strings.Contains(err.Error(), "removed the new pool again") {
+		t.Fatalf("id %q, err %v", id, err)
+	}
+}
+
+func TestListenerOnPort(t *testing.T) {
+	lb := &LoadBalancer{Listeners: []LBListener{{ID: "l-1", Protocol: "HTTP", Port: 80}, {ID: "l-2", Protocol: "UDP", Port: 53}}}
+	for _, c := range []struct {
+		proto string
+		port  int64
+		want  string
+	}{{"TCP", 80, "l-1"}, {"TERMINATED_HTTPS", 80, "l-1"}, {"UDP", 80, ""}, {"SCTP", 53, ""}, {"udp", 53, "l-2"}, {"HTTP", 53, ""}} {
+		got := ""
+		if l := lb.ListenerOnPort(c.proto, c.port); l != nil {
+			got = l.ID
+		}
+		if got != c.want {
+			t.Errorf("%s %d: got %q, want %q", c.proto, c.port, got, c.want)
+		}
+	}
+}
+
+// An L7 policy taken back after one of its rules failed is marked on its step only (live, t137).
+func TestLBWrite_StepRolledBack(t *testing.T) {
+	b, _ := json.Marshal(map[string]any{"success": false, "action": "l7policy-create", "error": "L7 rule 'x': bad escape",
+		"steps": []any{map[string]any{"kind": "L7 rule", "name": "x", "applied": false, "error": "bad escape"},
+			map[string]any{"kind": "L7 policy", "name": "p", "applied": true, "rolledBack": true, "id": "pol-1"}}})
+	f := newLBFake(t, string(b))
+	_, err := f.client(t, fastPoll).CreateLBL7Policy(t.Context(), 114, "lb-1", "l-1", LBL7PolicySpec{Action: "REJECT", Position: 1})
+	if err == nil || !strings.Contains(err.Error(), "bad escape. What this save created was removed again, so the next apply starts clean") {
+		t.Fatalf("err %v", err)
+	}
+	if f.runs.Load() != 1 {
+		t.Errorf("%d runs: nothing to look up after a clean rollback", f.runs.Load())
+	}
+}
+
+// A pending create whose piece is still there once settled keeps it, from the wait's own last read.
+func TestCreateLBPool_PendingStillThere(t *testing.T) {
+	settled := lbAnswer("read", map[string]any{"success": true, "canManage": true, "loadbalancer": map[string]any{
+		"id": "lb-1", "provisioning_status": "ACTIVE", "pools": []any{map[string]any{"id": "pool-7"}}}})
+	f := newLBFake(t,
+		lbAnswerTop("pool-create", map[string]any{"success": true, "steps": []any{}},
+			map[string]any{"pending": true, "piece": map[string]any{"id": "pool-7"}}),
+		lbReadAs("PENDING_UPDATE"), settled)
+	id, err := f.client(t, fastPoll).CreateLBPool(t.Context(), 114, "lb-1", LBPoolSpec{Protocol: "HTTP", Algorithm: "ROUND_ROBIN"})
+	if err != nil || id != "pool-7" {
+		t.Fatalf("id %q, err %v", id, err)
+	}
+	if f.runs.Load() != 3 {
+		t.Errorf("%d runs, want the create and two reads: the wait's last read is the check", f.runs.Load())
+	}
+}

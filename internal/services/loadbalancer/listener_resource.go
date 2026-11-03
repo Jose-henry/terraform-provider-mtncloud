@@ -2,6 +2,8 @@ package loadbalancer
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -23,6 +25,7 @@ import (
 var (
 	_ resource.ResourceWithImportState    = (*listenerResource)(nil)
 	_ resource.ResourceWithValidateConfig = (*listenerResource)(nil)
+	_ resource.ResourceWithModifyPlan     = (*listenerResource)(nil)
 )
 
 func newListenerResource() resource.Resource { return &listenerResource{} }
@@ -77,9 +80,12 @@ func (r *listenerResource) Schema(ctx context.Context, _ resource.SchemaRequest,
 				Validators:  []validator.String{stringvalidator.OneOf(listenerProtocols...)},
 				Description: "`HTTP`, `HTTPS` (passed through, still encrypted), `TERMINATED_HTTPS` (decrypted here with `tls_certificate_ref`), `TCP`, `UDP` or `SCTP`. Set at create: the cloud can't change it, so a change is refused at plan time."},
 			"port": schema.Int64Attribute{Required: true, PlanModifiers: fixedInt(listenerKind), Validators: portValid,
-				Description: "The port, 1 to 65535. Set at create: the cloud can't change it, so a change is refused at plan time."},
+				Description: "The port, 1 to 65535. Set at create: the cloud can't change it, so a change is refused at plan time. " +
+					"A port is unique per transport on a load balancer: `HTTP`, `HTTPS`, `TERMINATED_HTTPS` and `TCP` listeners share one " +
+					"set of ports, `UDP` and `SCTP` each have their own. A port another listener holds is refused at plan."},
 			"default_pool_id": schema.StringAttribute{Optional: true,
-				Description: "The pool that gets this listener's traffic, for example `mtncloud_load_balancer_pool.web.id`. Leave it unset for none."},
+				Description: "The pool that gets this listener's traffic, for example `mtncloud_load_balancer_pool.web.id`. Leave it unset for none. " +
+					"One pool may be the default pool of several listeners: they all send traffic to its members."},
 			// Optional+Computed: the cloud's default is no limit (-1).
 			"connection_limit": schema.Int64Attribute{Optional: true, Computed: true, PlanModifiers: keepInt,
 				Validators:  []validator.Int64{int64validator.AtLeast(-1)},
@@ -118,6 +124,39 @@ func (r *listenerResource) ValidateConfig(ctx context.Context, req resource.Vali
 		resp.Diagnostics.AddAttributeError(path.Root("tls_certificate_ref"), "Missing certificate",
 			"A TERMINATED_HTTPS listener decrypts traffic, so it needs tls_certificate_ref: a certificate uploaded in the console. "+
 				"To change the certificate, point it at another one.")
+	}
+}
+
+// ModifyPlan refuses a new listener on a port a listener of another protocol in the same transport
+// holds: HTTP, HTTPS, TERMINATED_HTTPS and TCP share one set of ports, UDP and SCTP each have their
+// own. The plugin refuses it too, before sending anything (2026-11-02); this says so at plan. A
+// listener of the same protocol and port is left to the apply: a replacement plans its new half with
+// no prior state, while the old listener still holds the port (review, 2026-11-03). The read is the
+// one the refresh shares; a load balancer made in the same apply, or one that can't be read, is left
+// to the apply.
+func (r *listenerResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if r.client == nil || req.Plan.Raw.IsNull() || !req.State.Raw.IsNull() {
+		return
+	}
+	var m listenerRes
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &m)...)
+	if resp.Diagnostics.HasError() || m.NetworkID.IsUnknown() || m.LoadBalancerID.IsUnknown() || m.Protocol.IsUnknown() || m.Port.IsUnknown() {
+		return
+	}
+	lb, _, err := r.client.LoadBalancerSnapshot(ctx, m.NetworkID.ValueInt64(), m.LoadBalancerID.ValueString(), "")
+	if err != nil {
+		return
+	}
+	if l := lb.ListenerOnPort(m.Protocol.ValueString(), m.Port.ValueInt64()); l != nil && !strings.EqualFold(l.Protocol, m.Protocol.ValueString()) {
+		who := l.ID
+		if l.Name != "" {
+			who = fmt.Sprintf("%q", l.Name)
+		}
+		resp.Diagnostics.AddAttributeError(path.Root("port"), "Port in use",
+			fmt.Sprintf("Listener %s (%s) already uses port %d on this load balancer. HTTP, HTTPS, TERMINATED_HTTPS and TCP "+
+				"listeners share one set of ports; UDP and SCTP each have their own. Pick another port. If this listener replaces "+
+				"that one, remove the old one in one apply and add this one in the next; if Terraform doesn't manage it, import it "+
+				"or delete it first.", who, l.Protocol, l.Port))
 	}
 }
 

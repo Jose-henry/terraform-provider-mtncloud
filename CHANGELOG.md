@@ -2,6 +2,13 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
+## Unreleased
+
+- **Changed: a listener on a port a listener of another protocol holds is refused at plan** (load balancer plugin, 2026-11-02; live 2026-11-03). HTTP, HTTPS, TERMINATED_HTTPS and TCP listeners share one set of ports; UDP and SCTP each have their own. A clash with the same protocol (for example a listener being replaced), or on a load balancer made in the same apply, is checked at apply, by the plugin, before anything is sent.
+- **Changed: a refused load balancer save says what it took back.** The plugin now removes the pools and listeners a failed save created; the error says the next apply starts clean, or lists what was left behind (kind, name, ID and why). Live 2026-11-03: an L7 policy whose rule the cloud refused was taken back, and nothing was kept in state.
+- **Fixed: a piece whose save answered `pending` and then failed is no longer kept in state.** Once the load balancer settles, a piece that isn't there fails the create, and the next apply makes it again.
+- Docs: a `PROXY` or `PROXYV2` pool sends members a PROXY protocol header with the client's address; the members must expect it. One pool may be the default pool of several listeners.
+
 ## 0.10.0 (2026-11-03)
 
 - **New: `mtncloud_managed_kubernetes_cluster` and `mtncloud_docker_cluster` replace `mtncloud_cluster`** (owner, 2026-11-02). They come with the data sources `mtncloud_managed_kubernetes_cluster(s)` and `mtncloud_docker_cluster(s)`, which replace `mtncloud_cluster(s)`. Clusters are now built the way MTN's own Managed Kubernetes order builds them:
