@@ -2,7 +2,7 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
-## Unreleased
+## 0.10.1 (2026-11-04)
 
 - **Changed: a load balancer delete that ended with no answer is tried again** (load balancer plugin 6c47249, 2026-11-04). The plugin now answers a delete of something already gone with success (`alreadyGone`), so repeating a delete is safe. Before, a delete with no answer failed with "Try again".
 - Lookaheads (`(?=...)`, `(?!...)`) in an L7 rule regex are fine; the plugin now refuses lookbehinds itself, with the same message as the provider.

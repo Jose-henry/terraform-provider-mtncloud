@@ -1,11 +1,11 @@
 # Status: what's done, what's next
 
-Last updated 2026-11-03 (v0.10.0). Update this file whenever a slice lands. The detailed list is
+Last updated 2026-11-04 (v0.10.1). Update this file whenever a slice lands. The detailed list is
 [backlog-open.md](backlog-open.md); history is in git and `CHANGELOG.md`.
 
 ## Where things stand
 
-- Released: **v0.10.0** (2026-11-03): Kubernetes and Docker clusters (D-043), forced cluster destroy,
+- Released: **v0.10.1** (2026-11-04): load balancer plugin follow-ups (L7 regexes refused at plan, a piece in ERROR kept and replaced, deletes retried). **v0.10.0** (2026-11-03): Kubernetes and Docker clusters (D-043), forced cluster destroy,
   catalog orders sent as the console sends them. Unreleased on `main`: the load balancer plugin update
   of 2026-11-02 (failed saves rolled back, listener ports checked per transport at plan, PROXY pools).
 - 124 resources and 108 data sources, all usable by a customer (sub-tenant) login. Generated list:
