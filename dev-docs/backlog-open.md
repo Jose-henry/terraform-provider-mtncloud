@@ -156,6 +156,8 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
   - A pool on another router's external network is a warning (B-020): the runtime check fails an instance whose
     address can't come.
 
+- **Load balancer destroy can finish before the cloud does (t141, 2026-11-04; reported to the plugin side).** The plugin's `read` answered not found about 15 s after `delete`, while `list` showed `PENDING_DELETE` for about 6.5 minutes more. `DeleteLoadBalancer` waits on `read` as the guide says, so `terraform destroy` returns early. Not seen to fail anything yet; a network deleted right after is the risk. Waiting on the plugin's answer; if `read` can't change, wait on `list` instead.
+
 ## 5. Debt and housekeeping
 
 - [X] **Legacy bugs (B-001).** Done 2026-10-31: no dropped `json.Unmarshal` error is left; the logo uploads went with their types (D-025).

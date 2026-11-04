@@ -88,6 +88,9 @@ type lbEnvelope struct {
 	// Warning comes on a save that succeeded but left something in ERROR that the save didn't fail
 	// for: an L7 rule on an updated policy (plugin, 2026-11-03).
 	Warning string `json:"warning"`
+	// AlreadyGone answers a delete of something that isn't there (any more): success, nothing done
+	// (plugin 6c47249). Older plugins answer success:false with the same words (isPieceGone).
+	AlreadyGone bool `json:"alreadyGone"`
 	// A failed save takes back the pools and listeners it created (rolledBack); what it couldn't
 	// take back, or had already changed, is in leftBehind (plugin, 2026-11-02).
 	RolledBack bool `json:"rolledBack"`
@@ -200,11 +203,12 @@ func lbRead(action string) bool {
 // plugin read its inputs (action is empty then), the job ended with no output (a plugin reload), or
 // the plugin said so itself. Writes say so at the top level; reads inside result (lookupFailed,
 // retryable), as the guide's error table lists. A run that ran out of time, or ended with no
-// output, may still have acted, so it is retried only when repeating it is safe: a read, or a
-// create, whose requestId makes the plugin answer with the one already made (existing: true).
+// output, may still have acted, so it is retried only when repeating it is safe: a read; a
+// create, whose requestId makes the plugin answer with the one already made (existing: true); or a
+// delete, which the plugin answers alreadyGone when the first one went through (plugin 6c47249).
 func lbTransient(action, status string, env *lbEnvelope) bool {
 	if env == nil {
-		return (status == "error" || status == lbTimedOut) && (lbRead(action) || lbCreate(action))
+		return (status == "error" || status == lbTimedOut) && (lbRead(action) || lbCreate(action) || lbDelete(action))
 	}
 	if env.Success {
 		return false
@@ -226,6 +230,16 @@ func lbTransient(action, status string, env *lbEnvelope) bool {
 func lbCreate(action string) bool {
 	switch action {
 	case "create", "listener-create", "pool-create", "member-add", "monitor-create", "l7policy-create", "fip-attach", "fip-detach":
+		return true
+	}
+	return false
+}
+
+// lbDelete reports a delete: the load balancer's and each piece's. Since plugin 6c47249 one of
+// something already gone answers success with alreadyGone, so repeating it is safe.
+func lbDelete(action string) bool {
+	switch action {
+	case "delete", "listener-delete", "pool-delete", "member-remove", "monitor-delete", "l7policy-delete":
 		return true
 	}
 	return false
@@ -321,7 +335,7 @@ func (c *Client) runLBEnv(ctx context.Context, action string, in map[string]any)
 			}
 			return nil, e
 		}
-		if len(env.Result) == 0 || string(env.Result) == "null" {
+		if (len(env.Result) == 0 || string(env.Result) == "null") && !env.AlreadyGone {
 			return nil, &LBError{Action: action, Msg: fmt.Sprintf("The load balancer %s operation answered without a result. Try again.", action)}
 		}
 		return env, nil

@@ -87,7 +87,7 @@ func l7RegexProblem(rx string) string {
 				continue
 			}
 			if strings.HasPrefix(rx[i:], "(?<") && (i+3 >= len(rx) || (rx[i+3] != '=' && rx[i+3] != '!')) {
-				return "regex uses (?< outside a lookbehind, which the load balancer does not support - use a plain group (...)"
+				return "regex uses (?<, which the load balancer does not support - use a plain group (...)"
 			}
 			depth++
 		case ')':

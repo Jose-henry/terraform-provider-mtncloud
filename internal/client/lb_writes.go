@@ -552,7 +552,9 @@ func (c *Client) DeleteLoadBalancer(ctx context.Context, networkID int64, id str
 	defer unlock()
 	_, err = c.runLB(ctx, "delete", map[string]any{"networkId": itoa(networkID), "lbId": id})
 	c.lbChanged(networkID)
-	if err != nil && !IsLBMissing(err) {
+	// A delete tried again after one that had no answer can find the first one still deleting: the
+	// cloud refuses it for PENDING_DELETE, and the wait below sees it go (review, 2026-11-04).
+	if err != nil && !IsLBMissing(err) && !strings.Contains(err.Error(), "PENDING_DELETE") {
 		return err
 	}
 	_, err = poll(ctx, c, func(ctx context.Context) (*LoadBalancer, error) {
@@ -588,6 +590,9 @@ func (c *Client) lbWrite(ctx context.Context, networkID int64, lbID, action stri
 		c.lbWarn(ctx, action, env.Warning)
 	}
 	ans := &writeAnswer{result: env.Result, piece: env.Piece, pending: env.Pending}
+	if env.AlreadyGone {
+		return ans, nil // nothing was changed, so there is nothing to wait for
+	}
 	lb, err := c.waitLB(ctx, networkID, lbID, action, ans.pending)
 	if err != nil {
 		return ans, err

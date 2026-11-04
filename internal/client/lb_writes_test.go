@@ -94,6 +94,26 @@ func TestDeleteLoadBalancer_WaitsUntilGone(t *testing.T) {
 	}
 }
 
+// A load balancer delete with no answer is tried again (plugin 6c47249). The retry answers
+// alreadyGone inside result when the first went through, or is refused while the first is still
+// deleting; either way the wait sees it go.
+func TestDeleteLoadBalancer_Retried(t *testing.T) {
+	for name, retry := range map[string]string{
+		"already gone":   lbAnswer("delete", map[string]any{"success": true, "id": "lb-1", "alreadyGone": true}),
+		"still deleting": lbRefusal("delete", "Invalid state PENDING_DELETE of loadbalancer resource lb-1"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newLBFake(t, "", retry, lbRefusal("read", "Load balancer lb-1 was not found on this network."))
+			if err := f.client(t, fastPoll).DeleteLoadBalancer(t.Context(), 114, "lb-1"); err != nil {
+				t.Fatal(err)
+			}
+			if f.runs.Load() != 3 {
+				t.Errorf("%d runs, want the delete, its retry and a read", f.runs.Load())
+			}
+		})
+	}
+}
+
 func TestDeleteLBListener_AlreadyGoneIsDone(t *testing.T) {
 	f := newLBFake(t, lbRefusal("listener-delete", "Listener l-9 is not on this load balancer."))
 	if err := f.client(t, fastPoll).DeleteLBListener(t.Context(), 114, "lb-1", "l-9"); err != nil {

@@ -143,3 +143,43 @@ func TestDeleteLBL7Policy_NotRemoved(t *testing.T) {
 		t.Errorf("%d runs, want 1", f.runs.Load())
 	}
 }
+
+// A delete that ended with no answer may not have run: it is tried again, and the plugin answers
+// alreadyGone when the first one went through (plugin 6c47249). Nothing is waited for after that.
+func TestDeleteLBPool_RetriedAlreadyGone(t *testing.T) {
+	gone := lbAnswerTop("pool-delete", map[string]any{"success": true, "error": "Pool pool-1 is not on this load balancer."},
+		map[string]any{"alreadyGone": true, "pending": false})
+	f := newLBFake(t, "", gone)
+	if err := f.client(t, fastPoll).DeleteLBPool(t.Context(), 114, "lb-1", "pool-1"); err != nil {
+		t.Fatal(err)
+	}
+	if f.runs.Load() != 2 {
+		t.Errorf("%d runs, want the delete, its retry, and no read", f.runs.Load())
+	}
+}
+
+// alreadyGone with no result still counts as deleted.
+func TestDeleteLBListener_AlreadyGoneNoResult(t *testing.T) {
+	b, _ := json.Marshal(map[string]any{"success": true, "action": "listener-delete", "alreadyGone": true, "pending": false})
+	f := newLBFake(t, string(b))
+	if err := f.client(t, fastPoll).DeleteLBListener(t.Context(), 114, "lb-1", "l-1"); err != nil {
+		t.Fatal(err)
+	}
+	if f.runs.Load() != 1 {
+		t.Errorf("%d runs, want 1", f.runs.Load())
+	}
+}
+
+// A save refused because a read failed says retryable at the top level: it is tried again.
+func TestUpdateLBPool_RefusedUnreadRetried(t *testing.T) {
+	refused, _ := json.Marshal(map[string]any{"success": false, "action": "pool-update", "retryable": true,
+		"error": "Refusing to save: could not read the current members of pool pool-1. Retry in a moment."})
+	f := newLBFake(t, string(refused),
+		lbAnswer("pool-update", map[string]any{"success": true, "steps": []any{}}), lbReadAs("ACTIVE"))
+	if err := f.client(t, fastPoll).UpdateLBPool(t.Context(), 114, "lb-1", "pool-1", LBPoolSpec{Protocol: "HTTP", Algorithm: "ROUND_ROBIN"}); err != nil {
+		t.Fatal(err)
+	}
+	if f.runs.Load() != 3 {
+		t.Errorf("%d runs, want the refused save, its retry and a read", f.runs.Load())
+	}
+}

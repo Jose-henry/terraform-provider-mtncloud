@@ -276,10 +276,16 @@ func TestLBCustomerText(t *testing.T) {
 	}
 }
 
-func TestRunLB_WriteTimeoutIsNotRetried(t *testing.T) {
-	for _, action := range []string{"pool-update", "member-remove", "listener-update", "loadbalancer-update", "delete"} {
+func TestRunLB_RetriedOnlyWhenSafe(t *testing.T) {
+	for _, action := range []string{"pool-update", "listener-update", "loadbalancer-update", "member-update"} {
 		if lbTransient(action, lbTimedOut, nil) || lbTransient(action, "error", nil) {
 			t.Errorf("%s: a write that may have acted counted as nothing ran", action)
+		}
+	}
+	// A repeated delete answers alreadyGone when the first went through (plugin 6c47249).
+	for _, action := range []string{"delete", "listener-delete", "pool-delete", "member-remove", "monitor-delete", "l7policy-delete"} {
+		if !lbTransient(action, lbTimedOut, nil) || !lbTransient(action, "error", nil) {
+			t.Errorf("a %s with no answer wasn't retried: repeating it is safe", action)
 		}
 	}
 	// Creates carry a requestId: a retry finds what the first try made (guide 9.6).

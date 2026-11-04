@@ -44,7 +44,7 @@ func TestL7RegexProblem(t *testing.T) {
 		{`\p{L}`, `regex uses \p, which the load balancer does not support`},
 		{`\x{41}`, `\x without two hex digits`},
 		{`\x4`, `\x without two hex digits`},
-		{`(?<x>a)`, `(?< outside a lookbehind`},
+		{`(?<x>a)`, `regex uses (?<, which the load balancer does not support`},
 		{`(a`, `a ( is never closed`},
 		{`a)`, `a ) has no matching (`},
 		{`[a`, `a [ is never closed`},
