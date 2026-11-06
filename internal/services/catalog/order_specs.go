@@ -76,7 +76,8 @@ type rules struct {
 
 // ref is how the item is found: by its code, then by any name it has had.
 func (s orderSpec) ref() client.CatalogItemRef {
-	return client.CatalogItemRef{Code: s.code, Names: append([]string{s.item}, s.aliases...)}
+	names := append([]string{s.item}, s.aliases...)
+	return client.CatalogItemRef{Code: s.code, Names: append(names, formerNames[s.code]...)}
 }
 
 // vm is the placement, size, disks and networking a VM item's form asks for. req lists the base
@@ -169,9 +170,32 @@ func adminFields() []field {
 // itemCodes are the codes of the items built with the db and appliance helpers
 // (/api/catalog-item-types, 2026-10-30).
 var itemCodes = map[string]string{
-	"MTN MySQL": "MySQLINST01", "MTN PostgreSQL": "PoSQLINST01", "MTN MariaDB": "MariaDB2378",
-	"MTN Fortinet Firewall (BYOL)": "FFW03", "MTN FortiWeb (BYOL)": "FWB003", "MTN FortiADC (BYOL)": "FADC003",
-	"MTN FortiManager (BYOL)": "FMB003", "MTN FortiAnalyzer (BYOL)": "FAD003", "MTN SOPHOS Firewall (BYOL)": "SPH004",
+	"MTN SQL Database - MySQL": "MySQLINST01", "MTN SQL Database · PostgreSQL": "PoSQLINST01", "MTN SQL Database - MariaDB": "MariaDB2378",
+	"Fortinet FortiGate Firewall (BYOL)": "FFW03", "Fortinet FortiWeb (BYOL)": "FWB003", "Fortinet FortiADC (BYOL)": "FADC003",
+	"Fortinet FortiManager (BYOL)": "FMB003", "Fortinet FortiAnalyzer (BYOL)": "FAD003", "Sophos Firewall (BYOL)": "SPH004",
+}
+
+// formerNames are the names an item has had, by code: MTN renamed most of the catalog on 2026-11-06.
+// Orders placed before that, and a login that can only find items by name, still match them.
+var formerNames = map[string][]string{
+	"MySQLINST01":    {"MTN MySQL"},
+	"PoSQLINST01":    {"MTN PostgreSQL", "MTN SQL Database - PostgreSQL"},
+	"MariaDB2378":    {"MTN MariaDB"},
+	"MongoDBINST01":  {"MTN MongoDB"},
+	"wordpres010":    {"MTN WordPress"},
+	"APACHEWS001":    {"MTN Apache Web Server"},
+	"NGINXWS001":     {"MTN Nginx Web Server"},
+	"MQS001":         {"MTN Managed MQ"},
+	"MVPNSV02":       {"MTN PfSense VPN"},
+	"WGVPN001":       {"MTN WireGuard SSL VPN"},
+	"SPH004":         {"MTN SOPHOS Firewall (BYOL)"},
+	"FFW03":          {"MTN Fortinet Firewall (BYOL)"},
+	"FWB003":         {"MTN FortiWeb (BYOL)"},
+	"FADC003":        {"MTN FortiADC (BYOL)"},
+	"FMB003":         {"MTN FortiManager (BYOL)"},
+	"FAD003":         {"MTN FortiAnalyzer (BYOL)"},
+	"K8S":            {"MTN KUBERNETES (MK8S)", "Kubernetes  (MK8S) Engine"},
+	"letsencrypt010": {"MTN Let's Encrypt SSL"},
 }
 
 var applianceBase = []string{"resourcepool", "plan", "networks", "floatingip"}
@@ -191,10 +215,10 @@ func orderSpecs() []orderSpec {
 	}
 	heat := func(s orderSpec) orderSpec { s.heat = true; return reported(s) }
 	return []orderSpec{
-		db("MTN MySQL", "mysql", "A MySQL server on its own VM.", "mysqlVersion", "MySQL", false),
-		db("MTN PostgreSQL", "postgresql", "A PostgreSQL server on its own VM.", "pgVersion", "PostgreSQL", false),
-		db("MTN MariaDB", "mariadb", "A MariaDB server on its own VM.", "mariadbVersion", "MariaDB", true),
-		{typeName: "mongodb", item: "MTN MongoDB", code: "MongoDBINST01", about: "A MongoDB server on its own VM.",
+		db("MTN SQL Database - MySQL", "mysql", "A MySQL server on its own VM.", "mysqlVersion", "MySQL", false),
+		db("MTN SQL Database · PostgreSQL", "postgresql", "A PostgreSQL server on its own VM.", "pgVersion", "PostgreSQL", false),
+		db("MTN SQL Database - MariaDB", "mariadb", "A MariaDB server on its own VM.", "mariadbVersion", "MariaDB", true),
+		{typeName: "mongodb", item: "MongoDB Database", code: "MongoDBINST01", about: "A MongoDB server on its own VM.",
 			fields: with(vm("labels", "resourcepool", "plan", "volumes", "networks"),
 				field{attr: "version", key: "mongodbVersion", kind: kSelect, required: true, desc: "MongoDB version, as the form lists it."},
 				field{attr: "database_name", key: "dbName", kind: kText, desc: "Database to create."},
@@ -224,7 +248,7 @@ func orderSpecs() []orderSpec {
 		{typeName: "lemp_stack", item: "MTN LEMP (PHP)", code: "Lemp01", about: "Linux, Nginx, MySQL and PHP on one VM.",
 			fields: with(with(with(vm("label", "resourcepool", "plan", "volumes", "networks", "floatingip"), webPort),
 				dbFields("mysqlVersion", "MySQL", false)...), phpFields(false)...)},
-		{typeName: "wordpress", item: "MTN WordPress", code: "wordpres010", about: "WordPress with its web server and MySQL on one VM.",
+		{typeName: "wordpress", item: "MTN Website Hosting (WordPress)", code: "wordpres010", about: "WordPress with its web server and MySQL on one VM.",
 			fields: with(with(vm("labels", "resourcepool", "plan", "volumes", "networks", "floatingip"),
 				field{attr: "web_server", key: "webserver_type", kind: kSelect, required: true, desc: "`Apache` or `Nginx`."},
 				webPort,
@@ -235,10 +259,10 @@ func orderSpecs() []orderSpec {
 				field{attr: "allowed_cidrs", key: "hostCIDRs", kind: kLines, desc: "Networks that may reach the database, as CIDRs."},
 				field{attr: "auto_security_updates", key: "autoSecurityUpdates", kind: kFlag, desc: "Install security updates automatically."},
 			), phpFields(true)...)},
-		{typeName: "apache_web_server", item: "MTN Apache Web Server", code: "APACHEWS001", about: "An Apache web server on its own VM.",
+		{typeName: "apache_web_server", item: "MTN Web Server - Apache", code: "APACHEWS001", about: "An Apache web server on its own VM.",
 			fields: with(vm("labels", "resourcepool", "plan", "volumes", "networks"), webPort,
 				field{attr: "scale_factor", key: "scalefactor", kind: kNumber, desc: "Number of VMs."})},
-		{typeName: "nginx_web_server", item: "MTN Nginx Web Server", code: "NGINXWS001", about: "An Nginx web server on its own VM.",
+		{typeName: "nginx_web_server", item: "MTN Web Server - Nginx", code: "NGINXWS001", about: "An Nginx web server on its own VM.",
 			fields: with(vm("labels", "resourcepool", "plan", "volumes", "networks"), webPort,
 				field{attr: "scale_factor", key: "scalefactor", kind: kNumber, desc: "Number of VMs."})},
 		{typeName: "managed_database", item: "MTN Managed Database", code: "MDBS001", app: true, about: "A managed MySQL or PostgreSQL database service.",
@@ -249,7 +273,7 @@ func orderSpecs() []orderSpec {
 				field{attr: "postgresql_version", key: "pgVersion", kind: kSelect, desc: "PostgreSQL version, when `engine` is `postgres`."},
 				field{attr: "node_count", key: "no_nodes", kind: kNumber, desc: "Number of nodes. A 2-node cluster isn't supported."},
 			), adminFields()...), rules: rules{badNodes: []int64{2}}},
-		{typeName: "managed_mq", item: "MTN Managed MQ", code: "MQS001", app: true, about: "A managed message queue (RabbitMQ) service.",
+		{typeName: "managed_mq", item: "MTN Managed Queue", code: "MQS001", app: true, about: "A managed message queue (RabbitMQ) service.",
 			// The form hides its floating IP and locks the node count at 1 (live, 2026-11-02): the
 			// console sends its own 1, and so does the provider.
 			fields: with(with(without(vm("labels", "resourcepool", "plan", "volumes", "networks"), "floatingip"),
@@ -269,26 +293,26 @@ func orderSpecs() []orderSpec {
 		{typeName: "bastion_host", item: "Warpgate Bastion Host", code: "bastion987", about: "A bastion host for SSH, HTTPS and database access.",
 			fields: with(vm("labels", "plan", "resourcepool", "volumes", "networks", "floatingip"),
 				field{attr: "admin_password", key: "warpgateAdminPassword", kind: kSecret, required: true, desc: "Administrator password."})},
-		reported(orderSpec{typeName: "pfsense_vpn", item: "MTN PfSense VPN", code: "MVPNSV02", aliases: []string{"MTN VPN Service"},
+		reported(orderSpec{typeName: "pfsense_vpn", item: "PfSense VPN", code: "MVPNSV02", aliases: []string{"MTN VPN Service"},
 			about: "A PfSense site-to-site VPN gateway. Its disks are fixed by MTN Cloud (a 50 GB root disk).",
 			// The form's disks are hidden and locked: the provider sends the form's own (50 GB root).
 			fields: without(vm("label", applianceBase...), "volumes"),
 			rules:  rules{minNetworks: 2}}),
-		reported(orderSpec{typeName: "wireguard_vpn", item: "MTN WireGuard SSL VPN", code: "WGVPN001", about: "A WireGuard VPN server.",
+		reported(orderSpec{typeName: "wireguard_vpn", item: "MTN VPN Server (WireGuard)", code: "WGVPN001", about: "A WireGuard VPN server.",
 			fields: vm("labels", append(applianceBase, "volumes")...)}),
-		heat(appliance("MTN SOPHOS Firewall (BYOL)", "sophos_firewall", "A SOPHOS firewall. Bring your own license.",
+		heat(appliance("Sophos Firewall (BYOL)", "sophos_firewall", "A SOPHOS firewall. Bring your own license.",
 			rules{minRootGB: 80, dataDiskGB: 40, minNetworks: 2, minCPU: 2, minMemoryGB: 4})),
-		appliance("MTN Fortinet Firewall (BYOL)", "fortinet_firewall", "A Fortinet firewall. Bring your own license.",
+		appliance("Fortinet FortiGate Firewall (BYOL)", "fortinet_firewall", "A Fortinet firewall. Bring your own license.",
 			rules{minRootGB: 40, minNetworks: 1, maxNetworks: 2}),
-		appliance("MTN FortiWeb (BYOL)", "fortiweb", "A FortiWeb web application firewall. Bring your own license.",
+		appliance("Fortinet FortiWeb (BYOL)", "fortiweb", "A FortiWeb web application firewall. Bring your own license.",
 			rules{minRootGB: 70, minNetworks: 1, maxNetworks: 2, minCPU: 2, minMemoryGB: 8}),
-		heat(appliance("MTN FortiADC (BYOL)", "fortiadc", "A FortiADC application delivery controller. Bring your own license.",
+		heat(appliance("Fortinet FortiADC (BYOL)", "fortiadc", "A FortiADC application delivery controller. Bring your own license.",
 			rules{minRootGB: 30, dataDiskGB: 30, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 16})),
-		appliance("MTN FortiManager (BYOL)", "fortimanager", "A FortiManager. Bring your own license.",
+		appliance("Fortinet FortiManager (BYOL)", "fortimanager", "A FortiManager. Bring your own license.",
 			rules{minRootGB: 500, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 8}),
-		appliance("MTN FortiAnalyzer (BYOL)", "fortianalyzer", "A FortiAnalyzer. Bring your own license.",
+		appliance("Fortinet FortiAnalyzer (BYOL)", "fortianalyzer", "A FortiAnalyzer. Bring your own license.",
 			rules{minRootGB: 250, dataDiskGB: 250, minNetworks: 1, maxNetworks: 2, minCPU: 4, minMemoryGB: 8}),
-		{typeName: "self_managed_kubernetes", item: "MTN KUBERNETES (MK8S)", code: "K8S", app: true,
+		{typeName: "self_managed_kubernetes", item: "Kubernetes (MK8S) Engine", code: "K8S", app: true,
 			about: "A self-managed Kubernetes cluster: MTN Cloud builds it, and you run and maintain it.",
 			fields: []field{
 				{attr: "name", key: "name", kind: kText, required: true, desc: "Cluster name. Its VMs are named after it."},
@@ -311,7 +335,7 @@ func orderSpecs() []orderSpec {
 				{attr: "cni", key: "cni_provider", kind: kSelect, desc: "Network plugin: `flannel` or `calico`."},
 				{attr: "api_endpoint", key: "k8s_api_endpoint", kind: kText, desc: "Address the Kubernetes API is published at."},
 			}},
-		{typeName: "letsencrypt_certificate", item: "MTN Let's Encrypt SSL", code: "letsencrypt010", target: true,
+		{typeName: "letsencrypt_certificate", item: "Let's Encrypt SSL", code: "letsencrypt010", target: true,
 			about: "Installs a free Let's Encrypt TLS certificate on an existing instance. Let's Encrypt checks the domain " +
 				"over HTTP: the instance needs a floating IP, port 80 open to the internet in its security group, and the " +
 				"domain's DNS record pointing at that IP before the order runs. The plan checks the instance and the record.",

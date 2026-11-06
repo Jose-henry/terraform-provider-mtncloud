@@ -100,7 +100,7 @@ func (b *base) readLB(ctx context.Context, networkID int64, id, name types.Strin
 	case client.IsLBNotAvailable(err):
 		diags.AddAttributeError(path.Root("network_id"), "Network not available", err.Error())
 	case client.IsLBMissing(err) && !id.IsNull():
-		diags.AddAttributeError(path.Root(idAttr), "No such load balancer", err.Error())
+		diags.AddAttributeError(path.Root(idAttr), client.LookupTitle(err, "load balancer", "No such load balancer"), client.LookupDetail(err, "load balancer"))
 	case client.IsLBMissing(err):
 		diags.AddAttributeError(path.Root(nameAttr), "Load balancer not found", err.Error()+" mtncloud_load_balancers lists the network's load balancers.")
 	default:

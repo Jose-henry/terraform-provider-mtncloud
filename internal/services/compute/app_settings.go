@@ -188,7 +188,7 @@ func (r *appSettingsResource) apply(ctx context.Context, plan *appSettingsModel,
 		if plan.Environment.ValueString() != "" {
 			env, err := r.client.EnvironmentByName(ctx, plan.Environment.ValueString())
 			if err != nil {
-				diags.AddAttributeError(path.Root("environment"), "Unknown environment", err.Error())
+				diags.AddAttributeError(path.Root("environment"), client.LookupTitle(err, "environment", "Unknown environment"), client.LookupDetail(err, "environment"))
 				r.refresh(ctx, plan, app, diags)
 				return
 			}
@@ -199,7 +199,7 @@ func (r *appSettingsResource) apply(ctx context.Context, plan *appSettingsModel,
 	if known(plan.Owner) && !strings.EqualFold(plan.Owner.ValueString(), app.OwnerName) {
 		owner, err := r.client.UserIDByName(ctx, plan.Owner.ValueString())
 		if err != nil {
-			diags.AddAttributeError(path.Root("owner"), "Unknown user", err.Error())
+			diags.AddAttributeError(path.Root("owner"), client.LookupTitle(err, "user", "Unknown user"), client.LookupDetail(err, "user"))
 			r.refresh(ctx, plan, app, diags)
 			return
 		}

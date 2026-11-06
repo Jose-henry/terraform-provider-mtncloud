@@ -57,7 +57,7 @@ Read-Only:
 - `id` (String) Load balancer ID.
 - `member_count` (Number) Backends across all its pools.
 - `name` (String) Load balancer name.
-- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `provisioning_status` (String) `ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`.
 - `vip_address` (String) Private address it receives traffic on.
 - `vip_subnet_id` (String) Subnet of that address.

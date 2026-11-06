@@ -79,7 +79,7 @@ func (d *projectDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	if !m.Name.IsNull() {
 		if p, err = d.client.ProjectByName(ctx, m.Name.ValueString()); err != nil {
 			if client.IsNoMatch(err) {
-				resp.Diagnostics.AddAttributeError(path.Root("name"), "No such project", err.Error())
+				resp.Diagnostics.AddAttributeError(path.Root("name"), client.LookupTitle(err, "project", "No such project"), client.LookupDetail(err, "project"))
 			} else {
 				apiError(&resp.Diagnostics, "projects", err)
 			}

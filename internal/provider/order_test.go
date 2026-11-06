@@ -116,7 +116,7 @@ func TestMySQLOrder(t *testing.T) {
 					return nil
 				}},
 			{ResourceName: "mtncloud_mysql.db", ImportState: true, ImportStateId: "9795", Config: cfg(body),
-				ExpectError: regexp.MustCompile(`is a "Create Project", not a "MTN MySQL"`)},
+				ExpectError: regexp.MustCompile(`is a "Create Project", not a "MTN SQL Database - MySQL"`)},
 			{
 				// Its instance deleted in the console: the order is planned again (and the test's
 				// final destroy finds nothing to do).

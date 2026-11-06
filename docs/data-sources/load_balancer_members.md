@@ -58,7 +58,7 @@ Read-Only:
 - `monitor_address` (String) Address the health monitor checks instead of `address`, or empty.
 - `monitor_port` (Number) Port the health monitor checks instead of `port`, or 0.
 - `name` (String) Member name, or empty.
-- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `port` (Number) Backend port.
 - `provisioning_status` (String) `ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`.
 - `subnet_id` (String) Subnet the address is on, or empty for the load balancer's own.

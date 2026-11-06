@@ -205,7 +205,7 @@ func (c *Client) doPayload(ctx context.Context, method, path string, query url.V
 		return nil
 	}
 	if err := json.Unmarshal(resp, out); err != nil {
-		return fmt.Errorf("MTN Cloud API %s %s: unexpected response (%w)", method, path, err)
+		return &callError{err: fmt.Errorf("MTN Cloud API %s %s: unexpected response (%w)", method, path, err), unreadable: true}
 	}
 	return nil
 }
@@ -265,7 +265,7 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 				if errors.As(err, &ue) {
 					err = ue.Err
 				}
-				return nil, fmt.Errorf("MTN Cloud API %s %s: %w", method, path, err)
+				return nil, &callError{err: fmt.Errorf("MTN Cloud API %s %s: %w", method, path, err)}
 			}
 			if err := sleep(ctx, backoff(attempt, c.cfg.BackoffBase, c.cfg.BackoffMax, "")); err != nil {
 				return nil, err
@@ -279,7 +279,7 @@ func (c *Client) send(ctx context.Context, method, path string, query url.Values
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			if readErr != nil {
-				return nil, fmt.Errorf("MTN Cloud API %s %s: reading response: %w", method, path, readErr)
+				return nil, &callError{err: fmt.Errorf("MTN Cloud API %s %s: reading response: %w", method, path, readErr)}
 			}
 			return data, nil
 		}
@@ -320,7 +320,11 @@ func (c *Client) accessToken(ctx context.Context) (string, error) {
 	if c.token != "" {
 		return c.token, nil
 	}
-	return c.loginLocked(ctx)
+	t, err := c.loginLocked(ctx)
+	if err != nil {
+		return "", &callError{err: err}
+	}
+	return t, nil
 }
 
 // relogin replaces a token the API rejected, unless another goroutine already did.
@@ -330,7 +334,11 @@ func (c *Client) relogin(ctx context.Context, rejected string) (string, error) {
 	if c.token != rejected {
 		return c.token, nil
 	}
-	return c.loginLocked(ctx)
+	t, err := c.loginLocked(ctx)
+	if err != nil {
+		return "", &callError{err: err}
+	}
+	return t, nil
 }
 
 // readTokenFile reads the token file: the token, or an error that says why there is none.
@@ -378,7 +386,7 @@ func (c *Client) loginLocked(ctx context.Context) (string, error) {
 		if errors.As(err, &apiErr) && (apiErr.StatusCode == http.StatusBadRequest || apiErr.StatusCode == http.StatusUnauthorized) {
 			return "", fmt.Errorf("MTN Cloud login failed for %q: wrong username, password or tenant (subdomain or account ID) (%s)", username, apiErr.Message)
 		}
-		return "", err
+		return "", fmt.Errorf("the login to MTN Cloud failed: %w", err)
 	}
 	var tok struct {
 		AccessToken string `json:"access_token"`

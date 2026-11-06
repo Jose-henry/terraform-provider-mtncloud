@@ -76,7 +76,7 @@ func (b *base) planProject(ctx context.Context, kind string, req resource.Modify
 	if req.State.Raw.IsNull() {
 		if !plan.IsUnknown() {
 			if _, err := b.client.ProjectByName(ctx, plan.ValueString()); err != nil {
-				resp.Diagnostics.AddAttributeError(at, client.ProjectErrorTitle(err), err.Error())
+				resp.Diagnostics.AddAttributeError(at, client.ProjectErrorTitle(err), client.LookupDetail(err, "project"))
 			}
 		}
 		return
@@ -93,7 +93,7 @@ func (b *base) planProject(ctx context.Context, kind string, req resource.Modify
 	from, errFrom := b.client.ProjectByName(ctx, state.ValueString())
 	to, errTo := b.client.ProjectByName(ctx, plan.ValueString())
 	if errTo != nil {
-		resp.Diagnostics.AddAttributeError(at, client.ProjectErrorTitle(errTo), errTo.Error())
+		resp.Diagnostics.AddAttributeError(at, client.ProjectErrorTitle(errTo), client.LookupDetail(errTo, "project"))
 		return
 	}
 	if errFrom != nil || from.ID != to.ID {
@@ -143,7 +143,7 @@ func (b *base) fillDefaults(ctx context.Context, req *resource.ModifyPlanRequest
 		"project": {d.Project, "MTNCLOUD_PROJECT"}, "group": {d.Group, "MTNCLOUD_GROUP"}, "cloud": {d.Cloud, "MTNCLOUD_CLOUD"},
 	}
 	for _, a := range attrs {
-		resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, a, values[a][1], values[a][0])...)
+		resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, a, values[a][1], values[a][0], nil)...)
 	}
 	req.Plan = resp.Plan
 }

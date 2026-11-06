@@ -158,3 +158,45 @@ func newAPIError(method, path string, status int, body []byte) *APIError {
 func ForbiddenHint(body []byte) string {
 	return newAPIError("", "", http.StatusForbidden, body).hint() + "."
 }
+
+// callError is a call that failed, so nothing came back to compare a value with: the network, the
+// login, or an answer that couldn't be read (unreadable).
+type callError struct {
+	err        error
+	unreadable bool
+}
+
+func (e *callError) Error() string { return e.err.Error() }
+func (e *callError) Unwrap() error { return e.err }
+
+// LookupFailed reports whether err means the lookup itself failed: the call didn't work, so the
+// user's value was never checked. False when the call worked and the value isn't in the result.
+func LookupFailed(err error) bool {
+	var apiErr *APIError
+	var call *callError
+	return errors.As(err, &apiErr) || errors.As(err, &call) ||
+		errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// IsUnreadable reports an answer that came back but couldn't be decoded.
+func IsUnreadable(err error) bool {
+	var call *callError
+	return errors.As(err, &call) && call.unreadable
+}
+
+// LookupTitle is the heading for a failed lookup of what (for example "project"): title when the
+// value isn't there, otherwise a heading that doesn't blame the value.
+func LookupTitle(err error, what, title string) string {
+	if LookupFailed(err) {
+		return "Couldn't check the " + what
+	}
+	return title
+}
+
+// LookupDetail is the detail to go with LookupTitle.
+func LookupDetail(err error, what string) string {
+	if LookupFailed(err) {
+		return fmt.Sprintf("The %s wasn't checked, so it may be fine: %s. Try again.", what, strings.TrimRight(err.Error(), ". "))
+	}
+	return err.Error()
+}

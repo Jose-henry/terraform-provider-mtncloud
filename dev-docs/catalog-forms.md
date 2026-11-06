@@ -1,5 +1,9 @@
 # Catalog order forms (read 2026-10-27)
 
+> **MTN renamed most of the catalog on 2026-11-06** (codes unchanged, so orders kept working). The
+> names below are the older ones; `orderSpecs` and `formerNames` in `internal/services/catalog/order_specs.go`
+> hold the current name and every former one. `TestAccCatalogForms_MatchSpecs` (reads only) flags a rename.
+
 > **Update 2026-10-31.** Items are now found by code (`/api/catalog-item-types`); see `itemCodes` and
 > each spec in `internal/services/catalog/order_specs.go`. Item 53 is now "MTN PfSense VPN" (was "MTN
 > VPN Service"); item 72 "MTN SOPHOS Firewall (BYOL)" is new. The live form is checked at plan time

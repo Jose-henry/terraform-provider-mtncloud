@@ -3,6 +3,7 @@ package planmodifiers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -14,11 +15,17 @@ import (
 // of the same name, or env) when the configuration leaves it out. With neither set, it fails,
 // naming the three places to set it. Call it first in a resource's ModifyPlan: an attribute plan
 // modifier can't do this, as the framework builds schemas on unconfigured resource instances.
-func FillDefault(ctx context.Context, config tfsdk.Config, plan *tfsdk.Plan, attr, env, value string) diag.Diagnostics {
+func FillDefault(ctx context.Context, config tfsdk.Config, plan *tfsdk.Plan, attr, env, value string, lookupErr error) diag.Diagnostics {
 	var diags diag.Diagnostics
 	var v types.String
 	diags.Append(config.GetAttribute(ctx, path.Root(attr), &v)...)
 	if diags.HasError() || !v.IsNull() {
+		return diags
+	}
+	if value == "" && lookupErr != nil {
+		diags.AddAttributeError(path.Root(attr), "Couldn't check the "+attr,
+			fmt.Sprintf("With no %s set, your account's only one is used, but looking it up failed: %s. Try again, or set %s "+
+				"on this resource.", attr, strings.TrimRight(lookupErr.Error(), ". "), attr))
 		return diags
 	}
 	if value == "" {

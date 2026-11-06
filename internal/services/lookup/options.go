@@ -85,7 +85,7 @@ func (d *optionListDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	if d.spec.byProject {
 		p, err := d.client.ProjectByName(ctx, project.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
+			resp.Diagnostics.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), client.LookupDetail(err, "project"))
 			return
 		}
 		projectID = p.ID

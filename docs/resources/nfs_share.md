@@ -2,12 +2,12 @@
 page_title: "mtncloud_nfs_share Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  An NFS file share, ordered from MTN Cloud's catalog (MTN NFS). Quota and client changes are ordered as updates; destroy orders its deletion. MTN Cloud doesn't report a share's settings back, so changes made in the console aren't seen.
+  An NFS file share, ordered from MTN Cloud's catalog (MTN NFS Storage). Quota and client changes are ordered as updates; destroy orders its deletion. MTN Cloud doesn't report a share's settings back, so changes made in the console aren't seen.
 ---
 
 # mtncloud_nfs_share
 
-An NFS file share, ordered from MTN Cloud's catalog (MTN NFS). Quota and client changes are ordered as updates; destroy orders its deletion. MTN Cloud doesn't report a share's settings back, so changes made in the console aren't seen.
+An NFS file share, ordered from MTN Cloud's catalog (MTN NFS Storage). Quota and client changes are ordered as updates; destroy orders its deletion. MTN Cloud doesn't report a share's settings back, so changes made in the console aren't seen.
 
 ## Example Usage
 

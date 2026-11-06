@@ -43,6 +43,9 @@ type instStore struct {
 	pending        map[int64]bool
 	fail           string // the next create ends in this status
 	stuck          bool   // instances never leave "provisioning"
+	listFails      bool   // GET /api/instances answers 500, by name or not
+	getFails       int    // the next reads of one instance answer 400
+	listUnreadable bool   // the whole list has a row that can't be decoded; a list by name doesn't
 	sgsDenied      int64  // reading this instance's security groups answers 403
 	lostReplies    int    // the next creates are applied but answer 502
 	creates        int
@@ -104,7 +107,14 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if rest == "" {
 		switch r.Method {
 		case http.MethodGet:
+			if s.listFails {
+				reply(http.StatusInternalServerError, map[string]any{"success": false, "msg": "list failed"})
+				return
+			}
 			list := []any{}
+			if s.listUnreadable && r.URL.Query().Get("name") == "" {
+				list = append(list, map[string]any{"id": "not-a-number", "name": "odd"})
+			}
 			for id, in := range s.insts {
 				if name := r.URL.Query().Get("name"); name == "" || in["name"] == name {
 					list = append(list, s.view(id))
@@ -118,6 +128,11 @@ func (s *instStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	parts := strings.SplitN(rest, "/", 2)
 	id, _ := strconv.ParseInt(parts[0], 10, 64)
+	if s.getFails > 0 && len(parts) == 1 && r.Method == http.MethodGet {
+		s.getFails--
+		reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "read failed"})
+		return
+	}
 	in := s.insts[id]
 	if in == nil {
 		reply(http.StatusNotFound, map[string]any{"success": false, "msg": "Instance not found"})

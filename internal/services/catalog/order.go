@@ -32,6 +32,10 @@ import (
 
 const orderTimeout = 90 * time.Minute
 
+// appUnchecked is the private state of an app order whose app wasn't seen to come up, because only
+// the lookup failed. Read checks the app once it knows which one it is.
+const appUnchecked = "app_unchecked"
+
 var (
 	_ resource.ResourceWithModifyPlan  = (*orderResource)(nil)
 	_ resource.ResourceWithImportState = (*orderResource)(nil)
@@ -87,7 +91,10 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 		"changed input is refused at plan time, and nothing is deleted to order it again. Change the plan, labels, security " +
 		"groups, floating IP or data disks of the VMs it made with `mtncloud_instance_settings`. " +
 		"`terraform apply -replace=<address>` orders it again; add `lifecycle { prevent_destroy = true }` to stop that. " +
-		"The apply succeeds only when the order's workflow succeeded and every VM it made is running. Inputs are checked " +
+		"The apply succeeds only when the order's workflow succeeded and every VM it made is running. The one exception: " +
+		"when the workflow succeeded and only the lookup of what it made failed, the apply succeeds with a warning and " +
+		"nothing is ordered again. `instance_ids` is then empty until the next refresh, so anything that indexes it in " +
+		"the same apply fails until you apply again. Inputs are checked " +
 		"at plan time against the item's live order form: what the form requires, its choices and its stated minimums. " +
 		"`terraform destroy` deletes what it made, shown under " + where + " in the console, with its disks and floating " +
 		"IPs, then the order's record in Catalog > Inventory. Secrets are write-only (Terraform 1.11 or newer): they are " +
@@ -132,8 +139,10 @@ func (r *orderResource) Schema(ctx context.Context, _ resource.SchemaRequest, re
 				"names the VM itself, this is the name MTN gave it (`<initials>-<account>-MTN-CLOUD-<type>-<n>`).",
 			PlanModifiers: []planmodifier.List{listplanmodifier.UseStateForUnknown()}}
 		attrs["instance_statuses"] = schema.MapAttribute{Computed: true, ElementType: types.StringType,
-			Description: "Status of each instance the order created, by instance ID, for example `running`. A `failed` " +
-				"instance plans a replace: the order is deleted and placed again.",
+			Description: "Status of each instance the order created, by instance ID, for example `running`, or `unknown` " +
+				"until the next refresh when it couldn't be read. A `failed` instance plans a replace: the order is deleted " +
+				"and placed again. An app order whose app couldn't be checked when it was placed, and then failed, shows it " +
+				"here as `app-<id>`, and plans the same replace.",
 			PlanModifiers: []planmodifier.Map{mapplanmodifier.UseStateForUnknown()}}
 		// Sensitive: a form field can be a password, and these are sent as they are.
 		attrs["extra_inputs"] = schema.MapAttribute{Optional: true, Sensitive: true, ElementType: types.StringType,
@@ -208,13 +217,13 @@ func (r *orderResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	if req.Plan.Raw.IsNull() || r.client == nil {
 		return // destroy, or an unconfigured provider
 	}
-	d := r.client.DefaultsFor(ctx)
+	d, lookupErr := r.client.DefaultsFor(ctx)
 	for _, f := range r.spec.fields {
 		switch f.kind {
 		case kGroup:
-			resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, f.attr, "MTNCLOUD_GROUP", d.Group)...)
+			resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, f.attr, "MTNCLOUD_GROUP", d.Group, lookupErr)...)
 		case kProject:
-			resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, f.attr, "MTNCLOUD_PROJECT", d.Project)...)
+			resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, f.attr, "MTNCLOUD_PROJECT", d.Project, nil)...)
 		}
 	}
 	if resp.Diagnostics.HasError() {
@@ -416,7 +425,8 @@ func (r *orderResource) build(ctx context.Context, p, cfg source, checkPools boo
 	primary := map[string]int64{} // prefix -> the first network's ID
 	pools := map[string]string{}  // pool attribute -> the external network's name
 	fail := func(a string, err error) {
-		diags.AddAttributeError(path.Root(a), "Invalid "+strings.ReplaceAll(strings.TrimSuffix(a, "_"), "_", " "), err.Error())
+		what := strings.ReplaceAll(strings.TrimSuffix(a, "_"), "_", " ")
+		diags.AddAttributeError(path.Root(a), client.LookupTitle(err, what, "Invalid "+what), client.LookupDetail(err, what))
 	}
 	out := map[string]any{}
 	planNames := map[string]string{} // plan attribute -> the chosen plan's name on the form
@@ -756,6 +766,10 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 			resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), strconv.FormatInt(a.ID, 10))...)
 		}
 		if !ok {
+			if !resp.Diagnostics.HasError() {
+				// Only the lookup failed, so the app hasn't been seen to come up: Read checks it (D-044).
+				resp.Diagnostics.Append(resp.Private.SetKey(ctx, appUnchecked, []byte("true"))...)
+			}
 			return
 		}
 	}
@@ -768,6 +782,9 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 		ids, err = r.instancesNamed(ctx, resp.State, &resp.Diagnostics)
 		return len(ids) > 0, err
 	})
+	if r.lookupOnlyFailed(ctx, werr, item.ID, &resp.Diagnostics) {
+		return
+	}
 	if werr != nil && r.spec.reports {
 		resp.Diagnostics.AddError(r.spec.item+" instance not found",
 			fmt.Sprintf("Order %d's workflow succeeded, but the VM it reported isn't in the project (%s). MTN's workflow names "+
@@ -791,6 +808,8 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 			names[key] = in.Name
 		}
 		switch {
+		case r.lookupOnlyFailed(ctx, err, item.ID, &resp.Diagnostics):
+			statuses[key] = "unknown"
 		case err != nil:
 			statuses[key] = "provisioning"
 			resp.Diagnostics.AddError(r.spec.item+" instance not ready",
@@ -810,6 +829,20 @@ func (r *orderResource) Create(ctx context.Context, req resource.CreateRequest, 
 		}
 	}
 	setVMs(ctx, &resp.State, ids, statuses, names, &resp.Diagnostics)
+}
+
+// lookupOnlyFailed warns, and reports true, when the order's workflow succeeded and only looking for
+// what it made failed (not a timeout). That order worked: it stays in state with no error, so
+// nothing tainted deletes a good VM and orders another. The next refresh finds the VM (D-044).
+func (r *orderResource) lookupOnlyFailed(ctx context.Context, err error, orderID int64, diags *diag.Diagnostics) bool {
+	if err == nil || ctx.Err() != nil || !client.LookupFailed(err) {
+		return false
+	}
+	diags.AddWarning("Couldn't look up what "+r.spec.item+" made",
+		fmt.Sprintf("Order %d's workflow succeeded, but looking up what it made failed: %s. Whether it came up isn't known "+
+			"yet: check Instances or Apps in the console. The order is saved and won't be ordered again. The next refresh looks "+
+			"again and fills in instance_ids; run terraform refresh or plan.", orderID, err))
+	return true
 }
 
 // createTimeout is the default create timeout: a workflow that builds through a Heat stack waits for
@@ -838,8 +871,11 @@ func (r *orderResource) findInstances(ctx context.Context, p source, diags *diag
 		return nil
 	}
 	if len(ids) == 0 {
-		diags.AddWarning("No instance found for "+r.spec.item,
-			fmt.Sprintf("The order succeeded, but no instance named %q is in the project yet. The next refresh looks again.", name.ValueString()))
+		what := fmt.Sprintf("no instance named %q is in the project yet", name.ValueString())
+		if r.spec.reports {
+			what = "the VM its workflow reported isn't in the project yet"
+		}
+		diags.AddWarning("No instance found for "+r.spec.item, "The order succeeded, but "+what+". The next refresh looks again.")
 	}
 	return ids
 }
@@ -850,6 +886,14 @@ func (r *orderResource) instancesNamed(ctx context.Context, p source, diags *dia
 	name := r.nameOf(ctx, p, diags)
 	diags.Append(p.GetAttribute(ctx, path.Root("project"), &project)...)
 	all, err := r.client.ListInstances(ctx)
+	if client.IsUnreadable(err) && !r.spec.app {
+		// One instance the list can't decode mustn't hide this one, so ask for it alone. An app's VMs
+		// have template names, so those can't be. A reported VM is read from what its workflow printed.
+		all, err = nil, nil
+		if !r.spec.reports {
+			all, err = r.client.ListInstancesNamed(ctx, name.ValueString())
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("the instances couldn't be listed: %w", err)
 	}
@@ -959,6 +1003,27 @@ func (r *orderResource) appFor(ctx context.Context, p source, ids []int64, diags
 	return types.StringNull()
 }
 
+// savedApp reads the app in state. Only that one: app names repeat, and an app doesn't say which
+// project it is in, so one is the order's only when it holds the order's VMs (appFor). A name alone
+// could take another project's app, which destroy would then delete. Nil until it is known and read.
+func (r *orderResource) savedApp(ctx context.Context, p source, diags *diag.Diagnostics) *client.App {
+	id := r.appIDOf(ctx, p, diags)
+	if id == 0 {
+		return nil
+	}
+	apps, err := r.client.ListApps(ctx)
+	if err != nil {
+		diags.AddWarning("Unable to check the order's app", err.Error()+". The next refresh looks again.")
+		return nil
+	}
+	for _, a := range apps {
+		if a.ID == id {
+			return &a
+		}
+	}
+	return nil
+}
+
 // reportedInstance is the VM a workflow that names it itself reported (spec reports): by the ID it
 // printed, else by the name, and only in the order's project. Nothing before the order exists.
 func (r *orderResource) reportedInstance(ctx context.Context, p source, projectID int64, all []*client.Instance, diags *diag.Diagnostics) ([]int64, error) {
@@ -983,6 +1048,23 @@ func (r *orderResource) reportedInstance(ctx context.Context, p source, projectI
 		return nil, fmt.Errorf("the order's workflow output couldn't be read: %w", err)
 	}
 	id, name := client.WorkflowInstance(out)
+	if all == nil { // the list couldn't be read
+		switch {
+		case id != 0:
+			in, err := r.client.GetInstance(ctx, id)
+			if client.IsNotFound(err) {
+				return nil, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			all = []*client.Instance{in}
+		case name != "":
+			if all, err = r.client.ListInstancesNamed(ctx, name); err != nil {
+				return nil, err
+			}
+		}
+	}
 	for _, in := range all {
 		if in.ProjectID == projectID && ((id != 0 && in.ID == id) || (id == 0 && name != "" && strings.EqualFold(in.Name, name))) {
 			return []int64{in.ID}, nil
@@ -1043,6 +1125,8 @@ func (r *orderResource) appReady(ctx context.Context, p source, orderID int64, b
 	name := r.nameOf(ctx, p, diags)
 	a, err := r.client.WaitForApp(ctx, name.ValueString(), before)
 	switch {
+	case r.lookupOnlyFailed(ctx, err, orderID, diags):
+		return a, false
 	case err != nil && a == nil && errors.Is(err, context.DeadlineExceeded):
 		diags.AddError(r.spec.item+" app not found",
 			fmt.Sprintf("Order %d's workflow succeeded, but no app named %q appeared before the create timeout. Check Apps "+
@@ -1158,6 +1242,25 @@ func (r *orderResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	}
 	if r.spec.app && r.appIDOf(ctx, req.State, &resp.Diagnostics) == 0 && len(found) > 0 {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), r.appFor(ctx, req.State, found, &resp.Diagnostics))...)
+	}
+	unchecked, d := req.Private.GetKey(ctx, appUnchecked)
+	resp.Diagnostics.Append(d...)
+	if r.spec.app && len(unchecked) > 0 {
+		if a := r.savedApp(ctx, &resp.State, &resp.Diagnostics); a != nil {
+			appID := strconv.FormatInt(a.ID, 10)
+			switch {
+			case !client.AppSettled(a):
+			case client.AppRunning(a):
+				resp.Diagnostics.Append(resp.Private.SetKey(ctx, appUnchecked, nil)...)
+			default:
+				// Still unchecked, so every plan shows it until it is replaced or comes back. A status
+				// the replace check reads: an app can fail with no VM to show it.
+				statuses["app-"+appID] = "failed"
+				resp.Diagnostics.AddWarning(r.spec.item+" app failed",
+					fmt.Sprintf("App %q (%d) from order %d is %q. The order's workflow succeeded, but what it made didn't. The "+
+						"next apply deletes the order with what it made and orders it again.", a.Name, a.ID, id, a.Status))
+			}
+		}
 	}
 	setVMs(ctx, &resp.State, found, statuses, names, &resp.Diagnostics)
 }

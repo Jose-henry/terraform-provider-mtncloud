@@ -36,13 +36,14 @@ type orderStore struct {
 	sent        map[int64]map[string]any // each order's item, as posted
 	// apps maps an app ID to its instance IDs; deleting one (removeInstances=on) deletes them from
 	// insts. deleted lists the inventory records and apps deleted, in order ("item 9801", "app 9901").
-	apps    map[int64][]int64
-	appName map[int64]string   // an app's name, "app-<id>" when not set
-	appStep map[int64][]string // an app's status on each list, the last kept; "running" when not set
-	failure string             // the failed task's output in every execution, when set
-	output  string             // a finished task's output in every execution, when set
-	insts   *instStore
-	deleted []string
+	apps     map[int64][]int64
+	appsFail bool               // GET /api/apps answers 400
+	appName  map[int64]string   // an app's name, "app-<id>" when not set
+	appStep  map[int64][]string // an app's status on each list, the last kept; "running" when not set
+	failure  string             // the failed task's output in every execution, when set
+	output   string             // a finished task's output in every execution, when set
+	insts    *instStore
+	deleted  []string
 }
 
 func newOrderFakes(t *testing.T) (*fakeAPI, *orderStore) {
@@ -137,6 +138,10 @@ func (s *orderStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // serveApps lists the apps, takes an instance out of one, and deletes one with its instances.
 func (s *orderStore) serveApps(r *http.Request, reply func(int, any)) {
 	if r.Method == http.MethodGet && r.URL.Path == "/api/apps" {
+		if s.appsFail {
+			reply(http.StatusBadRequest, map[string]any{"success": false, "msg": "list failed"})
+			return
+		}
 		list := []any{}
 		for id, held := range s.apps {
 			var insts []any

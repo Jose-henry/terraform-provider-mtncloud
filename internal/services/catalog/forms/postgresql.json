@@ -1,7 +1,7 @@
 {
-  "item": "MTN PostgreSQL",
+  "item": "MTN SQL Database · PostgreSQL",
   "code": "PoSQLINST01",
-  "read": "2026-11-02",
+  "read": "2026-11-06",
   "fields": [
     {
       "name": "autoSecurityUpdates",

@@ -159,7 +159,7 @@ func (r *taskResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRe
 			continue
 		}
 		if _, err := r.client.OptionByName(ctx, o.source, o.what, v.ValueString()); err != nil {
-			resp.Diagnostics.AddAttributeError(path.Root(o.attr), "Unknown "+o.what, err.Error())
+			resp.Diagnostics.AddAttributeError(path.Root(o.attr), client.LookupTitle(err, o.what, "Unknown "+o.what), client.LookupDetail(err, o.what))
 		}
 	}
 	if r.spec.credential {
@@ -167,7 +167,7 @@ func (r *taskResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRe
 		resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("credential"), &v)...)
 		if !v.IsNull() && !v.IsUnknown() {
 			if _, err := r.client.OptionByName(ctx, "credentials", "credential", v.ValueString()); err != nil {
-				resp.Diagnostics.AddAttributeError(path.Root("credential"), "Unknown credential", err.Error())
+				resp.Diagnostics.AddAttributeError(path.Root("credential"), client.LookupTitle(err, "credential", "Unknown credential"), client.LookupDetail(err, "credential"))
 			}
 		}
 	}
@@ -213,7 +213,7 @@ func (r *taskResource) input(ctx context.Context, g getter, diags *diag.Diagnost
 		if name := str("credential"); name != "" {
 			c, err := r.client.OptionByName(ctx, "credentials", "credential", name)
 			if err != nil {
-				diags.AddAttributeError(path.Root("credential"), "Unknown credential", err.Error())
+				diags.AddAttributeError(path.Root("credential"), client.LookupTitle(err, "credential", "Unknown credential"), client.LookupDetail(err, "credential"))
 			}
 			in.CredentialID = c.ID
 		}
@@ -248,7 +248,7 @@ func (r *taskResource) input(ctx context.Context, g getter, diags *diag.Diagnost
 			}
 			opt, err := r.client.OptionByName(ctx, o.source, o.what, name)
 			if err != nil {
-				diags.AddAttributeError(path.Root(o.attr), "Unknown "+o.what, err.Error())
+				diags.AddAttributeError(path.Root(o.attr), client.LookupTitle(err, o.what, "Unknown "+o.what), client.LookupDetail(err, o.what))
 				continue
 			}
 			if o.kind == ref {

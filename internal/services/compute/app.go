@@ -120,14 +120,14 @@ func (r *appResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 	p, err := r.client.PlacementForGroup(ctx, plan.Group.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("group"), "Unknown group", err.Error())
+		resp.Diagnostics.AddAttributeError(path.Root("group"), client.LookupTitle(err, "group", "Unknown group"), client.LookupDetail(err, "group"))
 		return
 	}
 	in := client.AppCreate{Name: plan.Name.ValueString(), Description: plan.Description.ValueString(), GroupID: p.GroupID, CloudID: p.CloudID}
 	if known(plan.Environment) && plan.Environment.ValueString() != "" {
 		env, err := r.client.EnvironmentByName(ctx, plan.Environment.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddAttributeError(path.Root("environment"), "Unknown environment", err.Error())
+			resp.Diagnostics.AddAttributeError(path.Root("environment"), client.LookupTitle(err, "environment", "Unknown environment"), client.LookupDetail(err, "environment"))
 			return
 		}
 		in.Environment = env.Value
@@ -216,7 +216,7 @@ func (r *appResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		if plan.Environment.ValueString() != "" {
 			env, err := r.client.EnvironmentByName(ctx, plan.Environment.ValueString())
 			if err != nil {
-				resp.Diagnostics.AddAttributeError(path.Root("environment"), "Unknown environment", err.Error())
+				resp.Diagnostics.AddAttributeError(path.Root("environment"), client.LookupTitle(err, "environment", "Unknown environment"), client.LookupDetail(err, "environment"))
 				return
 			}
 			code = env.Value

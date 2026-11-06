@@ -2,6 +2,14 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
+## 0.10.2 (2026-11-07)
+
+- **Fixed: one instance with a checkbox-style `noAgent` no longer breaks every instance list.** MTN Cloud stores `"on"` for some instances (live 2026-11-06). The list failed for the whole tenant, which also broke `mtncloud_instances` and finding the VM of a catalog order. Flags under an instance's `config` now accept `true`/`false` and `"true"`/`"false"`/`"on"`/`"off"`.
+- **Fixed: a catalog order that worked is no longer tainted when only the lookup failed.** When the workflow succeeded and finding what it made failed (not a timeout), the apply succeeds with a warning, the order stays in state, and the next refresh fills in `instance_ids`. Nothing is deleted or ordered again. An app order is checked once its VMs are found: `app_id` is filled in, and an app that failed plans a replace. An instance the list can't decode no longer hides the order's VM: it is read by name, or by the ID its workflow printed.
+- **Fixed: errors no longer blame your value when a lookup failed.** `Unknown project`, `Invalid plan`, `No group set`, `No such ...` and the like now mean the lookup worked and the value isn't there, across instances, networks, catalog orders, clusters, tasks and workflows. After a timeout, 5xx, failed login or unreadable answer the heading is `Couldn't check the <thing>`, with the call's error. With no group set, a failed group lookup reports that instead of `No group set`.
+- **Changed: catalog names follow MTN's rename** (for example `MTN SQL Database - MySQL`, `MTN Web Server - Nginx`, `Fortinet FortiGate Firewall (BYOL)`). Resource types are unchanged and existing orders still match: items are found by code, and the old names are kept.
+- Docs: `operating_status` on `mtncloud_load_balancer` was wrong: one with no members shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
+
 ## 0.10.1 (2026-11-04)
 
 - **Changed: a load balancer delete that ended with no answer is tried again** (load balancer plugin 6c47249, 2026-11-04). The plugin now answers a delete of something already gone with success (`alreadyGone`), so repeating a delete is safe. Before, a delete with no answer failed with "Try again".

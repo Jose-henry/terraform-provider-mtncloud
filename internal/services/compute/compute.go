@@ -48,12 +48,16 @@ func (b *base) ready(diags *diag.Diagnostics) bool {
 // fillDefaults fills the attributes the configuration leaves out from the provider-wide defaults
 // (the provider block, or env), in resp.Plan and in req.Plan, which the rest of ModifyPlan reads.
 func (b *base) fillDefaults(ctx context.Context, req *resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse, attrs ...string) {
-	d := b.client.DefaultsFor(ctx)
+	d, lookupErr := b.client.DefaultsFor(ctx)
 	values := map[string][2]string{
 		"project": {d.Project, "MTNCLOUD_PROJECT"}, "group": {d.Group, "MTNCLOUD_GROUP"}, "cloud": {d.Cloud, "MTNCLOUD_CLOUD"},
 	}
 	for _, a := range attrs {
-		resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, a, values[a][1], values[a][0])...)
+		var why error
+		if a == "group" {
+			why = lookupErr
+		}
+		resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, a, values[a][1], values[a][0], why)...)
 	}
 	req.Plan = resp.Plan
 }

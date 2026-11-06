@@ -335,7 +335,7 @@ func (r *networkResource) Create(ctx context.Context, req resource.CreateRequest
 	defer cancel()
 	project, err := r.client.ProjectByName(ctx, plan.Project.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
+		resp.Diagnostics.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), client.LookupDetail(err, "project"))
 		return
 	}
 	in.ProjectID = project.ID

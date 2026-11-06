@@ -382,17 +382,17 @@ func (r *instanceResource) ModifyPlan(ctx context.Context, req resource.ModifyPl
 	}
 	p, err := r.client.PlacementForGroup(ctx, plan.Group.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("group"), "Unknown group", err.Error())
+		resp.Diagnostics.AddAttributeError(path.Root("group"), client.LookupTitle(err, "group", "Unknown group"), client.LookupDetail(err, "group"))
 		return
 	}
 	project, err := r.client.ProjectByNameAt(ctx, p, plan.Project.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
+		resp.Diagnostics.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), client.LookupDetail(err, "project"))
 		return
 	}
 	image, err := r.client.ImageByName(ctx, plan.Image.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddAttributeError(path.Root("image"), "Unknown image", err.Error())
+		resp.Diagnostics.AddAttributeError(path.Root("image"), client.LookupTitle(err, "image", "Unknown image"), client.LookupDetail(err, "image"))
 		return
 	}
 	r.checkNames(ctx, plan, p, project.ID, image, &resp.Diagnostics)
@@ -534,12 +534,12 @@ func checkLifecycle(plan, state instanceModel, diags *diag.Diagnostics) {
 func (r *instanceResource) checkNames(ctx context.Context, m instanceModel, p *client.Placement, projectID int64, image client.InstanceType, diags *diag.Diagnostics) {
 	if v := m.Plan; !v.IsUnknown() {
 		if _, err := r.client.PlanByName(ctx, p, projectID, image.LayoutID, v.ValueString()); err != nil {
-			diags.AddAttributeError(path.Root("plan"), "Unknown plan", err.Error())
+			diags.AddAttributeError(path.Root("plan"), client.LookupTitle(err, "plan", "Unknown plan"), client.LookupDetail(err, "plan"))
 		}
 	}
 	for _, name := range stringsOf(ctx, m.SecurityGroups, diags) {
 		if _, err := r.client.SecurityGroupByName(ctx, p, projectID, name); err != nil {
-			diags.AddAttributeError(path.Root("security_groups"), "Unknown security group", err.Error())
+			diags.AddAttributeError(path.Root("security_groups"), client.LookupTitle(err, "security group", "Unknown security group"), client.LookupDetail(err, "security group"))
 		}
 	}
 	stores := []types.String{m.Datastore}
@@ -549,18 +549,18 @@ func (r *instanceResource) checkNames(ctx context.Context, m instanceModel, p *c
 	for _, s := range stores {
 		if known(s) {
 			if _, err := r.client.DatastoreByName(ctx, p, projectID, s.ValueString()); err != nil {
-				diags.AddAttributeError(path.Root("datastore"), "Unknown datastore", err.Error())
+				diags.AddAttributeError(path.Root("datastore"), client.LookupTitle(err, "datastore", "Unknown datastore"), client.LookupDetail(err, "datastore"))
 			}
 		}
 	}
 	if known(m.Environment) {
 		if _, err := r.client.EnvironmentByName(ctx, m.Environment.ValueString()); err != nil {
-			diags.AddAttributeError(path.Root("environment"), "Unknown environment", err.Error())
+			diags.AddAttributeError(path.Root("environment"), client.LookupTitle(err, "environment", "Unknown environment"), client.LookupDetail(err, "environment"))
 		}
 	}
 	if known(m.Domain) {
 		if _, err := r.client.NetworkDomainByName(ctx, m.Domain.ValueString()); err != nil {
-			diags.AddAttributeError(path.Root("domain"), "Unknown network domain", err.Error())
+			diags.AddAttributeError(path.Root("domain"), client.LookupTitle(err, "network domain", "Unknown network domain"), client.LookupDetail(err, "network domain"))
 		}
 	}
 	if known(m.FloatingIPPool) {
@@ -663,23 +663,23 @@ func (r *instanceResource) input(ctx context.Context, m instanceModel, diags *di
 	var out resolved
 	p, err := r.client.PlacementForGroup(ctx, m.Group.ValueString())
 	if err != nil {
-		diags.AddAttributeError(path.Root("group"), "Unknown group", err.Error())
+		diags.AddAttributeError(path.Root("group"), client.LookupTitle(err, "group", "Unknown group"), client.LookupDetail(err, "group"))
 		return out, false
 	}
 	out.placement = p
 	project, err := r.client.ProjectByNameAt(ctx, p, m.Project.ValueString())
 	if err != nil {
-		diags.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
+		diags.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), client.LookupDetail(err, "project"))
 		return out, false
 	}
 	image, err := r.client.ImageByName(ctx, m.Image.ValueString())
 	if err != nil {
-		diags.AddAttributeError(path.Root("image"), "Unknown image", err.Error())
+		diags.AddAttributeError(path.Root("image"), client.LookupTitle(err, "image", "Unknown image"), client.LookupDetail(err, "image"))
 		return out, false
 	}
 	plan, err := r.client.PlanByName(ctx, p, project.ID, image.LayoutID, m.Plan.ValueString())
 	if err != nil {
-		diags.AddAttributeError(path.Root("plan"), "Unknown plan", err.Error())
+		diags.AddAttributeError(path.Root("plan"), client.LookupTitle(err, "plan", "Unknown plan"), client.LookupDetail(err, "plan"))
 		return out, false
 	}
 	in := client.InstanceInput{
@@ -699,7 +699,7 @@ func (r *instanceResource) input(ctx context.Context, m instanceModel, diags *di
 	if known(m.Environment) {
 		env, err := r.client.EnvironmentByName(ctx, m.Environment.ValueString())
 		if err != nil {
-			diags.AddAttributeError(path.Root("environment"), "Unknown environment", err.Error())
+			diags.AddAttributeError(path.Root("environment"), client.LookupTitle(err, "environment", "Unknown environment"), client.LookupDetail(err, "environment"))
 			return out, false
 		}
 		in.Environment = env.Value
@@ -707,14 +707,14 @@ func (r *instanceResource) input(ctx context.Context, m instanceModel, diags *di
 	if known(m.Domain) {
 		d, err := r.client.NetworkDomainByName(ctx, m.Domain.ValueString())
 		if err != nil {
-			diags.AddAttributeError(path.Root("domain"), "Unknown network domain", err.Error())
+			diags.AddAttributeError(path.Root("domain"), client.LookupTitle(err, "network domain", "Unknown network domain"), client.LookupDetail(err, "network domain"))
 			return out, false
 		}
 		in.NetworkDomainID = d.ID
 	}
 	sgs, err := r.client.SecurityGroupIDs(ctx, p, project.ID, stringsOf(ctx, m.SecurityGroups, diags))
 	if err != nil {
-		diags.AddAttributeError(path.Root("security_groups"), "Unknown security group", err.Error())
+		diags.AddAttributeError(path.Root("security_groups"), client.LookupTitle(err, "security group", "Unknown security group"), client.LookupDetail(err, "security group"))
 		return out, false
 	}
 	in.SecurityGroupIDs = sgs
@@ -752,7 +752,7 @@ func (r *instanceResource) datastoreID(ctx context.Context, p *client.Placement,
 	}
 	ds, err := r.client.DatastoreByName(ctx, p, projectID, name.ValueString())
 	if err != nil {
-		diags.AddAttributeError(path.Root("datastore"), "Unknown datastore", err.Error())
+		diags.AddAttributeError(path.Root("datastore"), client.LookupTitle(err, "datastore", "Unknown datastore"), client.LookupDetail(err, "datastore"))
 		return "", false
 	}
 	return strconv.FormatInt(ds.ID, 10), true

@@ -138,7 +138,7 @@ func (r *routerResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 	}
 	if v := plan.ExternalNetwork; !v.IsNull() && !v.IsUnknown() {
 		if _, err := r.client.ExternalNetworkByName(ctx, v.ValueString()); err != nil {
-			resp.Diagnostics.AddAttributeError(path.Root("external_network"), "Unknown external network", err.Error())
+			resp.Diagnostics.AddAttributeError(path.Root("external_network"), client.LookupTitle(err, "external network", "Unknown external network"), client.LookupDetail(err, "external network"))
 		}
 	}
 	if req.State.Raw.IsNull() {
@@ -174,14 +174,14 @@ func (r *routerResource) input(ctx context.Context, m routerModel, diags *diag.D
 	in := client.RouterInput{Name: m.Name.ValueString(), Description: m.Description.ValueString(), Enabled: m.Enabled.ValueBool()}
 	project, err := r.client.ProjectByName(ctx, m.Project.ValueString())
 	if err != nil {
-		diags.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), err.Error())
+		diags.AddAttributeError(path.Root("project"), client.ProjectErrorTitle(err), client.LookupDetail(err, "project"))
 		return in, false
 	}
 	in.ProjectID = project.ID
 	if !m.ExternalNetwork.IsNull() {
 		ext, err := r.client.ExternalNetworkByName(ctx, m.ExternalNetwork.ValueString())
 		if err != nil {
-			diags.AddAttributeError(path.Root("external_network"), "Unknown external network", err.Error())
+			diags.AddAttributeError(path.Root("external_network"), client.LookupTitle(err, "external network", "Unknown external network"), client.LookupDetail(err, "external network"))
 			return in, false
 		}
 		in.ExternalNetworkID = ext.ID

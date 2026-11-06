@@ -1,7 +1,7 @@
 {
-  "item": "MTN FortiManager (BYOL)",
+  "item": "Fortinet FortiManager (BYOL)",
   "code": "FMB003",
-  "read": "2026-11-02",
+  "read": "2026-11-06",
   "fields": [
     {
       "name": "cloud",

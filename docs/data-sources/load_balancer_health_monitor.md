@@ -50,7 +50,7 @@ output "check_path" {
 - `http_method` (String) HTTP method for `HTTP` and `HTTPS` checks, or empty.
 - `max_retries` (Number) Successful checks in a row before a member is marked up.
 - `max_retries_down` (Number) Failed checks in a row before a member is marked down.
-- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `pool_id` (String) ID of the pool it checks.
 - `pool_name` (String) Name of the pool it checks.
 - `provisioning_status` (String) `ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`.

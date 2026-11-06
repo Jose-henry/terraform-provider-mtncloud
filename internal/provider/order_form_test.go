@@ -237,7 +237,7 @@ resource "mtncloud_mysql" "db" {
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: factories(),
 		Steps: []resource.TestStep{
-			{Config: cfg, ExpectError: regexp.MustCompile(wrapped(`(?s)MTN MySQL instance failed.*"failed": Image virtual size is 40GB`))},
+			{Config: cfg, ExpectError: regexp.MustCompile(wrapped(`(?s)MTN SQL Database - MySQL instance failed.*"failed": Image virtual size is 40GB`))},
 			{
 				// Tainted: the next apply deletes the failed VM with the order and orders again.
 				PreConfig: func() { failNext = false },

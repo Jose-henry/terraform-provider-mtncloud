@@ -2,12 +2,12 @@
 page_title: "mtncloud_letsencrypt_certificate Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Installs a free Let's Encrypt TLS certificate on an existing instance. Let's Encrypt checks the domain over HTTP: the instance needs a floating IP, port 80 open to the internet in its security group, and the domain's DNS record pointing at that IP before the order runs. The plan checks the instance and the record. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Changing an input orders it again. terraform destroy deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning. Each argument says what the MTN Let's Encrypt SSL order form requires and allows (read 2026-11-02); every plan checks the live form.
+  Installs a free Let's Encrypt TLS certificate on an existing instance. Let's Encrypt checks the domain over HTTP: the instance needs a floating IP, port 80 open to the internet in its security group, and the domain's DNS record pointing at that IP before the order runs. The plan checks the instance and the record. Ordered from MTN Cloud's catalog (Let's Encrypt SSL). Changing an input orders it again. terraform destroy deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning. Each argument says what the Let's Encrypt SSL order form requires and allows (read 2026-11-06); every plan checks the live form.
 ---
 
 # mtncloud_letsencrypt_certificate
 
-Installs a free Let's Encrypt TLS certificate on an existing instance. Let's Encrypt checks the domain over HTTP: the instance needs a floating IP, port 80 open to the internet in its security group, and the domain's DNS record pointing at that IP before the order runs. The plan checks the instance and the record. Ordered from MTN Cloud's catalog (MTN Let's Encrypt SSL). Changing an input orders it again. `terraform destroy` deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning. Each argument says what the MTN Let's Encrypt SSL order form requires and allows (read 2026-11-02); every plan checks the live form.
+Installs a free Let's Encrypt TLS certificate on an existing instance. Let's Encrypt checks the domain over HTTP: the instance needs a floating IP, port 80 open to the internet in its security group, and the domain's DNS record pointing at that IP before the order runs. The plan checks the instance and the record. Ordered from MTN Cloud's catalog (Let's Encrypt SSL). Changing an input orders it again. `terraform destroy` deletes nothing: the certificate stays on the instance, and the resource is only removed from state, with a warning. Each argument says what the Let's Encrypt SSL order form requires and allows (read 2026-11-06); every plan checks the live form.
 
 ## Example Usage
 

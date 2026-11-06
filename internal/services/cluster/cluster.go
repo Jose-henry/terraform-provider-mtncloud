@@ -297,9 +297,9 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 	if req.Plan.Raw.IsNull() || r.client == nil {
 		return
 	}
-	d := r.client.DefaultsFor(ctx)
-	resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, "group", "MTNCLOUD_GROUP", d.Group)...)
-	resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, "project", "MTNCLOUD_PROJECT", d.Project)...)
+	d, lookupErr := r.client.DefaultsFor(ctx)
+	resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, "group", "MTNCLOUD_GROUP", d.Group, lookupErr)...)
+	resp.Diagnostics.Append(planmodifiers.FillDefault(ctx, req.Config, &resp.Plan, "project", "MTNCLOUD_PROJECT", d.Project, nil)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -476,7 +476,8 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 	}
 	isKube := r.kind == kube
 	fail := func(a string, err error) {
-		r.addError(diags, a, "Invalid "+strings.ReplaceAll(r.attrName(a), "_", " "), err.Error())
+		what := strings.ReplaceAll(r.attrName(a), "_", " ")
+		r.addError(diags, a, client.LookupTitle(err, what, "Invalid "+what), client.LookupDetail(err, what))
 	}
 	want := dockerLayout
 	if isKube {
@@ -693,7 +694,8 @@ func (r *clusterResource) nodeConfig(ctx context.Context, b *built, layout clien
 	}
 	at := func(a string) path.Path { return path.Root(block).AtName(a) }
 	fail := func(a string, err error) {
-		diags.AddAttributeError(at(a), "Invalid "+block+" "+strings.ReplaceAll(a, "_", " "), err.Error())
+		what := block + " " + strings.ReplaceAll(a, "_", " ")
+		diags.AddAttributeError(at(a), client.LookupTitle(err, what, "Invalid "+what), client.LookupDetail(err, what))
 	}
 	config := map[string]any{"resourcePoolId": b.projectID}
 	out := map[string]any{"config": config}

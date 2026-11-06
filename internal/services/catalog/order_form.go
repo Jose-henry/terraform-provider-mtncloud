@@ -325,7 +325,7 @@ func (r *orderResource) extraInputs(ctx context.Context, form *client.CatalogFor
 		case "select", "radio", "typeahead":
 			c, err := r.client.FormChoice(ctx, ff, label(ff), v)
 			if err != nil {
-				diags.AddAttributeError(at, "Invalid "+key, err.Error())
+				diags.AddAttributeError(at, client.LookupTitle(err, key, "Invalid "+key), client.LookupDetail(err, key))
 				continue
 			}
 			out[key] = c.Value
@@ -394,7 +394,11 @@ func (r *orderResource) replaceFailed(ctx context.Context, req resource.ModifyPl
 	var failed []string
 	for id, st := range statuses {
 		if client.InstanceFailed(st) {
-			failed = append(failed, id)
+			if app, ok := strings.CutPrefix(id, "app-"); ok {
+				failed = append(failed, "App "+app)
+			} else {
+				failed = append(failed, "Instance "+id)
+			}
 		}
 	}
 	var status types.String
@@ -416,7 +420,7 @@ func (r *orderResource) replaceFailed(ctx context.Context, req resource.ModifyPl
 	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, at, types.MapUnknown(types.StringType))...)
 	resp.RequiresReplace.Append(at)
 	resp.Diagnostics.AddAttributeWarning(at, "Failed instance: the order is placed again",
-		fmt.Sprintf("Instance %s from this %s order has failed. The plan deletes the order with what it made, and orders it again.",
+		fmt.Sprintf("%s from this %s order has failed. The plan deletes the order with what it made, and orders it again.",
 			strings.Join(failed, ", "), r.spec.item))
 }
 

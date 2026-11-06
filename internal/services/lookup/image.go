@@ -55,7 +55,7 @@ func (d *imageDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	}
 	img, err := d.client.ImageByName(ctx, m.Name.ValueString())
 	if client.IsNoMatch(err) {
-		resp.Diagnostics.AddAttributeError(path.Root("name"), "No such image", err.Error())
+		resp.Diagnostics.AddAttributeError(path.Root("name"), client.LookupTitle(err, "image", "No such image"), client.LookupDetail(err, "image"))
 		return
 	}
 	if err != nil {

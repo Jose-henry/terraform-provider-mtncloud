@@ -343,22 +343,31 @@ func TestPlacement(t *testing.T) {
 }
 
 // With no group configured, the caller's only group becomes the default; with several, none does.
+func defaultGroup(t *testing.T, c *Client) string {
+	t.Helper()
+	d, err := c.DefaultsFor(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d.Group
+}
+
 func TestDefaultsFor_SoleGroup(t *testing.T) {
 	one := newFakeAPI(t)
 	one.route("GET", "/api/options/groups", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"data":[{"name":"MTNNG_CLOUD_AZ_1","value":9101}]}`))
 	})
-	if g := one.client(t).DefaultsFor(t.Context()).Group; g != "MTNNG_CLOUD_AZ_1" {
+	if g := defaultGroup(t, one.client(t)); g != "MTNNG_CLOUD_AZ_1" {
 		t.Errorf("sole group: got %q", g)
 	}
-	if g := one.client(t, func(c *Config) { c.Defaults = Defaults{Group: "mine"} }).DefaultsFor(t.Context()).Group; g != "mine" {
+	if g := defaultGroup(t, one.client(t, func(c *Config) { c.Defaults = Defaults{Group: "mine"} })); g != "mine" {
 		t.Errorf("configured group: got %q", g)
 	}
 	two := newFakeAPI(t)
 	two.route("GET", "/api/options/groups", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"data":[{"name":"one","value":1},{"name":"two","value":2}]}`))
 	})
-	if g := two.client(t).DefaultsFor(t.Context()).Group; g != "" {
+	if g := defaultGroup(t, two.client(t)); g != "" {
 		t.Errorf("several groups: got %q, want none", g)
 	}
 }

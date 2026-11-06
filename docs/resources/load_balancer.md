@@ -47,7 +47,7 @@ output "vip" {
 ### Read-Only
 
 - `id` (String) The load balancer's ID.
-- `operating_status` (String) `ONLINE` when its members answer their health checks; `OFFLINE` with no members.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. A load balancer with no members shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `provisioning_status` (String) `ACTIVE` once it is ready; `ERROR` if the cloud failed it.
 
 <a id="nestedblock--timeouts"></a>

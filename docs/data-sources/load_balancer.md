@@ -51,7 +51,7 @@ output "web_backends" {
 - `description` (String) Description, or empty.
 - `enabled` (Boolean) Whether it is administratively up.
 - `listeners` (Attributes List) Its listeners, sorted by name. (see [below for nested schema](#nestedatt--listeners))
-- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `pools` (Attributes List) Its pools, sorted by name, with their members and health monitors. (see [below for nested schema](#nestedatt--pools))
 - `provisioning_status` (String) `ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`.
 - `updated_at` (String) When it last changed (RFC 3339), or empty.
@@ -75,7 +75,7 @@ Read-Only:
 - `member_connect_timeout` (Number) Milliseconds to wait for a member to accept a connection.
 - `member_data_timeout` (Number) Milliseconds a member connection may stay idle.
 - `name` (String) Listener name.
-- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `port` (Number) Port it listens on.
 - `protocol` (String) `HTTP`, `HTTPS`, `TERMINATED_HTTPS`, `TCP` or `UDP`.
 - `provisioning_status` (String) `ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`.
@@ -97,7 +97,7 @@ Read-Only:
 - `listener_ids` (List of String) IDs of the listeners that use this pool.
 - `members` (Attributes List) Backends, sorted by address. (see [below for nested schema](#nestedatt--pools--members))
 - `name` (String) Pool name.
-- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `protocol` (String) Protocol to the members: `HTTP`, `HTTPS`, `PROXY`, `PROXYV2`, `TCP` or `UDP`.
 - `provisioning_status` (String) `ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`.
 - `session_persistence` (String) `SOURCE_IP`, `HTTP_COOKIE` or `APP_COOKIE` to keep a client on one member, or empty.
@@ -116,7 +116,7 @@ Read-Only:
 - `max_retries` (Number) Successful checks in a row before a member is marked up.
 - `max_retries_down` (Number) Failed checks in a row before a member is marked down.
 - `name` (String) Health monitor name, or empty.
-- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `pool_id` (String) ID of the pool it checks.
 - `pool_name` (String) Name of the pool it checks.
 - `provisioning_status` (String) `ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`.
@@ -137,7 +137,7 @@ Read-Only:
 - `monitor_address` (String) Address the health monitor checks instead of `address`, or empty.
 - `monitor_port` (Number) Port the health monitor checks instead of `port`, or 0.
 - `name` (String) Member name, or empty.
-- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `port` (Number) Backend port.
 - `provisioning_status` (String) `ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`.
 - `subnet_id` (String) Subnet the address is on, or empty for the load balancer's own.

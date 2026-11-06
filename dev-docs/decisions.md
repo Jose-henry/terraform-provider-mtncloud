@@ -4,6 +4,20 @@ Each entry records what was decided, why, and what it rules out. Change a decisi
 entry that supersedes it, never by editing history.
 
 
+## D-044 A lookup failure after a good order is a warning, not a failed apply (owner's fix list, 2026-11-06)
+Refines the rule of 2026-10-30 that success is the workflow's result and what it made, running. When
+the workflow succeeded and only the follow-up lookup failed (network, 5xx, login, unreadable answer),
+Create warns and leaves the order in state, untainted. An error would taint it, and the next apply would
+delete a working, billable VM and order a second one. A real timeout (the VM never appeared) still fails.
+An app order in that state keeps private state (`app_unchecked`). Read fills `app_id` from the app that
+holds the order's VMs in its project (never by name alone: app names repeat, an app has no project field,
+and destroy deletes the saved app), and an app that failed then plans a replace, as it would have.
+Accepted costs: `instance_statuses` may read `unknown` until the next refresh; config that indexes
+`instance_ids` in the same apply fails once; an app that failed with no VM at all can't be told from
+another project's, so it isn't adopted: every refresh warns, and it is cleaned up in the console.
+Headings follow the same split: `Unknown`, `Invalid`, `No such` and `No ... set` mean the lookup worked
+and the value isn't there; a failed lookup says `Couldn't check the <thing>`.
+
 ## D-001 Fork the upstream provider, rename everything (2026-10-26)
 Start from the upstream Morpheus SDKv2 provider (MIT), moved whole into `internal/legacy`. The
 product name is replaced everywhere: types `mtncloud_*`, env vars `MTNCLOUD_*`, docs "MTN Cloud".

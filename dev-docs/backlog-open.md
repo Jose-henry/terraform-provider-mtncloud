@@ -146,6 +146,8 @@ Catalog orders own what they make and can't change after create, so ordered VMs 
 
 ## 4. Small code follow-ups
 
+- App order whose lookup failed and whose app then failed with no VM at all: it can't be told from another project's app (an app has no project field), so it isn't adopted; every refresh warns (D-044). If `/api/apps` ever shows a project, match on it.
+
 - [X] **Resize that never applies (B-016).** Done 2026-10-31: the error names the plan and disks the instance is still on.
 - [X] **Unreadable option values (B-016).** Done 2026-10-31.
 - [X] **Missing `_disappears` tests.** Done 2026-10-31: L7 policy, load balancer instance member, and security group rule (with drift and a refused rule partway through a group update).

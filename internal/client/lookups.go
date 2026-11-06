@@ -189,16 +189,20 @@ func (c *Client) ProjectsAt(ctx context.Context, p *Placement) ([]Option, error)
 }
 
 // DefaultsFor is Defaults with the group filled in, when none is set, from the caller's only group
-// (an MTN Cloud tenant normally has one). With several groups, or when the lookup fails, the group
-// stays empty and the resource asks for one.
-func (c *Client) DefaultsFor(ctx context.Context) Defaults {
+// (an MTN Cloud tenant normally has one). With several groups it stays empty and the resource asks
+// for one. An error says the lookup failed: an empty group then means unknown, not "none".
+func (c *Client) DefaultsFor(ctx context.Context) (Defaults, error) {
 	d := c.cfg.Defaults
 	if d.Group == "" {
-		if groups, err := c.Groups(ctx); err == nil && len(groups) == 1 {
+		groups, err := c.Groups(ctx)
+		if err != nil {
+			return d, err
+		}
+		if len(groups) == 1 {
 			d.Group = groups[0].Name
 		}
 	}
-	return d
+	return d, nil
 }
 
 // Groups lists the groups the caller can provision into, for example "MTNNG_CLOUD_AZ_1".
@@ -214,12 +218,13 @@ func (e placementError) Error() string { return e.err.Error() }
 func (e placementError) Unwrap() error { return e.err }
 
 // ProjectErrorTitle is the title for an error from a project lookup: "Unknown group or cloud" when
-// the group or cloud couldn't be resolved first, otherwise "Unknown project".
+// the group or cloud couldn't be resolved first, "Unknown project" when it isn't there, and
+// LookupTitle's heading when the lookup itself failed.
 func ProjectErrorTitle(err error) string {
 	if errors.As(err, new(placementError)) {
 		return "Unknown group or cloud"
 	}
-	return "Unknown project"
+	return LookupTitle(err, "project", "Unknown project")
 }
 
 // PlacementForGroup is the placement of a named group: the group and its one OpenStack cloud.
@@ -423,11 +428,11 @@ func listAll[T any](ctx context.Context, c *Client, path, key string, q url.Valu
 		}
 		raw, ok := resp[key]
 		if !ok {
-			return nil, fmt.Errorf("MTN Cloud API GET %s: response has no %q list", path, key)
+			return nil, &callError{err: fmt.Errorf("MTN Cloud API GET %s: response has no %q list", path, key), unreadable: true}
 		}
 		var items []T
 		if err := json.Unmarshal(raw, &items); err != nil {
-			return nil, fmt.Errorf("MTN Cloud API GET %s: unexpected %q list (%w)", path, key, err)
+			return nil, &callError{err: fmt.Errorf("MTN Cloud API GET %s: unexpected %q list (%w)", path, key, err), unreadable: true}
 		}
 		all = append(all, items...)
 		// Stop on meta.total when the API sends it (the server may cap "max" below pageSize),

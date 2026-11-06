@@ -131,9 +131,9 @@ func (r *instanceWorkflowResource) ModifyPlan(ctx context.Context, req resource.
 	}
 	plan.ExecutionID, plan.Status = types.Int64Unknown(), types.StringUnknown()
 	if r.client != nil && !plan.Workflow.IsUnknown() {
-		wf, msg := r.resolve(ctx, plan.Workflow.ValueString())
+		wf, msg, lookupErr := r.resolve(ctx, plan.Workflow.ValueString())
 		if msg != "" {
-			resp.Diagnostics.AddAttributeError(path.Root("workflow"), "Unknown workflow", msg)
+			resp.Diagnostics.AddAttributeError(path.Root("workflow"), client.LookupTitle(lookupErr, "workflow", "Unknown workflow"), msg)
 			return
 		}
 		plan.WorkflowID = types.Int64Value(wf.ID)
@@ -144,25 +144,26 @@ func (r *instanceWorkflowResource) ModifyPlan(ctx context.Context, req resource.
 	resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 }
 
-// resolve finds the workflow by name; msg says why when it can't be used.
-func (r *instanceWorkflowResource) resolve(ctx context.Context, name string) (*client.Workflow, string) {
+// resolve finds the workflow by name; msg says why when it can't be used, and err is set when that
+// is because the lookup failed.
+func (r *instanceWorkflowResource) resolve(ctx context.Context, name string) (*client.Workflow, string, error) {
 	ws, err := r.client.WorkflowsNamed(ctx, name)
 	if err != nil {
-		return nil, fmt.Sprintf("Unable to look up workflow %q: %s", name, err)
+		return nil, fmt.Sprintf("Unable to look up workflow %q: %s", name, err), err
 	}
 	switch len(ws) {
 	case 0:
 		return nil, fmt.Sprintf("No workflow named %q is visible to this login. Use the name shown in the console (Library > "+
-			"Automation > Workflows).", name)
+			"Automation > Workflows).", name), nil
 	case 1:
 	default:
-		return nil, fmt.Sprintf("%d workflows are named %q, so the name doesn't say which one to run.", len(ws), name)
+		return nil, fmt.Sprintf("%d workflows are named %q, so the name doesn't say which one to run.", len(ws), name), nil
 	}
 	if !strings.EqualFold(ws[0].Type, "operation") {
 		return nil, fmt.Sprintf("Workflow %q is a %s workflow. Only operational workflows run on existing instances; a "+
-			"provisioning workflow is given to the instance when it is made.", name, ws[0].Type)
+			"provisioning workflow is given to the instance when it is made.", name, ws[0].Type), nil
 	}
-	return &ws[0], ""
+	return &ws[0], "", nil
 }
 
 // checkInputs compares the inputs with the workflow's form: every field must be one of its own, a
@@ -228,7 +229,7 @@ func checkInputs(ctx context.Context, wf *client.Workflow, plan instanceWorkflow
 // run runs the workflow as planned and waits for it. The error names the platform's reason, with
 // the secret values masked.
 func (r *instanceWorkflowResource) run(ctx context.Context, m *instanceWorkflowModel) error {
-	wf, msg := r.resolve(ctx, m.Workflow.ValueString())
+	wf, msg, _ := r.resolve(ctx, m.Workflow.ValueString())
 	if msg != "" {
 		return fmt.Errorf("%s", msg)
 	}

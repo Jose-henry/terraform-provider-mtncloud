@@ -1,7 +1,7 @@
 {
-  "item": "MTN MongoDB",
+  "item": "MongoDB Database",
   "code": "MongoDBINST01",
-  "read": "2026-11-02",
+  "read": "2026-11-06",
   "fields": [
     {
       "name": "adminPassword",

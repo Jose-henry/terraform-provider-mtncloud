@@ -48,8 +48,8 @@ func (b *base) ready(diags *diag.Diagnostics) bool {
 // 2026-10-30, code MVPNSV02 kept), and ordered by the name they have now.
 var (
 	projectItem = client.CatalogItemRef{Code: "001034sd", Names: []string{"Create Project"}}
-	nfsItem     = client.CatalogItemRef{Code: "nfs12", Names: []string{"MTN NFS"}}
-	smbItem     = client.CatalogItemRef{Code: "smb12", Names: []string{"MTN SMB"}}
+	nfsItem     = client.CatalogItemRef{Code: "nfs12", Names: []string{"MTN NFS Storage", "MTN NFS"}}
+	smbItem     = client.CatalogItemRef{Code: "smb12", Names: []string{"MTN SMB Storage", "MTN SMB"}}
 )
 
 // itemName is the item's name now, which an order is placed by.

@@ -80,7 +80,7 @@ func (r *lbResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp 
 				Description: "Whether the load balancer passes traffic. Defaults to `true`. **`false` takes the whole load balancer out " +
 					"of service**: every listener stops passing traffic until it is set back to `true`."},
 			"provisioning_status": schema.StringAttribute{Computed: true, Description: "`ACTIVE` once it is ready; `ERROR` if the cloud failed it."},
-			"operating_status":    schema.StringAttribute{Computed: true, Description: "`ONLINE` when its members answer their health checks; `OFFLINE` with no members."},
+			"operating_status":    schema.StringAttribute{Computed: true, Description: "`ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. A load balancer with no members shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic."},
 		},
 		Blocks: map[string]schema.Block{
 			"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Update: true, Delete: true}),

@@ -50,7 +50,7 @@ output "api_rules" {
 - `action` (String) `REDIRECT_TO_POOL`, `REDIRECT_TO_URL`, `REDIRECT_PREFIX` or `REJECT`.
 - `description` (String) Description, or empty.
 - `enabled` (Boolean) Whether it is administratively up.
-- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `position` (Number) Its place in the listener's order, from 1.
 - `provisioning_status` (String) `ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`.
 - `redirect_http_code` (Number) For redirects: the status code, or 0.

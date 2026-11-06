@@ -58,7 +58,7 @@ Read-Only:
 - `member_connect_timeout` (Number) Milliseconds to wait for a member to accept a connection.
 - `member_data_timeout` (Number) Milliseconds a member connection may stay idle.
 - `name` (String) Listener name.
-- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`.
+- `operating_status` (String) `ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic.
 - `port` (Number) Port it listens on.
 - `protocol` (String) `HTTP`, `HTTPS`, `TERMINATED_HTTPS`, `TCP` or `UDP`.
 - `provisioning_status` (String) `ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`.

@@ -33,7 +33,7 @@ func statusAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"enabled":             flag("Whether it is administratively up."),
 		"provisioning_status": str("`ACTIVE`, or `PENDING_CREATE`, `PENDING_UPDATE`, `PENDING_DELETE` while a change is applied, or `ERROR`."),
-		"operating_status":    str("`ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`."),
+		"operating_status":    str("`ONLINE`, `OFFLINE`, `DEGRADED`, `ERROR` or `NO_MONITOR`. Something with no members still shows `ONLINE`, so `ONLINE` doesn't mean it can serve traffic."),
 	}
 }
 

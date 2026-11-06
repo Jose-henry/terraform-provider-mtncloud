@@ -3,6 +3,7 @@ package client
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -147,9 +148,9 @@ type wireInstance struct {
 		Value any    `json:"value"`
 	} `json:"evars"`
 	Config struct {
-		ResourcePoolID any   `json:"resourcePoolId"`
-		NoAgent        *bool `json:"noAgent"`
-		LayoutSize     any   `json:"layoutSize"`
+		ResourcePoolID any         `json:"resourcePoolId"`
+		NoAgent        lenientFlag `json:"noAgent"`
+		LayoutSize     any         `json:"layoutSize"`
 	} `json:"config"`
 	Volumes []struct {
 		ID          int64  `json:"id"`
@@ -166,6 +167,32 @@ type wireInstance struct {
 	ConnectionInfo []struct {
 		IP string `json:"ip"`
 	} `json:"connectionInfo"`
+}
+
+// lenientFlag is a yes or no as the API stores it: a JSON boolean from most instances, the form's
+// checkbox string ("on") from one built another way (live 2026-11-06). It never fails to decode:
+// one odd instance must not stop the whole list being read.
+type lenientFlag bool
+
+func (f *lenientFlag) UnmarshalJSON(b []byte) error {
+	var v any
+	_ = json.Unmarshal(b, &v) // left nil on bad JSON, which is false
+	switch x := v.(type) {
+	case bool:
+		*f = lenientFlag(x)
+	case string:
+		switch strings.ToLower(strings.TrimSpace(x)) {
+		case "true", "on", "yes", "1":
+			*f = true
+		default:
+			*f = false
+		}
+	case float64:
+		*f = x != 0
+	default:
+		*f = false
+	}
+	return nil
 }
 
 type wireTag struct {
@@ -217,7 +244,7 @@ func (w wireInstance) instance() *Instance {
 		in.EnvPrefix = derivedEnvPrefix(in.EnvVars, in.ImageName)
 	}
 	in.ProjectID = idFrom(w.Config.ResourcePoolID, "pool-")
-	in.NoAgent = w.Config.NoAgent != nil && *w.Config.NoAgent
+	in.NoAgent = bool(w.Config.NoAgent)
 	if in.LayoutSize = idFrom(w.Config.LayoutSize, ""); in.LayoutSize == 0 {
 		in.LayoutSize = 1
 	}

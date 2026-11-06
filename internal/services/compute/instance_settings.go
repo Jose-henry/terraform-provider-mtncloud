@@ -401,7 +401,7 @@ func (r *instanceSettingsResource) apply(ctx context.Context, plan *instanceSett
 	if set(plan.SecurityGroups) && !plan.SecurityGroups.Equal(was.SecurityGroups) {
 		ids, err := r.client.SecurityGroupIDs(ctx, p, inst.ProjectID, stringsOf(ctx, plan.SecurityGroups, diags))
 		if err != nil {
-			diags.AddAttributeError(path.Root("security_groups"), "Unknown security group", err.Error())
+			diags.AddAttributeError(path.Root("security_groups"), client.LookupTitle(err, "security group", "Unknown security group"), client.LookupDetail(err, "security group"))
 			r.settle(ctx, plan, inst, nil, diags)
 			return
 		}
@@ -486,7 +486,7 @@ func (r *instanceSettingsResource) apply(ctx context.Context, plan *instanceSett
 			}
 			pl, err := r.client.PlanByName(ctx, p, inst.ProjectID, image.LayoutID, plan.Plan.ValueString())
 			if err != nil {
-				diags.AddAttributeError(path.Root("plan"), "Unknown plan", err.Error())
+				diags.AddAttributeError(path.Root("plan"), client.LookupTitle(err, "plan", "Unknown plan"), client.LookupDetail(err, "plan"))
 				r.settle(ctx, plan, inst, nil, diags)
 				return
 			}

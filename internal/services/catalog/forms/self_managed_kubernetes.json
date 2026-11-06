@@ -1,7 +1,7 @@
 {
-  "item": "MTN KUBERNETES (MK8S)",
+  "item": "Kubernetes  (MK8S) Engine",
   "code": "K8S",
-  "read": "2026-11-02",
+  "read": "2026-11-06",
   "fields": [
     {
       "name": "cloud",

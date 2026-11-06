@@ -92,12 +92,12 @@ func (d *plansDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	}
 	project, err := d.client.ProjectByName(ctx, m.Project.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddAttributeError(pathOf("project"), client.ProjectErrorTitle(err), err.Error())
+		resp.Diagnostics.AddAttributeError(pathOf("project"), client.ProjectErrorTitle(err), client.LookupDetail(err, "project"))
 		return
 	}
 	image, err := d.client.ImageByName(ctx, m.Image.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddAttributeError(pathOf("image"), "Unknown image", err.Error())
+		resp.Diagnostics.AddAttributeError(pathOf("image"), client.LookupTitle(err, "image", "Unknown image"), client.LookupDetail(err, "image"))
 		return
 	}
 	plans, err := d.client.Plans(ctx, project.ID, image.LayoutID)

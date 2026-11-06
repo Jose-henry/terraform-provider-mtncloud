@@ -1,13 +1,12 @@
 # Status: what's done, what's next
 
-Last updated 2026-11-04 (v0.10.1). Update this file whenever a slice lands. The detailed list is
+Last updated 2026-11-07 (v0.10.2). Update this file whenever a slice lands. The detailed list is
 [backlog-open.md](backlog-open.md); history is in git and `CHANGELOG.md`.
 
 ## Where things stand
 
-- Released: **v0.10.1** (2026-11-04): load balancer plugin follow-ups (L7 regexes refused at plan, a piece in ERROR kept and replaced, deletes retried). **v0.10.0** (2026-11-03): Kubernetes and Docker clusters (D-043), forced cluster destroy,
-  catalog orders sent as the console sends them. Unreleased on `main`: the load balancer plugin update
-  of 2026-11-02 (failed saves rolled back, listener ports checked per transport at plan, PROXY pools).
+- Released: **v0.10.2** (2026-11-07): instance list survives a checkbox-style `noAgent`, a good order isn't tainted when only the lookup failed (D-044), a failed lookup no longer blames your value, catalog names follow MTN's rename. **v0.10.1** (2026-11-04): load balancer plugin follow-ups (L7 regexes refused at plan, a piece in ERROR kept and replaced, deletes retried). **v0.10.0** (2026-11-03): Kubernetes and Docker clusters (D-043), forced cluster destroy,
+  catalog orders sent as the console sends them.
 - 124 resources and 108 data sources, all usable by a customer (sub-tenant) login. Generated list:
   `docs/guides/features.md`.
 - Live QA runs in the dev test tenant (`tf-acc-*` objects in project `admin`, each logged and deleted

@@ -28,7 +28,7 @@ provider and renamed throughout.
    `mtn-cloud-domain.md` (catalog items, images, MOS), `decisions.md` (D-001…D-043), and
    `catalog-forms.md` (each order form's inputs).
 
-**Where things stand (2026-11-04):** v0.10.1 is released (registry `jose-henry/mtncloud`); 124
+**Where things stand (2026-11-07):** v0.10.2 is released (registry `jose-henry/mtncloud`); 124
 resources and 108 data sources, all for customer logins. It carries the load balancer plugin updates up
 to 6c47249 (see `CHANGELOG.md`). Live QA runs in the dev test tenant: `tf-acc-*`
 objects in project `admin`, each logged, deleted and checked with an API 404.

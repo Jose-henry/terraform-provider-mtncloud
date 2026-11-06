@@ -444,7 +444,7 @@ func (d *objectsData) Read(ctx context.Context, req datasource.ReadRequest, resp
 	}
 	l, err := d.client.ListMOSObjects(ctx, m.Bucket.ValueString(), m.Prefix.ValueString(), m.Delimiter.ValueString(), limit)
 	if bucketGone(err) {
-		resp.Diagnostics.AddAttributeError(rootBucket, "No such bucket", err.Error())
+		resp.Diagnostics.AddAttributeError(rootBucket, client.LookupTitle(err, "bucket", "No such bucket"), client.LookupDetail(err, "bucket"))
 		return
 	}
 	if err != nil {
@@ -587,7 +587,7 @@ func (d *objectACLData) Read(ctx context.Context, req datasource.ReadRequest, re
 	}
 	a, err := d.client.GetObjectACL(ctx, m.Bucket.ValueString(), m.Key.ValueString())
 	if client.IsMOSNotFound(err) {
-		resp.Diagnostics.AddAttributeError(rootKey, "No such object", err.Error())
+		resp.Diagnostics.AddAttributeError(rootKey, client.LookupTitle(err, "object", "No such object"), client.LookupDetail(err, "object"))
 		return
 	}
 	if err != nil {

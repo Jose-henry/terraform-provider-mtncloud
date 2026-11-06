@@ -1,7 +1,7 @@
 {
-  "item": "MTN Fortinet Firewall (BYOL)",
+  "item": "Fortinet FortiGate Firewall (BYOL)",
   "code": "FFW03",
-  "read": "2026-11-02",
+  "read": "2026-11-06",
   "fields": [
     {
       "name": "cloud",
