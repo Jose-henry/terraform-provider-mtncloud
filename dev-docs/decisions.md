@@ -14,7 +14,7 @@ Owner: "manual autoscaling shouldn't depend on the autoscaler package". Sources:
   `autoScalerEnabled` off. The provider and client no longer call it (supersedes the 0.11.0 behaviour of
   holding the range at `worker_count` before scaling, and the group-id resend tried in this release).
 - So: the create sends the range (flat keys, as before); `worker_count` changes only add or remove workers;
-  adding, changing or removing `autoscaling` on a built cluster is refused at plan (rebuild to change it); an
+  adding, changing or removing `autoscaling` on a built cluster warns at plan and is refused at apply (rebuild to change it); an
   imported cluster adopts its configuration. Known gap: a cluster built without `autoscaling` has its
   autoscaler held at the built count, and it may remove an idle worker added above it.
 - `worker_count` is at least 3 for Kubernetes when a cluster is built or the count changes (not a schema

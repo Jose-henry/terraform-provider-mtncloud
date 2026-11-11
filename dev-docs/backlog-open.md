@@ -13,8 +13,14 @@ Split into `mtncloud_managed_kubernetes_cluster` and `mtncloud_docker_cluster`, 
 - [X] Long builds: `access_token_file` reads a refreshed token (QA ran 90-minute creates on it).
 - [X] MTN's tested payload (v0.11.0, 2026-11-11): Kubernetes healthy build live (t160, cluster 174, 2 workers), a failed worker replaced by a healthy cluster (t161), Docker scale 1 → 2 again.
 - [X] "No kube masters found" on a complete build counts as built (D-045), unit-tested.
-- [ ] Kubernetes live: scaling an `ok` cluster 1 → 2 in place, the autoscaler hold on an `ok` cluster
-  (unknown whether `mks-autoscaler-1-0-0-package` is missing platform-wide).
+- [X] The platform autoscaler package (`configure-autoscaler`) is missing on MTN's clusters (cluster 183,
+  2026-11-11): 0.11.1 no longer calls it. Manual scaling only adds or removes workers; the in-cluster
+  autoscaler's range is fixed at build (D-046).
+- [ ] Kubernetes live (t165): build 3 workers, scale 3 → 4 → 3 in place, and whether the in-cluster
+  autoscaler removes an idle worker added above the built count.
+- [ ] **For MTN:** every 1-worker build failed at the worker join with "bash: line 1: null: command not
+  found" (clusters 177, 179, 181): the worker join script runs before the master has rendered the join
+  command. It should wait or retry until the command exists. The provider now builds at least 3 workers.
 
 ### 1.2 Apps, resources and groups (B-026, B-017)
 
