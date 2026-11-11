@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -256,6 +255,26 @@ type Cluster struct {
 	LayoutID      int64
 	TypeCode      string
 	TypeName      string // the list carries only the name, a single read the code too
+	// ProvisionComplete is the platform's own word that every node was built.
+	ProvisionComplete bool
+}
+
+// kubeSyncDefect is the message of MTN Cloud's Kubernetes inventory-sync defect: the cluster is
+// built, every node provisioned, and the cluster still says "error" (clusters 143, 144, 168, 169, 171;
+// MTN's cluster API reference, finding B). It is the console's view, not the cluster's.
+const kubeSyncDefect = "no kube masters found"
+
+// SyncDefect reports a Kubernetes cluster that finished building but shows MTN Cloud's sync defect
+// ("No kube masters found"). Whether its nodes are all provisioned is checked separately (Healthy).
+func (c *Cluster) SyncDefect() bool {
+	return c != nil && strings.EqualFold(c.Status, "error") && c.ProvisionComplete &&
+		strings.Contains(strings.ToLower(c.StatusMessage), kubeSyncDefect)
+}
+
+// Usable reports a cluster that can be used and changed: "ok", or built with only the sync defect
+// (owner, 2026-11-11: that error must not fail a build whose every step succeeded).
+func (c *Cluster) Usable() bool {
+	return c != nil && (strings.EqualFold(c.Status, "ok") || c.SyncDefect())
 }
 
 // IsType reports whether the cluster is of the type with this code or name; a cluster that says
@@ -275,6 +294,7 @@ type wireCluster struct {
 	Status        string   `json:"status"`
 	StatusMessage *string  `json:"statusMessage"`
 	ServiceURL    *string  `json:"serviceUrl"`
+	Provisioned   bool     `json:"provisionComplete"`
 	Layout        *struct {
 		ID int64 `json:"id"`
 	} `json:"layout"`
@@ -286,7 +306,7 @@ type wireCluster struct {
 
 func (w wireCluster) cluster() *Cluster {
 	c := &Cluster{ID: w.ID, Name: w.Name, Description: deref(w.Description), Labels: w.Labels, Status: w.Status,
-		StatusMessage: deref(w.StatusMessage), ServiceURL: deref(w.ServiceURL)}
+		StatusMessage: deref(w.StatusMessage), ServiceURL: deref(w.ServiceURL), ProvisionComplete: w.Provisioned}
 	if w.Layout != nil {
 		c.LayoutID = w.Layout.ID
 	}
@@ -394,8 +414,17 @@ type ClusterNode struct {
 // ClusterWorkers lists a cluster's workers. The reference shows a bare array; the CLI reads
 // {"workers": [...]}. Both are accepted.
 func (c *Client) ClusterWorkers(ctx context.Context, id int64) ([]ClusterNode, error) {
+	return c.clusterNodes(ctx, id, "workers")
+}
+
+// ClusterMasters lists a Kubernetes cluster's masters, as ClusterWorkers lists its workers.
+func (c *Client) ClusterMasters(ctx context.Context, id int64) ([]ClusterNode, error) {
+	return c.clusterNodes(ctx, id, "masters")
+}
+
+func (c *Client) clusterNodes(ctx context.Context, id int64, kind string) ([]ClusterNode, error) {
 	var raw json.RawMessage
-	if err := c.get(ctx, "/api/clusters/"+itoa(id)+"/workers", url.Values{"max": {"1000"}}, &raw); err != nil {
+	if err := c.get(ctx, "/api/clusters/"+itoa(id)+"/"+kind, url.Values{"max": {"1000"}}, &raw); err != nil {
 		return nil, err
 	}
 	type wire struct {
@@ -405,17 +434,19 @@ func (c *Client) ClusterWorkers(ctx context.Context, id int64) ([]ClusterNode, e
 	}
 	var list []wire
 	if err := json.Unmarshal(raw, &list); err != nil {
-		var wrapped struct {
-			Workers *[]wire `json:"workers"`
-		}
+		// {"workers": [...], "meta": {...}}: only the list is read (QA t160: meta is an object).
+		var wrapped map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &wrapped); err != nil {
-			return nil, fmt.Errorf("unexpected workers response: %w", err)
+			return nil, fmt.Errorf("unexpected %s response: %w", kind, err)
 		}
-		if wrapped.Workers == nil {
+		inner, ok := wrapped[kind]
+		if !ok || string(inner) == "null" {
 			// Never read as "no workers": that would plan new ones.
-			return nil, errors.New("unexpected workers response: no workers list")
+			return nil, fmt.Errorf("unexpected %s response: no %s list", kind, kind)
 		}
-		list = *wrapped.Workers
+		if err := json.Unmarshal(inner, &list); err != nil {
+			return nil, fmt.Errorf("unexpected %s response: %w", kind, err)
+		}
 	}
 	out := make([]ClusterNode, 0, len(list))
 	for _, w := range list {
@@ -463,6 +494,7 @@ func (c *Client) ConfigureAutoscaler(ctx context.Context, id int64, enabled bool
 type ClusterHealth struct {
 	Cluster *Cluster
 	Workers []ClusterNode
+	Masters []ClusterNode // read only for a cluster with the sync defect
 }
 
 // Failed reports the cluster, or one of its workers, ending in a failed state.
@@ -470,16 +502,17 @@ func (h *ClusterHealth) Failed() bool {
 	if h == nil || h.Cluster == nil {
 		return false
 	}
-	if ClusterFailed(h.Cluster.Status) {
+	if ClusterFailed(h.Cluster.Status) && !h.Cluster.SyncDefect() {
 		return true
 	}
-	return slices.ContainsFunc(h.Workers, func(w ClusterNode) bool { return ClusterFailed(w.Status) })
+	failed := func(w ClusterNode) bool { return ClusterFailed(w.Status) }
+	return slices.ContainsFunc(h.Workers, failed) || slices.ContainsFunc(h.Masters, failed)
 }
 
-// FailedWorkers names the workers that failed.
+// FailedWorkers names the workers (and masters) that failed.
 func (h *ClusterHealth) FailedWorkers() []string {
 	var out []string
-	for _, w := range h.Workers {
+	for _, w := range slices.Concat(h.Masters, h.Workers) {
 		if ClusterFailed(w.Status) {
 			out = append(out, w.Name)
 		}
@@ -487,14 +520,18 @@ func (h *ClusterHealth) FailedWorkers() []string {
 	return out
 }
 
-// Healthy reports a cluster that finished building and works: the cluster "ok" and want workers, every
-// one "provisioned" (want < 0: any number). A cluster's own status isn't enough: on 2026-11-03 cluster
-// 143 said "error" with every worker "provisioned", and a cluster stays "ok" while a worker is added.
+// Healthy reports a cluster that finished building and works: the cluster usable and want workers, every
+// one "provisioned" (want < 0: any number). A cluster's own status isn't enough: a cluster stays "ok"
+// while a worker is added. One with only the sync defect needs its masters read and provisioned too.
 func (h *ClusterHealth) Healthy(want int) bool {
-	if h == nil || h.Cluster == nil || !strings.EqualFold(h.Cluster.Status, "ok") || (want >= 0 && len(h.Workers) != want) {
+	if h == nil || !h.Cluster.Usable() || (want >= 0 && len(h.Workers) != want) {
 		return false
 	}
-	return !slices.ContainsFunc(h.Workers, func(w ClusterNode) bool { return !strings.EqualFold(w.Status, "provisioned") })
+	if h.Cluster.SyncDefect() && len(h.Masters) == 0 {
+		return false
+	}
+	pending := func(w ClusterNode) bool { return !strings.EqualFold(w.Status, "provisioned") }
+	return !slices.ContainsFunc(h.Workers, pending) && !slices.ContainsFunc(h.Masters, pending)
 }
 
 // WaitForClusterHealthy polls the cluster and its workers until it is healthy with want workers, or it
@@ -510,7 +547,13 @@ func (c *Client) WaitForClusterHealthy(ctx context.Context, id int64, want int, 
 		if err != nil {
 			return nil, err
 		}
-		return &ClusterHealth{Cluster: cl, Workers: ws}, nil
+		h := &ClusterHealth{Cluster: cl, Workers: ws}
+		if cl.SyncDefect() {
+			if h.Masters, err = c.ClusterMasters(ctx, id); err != nil {
+				return nil, err
+			}
+		}
+		return h, nil
 	}, func(h *ClusterHealth, err error) (bool, error) {
 		switch {
 		case IsNotFound(err) && created:

@@ -11,8 +11,10 @@ Split into `mtncloud_managed_kubernetes_cluster` and `mtncloud_docker_cluster`, 
 - [X] Docker live: create, scale 1 → 2, `No changes.`, forced destroy (t135/t136, 2026-11-03).
 - [X] Forced destroy live, also of a cluster still provisioning (32 s).
 - [X] Long builds: `access_token_file` reads a refreshed token (QA ran 90-minute creates on it).
-- [ ] Kubernetes live, once MTN fixes the worker join: a healthy build, scaling 1 → 2, the autoscaler
-  hold on an `ok` cluster (unknown whether `mks-autoscaler-1-0-0-package` is missing platform-wide).
+- [X] MTN's tested payload (v0.11.0, 2026-11-11): Kubernetes healthy build live (t160, cluster 174, 2 workers), a failed worker replaced by a healthy cluster (t161), Docker scale 1 → 2 again.
+- [X] "No kube masters found" on a complete build counts as built (D-045), unit-tested.
+- [ ] Kubernetes live: scaling an `ok` cluster 1 → 2 in place, the autoscaler hold on an `ok` cluster
+  (unknown whether `mks-autoscaler-1-0-0-package` is missing platform-wide).
 
 ### 1.2 Apps, resources and groups (B-026, B-017)
 

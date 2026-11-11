@@ -84,6 +84,7 @@ type model struct {
 // node is the master block, and the worker block's overrides (every field optional there).
 type node struct {
 	Plan           types.String `tfsdk:"plan"`
+	RootDatastore  types.String `tfsdk:"root_datastore"`
 	DataVolumes    []volume     `tfsdk:"data_volume"`
 	Networks       []string     `tfsdk:"networks"`
 	SecurityGroups []string     `tfsdk:"security_groups"`
@@ -133,6 +134,9 @@ func nodeAttrs(master bool) map[string]schema.Attribute {
 	return nodeAttrsFor(master, "master")
 }
 
+// defaultWorkers is the worker (Docker: host) count when none is set.
+const defaultWorkers = 3
+
 // rootGB is the fixed root disk of every node, Kubernetes and Docker alike (owner, 2026-11-02:
 // 100 GB, CreateCluster.sh moves from 50 to match); what a user sizes are the data disks.
 const rootGB = 100
@@ -144,19 +148,24 @@ func nodeAttrsFor(master bool, who string) map[string]schema.Attribute {
 		who = "worker"
 	}
 	inherit := ""
+	rootDefault := " Left out, the project's default, `__DEFAULT__`."
 	if !master {
 		inherit = " Left out, the master's is used."
+		rootDefault = inherit
 	}
 	return map[string]schema.Attribute{
 		"plan": schema.StringAttribute{Required: master, Optional: !master,
 			Description: "Plan (size) of each " + who + " node, by name, for example `G4S16`." + inherit},
+		"root_datastore": schema.StringAttribute{Optional: true,
+			Description: "Datastore of the fixed 100 GB root disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`)." +
+				rootDefault},
 		"data_volume": schema.ListNestedAttribute{Required: master, Optional: !master,
 			Description: "Data disks, at least one: container data lives on them. The root disk is always 100 GB." + inherit,
 			Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
 			NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 				"size": schema.Int64Attribute{Required: true, Description: "Size in GB.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
 				"datastore": schema.StringAttribute{Optional: true,
-					Description: "Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default."},
+					Description: "Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`."},
 			}}},
 		"networks": schema.ListAttribute{Required: master, Optional: !master, ElementType: types.StringType,
 			Description: "MTN Networks of the project, by name; the first is the primary interface." + inherit,
@@ -199,7 +208,8 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 		"create_user": schema.BoolAttribute{Optional: true,
 			Description:   "Create your user on the " + nodes + ". Left out, `true`, as MTN's own cluster order does. Changing it builds a new cluster.",
 			PlanModifiers: []planmodifier.Bool{boolReplaceIfSet{}}},
-		"status": schema.StringAttribute{Computed: true, Description: "Status: `ok` when healthy. The cluster can be changed in place only while it is `ok`."},
+		"status": schema.StringAttribute{Computed: true, Description: "Status, as MTN Cloud reports it: `ok` when healthy. The cluster can be " +
+			"changed in place only while it is healthy."},
 	}
 	blocks := map[string]schema.Block{"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Update: true, Delete: true})}
 	if r.kind == docker {
@@ -207,7 +217,7 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 			Description:   "The Docker hosts. Changing it builds a new cluster.",
 			PlanModifiers: []planmodifier.Object{objectReplaceIfSet{}}}
 		attrs["host_count"] = schema.Int64Attribute{Optional: true, Computed: true,
-			Description: "Number of hosts. Left out, the layout's default (1). Changing it adds or removes hosts in place (removal takes " +
+			Description: "Number of hosts. Left out, 3. Changing it adds or removes hosts in place (removal takes " +
 				"the newest), and the apply ends when the new hosts are ready.",
 			Validators: []validator.Int64{int64validator.AtLeast(1)}}
 		attrs["host_ids"] = schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "IDs of the hosts now in the cluster."}
@@ -252,7 +262,9 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 		Description: "A managed Kubernetes cluster, built from MTN's Kubernetes layouts as MTN's own cluster order builds it: " +
 			"the masters from `master`, the workers from `worker` where it is set and the master's settings otherwise, every node " +
 			"with a fixed 100 GB root disk and no public IP, and the `MK8S` label. The security groups must allow the Kubernetes API (TCP 6443) " +
-			"and the kubelet (TCP 10250) between the nodes. Only a Customer Admin or Power User login can run kubectl on it from the console.",
+			"and the kubelet (TCP 10250) between the nodes. Only a Customer Admin or Power User login can run kubectl on it from the console. " +
+			"MTN Cloud's console can show a cluster that built fine as `error` with \"No kube masters found\": when every master and worker " +
+			"is provisioned and the build reports complete, the cluster counts as built and can be changed in place, and `status` still shows `error`.",
 		Attributes: attrs,
 		Blocks:     blocks,
 	}
@@ -323,12 +335,12 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 		// destroy plans the configuration first, and an error there would stop a destroy (QA t135). The
 		// apply refuses, on a fresh read. A replacement works in any state; the framework fills
 		// RequiresReplace only after this method, so a replacement is found here.
-		if changed && !replacing(plan, state) && !strings.EqualFold(state.Status.ValueString(), "ok") {
+		if changed && !replacing(plan, state) && !r.usable(ctx, state) {
 			summary, detail := notHealthy(state.ID.ValueString(), state.Status.ValueString())
 			resp.Diagnostics.AddWarning(summary, detail+" Applying this plan fails unless the cluster is healthy by then.")
 		}
 		if pending, d := req.Private.GetKey(ctx, scalerPending); len(pending) > 0 && !plan.Autoscaling.IsNull() &&
-			strings.EqualFold(state.Status.ValueString(), "ok") {
+			r.usable(ctx, state) {
 			// The autoscaler was never configured: an update does it, once the cluster is healthy.
 			resp.Diagnostics.Append(d...)
 			plan.Status, plan.WorkerIDs = types.StringUnknown(), types.ListUnknown(types.StringType)
@@ -360,6 +372,24 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 		plan.APIURL = types.StringUnknown()
 	}
 	resp.Diagnostics.Append(r.set(ctx, &resp.Plan, &plan)...)
+}
+
+// usable reports whether the cluster in state can be changed in place: "ok", or built with only MTN
+// Cloud's Kubernetes sync defect, which needs a read to tell from a real error. A failed read says no:
+// the plan only warns, and the apply reads again.
+func (r *clusterResource) usable(ctx context.Context, state model) bool {
+	switch {
+	case strings.EqualFold(state.Status.ValueString(), "ok"):
+		return true
+	case r.kind != kube || !client.ClusterFailed(state.Status.ValueString()):
+		return false
+	}
+	id, err := strconv.ParseInt(state.ID.ValueString(), 10, 64)
+	if err != nil {
+		return false
+	}
+	c, err := r.client.GetCluster(ctx, id)
+	return err == nil && c.Usable()
 }
 
 // planUpdate plans an in-place change and reports whether anything changes in place. Its checks only
@@ -513,11 +543,9 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 	}
 	b := &built{place: place, projectID: pr.ID, addType: layout.AddServerType, layout: layout.Name}
 	if m.WorkerCount.IsNull() || m.WorkerCount.IsUnknown() {
-		// Kubernetes: 3, MTN's order's default whatever the layout says (CreateCluster.sh workerCount).
-		m.WorkerCount = types.Int64Value(max(layout.Workers, 1))
-		if isKube {
-			m.WorkerCount = types.Int64Value(3)
-		}
+		// 3 for both kinds (owner, 2026-11-11), MTN's order's default whatever the layout says
+		// (CreateCluster.sh workerCount).
+		m.WorkerCount = types.Int64Value(defaultWorkers)
 	}
 	r.checkAutoscaling(ctx, m, diags)
 
@@ -542,7 +570,6 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 	// and got the layout's 3, with the autoscaler held at 1.
 	config["nodeCount"] = count
 	server["nodeCount"] = count
-	server["visibility"] = "private"
 	if v := m.ResourceName.ValueString(); v != "" {
 		server["name"] = v
 	}
@@ -619,9 +646,12 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 		// 139). The values are strings, as the console's wizard sends them.
 		lo, hi := scalerRange(ctx, *m, diags)
 		config["autoScalerEnabled"], config["minNodes"], config["maxNodes"] = "on", lo, hi
-		top = map[string]any{"workerCount": count, "defaultRepoAccount": repo, "k8s_version": custom["k8s_version"],
+		top = map[string]any{"workerCount": count, "k8s_version": custom["k8s_version"],
 			"podCidr": custom["podCidr"], "serviceCidr": custom["serviceCidr"], "initConfig": "",
 			"autoScalerEnabled": "on", "minNodes": lo, "maxNodes": hi}
+		if repo != "" {
+			top["defaultRepoAccount"] = repo // MTN's tested payload leaves it out when there is none
+		}
 	}
 	body := map[string]any{
 		"name": m.Name.ValueString(), "type": typeCodes[r.kind], "layout": map[string]any{"id": layout.ID},
@@ -664,6 +694,21 @@ func (r *clusterResource) build(ctx context.Context, m *model, diags *diag.Diagn
 	return b
 }
 
+// dataDiskName names a node's data disks as MTN's tested payloads do: the first is the Docker host's
+// "docker-data", a master's "etcd-data", a worker's "data"; more are "data-2", "data-3" and so on.
+func (r *clusterResource) dataDiskName(what string, i int) string {
+	if i > 0 {
+		return "data-" + strconv.Itoa(i+1)
+	}
+	switch {
+	case r.kind == docker:
+		return "docker-data"
+	case what == "master":
+		return "etcd-data"
+	}
+	return "data"
+}
+
 func attrOf(key string) string {
 	return map[string]string{"k8s_version": "kubernetes_version", "podCidr": "pod_cidr", "serviceCidr": "service_cidr"}[key]
 }
@@ -672,6 +717,9 @@ func attrOf(key string) string {
 func inherit(w, m node) node {
 	if w.Plan.IsNull() {
 		w.Plan = m.Plan
+	}
+	if w.RootDatastore.IsNull() {
+		w.RootDatastore = m.RootDatastore
 	}
 	if w.DataVolumes == nil {
 		w.DataVolumes = m.DataVolumes
@@ -706,20 +754,36 @@ func (r *clusterResource) nodeConfig(ctx context.Context, b *built, layout clien
 	}
 	// The fixed root disk, then the data disks, as the instance API takes them (CreateCluster.sh:
 	// root of a fixed size, storage type 11, datastore "auto").
-	specs := []client.VolumeSpec{{Root: true, Name: "root", Size: rootGB, DatastoreID: "auto"}}
-	for i, v := range n.DataVolumes {
-		spec := client.VolumeSpec{Name: "data-" + strconv.Itoa(i+1), Size: v.Size.ValueInt64(), DatastoreID: "auto"}
-		if ds := v.Datastore.ValueString(); ds != "" {
-			o, err := r.client.DatastoreByName(ctx, b.place, b.projectID, ds)
-			if err != nil {
-				fail("data_volume", err)
-				continue
-			}
-			spec.DatastoreID = strconv.FormatInt(o.ID, 10)
+	// A datastore left out is "auto": the project's default, __DEFAULT__, as MTN's payloads send it.
+	datastore := func(a, name string) (string, bool) {
+		if name == "" {
+			return "auto", true
 		}
-		specs = append(specs, spec)
+		o, err := r.client.DatastoreByName(ctx, b.place, b.projectID, name)
+		if err != nil {
+			fail(a, err)
+			return "", false
+		}
+		return strconv.FormatInt(o.ID, 10), true
+	}
+	rootDS, _ := datastore("root_datastore", n.RootDatastore.ValueString())
+	specs := []client.VolumeSpec{{Root: true, Name: "root", Size: rootGB, DatastoreID: rootDS}}
+	for i, v := range n.DataVolumes {
+		ds, ok := datastore("data_volume", v.Datastore.ValueString())
+		if !ok {
+			continue
+		}
+		specs = append(specs, client.VolumeSpec{Name: r.dataDiskName(what, i), Size: v.Size.ValueInt64(), DatastoreID: ds})
 	}
 	vols := client.VolumesBody(specs)
+	// As MTN's tested payloads send them (MTN's cluster API reference, clusters 170 and 171): the
+	// disk order and the size in bytes too. The Docker host takes the first data disk as its data device.
+	for i, v := range vols {
+		v["displayOrder"] = i
+		if gb, ok := v["size"].(int64); ok {
+			v["sizeBytes"] = gb << 30
+		}
+	}
 	out["volumes"] = vols
 	nets := []any{}
 	for i, name := range n.Networks {
@@ -1067,7 +1131,7 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 		if now, err := r.client.GetCluster(ctx, id); err != nil {
 			resp.Diagnostics.AddError("Unable to read the cluster", err.Error())
 			return
-		} else if !strings.EqualFold(now.Status, "ok") {
+		} else if !now.Usable() {
 			resp.Diagnostics.AddError(notHealthy(state.ID.ValueString(), now.Status))
 			return
 		}
@@ -1174,7 +1238,6 @@ func (r *clusterResource) scale(ctx context.Context, id int64, plan model, diags
 		body := b.worker
 		if r.kind == docker {
 			body = b.body["server"].(map[string]any)
-			delete(body, "visibility")
 		}
 		if b.addType == 0 {
 			diags.AddError("Unable to add workers", fmt.Sprintf("Layout %q has no node set that can grow, so MTN Cloud can't add nodes to this cluster.", b.layout))

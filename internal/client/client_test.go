@@ -857,7 +857,7 @@ func TestPoll_RidesOutAnOutage(t *testing.T) {
 				_, _ = w.Write([]byte(`{"cluster":{"id":7,"status":"ok"}}`))
 			})
 			f.route("GET", "/api/clusters/7/workers", func(w http.ResponseWriter, _ *http.Request) {
-				_, _ = w.Write([]byte(`{"workers":[{"id":70,"name":"w","status":"provisioned"}]}`))
+				_, _ = w.Write([]byte(`{"workers":[{"id":70,"name":"w","status":"provisioned"}],"meta":{"total":1}}`))
 			})
 			c := f.client(t, func(cfg *Config) { cfg.PollMin, cfg.PollMax = time.Millisecond, 2*time.Millisecond })
 			ctx := t.Context()
@@ -956,6 +956,67 @@ func TestClusterHealth(t *testing.T) {
 	var none *ClusterHealth
 	if none.Failed() || none.Healthy(-1) {
 		t.Error("a cluster never read is neither failed nor healthy")
+	}
+}
+
+// MTN Cloud's Kubernetes sync defect: a cluster that built fine says "error", "No kube masters found"
+// (owner, 2026-11-11: it must not fail the build). It is healthy only when the build reports complete and
+// every master and worker is provisioned; anything else about it is still a failure or still waiting.
+func TestClusterHealth_SyncDefect(t *testing.T) {
+	node := func(st string) []ClusterNode { return []ClusterNode{{ID: 1, Name: "n1", Status: st}} }
+	defect := func(done bool, msg string) *Cluster {
+		return &Cluster{ID: 1, Status: "error", StatusMessage: msg, ProvisionComplete: done}
+	}
+	const msg = "No kube masters found"
+	for _, tc := range []struct {
+		name            string
+		c               *Cluster
+		masters, wkrs   []ClusterNode
+		usable, healthy bool
+		failed          bool
+	}{
+		{"built, all provisioned", defect(true, msg), node("provisioned"), node("provisioned"), true, true, false},
+		{"masters not read yet", defect(true, msg), nil, node("provisioned"), true, false, false},
+		{"a master still building", defect(true, msg), node("provisioning"), node("provisioned"), true, false, false},
+		{"a master failed", defect(true, msg), node("failed"), node("provisioned"), true, false, true},
+		{"a worker failed", defect(true, msg), node("provisioned"), node("failed"), true, false, true},
+		{"build not complete", defect(false, msg), node("provisioned"), node("provisioned"), false, false, true},
+		{"another error", defect(true, "Kubernetes join failed"), node("provisioned"), node("provisioned"), false, false, true},
+	} {
+		h := &ClusterHealth{Cluster: tc.c, Masters: tc.masters, Workers: tc.wkrs}
+		if got := tc.c.Usable(); got != tc.usable {
+			t.Errorf("%s: usable %v, want %v", tc.name, got, tc.usable)
+		}
+		if got := h.Healthy(1); got != tc.healthy {
+			t.Errorf("%s: healthy %v, want %v", tc.name, got, tc.healthy)
+		}
+		if got := h.Failed(); got != tc.failed {
+			t.Errorf("%s: failed %v, want %v", tc.name, got, tc.failed)
+		}
+	}
+}
+
+// The wait reads the masters of a cluster with the sync defect, and ends healthy once they are provisioned.
+func TestWaitForClusterHealthy_SyncDefect(t *testing.T) {
+	f := newFakeAPI(t)
+	var reads atomic.Int32
+	f.route("GET", "/api/clusters/7", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"cluster":{"id":7,"status":"error","statusMessage":"No kube masters found","provisionComplete":true}}`))
+	})
+	f.route("GET", "/api/clusters/7/workers", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"workers":[{"id":70,"name":"w","status":"provisioned"}],"meta":{"total":1}}`))
+	})
+	f.route("GET", "/api/clusters/7/masters", func(w http.ResponseWriter, _ *http.Request) {
+		st := "provisioning"
+		if reads.Add(1) > 1 {
+			st = "provisioned"
+		}
+		_, _ = w.Write([]byte(`{"masters":[{"id":69,"name":"m","status":"` + st + `"}],"meta":{"total":1}}`))
+	})
+	c := f.client(t, func(cfg *Config) { cfg.PollMin, cfg.PollMax = time.Millisecond, 2*time.Millisecond })
+	h, err := c.WaitForClusterHealthy(t.Context(), 7, 1, true)
+	if err != nil || !h.Healthy(1) || reads.Load() != 2 {
+		t.Fatalf("health %+v, err %v, %d master reads", h, err, reads.Load())
 	}
 }
 

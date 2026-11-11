@@ -2,6 +2,14 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
+## 0.11.0 (2026-11-11)
+
+- **Changed: clusters are built with MTN's tested payload** (MTN's cluster API reference, clusters 170 and 171, 2026-11-10). Disks carry their order and size in bytes, the first data disk is named as MTN names it (`docker-data`, `etcd-data`, `data`), and empty settings aren't sent.
+- **Changed: a Kubernetes cluster showing "No kube masters found" counts as built** when the build reports complete and every master and worker is provisioned. That message is MTN Cloud's console sync defect, not a failed build. The create succeeds and the cluster can be changed in place; `status` still shows `error`. Any other error, or a failed node, still fails.
+- **Added: `root_datastore`** on `master`, `worker` and `host`: the datastore of the 100 GB root disk, by name. Left out, the project's default, `__DEFAULT__`, as before.
+- **Changed: `host_count` on `mtncloud_docker_cluster` is 3 when left out** (was the layout's 1), like `worker_count`. Existing clusters keep their count in place; one replaced with `host_count` left out is rebuilt with 3 hosts, so set `host_count` to keep 1.
+- **Fixed: a cluster's workers list with a `meta` object is read.**
+
 ## 0.10.2 (2026-11-07)
 
 - **Fixed: one instance with a checkbox-style `noAgent` no longer breaks every instance list.** MTN Cloud stores `"on"` for some instances (live 2026-11-06). The list failed for the whole tenant, which also broke `mtncloud_instances` and finding the VM of a catalog order. Flags under an instance's `config` now accept `true`/`false` and `"true"`/`"false"`/`"on"`/`"off"`.

@@ -37,8 +37,9 @@ objects in project `admin`, each logged, deleted and checked with an API 404.
   changed in place only when healthy (cluster `ok`, every node `provisioned`); a failed or timed-out
   create fails the apply and is replaced on the next one. Plan-time checks on a change only warn,
   because `terraform destroy` plans the configuration first; the apply checks again on a fresh read.
-  Destroy force-deletes (`removeResources`, `removeInstances`, `force`) in any state. Docker is proven
-  live; Kubernetes workers fail to join on MTN's side, so a healthy Kubernetes build is unproven.
+  Destroy force-deletes (`removeResources`, `removeInstances`, `force`) in any state. Both are proven
+  live on MTN's tested payload (v0.11.0). A Kubernetes cluster in `error` with only "No kube masters
+  found", after a complete build with every node provisioned, counts as built (D-045).
 - **Load balancers** run through the console task `lboperate.terraform` (D-031); the plugin's own
   guide is `../Octavia-Load-Balancer-Plugin/docs/TERRAFORM-AGENT-GUIDE.md`. Read it before changing
   anything there; the plugin's owner sends updates as short notes.
@@ -64,7 +65,7 @@ objects in project `admin`, each logged, deleted and checked with an API 404.
   anything that writes.
 
 **Your first task:** read the files above, then take the next open item in `backlog-open.md`
-(Kubernetes clusters once MTN fixes the worker join, or the next item the owner names). Propose its plan
+(live in-place scaling of an `ok` Kubernetes cluster, or the next item the owner names). Propose its plan
 (schema with every attribute's Required/Optional/Computed and why, client methods with their Context7
 source, tests, docs) and wait for approval before writing Go. Use the `ship-check` skill before
 calling anything done, and the `mtncloud-code-reviewer` agent on every diff.
