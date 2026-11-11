@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -32,25 +31,5 @@ func TestForbiddenKinds(t *testing.T) {
 	}
 	if msg := newAPIError(http.MethodGet, "/api/x", http.StatusBadGateway, []byte("<html>Access Restricted</html>")).Error(); strings.Contains(msg, "firewall") {
 		t.Errorf("a 502 page isn't a firewall block: %q", msg)
-	}
-}
-
-// Only a 400 naming the autoscaler package means the cluster has no autoscaler yet.
-func TestIsNoAutoscaler(t *testing.T) {
-	pkg := `{"success":false,"msg":"Unable to find autoscaler package mks-autoscaler-1-0-0-package"}`
-	for _, tc := range []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{"400 package", newAPIError(http.MethodPost, "/api/clusters/1/configure-autoscaler", http.StatusBadRequest, []byte(pkg)), true},
-		{"wrapped", fmt.Errorf("hold: %w", newAPIError(http.MethodPost, "/x", http.StatusBadRequest, []byte(pkg))), true},
-		{"500 package", newAPIError(http.MethodPost, "/x", http.StatusInternalServerError, []byte(pkg)), false},
-		{"400 other", newAPIError(http.MethodPost, "/x", http.StatusBadRequest, []byte(`{"msg":"minNodes too high"}`)), false},
-		{"not an API error", fmt.Errorf("autoscaler package"), false},
-	} {
-		if got := IsNoAutoscaler(tc.err); got != tc.want {
-			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
-		}
 	}
 }

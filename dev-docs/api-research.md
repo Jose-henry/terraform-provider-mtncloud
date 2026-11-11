@@ -576,8 +576,16 @@ generate the value; `?ttl=` sets the lease (`0` = none). A `GET` of a missing ke
   `/api/options/taskSets?phase=postProvision`. Floating IP pools: the floating IP options source with
   `zoneId` and `resourcePoolId` (values `pool-<id>`, plus single addresses `ip-<id>`).
 - Workers: `GET /api/clusters/{id}/workers`, `POST /api/clusters/{id}/servers` (add), `DELETE .../servers/{id}`.
-  Autoscaler: `POST /api/clusters/{id}/configure-autoscaler` with
-  `{cluster: {autoScalerEnabled, autoScalerGroups: [{minNodes, maxNodes}]}}`.
+  Autoscaler: **two different things; the provider uses only the create's.** (1) MTN's own: the create's flat
+  `config.autoScalerEnabled:"on"`/`minNodes`/`maxNodes` become `config.autoScalerConfig`, which MTN's
+  `install-cluster-autoscaler.sh` (provision phase, master node type, runs once) reads and bakes into a
+  Deployment plus the `morpheus-agent-config` Secret (`nodeGroupConfiguration` min/max) in `kube-system`. No API
+  call re-runs it, so the range is fixed at build (D-046). (2) The platform's `POST
+  /api/clusters/{id}/configure-autoscaler` (`{cluster: {autoScalerEnabled, autoScalerGroups: [...]}}`) needs the
+  `mks-autoscaler` package: on cluster 183 it answered 400 "Unable to find autoscaler package
+  mks-autoscaler-1-0-0-package" and still flipped the top-level `autoScalerEnabled` true→false; on cluster 180 it
+  answered 400 "... already has an auto scaler config with id 89" (2026-11-11). MTN's README: the top-level
+  `autoScalerEnabled` "is a different feature and is not sent". The provider never calls it (0.11.1).
 
 ### MOS keys in Cypher (read 2026-10-31, `upload-mos-creds-to-cypher.sh`)
 

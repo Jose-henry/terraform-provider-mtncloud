@@ -137,7 +137,7 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 			lb.ServeHTTP(w, r)
 			return
 		}
-		if clu != nil && strings.HasPrefix(r.URL.Path, "/api/clusters") && r.Header.Get("Authorization") == "Bearer test-token" {
+		if clu != nil && (strings.HasPrefix(r.URL.Path, "/api/clusters") || r.URL.Path == "/api/processes") && r.Header.Get("Authorization") == "Bearer test-token" {
 			clu.ServeHTTP(w, r)
 			return
 		}

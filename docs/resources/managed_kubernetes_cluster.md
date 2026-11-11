@@ -55,7 +55,7 @@ resource "mtncloud_managed_kubernetes_cluster" "apps" {
 
 ### Optional
 
-- `autoscaling` (Attributes) Scale workers automatically between these counts. Changes in place. The autoscaler then owns the count, so `worker_count` can't change. Left out, the autoscaler is held at `worker_count`, as MTN's own cluster order does (a cluster built with it off never finishes its workers). (see [below for nested schema](#nestedatt--autoscaling))
+- `autoscaling` (Attributes) Scale workers automatically between these counts. The range is written into the cluster's own autoscaler when the cluster is built, so it can't change afterwards: adding, changing or removing it later is refused (rebuild with `terraform apply -replace`). The autoscaler then owns the count, so `worker_count` can't change. Left out, the autoscaler is built held at `worker_count`, as MTN's own cluster order does (a cluster built with it off never finishes its workers), and `worker_count` changes in place. (see [below for nested schema](#nestedatt--autoscaling))
 - `cloud` (String) Cloud, by name. Left out, the provider's `cloud` (or `MTNCLOUD_CLOUD`); it must be the group's cloud.
 - `create_user` (Boolean) Create your user on the nodes. Left out, `true`, as MTN's own cluster order does. Changing it builds a new cluster.
 - `description` (String) Description. Changes in place.
@@ -72,7 +72,7 @@ resource "mtncloud_managed_kubernetes_cluster" "apps" {
 - `service_cidr` (String) Service network. Left out, the layout's default (`10.96.0.0/12`).
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `worker` (Attributes) Worker settings that differ from the master's: plan, data disks, networks, security groups. Changing them applies to workers added later; existing workers keep theirs. (see [below for nested schema](#nestedatt--worker))
-- `worker_count` (Number) Number of workers. Left out, 3, as MTN's own cluster order does. Changing it adds or removes workers in place (removal takes the newest), and the apply ends when the new workers are ready. With `autoscaling`, it is only the starting count and can't change after the cluster is built: change `autoscaling` instead.
+- `worker_count` (Number) Number of workers, at least 3 (MTN's layouts don't build a cluster with fewer). Left out, 3, as MTN's own cluster order does. Changing it adds or removes workers in place (removal takes the newest), and the apply ends when the new workers are ready. With `autoscaling`, it is only the starting count and can't change after the cluster is built.
 - `workflow` (String) Workflow to run on each node after it is built, by name.
 
 ### Read-Only
@@ -93,7 +93,7 @@ Required:
 
 Optional:
 
-- `root_datastore` (String) Datastore of the fixed 100 GB root disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`.
+- `disk_datastore` (String) Datastore of the master's disks, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`): the fixed 100 GB root disk, and every data disk that doesn't name its own. Left out, the project's default, `__DEFAULT__`.
 - `security_groups` (List of String) Security groups, by name, in addition to the project's default group, which is always applied. Listing the default too changes nothing.
 
 <a id="nestedatt--master--data_volume"></a>
@@ -105,7 +105,7 @@ Required:
 
 Optional:
 
-- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`.
+- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, `disk_datastore`.
 
 
 
@@ -134,9 +134,9 @@ Optional:
 Optional:
 
 - `data_volume` (Attributes List) Data disks, at least one: container data lives on them. The root disk is always 100 GB. Left out, the master's is used. (see [below for nested schema](#nestedatt--worker--data_volume))
+- `disk_datastore` (String) Datastore of the worker's disks, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`): the fixed 100 GB root disk, and every data disk that doesn't name its own. Left out, the master's is used.
 - `networks` (List of String) MTN Networks of the project, by name; the first is the primary interface. Left out, the master's is used.
 - `plan` (String) Plan (size) of each worker node, by name, for example `G4S16`. Left out, the master's is used.
-- `root_datastore` (String) Datastore of the fixed 100 GB root disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the master's is used.
 - `security_groups` (List of String) Security groups, by name, in addition to the project's default group, which is always applied. Listing the default too changes nothing. Left out, the master's is used.
 
 <a id="nestedatt--worker--data_volume"></a>
@@ -148,7 +148,7 @@ Required:
 
 Optional:
 
-- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`.
+- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, `disk_datastore`.
 
 ## Import
 
@@ -161,7 +161,8 @@ terraform import mtncloud_managed_kubernetes_cluster.apps 42
 
 MTN Cloud doesn't report what the nodes were built with (plans, disks, networks, versions), so after
 an import those come from your configuration. The first apply after an import (which needs the cluster `ok`) records them, and only changes
-what can change in place (name, description, labels, worker count, autoscaling). A Docker cluster can't be
+what can change in place (name, description, labels, worker count); the `autoscaling` in your configuration is
+adopted as it is. A Docker cluster can't be
 imported here: use `mtncloud_docker_cluster`.
 
 ## Notes
@@ -171,22 +172,25 @@ imported here: use `mtncloud_docker_cluster`.
   not shown in `labels`), the description `MK8S Cluster` when you set none, your user created on every node, and
   the same networks and security groups on masters and workers unless `worker` says otherwise. The nodes get no
   public IP.
-- **Disks.** The root disk is always 100 GB. `root_datastore` and each data disk's `datastore` can name a datastore
-  of the project (for example `ENCR_AT_REST`; `mtncloud_datastores` lists them); left out, the project's default,
-  `__DEFAULT__`. Workers use the master's unless `worker` sets their own.
+- **Disks.** The root disk is always 100 GB. `disk_datastore` names a datastore of the project for a node's disks
+  (for example `ENCR_AT_REST`; `mtncloud_datastores` lists them), and a data disk's own `datastore` overrides it;
+  left out, the project's default, `__DEFAULT__`. Workers use the master's unless `worker` sets their own.
 - **Layouts.** `single` is `MTN Kubernetes Single-Master` (1 master), `ha3` is `MTN Kubernetes HA (3)` and `ha5`
   is `MTN Kubernetes HA (5)`. The layout sets the number of masters; `worker_count` sets the workers (3 if left out).
 - **Security groups.** List groups that allow the Kubernetes API (TCP 6443) and the kubelet (TCP 10250) between the
   nodes. The project's default group is always applied. A group must be synced to the project.
-- **Autoscaler.** It is always on. With `autoscaling`, it moves the worker count between `min_nodes` and
-  `max_nodes` and owns the count: `worker_count` is only the starting count, can't change after the build, and the
-  current workers are in `worker_ids`. To scale, change `min_nodes` or `max_nodes`, or remove `autoscaling` to set
-  the count yourself. Without it, the autoscaler is held at `worker_count` (MTN's order does the same: a cluster
-  built with it off never finishes its workers, and `min_nodes` can't be left empty), and changing `worker_count`
-  moves it first, so it never removes a worker you added.
+- **Workers.** At least 3: MTN's layouts don't build a cluster with fewer.
+- **Autoscaler.** Every cluster has its own autoscaler, installed by MTN's build with the range it was ordered with.
+  That range is fixed when the cluster is built: MTN Cloud has no call that changes it later, so adding, changing
+  or removing `autoscaling` afterwards is refused (rebuild with `terraform apply -replace` to change it). With
+  `autoscaling`, the autoscaler moves the worker count between `min_nodes` and `max_nodes` and owns the count:
+  `worker_count` is only the starting count, can't change after the build, and the current workers are in
+  `worker_ids`. Without it, the autoscaler is built held at `worker_count` (MTN's order does the same: a cluster
+  built with it off never finishes its workers), and `worker_count` changes in place by adding or removing workers.
+  The autoscaler keeps the range it was built with, so it may remove an idle worker added above that count.
 - **In place:** `name`, `description`, `labels`, `worker_count` without `autoscaling` (workers are added with the
-  worker settings, and removed newest first), the `worker` settings (used for workers added later) and `autoscaling`. Everything else
-  builds a new cluster.
+  worker settings, and removed newest first) and the `worker` settings (used for workers added later). Everything
+  else builds a new cluster.
 - **Names are checked when you plan:** project, plans, networks, security groups, datastores, domain, registry,
   workflow and Kubernetes version. An unknown name lists the valid ones.
 - **kubectl from the console** needs a Customer Admin or Power User login.
