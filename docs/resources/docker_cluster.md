@@ -67,7 +67,7 @@ Required:
 
 Optional:
 
-- `root_datastore` (String) Datastore of the fixed 100 GB root disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`.
+- `disk_datastore` (String) Datastore of the host's disks, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`): the fixed 100 GB root disk, and every data disk that doesn't name its own. Left out, the project's default, `__DEFAULT__`.
 - `security_groups` (List of String) Security groups, by name, in addition to the project's default group, which is always applied. Listing the default too changes nothing.
 
 <a id="nestedatt--host--data_volume"></a>
@@ -79,7 +79,7 @@ Required:
 
 Optional:
 
-- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`.
+- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, `disk_datastore`.
 
 
 
@@ -108,8 +108,8 @@ those come from your configuration. A Kubernetes cluster can't be imported here:
 ## Notes
 
 - **Hosts.** Every host is built from `host`: a fixed 100 GB root disk, at least one data disk (the first is the
-  host's Docker data disk) and at least one network. `root_datastore` and each data disk's `datastore` can name a
-  datastore of the project; left out, the project's default, `__DEFAULT__`. `host_count` is 3 if left out. Your user
+  host's Docker data disk) and at least one network. `disk_datastore` names a datastore of the project for the
+  host's disks, and a data disk's own `datastore` overrides it; left out, the project's default, `__DEFAULT__`. `host_count` is 3 if left out. Your user
   is created on every host. Hosts get no public IP. The project's default security group is always applied, with
   any groups you list.
 - **In place:** `name`, `description`, `labels` and `host_count` (hosts are added with the `host` settings, and

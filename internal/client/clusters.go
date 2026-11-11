@@ -481,15 +481,6 @@ func (c *Client) WaitForWorkersGone(ctx context.Context, id int64, ids []int64) 
 	return err
 }
 
-// ConfigureAutoscaler turns the cluster's worker autoscaler on (with its node range) or off.
-func (c *Client) ConfigureAutoscaler(ctx context.Context, id int64, enabled bool, minNodes, maxNodes int64) error {
-	cl := map[string]any{"autoScalerEnabled": enabled}
-	if enabled {
-		cl["autoScalerGroups"] = []any{map[string]any{"minNodes": minNodes, "maxNodes": maxNodes}}
-	}
-	return c.do(ctx, http.MethodPost, "/api/clusters/"+itoa(id)+"/configure-autoscaler", nil, map[string]any{"cluster": cl}, nil)
-}
-
 // ClusterHealth is a cluster and its workers (Docker: its hosts), read together.
 type ClusterHealth struct {
 	Cluster *Cluster
@@ -507,6 +498,17 @@ func (h *ClusterHealth) Failed() bool {
 	}
 	failed := func(w ClusterNode) bool { return ClusterFailed(w.Status) }
 	return slices.ContainsFunc(h.Workers, failed) || slices.ContainsFunc(h.Masters, failed)
+}
+
+// FailedNodes is the masters and workers that failed.
+func (h *ClusterHealth) FailedNodes() []ClusterNode {
+	var out []ClusterNode
+	for _, w := range slices.Concat(h.Masters, h.Workers) {
+		if ClusterFailed(w.Status) {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 // FailedWorkers names the workers (and masters) that failed.

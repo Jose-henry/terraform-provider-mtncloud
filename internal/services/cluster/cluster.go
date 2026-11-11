@@ -30,10 +30,9 @@ import (
 	"github.com/mtn/terraform-provider-mtncloud/internal/validators"
 )
 
-// scalerPending, in private state, marks a cluster whose autoscaler still has to be configured:
-// the create built it but couldn't configure the autoscaler. It is private because autoscaling is
-// pure configuration, which an apply can't change.
-const scalerPending = "autoscaler_pending"
+// minWorkers is the fewest workers a Kubernetes cluster is built or scaled to. Every QA build with one
+// worker failed at the worker's join (clusters 177, 179, 181), and MTN's order builds three (2026-11-11).
+const minWorkers = 3
 
 const (
 	createTimeout = 90 * time.Minute
@@ -84,7 +83,7 @@ type model struct {
 // node is the master block, and the worker block's overrides (every field optional there).
 type node struct {
 	Plan           types.String `tfsdk:"plan"`
-	RootDatastore  types.String `tfsdk:"root_datastore"`
+	DiskDatastore  types.String `tfsdk:"disk_datastore"`
 	DataVolumes    []volume     `tfsdk:"data_volume"`
 	Networks       []string     `tfsdk:"networks"`
 	SecurityGroups []string     `tfsdk:"security_groups"`
@@ -148,24 +147,24 @@ func nodeAttrsFor(master bool, who string) map[string]schema.Attribute {
 		who = "worker"
 	}
 	inherit := ""
-	rootDefault := " Left out, the project's default, `__DEFAULT__`."
+	diskDefault := " Left out, the project's default, `__DEFAULT__`."
 	if !master {
 		inherit = " Left out, the master's is used."
-		rootDefault = inherit
+		diskDefault = inherit
 	}
 	return map[string]schema.Attribute{
 		"plan": schema.StringAttribute{Required: master, Optional: !master,
 			Description: "Plan (size) of each " + who + " node, by name, for example `G4S16`." + inherit},
-		"root_datastore": schema.StringAttribute{Optional: true,
-			Description: "Datastore of the fixed 100 GB root disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`)." +
-				rootDefault},
+		"disk_datastore": schema.StringAttribute{Optional: true,
+			Description: "Datastore of the " + who + "'s disks, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`): the " +
+				"fixed 100 GB root disk, and every data disk that doesn't name its own." + diskDefault},
 		"data_volume": schema.ListNestedAttribute{Required: master, Optional: !master,
 			Description: "Data disks, at least one: container data lives on them. The root disk is always 100 GB." + inherit,
 			Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
 			NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 				"size": schema.Int64Attribute{Required: true, Description: "Size in GB.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
 				"datastore": schema.StringAttribute{Optional: true,
-					Description: "Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`."},
+					Description: "Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, `disk_datastore`."},
 			}}},
 		"networks": schema.ListAttribute{Required: master, Optional: !master, ElementType: types.StringType,
 			Description: "MTN Networks of the project, by name; the first is the primary interface." + inherit,
@@ -222,6 +221,7 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 			Validators: []validator.Int64{int64validator.AtLeast(1)}}
 		attrs["host_ids"] = schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "IDs of the hosts now in the cluster."}
 		resp.Schema = schema.Schema{
+			Version: schemaVersion,
 			Description: "A Docker cluster, built from MTN's Docker layout (`MTN Docker Cluster`): a set of Docker hosts " +
 				"built from `host`. The hosts' security groups must allow what your containers serve.",
 			Attributes: attrs,
@@ -241,17 +241,21 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 		Description:   "The masters. Changing any of it builds a new cluster.",
 		PlanModifiers: []planmodifier.Object{objectReplaceIfSet{}}}
 	attrs["worker_count"] = schema.Int64Attribute{Optional: true, Computed: true,
-		Description: "Number of workers. Left out, 3, as MTN's own cluster order does. Changing it adds or removes workers in place " +
-			"(removal takes the newest), and the apply ends when the new workers are ready. With `autoscaling`, it is only the starting " +
-			"count and can't change after the cluster is built: change `autoscaling` instead.",
+		Description: "Number of workers, at least 3 (MTN's layouts don't build a cluster with fewer). Left out, 3, as MTN's own " +
+			"cluster order does. Changing it adds or removes workers in place (removal takes the newest), and the apply ends when " +
+			"the new workers are ready. With `autoscaling`, it is only the starting count and can't change after the cluster is built.",
+		// At least minWorkers, checked when it is built or changed (fewerWorkers), not by a validator:
+		// a 0.11.0 cluster kept at 1 or 2 must still plan, and destroy.
 		Validators: []validator.Int64{int64validator.AtLeast(1)}}
 	attrs["worker"] = schema.SingleNestedAttribute{Optional: true, Attributes: nodeAttrs(false),
 		Description: "Worker settings that differ from the master's: plan, data disks, networks, security groups. " +
 			"Changing them applies to workers added later; existing workers keep theirs."}
 	attrs["autoscaling"] = schema.SingleNestedAttribute{Optional: true,
-		Description: "Scale workers automatically between these counts. Changes in place. The autoscaler then owns the count, so " +
-			"`worker_count` can't change. Left out, the autoscaler is held at `worker_count`, as MTN's own cluster order does " +
-			"(a cluster built with it off never finishes its workers).",
+		Description: "Scale workers automatically between these counts. The range is written into the cluster's own autoscaler when " +
+			"the cluster is built, so it can't change afterwards: adding, changing or removing it later is refused (rebuild with " +
+			"`terraform apply -replace`). The autoscaler then owns the count, so `worker_count` can't change. Left out, the " +
+			"autoscaler is built held at `worker_count`, as MTN's own cluster order does (a cluster built with it off never " +
+			"finishes its workers), and `worker_count` changes in place.",
 		Attributes: map[string]schema.Attribute{
 			"min_nodes": schema.Int64Attribute{Required: true, Description: "Fewest workers.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
 			"max_nodes": schema.Int64Attribute{Required: true, Description: "Most workers.", Validators: []validator.Int64{int64validator.AtLeast(1)}},
@@ -259,6 +263,7 @@ func (r *clusterResource) Schema(ctx context.Context, _ resource.SchemaRequest, 
 	attrs["api_url"] = schema.StringAttribute{Computed: true, Description: "Kubernetes API address, when MTN Cloud reports one."}
 	attrs["worker_ids"] = schema.ListAttribute{Computed: true, ElementType: types.StringType, Description: "IDs of the workers now in the cluster."}
 	resp.Schema = schema.Schema{
+		Version: schemaVersion,
 		Description: "A managed Kubernetes cluster, built from MTN's Kubernetes layouts as MTN's own cluster order builds it: " +
 			"the masters from `master`, the workers from `worker` where it is set and the master's settings otherwise, every node " +
 			"with a fixed 100 GB root disk and no public IP, and the `MK8S` label. The security groups must allow the Kubernetes API (TCP 6443) " +
@@ -339,12 +344,6 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 			summary, detail := notHealthy(state.ID.ValueString(), state.Status.ValueString())
 			resp.Diagnostics.AddWarning(summary, detail+" Applying this plan fails unless the cluster is healthy by then.")
 		}
-		if pending, d := req.Private.GetKey(ctx, scalerPending); len(pending) > 0 && !plan.Autoscaling.IsNull() &&
-			r.usable(ctx, state) {
-			// The autoscaler was never configured: an update does it, once the cluster is healthy.
-			resp.Diagnostics.Append(d...)
-			plan.Status, plan.WorkerIDs = types.StringUnknown(), types.ListUnknown(types.StringType)
-		}
 		resp.Diagnostics.Append(r.set(ctx, &resp.Plan, &plan)...)
 		return
 	}
@@ -363,6 +362,7 @@ func (r *clusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPla
 			return
 		}
 	}
+	r.fewerWorkers(plan, &resp.Diagnostics)
 	b := r.build(ctx, &plan, &resp.Diagnostics)
 	if b == nil || resp.Diagnostics.HasError() {
 		return
@@ -409,7 +409,7 @@ func (r *clusterResource) planUpdate(ctx context.Context, plan *model, config, s
 		}
 	}
 	changed := !plan.Name.Equal(state.Name) || !plan.Description.Equal(state.Description) || !plan.Labels.Equal(state.Labels) ||
-		!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount) || !plan.Autoscaling.Equal(state.Autoscaling)
+		!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount)
 	if changed {
 		// The workers are listed again after any change, and the autoscaler may have moved them since the plan.
 		plan.Status, plan.WorkerIDs = types.StringUnknown(), types.ListUnknown(types.StringType)
@@ -424,18 +424,40 @@ func (r *clusterResource) planUpdate(ctx context.Context, plan *model, config, s
 // settings, resolved by name.
 func (r *clusterResource) checkChange(ctx context.Context, plan *model, state model, diags *diag.Diagnostics) {
 	r.checkAutoscaling(ctx, plan, diags)
+	// The range is fixed when the cluster is built: MTN's installer writes it into the cluster's own
+	// autoscaler (install-cluster-autoscaler.sh, run once on the master), and no API call changes it
+	// afterwards. MTN Cloud's configure-autoscaler is a different autoscaler, which MTN's clusters don't
+	// have (QA clusters 180 and 183, 2026-11-11). An imported cluster only adopts its configuration.
+	if !state.Master.IsNull() && !plan.Autoscaling.IsUnknown() && !plan.Autoscaling.Equal(state.Autoscaling) {
+		r.addError(diags, "autoscaling", "Autoscaling is fixed when the cluster is built",
+			"MTN's installer writes the autoscaling range into the cluster's own autoscaler when the cluster is built, and "+
+				"MTN Cloud has no call that changes it afterwards. Put autoscaling back as it was, or rebuild the cluster with "+
+				"the new range (terraform apply -replace). Without autoscaling, worker_count changes in place.")
+	}
 	// With autoscaling, the autoscaler owns the count: worker_count is only where it started, and moving
 	// it by hand would fight the autoscaler (owner, 2026-11-03).
-	if !plan.Autoscaling.IsNull() && !plan.WorkerCount.IsUnknown() && !plan.WorkerCount.Equal(state.WorkerCount) {
+	adopting := state.Master.IsNull()
+	if !plan.WorkerCount.Equal(state.WorkerCount) {
+		r.fewerWorkers(*plan, diags)
+	}
+	// An imported cluster's count is wherever its autoscaler left it: adopted, never refused.
+	if !adopting && !plan.Autoscaling.IsNull() && !plan.WorkerCount.IsUnknown() && !plan.WorkerCount.Equal(state.WorkerCount) {
 		r.addError(diags, "worker_count", "Worker count is set by the autoscaler",
 			"With autoscaling, the autoscaler sets the worker count, so worker_count can't change after the cluster is built. "+
-				"Change autoscaling.min_nodes or max_nodes instead, or remove autoscaling to set the count yourself. To add "+
-				"autoscaling at a new count, change worker_count in one apply and add autoscaling in the next.")
+				"It moves the workers itself between autoscaling.min_nodes and max_nodes.")
 	}
 	if (!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount)) && !plan.WorkerCount.IsUnknown() {
 		// Checked on a copy: building fills defaults (version, CIDRs) the cluster may not have.
 		check := *plan
 		r.build(ctx, &check, diags)
+	}
+}
+
+// fewerWorkers refuses a Kubernetes cluster built, or scaled, to fewer than minWorkers workers.
+func (r *clusterResource) fewerWorkers(m model, diags *diag.Diagnostics) {
+	if n := m.WorkerCount; r.kind == kube && !n.IsNull() && !n.IsUnknown() && n.ValueInt64() < minWorkers {
+		r.addError(diags, "worker_count", "Too few workers",
+			fmt.Sprintf("worker_count must be at least %d: MTN's layouts don't build a cluster with fewer, got %d.", minWorkers, n.ValueInt64()))
 	}
 }
 
@@ -718,8 +740,8 @@ func inherit(w, m node) node {
 	if w.Plan.IsNull() {
 		w.Plan = m.Plan
 	}
-	if w.RootDatastore.IsNull() {
-		w.RootDatastore = m.RootDatastore
+	if w.DiskDatastore.IsNull() {
+		w.DiskDatastore = m.DiskDatastore
 	}
 	if w.DataVolumes == nil {
 		w.DataVolumes = m.DataVolumes
@@ -766,10 +788,16 @@ func (r *clusterResource) nodeConfig(ctx context.Context, b *built, layout clien
 		}
 		return strconv.FormatInt(o.ID, 10), true
 	}
-	rootDS, _ := datastore("root_datastore", n.RootDatastore.ValueString())
-	specs := []client.VolumeSpec{{Root: true, Name: "root", Size: rootGB, DatastoreID: rootDS}}
+	nodeDS, ok := datastore("disk_datastore", n.DiskDatastore.ValueString())
+	if !ok {
+		return out
+	}
+	specs := []client.VolumeSpec{{Root: true, Name: "root", Size: rootGB, DatastoreID: nodeDS}}
 	for i, v := range n.DataVolumes {
-		ds, ok := datastore("data_volume", v.Datastore.ValueString())
+		ds, ok := nodeDS, true
+		if name := v.Datastore.ValueString(); name != "" {
+			ds, ok = datastore("data_volume", name)
+		}
 		if !ok {
 			continue
 		}
@@ -852,7 +880,7 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 	if err != nil || h.Failed() {
 		// A cluster is built only once it is healthy (owner, 2026-11-03). An error, so Terraform marks
 		// it tainted and the next apply replaces it; state keeps it, so a destroy finds it.
-		resp.Diagnostics.AddError(r.unhealthy(id, h, err,
+		resp.Diagnostics.AddError(r.unhealthy(ctx, id, h, err,
 			"The next apply replaces it. If MTN Cloud is only slow, raise timeouts.create."))
 		// One last read, with a minute of its own, so state holds the nodes made so far. Skipped when
 		// you stop the run.
@@ -867,19 +895,9 @@ func (r *clusterResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 		return
 	}
-	c := h.Cluster
-	// The create sent the range. A range you set is configured again, the way the console's Edit
-	// Cluster stores it; held at worker_count, the create's own is enough.
-	if !m.Autoscaling.IsNull() {
-		if err := r.applyAutoscaling(ctx, id, m, &resp.Diagnostics); err != nil {
-			// A warning: an error would taint a cluster that was built fine. Left out of state, the
-			// autoscaler is configured by the next apply.
-			resp.Diagnostics.AddWarning("Autoscaler not configured",
-				fmt.Sprintf("Cluster %d was built, but configuring its autoscaler failed: %s. The next apply tries again.", id, err))
-			resp.Diagnostics.Append(resp.Private.SetKey(ctx, scalerPending, []byte("true"))...)
-		}
-	}
-	r.refresh(ctx, &m, c, false, &resp.Diagnostics)
+	// The create sent the autoscaling range (build), and MTN's installer read it into the cluster's own
+	// autoscaler: nothing more to configure.
+	r.refresh(ctx, &m, h.Cluster, false, &resp.Diagnostics)
 	resp.Diagnostics.Append(r.set(ctx, &resp.State, &m)...)
 }
 
@@ -917,8 +935,8 @@ func wantWorkers(m model) int {
 
 // unhealthy explains a cluster that didn't become healthy, from the wait's last read (h may be nil):
 // what failed, with the platform's own message, or where it stood when the wait ended. then says what
-// happens next.
-func (r *clusterResource) unhealthy(id int64, h *client.ClusterHealth, err error, then string) (string, string) {
+// happens next. A failed node is explained by the step its build failed at, read from its history.
+func (r *clusterResource) unhealthy(ctx context.Context, id int64, h *client.ClusterHealth, err error, then string) (string, string) {
 	node := "worker"
 	if r.kind == docker {
 		node = "host"
@@ -934,7 +952,11 @@ func (r *clusterResource) unhealthy(id int64, h *client.ClusterHealth, err error
 		if f := h.FailedWorkers(); len(f) > 0 {
 			detail += fmt.Sprintf(". Failed %ss: %s", node, strings.Join(f, ", "))
 		}
-		return "Cluster failed", detail + ". " + then
+		detail += "."
+		for _, why := range r.nodeFailures(ctx, h) {
+			detail += "\n\n" + why
+		}
+		return "Cluster failed", detail + "\n\n" + then
 	}
 	stood := "it was never read"
 	if h != nil && h.Cluster != nil {
@@ -949,21 +971,44 @@ func (r *clusterResource) unhealthy(id int64, h *client.ClusterHealth, err error
 	return "Cluster not healthy in time", fmt.Sprintf("Cluster %d wasn't healthy when the wait ended (%s): %s. %s", id, stood, err, then)
 }
 
-// applyAutoscaling sets a Kubernetes cluster's autoscaler: its range, or held at worker_count when
-// autoscaling is left out (as MTN's order builds it). Docker clusters have none.
-func (r *clusterResource) applyAutoscaling(ctx context.Context, id int64, m model, diags *diag.Diagnostics) error {
-	if r.kind != kube {
+// maxExplained is how many failed nodes have their history read: one is enough to see why, and the
+// rest usually failed the same way.
+const maxExplained = 3
+
+// nodeFailures explains each failed node by the step its build failed at, from the node's history:
+// the script, its phase, and the platform's own message. A read that fails, or a run already
+// stopped, leaves the explanation out: the failure itself is still reported.
+func (r *clusterResource) nodeFailures(ctx context.Context, h *client.ClusterHealth) []string {
+	if ctx.Err() != nil {
 		return nil
 	}
-	lo, hi := scalerRange(ctx, m, diags)
-	least, _ := strconv.ParseInt(lo, 10, 64)
-	most, _ := strconv.ParseInt(hi, 10, 64)
-	err := r.client.ConfigureAutoscaler(ctx, id, true, least, most)
-	if client.IsNoAutoscaler(err) {
-		// The setting is stored at create; the software is installed onto the cluster later in its build.
-		return fmt.Errorf("MTN Cloud hasn't installed the autoscaler on cluster %d (%w)", id, err)
+	var out []string
+	for _, n := range h.FailedNodes() {
+		if len(out) == maxExplained {
+			out = append(out, "The other failed nodes are in each node's history in the console.")
+			break
+		}
+		rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		f, err := r.client.NodeFailureOf(rctx, n.ID)
+		cancel()
+		if err != nil || f.String() == "" {
+			continue
+		}
+		why := fmt.Sprintf("%s failed at %s.", n.Name, f)
+		if joinNotReady(f) {
+			why += " MTN Cloud ran the node's join script before the cluster had a join command to give it, so the " +
+				"node never joined. That is on the platform's side, not in this configuration: tell MTN Cloud support, " +
+				"with the cluster's history."
+		}
+		out = append(out, why)
 	}
-	return err
+	return out
+}
+
+// joinNotReady is MTN's `kubeadm worker join` script, which only renders the cluster's join command,
+// run while the cluster has no join command: it renders as "null" (QA clusters 177, 179 and 181, 2026-11-11).
+func joinNotReady(f client.NodeFailure) bool {
+	return strings.Contains(strings.ToLower(f.Step), "join") && strings.Contains(f.Message, "null: command not found")
 }
 
 // scalerRange is the autoscaler's range, as strings: autoscaling's, else worker_count both ways.
@@ -1115,14 +1160,10 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 		resp.Diagnostics.AddError("Invalid cluster ID", fmt.Sprintf("%q is not a cluster ID.", state.ID.ValueString()))
 		return
 	}
-	pending, d := req.Private.GetKey(ctx, scalerPending)
-	resp.Diagnostics.Append(d...)
-	scalerOff := !state.Autoscaling.IsNull() && plan.Autoscaling.IsNull()
 	// Checked again on a fresh read when something on the cluster changes: the plan's status can be old
 	// (-refresh=false), and an import's first plan isn't checked. A timeouts edit alone changes nothing.
 	touches := !plan.Name.Equal(state.Name) || !plan.Description.Equal(state.Description) || !plan.Labels.Equal(state.Labels) ||
-		!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount) || !plan.Autoscaling.Equal(state.Autoscaling) ||
-		scalerOff || len(pending) > 0
+		!plan.Worker.Equal(state.Worker) || !plan.WorkerCount.Equal(state.WorkerCount) || !plan.Autoscaling.Equal(state.Autoscaling)
 	if touches {
 		// The plan only warned about these (planUpdate).
 		if r.checkChange(ctx, &plan, state, &resp.Diagnostics); resp.Diagnostics.HasError() {
@@ -1151,28 +1192,20 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 			return
 		}
 	}
-	// Without autoscaling the autoscaler is held at worker_count (MTN's order never turns it off): it
-	// moves to the new count first, so it doesn't undo the scaling.
-	pinned := plan.Autoscaling.IsNull() && (scalerOff || !plan.WorkerCount.Equal(state.WorkerCount))
-	if pinned {
-		if err := r.applyAutoscaling(ctx, id, plan, &resp.Diagnostics); err != nil {
-			resp.Diagnostics.AddError("Unable to hold the autoscaler at worker_count", err.Error())
-			return
-		}
-	}
-	// Held at worker_count, the autoscaler leaves the count to it, wherever it was before.
-	if !plan.WorkerCount.Equal(state.WorkerCount) || scalerOff {
+	// Manual scaling adds or removes workers only: it never goes through MTN Cloud's autoscaler
+	// package (owner, 2026-11-11; QA cluster 183, where that call failed and blocked the scaling).
+	// An imported cluster with autoscaling keeps the workers its autoscaler has (checkChange).
+	if adoptsScaler := state.Master.IsNull() && !plan.Autoscaling.IsNull(); !plan.WorkerCount.Equal(state.WorkerCount) && !adoptsScaler {
 		r.scale(ctx, id, plan, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			// State still gets the workers made or removed so far, so the next plan starts from them: once
 			// the cluster has settled, a failed worker doesn't count (until then the planned count stays,
-			// and the next refresh corrects it). The autoscaling not yet applied isn't saved. A minute of
-			// its own, skipped when you stop the run.
+			// and the next refresh corrects it). A minute of its own, skipped when you stop the run.
 			if parent.Err() == nil {
 				rctx, rcancel := context.WithTimeout(parent, time.Minute)
 				defer rcancel()
 				if c, err := r.client.GetCluster(rctx, id); err == nil {
-					plan.ID, plan.Autoscaling = state.ID, state.Autoscaling
+					plan.ID = state.ID
 					var quiet diag.Diagnostics
 					r.refresh(rctx, &plan, c, true, &quiet)
 					resp.Diagnostics.Append(r.set(rctx, &resp.State, &plan)...)
@@ -1180,15 +1213,6 @@ func (r *clusterResource) Update(ctx context.Context, req resource.UpdateRequest
 			}
 			return
 		}
-	}
-	if !plan.Autoscaling.IsNull() && (!plan.Autoscaling.Equal(state.Autoscaling) || len(pending) > 0) {
-		if err := r.applyAutoscaling(ctx, id, plan, &resp.Diagnostics); err != nil {
-			resp.Diagnostics.AddError("Unable to configure the autoscaler", err.Error())
-			return
-		}
-	}
-	if len(pending) > 0 {
-		resp.Diagnostics.Append(resp.Private.SetKey(ctx, scalerPending, nil)...)
 	}
 	c, err := r.client.GetCluster(ctx, id)
 	if err != nil {
@@ -1269,7 +1293,7 @@ func (r *clusterResource) scale(ctx context.Context, id int64, plan model, diags
 	// Done only when the cluster is healthy again with every worker ready: it can stay "ok" while
 	// workers come and go, so the workers are read too.
 	if h, err := r.client.WaitForClusterHealthy(ctx, id, want, false); err != nil || h.Failed() {
-		diags.AddError(r.unhealthy(id, h, err, "A failed one isn't counted once the cluster settles, so with worker_count set, the next apply replaces it."))
+		diags.AddError(r.unhealthy(ctx, id, h, err, "A failed one isn't counted once the cluster settles, so with worker_count set, the next apply replaces it."))
 	}
 }
 

@@ -2,6 +2,16 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
+## 0.11.1 (2026-11-11)
+
+- **Changed: `root_datastore` is renamed `disk_datastore`** on `master`, `worker` and `host`, and now also covers every data disk that doesn't name its own `datastore` (in 0.11.0 those went to the project's default). A configuration that set `root_datastore` in 0.11.0 renames the argument, and the stored state is carried over, so nothing is rebuilt. Existing nodes keep their disks where they are; workers or hosts added later put data disks without their own `datastore` on `disk_datastore`.
+- **Fixed: changing `worker_count` on a Kubernetes cluster no longer goes through MTN Cloud's autoscaler package.** It only adds or removes workers. In 0.11.0 the provider first sent the new count to the platform autoscaler, which MTN's clusters don't have: the call failed ("Unable to find autoscaler package"), the scaling never ran, and the failed call turned the platform's autoscaler flag off. A cluster built with `autoscaling` is also no longer sent that call after its build.
+- **Changed: `autoscaling` is fixed when the cluster is built.** MTN's build installs the cluster's own autoscaler with the range it was ordered with, and MTN Cloud has no call that changes that range later. Adding, changing or removing `autoscaling` on a built cluster now shows a warning at plan and is refused at apply before anything changes (rebuild with `terraform apply -replace`). An imported cluster adopts the `autoscaling` in its configuration.
+- **Changed: a Kubernetes cluster is built, or scaled, with at least 3 workers.** MTN's layouts don't build a cluster with fewer: every QA build with one worker failed. A new cluster, or a `worker_count` change, below 3 now fails at plan. A cluster already at 1 or 2 keeps working as it is: it plans, changes in place and destroys.
+- **Fixed: importing a cluster with `autoscaling` keeps the workers its autoscaler made.** `worker_count` in the configuration no longer has to match them, and nothing is added or removed.
+- **Changed: a failed cluster build says why.** Each failed master, worker or host (up to three) is explained from its build history: the script it failed at, its phase and MTN Cloud's own message, for example "worker-1 failed at kubeadm worker join (execute script): bash: line 1: null: command not found". That one, MTN's worker join script run before the cluster had a join command, is called out as a platform-side failure.
+- **Security: built with Go 1.26.11** (fixes GO-2026-6859 in the Go standard library's `net/http`).
+
 ## 0.11.0 (2026-11-11)
 
 - **Changed: clusters are built with MTN's tested payload** (MTN's cluster API reference, clusters 170 and 171, 2026-11-10). Disks carry their order and size in bytes, the first data disk is named as MTN names it (`docker-data`, `etcd-data`, `data`), and empty settings aren't sent.

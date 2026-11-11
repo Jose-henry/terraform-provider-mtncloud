@@ -4,6 +4,26 @@ Each entry records what was decided, why, and what it rules out. Change a decisi
 entry that supersedes it, never by editing history.
 
 
+## D-046 Kubernetes autoscaling is fixed at build; manual scaling never calls the autoscaler (owner, 2026-11-11)
+Owner: "manual autoscaling shouldn't depend on the autoscaler package". Sources: MTN's
+`install-cluster-autoscaler.sh` and README (Manage Kubernetes), QA clusters 180 and 183.
+- MTN's in-cluster autoscaler gets its min/max once, from `config.autoScalerConfig`, when the installer runs on
+  the master during the build; it bakes them into a Deployment and a Secret. No API call changes them later.
+- `POST /api/clusters/{id}/configure-autoscaler` is the platform's own autoscaler (package `mks-autoscaler`),
+  which MTN's clusters don't have. It failed on 180 and 183, blocked the scaling, and flipped the top-level
+  `autoScalerEnabled` off. The provider and client no longer call it (supersedes the 0.11.0 behaviour of
+  holding the range at `worker_count` before scaling, and the group-id resend tried in this release).
+- So: the create sends the range (flat keys, as before); `worker_count` changes only add or remove workers;
+  adding, changing or removing `autoscaling` on a built cluster warns at plan and is refused at apply (rebuild to change it); an
+  imported cluster adopts its configuration. Known gap: a cluster built without `autoscaling` has its
+  autoscaler held at the built count, and it may remove an idle worker added above it.
+- `worker_count` is at least 3 for Kubernetes when a cluster is built or the count changes (not a schema
+  validator: a 0.11.0 cluster at 1 or 2 must still plan and destroy): every 1-worker QA build failed at the
+  worker's join (177, 179, 181), and MTN's order builds 3. `autoscaling.min_nodes` may still be lower: the
+  build starts at `worker_count`, and the autoscaler removes only idle workers.
+- An imported cluster with `autoscaling` keeps its live workers: `worker_count` is adopted, not scaled to.
+- 0.11.0 states may hold the private key `autoscaler_pending`; nothing reads it now, and it is harmless.
+
 ## D-045 Clusters: MTN's tested payload, and the Kubernetes sync defect isn't a failure (owner, 2026-11-11)
 Source: `MTN-Cloud-Service-Automation/docs/morpheus-cluster-api-payloads.md` (clusters 170 Docker `ok`,
 171 Kubernetes single-master; tenant 72, 2026-11-10). The payload follows it: volumes with `displayOrder`
@@ -14,7 +34,7 @@ Every Kubernetes cluster on MTN Cloud ends `error`, "No kube masters found", wit
 message, `provisionComplete: true`, and every master (`/api/clusters/{id}/masters`) and worker
 `provisioned` counts as healthy for create, scaling and in-place changes (`Cluster.Usable`,
 `ClusterHealth.Healthy`). `status` shows the platform's value. Any other error or a failed node still fails.
-Also: `root_datastore` per node block (default `__DEFAULT__`, sent as `"auto"`); both kinds default to 3
+Also: `root_datastore` (renamed `disk_datastore` in 0.11.1, and it also covers data disks without their own datastore) per node block (default `__DEFAULT__`, sent as `"auto"`); both kinds default to 3
 workers or hosts; the project's default security group stays in the payload (owner).
 
 ## D-044 A lookup failure after a good order is a warning, not a failed apply (owner's fix list, 2026-11-06)
