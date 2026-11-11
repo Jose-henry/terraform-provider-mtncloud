@@ -4,6 +4,19 @@ Each entry records what was decided, why, and what it rules out. Change a decisi
 entry that supersedes it, never by editing history.
 
 
+## D-045 Clusters: MTN's tested payload, and the Kubernetes sync defect isn't a failure (owner, 2026-11-11)
+Source: `MTN-Cloud-Service-Automation/docs/morpheus-cluster-api-payloads.md` (clusters 170 Docker `ok`,
+171 Kubernetes single-master; tenant 72, 2026-11-10). The payload follows it: volumes with `displayOrder`
+and `sizeBytes`, first data disk named `docker-data` / `etcd-data` / `data`, no server `visibility`, no
+empty `defaultRepoAccount`. The worker count stays in `server.nodeCount` (finding A).
+Every Kubernetes cluster on MTN Cloud ends `error`, "No kube masters found", with every node provisioned
+(finding B: a console inventory-sync defect). Owner: that must not fail Terraform. A cluster with that
+message, `provisionComplete: true`, and every master (`/api/clusters/{id}/masters`) and worker
+`provisioned` counts as healthy for create, scaling and in-place changes (`Cluster.Usable`,
+`ClusterHealth.Healthy`). `status` shows the platform's value. Any other error or a failed node still fails.
+Also: `root_datastore` per node block (default `__DEFAULT__`, sent as `"auto"`); both kinds default to 3
+workers or hosts; the project's default security group stays in the payload (owner).
+
 ## D-044 A lookup failure after a good order is a warning, not a failed apply (owner's fix list, 2026-11-06)
 Refines the rule of 2026-10-30 that success is the workflow's result and what it made, running. When
 the workflow succeeded and only the follow-up lookup failed (network, 5xx, login, unreadable answer),

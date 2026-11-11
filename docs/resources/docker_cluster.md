@@ -42,7 +42,7 @@ resource "mtncloud_docker_cluster" "builds" {
 - `description` (String) Description. Changes in place.
 - `domain` (String) Network domain of the hosts, by name, for example `localdomain`.
 - `group` (String) Group, by name. Left out, the provider's `group` (or `MTNCLOUD_GROUP`).
-- `host_count` (Number) Number of hosts. Left out, the layout's default (1). Changing it adds or removes hosts in place (removal takes the newest), and the apply ends when the new hosts are ready.
+- `host_count` (Number) Number of hosts. Left out, 3. Changing it adds or removes hosts in place (removal takes the newest), and the apply ends when the new hosts are ready.
 - `hostname` (String) Host name prefix of the hosts. Left out, the resource name.
 - `labels` (List of String) Labels, on the cluster and its hosts. Change in place (the hosts keep the labels they were built with).
 - `project` (String) Project the hosts are built in, by name. Left out, the provider's `project` (or `MTNCLOUD_PROJECT`).
@@ -54,7 +54,7 @@ resource "mtncloud_docker_cluster" "builds" {
 
 - `host_ids` (List of String) IDs of the hosts now in the cluster.
 - `id` (String) Cluster ID.
-- `status` (String) Status: `ok` when healthy. The cluster can be changed in place only while it is `ok`.
+- `status` (String) Status, as MTN Cloud reports it: `ok` when healthy. The cluster can be changed in place only while it is healthy.
 
 <a id="nestedatt--host"></a>
 ### Nested Schema for `host`
@@ -67,6 +67,7 @@ Required:
 
 Optional:
 
+- `root_datastore` (String) Datastore of the fixed 100 GB root disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`.
 - `security_groups` (List of String) Security groups, by name, in addition to the project's default group, which is always applied. Listing the default too changes nothing.
 
 <a id="nestedatt--host--data_volume"></a>
@@ -78,7 +79,7 @@ Required:
 
 Optional:
 
-- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default.
+- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`.
 
 
 
@@ -106,8 +107,11 @@ those come from your configuration. A Kubernetes cluster can't be imported here:
 
 ## Notes
 
-- **Hosts.** Every host is built from `host`: a fixed 100 GB root disk, at least one data disk (each can name a
-  datastore of the project) and at least one network. Your user is created on every host. Hosts get no public IP.
+- **Hosts.** Every host is built from `host`: a fixed 100 GB root disk, at least one data disk (the first is the
+  host's Docker data disk) and at least one network. `root_datastore` and each data disk's `datastore` can name a
+  datastore of the project; left out, the project's default, `__DEFAULT__`. `host_count` is 3 if left out. Your user
+  is created on every host. Hosts get no public IP. The project's default security group is always applied, with
+  any groups you list.
 - **In place:** `name`, `description`, `labels` and `host_count` (hosts are added with the `host` settings, and
   removed newest first). Everything else builds a new cluster.
 - **Names are checked when you plan:** project, plan, networks, security groups, datastores, domain and workflow. An unknown name lists the valid ones.

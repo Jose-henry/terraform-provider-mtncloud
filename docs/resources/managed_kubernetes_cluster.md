@@ -2,12 +2,12 @@
 page_title: "mtncloud_managed_kubernetes_cluster Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  A managed Kubernetes cluster, built from MTN's Kubernetes layouts as MTN's own cluster order builds it: the masters from master, the workers from worker where it is set and the master's settings otherwise, every node with a fixed 100 GB root disk and no public IP, and the MK8S label. The security groups must allow the Kubernetes API (TCP 6443) and the kubelet (TCP 10250) between the nodes. Only a Customer Admin or Power User login can run kubectl on it from the console.
+  A managed Kubernetes cluster, built from MTN's Kubernetes layouts as MTN's own cluster order builds it: the masters from master, the workers from worker where it is set and the master's settings otherwise, every node with a fixed 100 GB root disk and no public IP, and the MK8S label. The security groups must allow the Kubernetes API (TCP 6443) and the kubelet (TCP 10250) between the nodes. Only a Customer Admin or Power User login can run kubectl on it from the console. MTN Cloud's console can show a cluster that built fine as error with "No kube masters found": when every master and worker is provisioned and the build reports complete, the cluster counts as built and can be changed in place, and status still shows error.
 ---
 
 # mtncloud_managed_kubernetes_cluster
 
-A managed Kubernetes cluster, built from MTN's Kubernetes layouts as MTN's own cluster order builds it: the masters from `master`, the workers from `worker` where it is set and the master's settings otherwise, every node with a fixed 100 GB root disk and no public IP, and the `MK8S` label. The security groups must allow the Kubernetes API (TCP 6443) and the kubelet (TCP 10250) between the nodes. Only a Customer Admin or Power User login can run kubectl on it from the console.
+A managed Kubernetes cluster, built from MTN's Kubernetes layouts as MTN's own cluster order builds it: the masters from `master`, the workers from `worker` where it is set and the master's settings otherwise, every node with a fixed 100 GB root disk and no public IP, and the `MK8S` label. The security groups must allow the Kubernetes API (TCP 6443) and the kubelet (TCP 10250) between the nodes. Only a Customer Admin or Power User login can run kubectl on it from the console. MTN Cloud's console can show a cluster that built fine as `error` with "No kube masters found": when every master and worker is provisioned and the build reports complete, the cluster counts as built and can be changed in place, and `status` still shows `error`.
 
 ## Example Usage
 
@@ -79,7 +79,7 @@ resource "mtncloud_managed_kubernetes_cluster" "apps" {
 
 - `api_url` (String) Kubernetes API address, when MTN Cloud reports one.
 - `id` (String) Cluster ID.
-- `status` (String) Status: `ok` when healthy. The cluster can be changed in place only while it is `ok`.
+- `status` (String) Status, as MTN Cloud reports it: `ok` when healthy. The cluster can be changed in place only while it is healthy.
 - `worker_ids` (List of String) IDs of the workers now in the cluster.
 
 <a id="nestedatt--master"></a>
@@ -93,6 +93,7 @@ Required:
 
 Optional:
 
+- `root_datastore` (String) Datastore of the fixed 100 GB root disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`.
 - `security_groups` (List of String) Security groups, by name, in addition to the project's default group, which is always applied. Listing the default too changes nothing.
 
 <a id="nestedatt--master--data_volume"></a>
@@ -104,7 +105,7 @@ Required:
 
 Optional:
 
-- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default.
+- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`.
 
 
 
@@ -135,6 +136,7 @@ Optional:
 - `data_volume` (Attributes List) Data disks, at least one: container data lives on them. The root disk is always 100 GB. Left out, the master's is used. (see [below for nested schema](#nestedatt--worker--data_volume))
 - `networks` (List of String) MTN Networks of the project, by name; the first is the primary interface. Left out, the master's is used.
 - `plan` (String) Plan (size) of each worker node, by name, for example `G4S16`. Left out, the master's is used.
+- `root_datastore` (String) Datastore of the fixed 100 GB root disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the master's is used.
 - `security_groups` (List of String) Security groups, by name, in addition to the project's default group, which is always applied. Listing the default too changes nothing. Left out, the master's is used.
 
 <a id="nestedatt--worker--data_volume"></a>
@@ -146,7 +148,7 @@ Required:
 
 Optional:
 
-- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default.
+- `datastore` (String) Datastore of the disk, by name, for example `ENCR_AT_REST` (see `mtncloud_datastores`). Left out, the project's default, `__DEFAULT__`.
 
 ## Import
 
@@ -169,8 +171,9 @@ imported here: use `mtncloud_docker_cluster`.
   not shown in `labels`), the description `MK8S Cluster` when you set none, your user created on every node, and
   the same networks and security groups on masters and workers unless `worker` says otherwise. The nodes get no
   public IP.
-- **Disks.** The root disk is always 100 GB on the project's default datastore and can't be changed. Each data disk
-  can name a datastore of the project (for example `ENCR_AT_REST`; `mtncloud_datastores` lists them).
+- **Disks.** The root disk is always 100 GB. `root_datastore` and each data disk's `datastore` can name a datastore
+  of the project (for example `ENCR_AT_REST`; `mtncloud_datastores` lists them); left out, the project's default,
+  `__DEFAULT__`. Workers use the master's unless `worker` sets their own.
 - **Layouts.** `single` is `MTN Kubernetes Single-Master` (1 master), `ha3` is `MTN Kubernetes HA (3)` and `ha5`
   is `MTN Kubernetes HA (5)`. The layout sets the number of masters; `worker_count` sets the workers (3 if left out).
 - **Security groups.** List groups that allow the Kubernetes API (TCP 6443) and the kubelet (TCP 10250) between the
@@ -192,6 +195,10 @@ imported here: use `mtncloud_docker_cluster`.
   workers. A create that fails, or isn't healthy when its wait ends, is kept in state and marked tainted: the next
   apply replaces it, and a destroy deletes it. With `worker_count` set in your configuration (with `autoscaling`, the autoscaler handles its workers), a worker that has failed isn't counted once the
   cluster settles: the next plan shows the cluster short, and its apply removes the failed worker and builds a new one.
+- **"No kube masters found".** MTN Cloud's console can show a cluster that built fine as `error` with this message.
+  When the build reports complete and every master and worker is provisioned, the cluster counts as built: the
+  create succeeds, and the cluster can be changed in place. `status` still shows `error`, as MTN Cloud reports it.
+  Any other error, or a failed node, still fails the apply.
 - **Changes need a healthy cluster.** While `status` isn't `ok` (still building, failed, or warning), the plan
   warns about an in-place change and its apply fails, changing nothing. A destroy works in any state, whatever
   the configuration says, and

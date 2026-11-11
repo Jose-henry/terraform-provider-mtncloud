@@ -31,6 +31,7 @@ type clusterStore struct {
 	updated    []map[string]any // each PUT's "cluster"
 	failScaler int              // the next n configure-autoscaler calls fail with a 400
 	noScaler   int              // the next n find no autoscaler installed, as on a cluster still building
+	syncDefect bool             // new clusters end "error", "No kube masters found", built fine (clusters 143-171)
 	stuck      bool             // new clusters stay "provisioning", as MTN Cloud's did on 2026-11-03
 	failAdd    bool             // workers added from now on fail to build
 	failed     map[int64]bool   // workers that failed
@@ -69,6 +70,10 @@ func (s *clusterStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"status": "ok", "serviceUrl": "https://10.0.0.10:6443", "layout": map[string]any{"id": layout}, "type": typ}
 			if s.stuck {
 				s.clusters[id]["status"] = "provisioning"
+			}
+			if s.syncDefect {
+				s.clusters[id]["status"], s.clusters[id]["statusMessage"] = "error", "No kube masters found"
+				s.clusters[id]["provisionComplete"] = true
 			}
 			nodes, _ := c["worker"].(map[string]any)
 			if nodes == nil {
@@ -115,7 +120,9 @@ func (s *clusterStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			list = append(list, map[string]any{"id": wid, "name": "w-" + strconv.FormatInt(wid, 10), "status": status})
 		}
-		reply(map[string]any{"workers": list})
+		reply(map[string]any{"workers": list, "meta": map[string]any{"total": len(list)}})
+	case parts[1] == "masters":
+		reply(map[string]any{"masters": []any{map[string]any{"id": id*10 + 1, "name": "m", "status": "provisioned"}}, "meta": map[string]any{"total": 1}})
 	case parts[1] == "servers" && r.Method == http.MethodPost:
 		b := body("server")
 		if b["serverType"] == nil { // as MTN Cloud answers it (QA cluster 148)
@@ -229,8 +236,8 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 					// The shape of MTN's Manage Kubernetes/CreateCluster.sh.
 					node := `"networkInterfaces":[{"network":{"id":9350},"primaryInterface":true}],` +
 						`"securityGroups":["11111111-1111-4111-8111-111111111111","22222222-2222-4222-8222-222222222222"],` +
-						`"volumes":[{"datastoreId":"auto","id":-1,"name":"root","rootVolume":true,"size":100,"storageType":11},` +
-						`{"datastoreId":"414","id":-1,"name":"data-1","rootVolume":false,"size":50,"storageType":11}]`
+						`"volumes":[{"datastoreId":"auto","displayOrder":0,"id":-1,"name":"root","rootVolume":true,"size":100,"sizeBytes":107374182400,"storageType":11},` +
+						`{"datastoreId":"414","displayOrder":1,"id":-1,"name":"etcd-data","rootVolume":false,"size":50,"sizeBytes":53687091200,"storageType":11}]`
 					for k, want := range map[string]string{
 						"layout": `{"id":315}`, "group": `{"id":9101}`, "cloud": `{"id":4}`, "type": `"kubernetes-cluster"`,
 						"taskSetId": `61`, "labels": `["MK8S","apps"]`, "description": `"MK8S Cluster"`, "visibility": `"private"`,
@@ -238,7 +245,7 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 							`"maxNodes":"4","minNodes":"1","podCidr":"10.244.0.0/16","serviceCidr":"10.96.0.0/12","workerCount":2}`,
 						"worker": `{"config":{"createUser":true,"noAgent":false,"resourcePoolId":9201},` +
 							`"networkInterfaces":[{"network":{"id":9350},"primaryInterface":true}],"nodeCount":2,"plan":{"id":9402},` +
-							strings.TrimPrefix(node, `"networkInterfaces":[{"network":{"id":9350},"primaryInterface":true}],`) + `}`,
+							strings.ReplaceAll(strings.TrimPrefix(node, `"networkInterfaces":[{"network":{"id":9350},"primaryInterface":true}],`), `"etcd-data"`, `"data"`) + `}`,
 					} {
 						if got := jsonOf(c[k]); got != want {
 							t.Errorf("cluster.%s\n got %s\nwant %s", k, got, want)
@@ -248,7 +255,7 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 					// worker block's alone is ignored (QA cluster 146).
 					for k, want := range map[string]string{
 						"name": `"apps-node"`, "hostname": `"apps"`, "networkDomain": `{"id":16}`, "plan": `{"id":9401}`, "nodeCount": `2`,
-						"sshKeyPair": `null`, "labels": `["MK8S","apps"]`,
+						"sshKeyPair": `null`, "labels": `["MK8S","apps"]`, "visibility": `null`,
 						"config": `{"autoScalerEnabled":"on","createUser":true,"customOptions":{"k8s_version":"1.35.3-1.1",` +
 							`"podCidr":"10.244.0.0/16","serviceCidr":"10.96.0.0/12"},"maxNodes":"4","minNodes":"1","noAgent":false,` +
 							`"nodeCount":2,"resourcePoolId":9201}`,
@@ -406,8 +413,10 @@ resource "mtncloud_docker_cluster" "docker" {
 					for k, want := range map[string]string{
 						"nodeCount": `1`, "sshKeyPair": `null`,
 						"securityGroups": `["11111111-1111-4111-8111-111111111111","22222222-2222-4222-8222-222222222222"]`,
-						"volumes":        `[{"datastoreId":"auto","id":-1,"name":"root","rootVolume":true,"size":100,"storageType":11},{"datastoreId":"auto","id":-1,"name":"data-1","rootVolume":false,"size":100,"storageType":11}]`,
-						"config":         `{"createUser":true,"noAgent":false,"nodeCount":1,"resourcePoolId":9201}`,
+						"volumes": `[{"datastoreId":"auto","displayOrder":0,"id":-1,"name":"root","rootVolume":true,"size":100,"sizeBytes":107374182400,"storageType":11},` +
+							`{"datastoreId":"auto","displayOrder":1,"id":-1,"name":"docker-data","rootVolume":false,"size":100,"sizeBytes":107374182400,"storageType":11}]`,
+						"visibility": `null`,
+						"config":     `{"createUser":true,"noAgent":false,"nodeCount":1,"resourcePoolId":9201}`,
 					} {
 						if got := jsonOf(srv[k]); got != want {
 							t.Errorf("cluster.server.%s\n got %s\nwant %s", k, got, want)
@@ -771,10 +780,12 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 						t.Errorf("config: %s", jsonOf(top))
 					}
 					srv := c["server"].(map[string]any)
-					if got := jsonOf(srv["volumes"]); got != `[{"datastoreId":"auto","id":-1,"name":"root","rootVolume":true,"size":100,"storageType":11},{"datastoreId":"auto","id":-1,"name":"data-1","rootVolume":false,"size":50,"storageType":11}]` {
+					if got := jsonOf(srv["volumes"]); got != `[{"datastoreId":"auto","displayOrder":0,"id":-1,"name":"root","rootVolume":true,"size":100,"sizeBytes":107374182400,"storageType":11},`+
+						`{"datastoreId":"auto","displayOrder":1,"id":-1,"name":"etcd-data","rootVolume":false,"size":50,"sizeBytes":53687091200,"storageType":11}]` {
 						t.Errorf("volumes: %s", got)
 					}
-					if got := jsonOf(c["worker"].(map[string]any)["volumes"]); got != jsonOf(srv["volumes"]) {
+					// The worker's disks are the master's, its data disk named as MTN's payload names it.
+					if got := jsonOf(c["worker"].(map[string]any)["volumes"]); got != strings.ReplaceAll(jsonOf(srv["volumes"]), "etcd-data", "data") {
 						t.Errorf("worker volumes %s, want the master's", got)
 					}
 					if len(s.scaler) != 0 {
@@ -969,4 +980,107 @@ func TestCluster_DestroyIgnoresRefusedChange(t *testing.T) {
 	if len(s.added) != 0 {
 		t.Errorf("workers added: %s", jsonOf(s.added))
 	}
+}
+
+// MTN Cloud's Kubernetes sync defect (owner, 2026-11-11): every node is built and the cluster still says
+// "error", "No kube masters found". The apply succeeds, the next plan is empty, and it changes in place.
+// The root disk goes on the datastore chosen, and a worker count left out is 3.
+func TestCluster_SyncDefectIsBuilt(t *testing.T) {
+	f, s := clusterFakes(t)
+	s.syncDefect = true
+	cfg := func(desc string) string {
+		return f.providerConfig() + `
+resource "mtncloud_managed_kubernetes_cluster" "k8s" {
+  name        = "apps"
+  group       = "MTNNG_CLOUD_AZ_1"
+  project     = "web-prod-Acme"
+  description = "` + desc + `"
+  master = {
+    plan           = "G2S4"
+    root_datastore = "ENCR_AT_REST"
+    data_volume    = [{ size = 50 }]
+    networks       = ["app-net"]
+  }
+}
+`
+	}
+	addr := "mtncloud_managed_kubernetes_cluster.k8s"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg("one"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("status"), knownvalue.StringExact("error")),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("worker_count"), knownvalue.Int64Exact(3)),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("worker_ids"), knownvalue.ListSizeExact(3)),
+				},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					srv := s.posted[0]["server"].(map[string]any)
+					vols := srv["volumes"].([]any)
+					if vols[0].(map[string]any)["datastoreId"] != "414" || vols[1].(map[string]any)["datastoreId"] != "auto" {
+						t.Errorf("volumes: %s", jsonOf(vols))
+					}
+					if jsonOf(srv["nodeCount"]) != "3" {
+						t.Errorf("server.nodeCount %s, want 3", jsonOf(srv["nodeCount"]))
+					}
+					// The workers take the master's root datastore.
+					wv := s.posted[0]["worker"].(map[string]any)["volumes"].([]any)
+					if wv[0].(map[string]any)["datastoreId"] != "414" {
+						t.Errorf("worker volumes: %s", jsonOf(wv))
+					}
+					return nil
+				},
+			},
+			{Config: cfg("one"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				Config: cfg("two"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction(addr, plancheck.ResourceActionUpdate)}},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("description"), knownvalue.StringExact("two"))},
+			},
+		},
+	})
+}
+
+// A Docker cluster with host_count left out gets 3 hosts (owner, 2026-11-11), and plans clean after.
+func TestDockerCluster_DefaultCount(t *testing.T) {
+	f, s := clusterFakes(t)
+	cfg := f.providerConfig() + `
+resource "mtncloud_docker_cluster" "docker" {
+  name    = "builds"
+  group   = "MTNNG_CLOUD_AZ_1"
+  project = "web-prod-Acme"
+  host = {
+    plan        = "G2S4"
+    data_volume = [{ size = 100 }]
+    networks    = ["app-net"]
+  }
+}
+`
+	addr := "mtncloud_docker_cluster.docker"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{
+				Config: cfg,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("host_count"), knownvalue.Int64Exact(3)),
+					statecheck.ExpectKnownValue(addr, tfjsonpath.New("host_ids"), knownvalue.ListSizeExact(3)),
+				},
+				Check: func(*terraform.State) error {
+					s.mu.Lock()
+					defer s.mu.Unlock()
+					if got := jsonOf(s.posted[0]["server"].(map[string]any)["nodeCount"]); got != "3" {
+						t.Errorf("server.nodeCount %s, want 3", got)
+					}
+					return nil
+				},
+			},
+			{Config: cfg, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
 }
