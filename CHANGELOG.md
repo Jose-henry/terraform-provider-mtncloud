@@ -10,6 +10,7 @@ All notable changes to this provider. Format: [Keep a Changelog](https://keepach
 - **Changed: a Kubernetes cluster is built, or scaled, with at least 3 workers.** MTN's layouts don't build a cluster with fewer: every QA build with one worker failed. A new cluster, or a `worker_count` change, below 3 now fails at plan. A cluster already at 1 or 2 keeps working as it is: it plans, changes in place and destroys.
 - **Fixed: importing a cluster with `autoscaling` keeps the workers its autoscaler made.** `worker_count` in the configuration no longer has to match them, and nothing is added or removed.
 - **Changed: a failed cluster build says why.** Each failed master, worker or host (up to three) is explained from its build history: the script it failed at, its phase and MTN Cloud's own message, for example "worker-1 failed at kubeadm worker join (execute script): bash: line 1: null: command not found". That one, MTN's worker join script run before the cluster had a join command, is called out as a platform-side failure.
+- **Security: built with Go 1.26.11** (fixes GO-2026-6859 in the Go standard library's `net/http`).
 
 ## 0.11.0 (2026-11-11)
 
