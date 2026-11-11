@@ -325,6 +325,48 @@ resource "mtncloud_managed_kubernetes_cluster" "k8s" {
 	})
 }
 
+// Masters and workers take their own security groups: the worker block's list goes to the workers
+// only, and the project's default group is on both.
+func TestCluster_WorkerSecurityGroups(t *testing.T) {
+	f, s := clusterFakes(t)
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{
+			Config: f.providerConfig() + `
+resource "mtncloud_managed_kubernetes_cluster" "k8s" {
+  name         = "apps"
+  group        = "MTNNG_CLOUD_AZ_1"
+  project      = "web-prod-Acme"
+  worker_count = 3
+  master = {
+    plan            = "G2S4"
+    data_volume     = [{ size = 50 }]
+    networks        = ["app-net"]
+    security_groups = ["web"]
+  }
+  worker = {
+    security_groups = ["default"]
+  }
+}
+`,
+			Check: func(*terraform.State) error {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				c := s.posted[0]
+				master := jsonOf(c["server"].(map[string]any)["securityGroups"])
+				worker := jsonOf(c["worker"].(map[string]any)["securityGroups"])
+				if want := `["11111111-1111-4111-8111-111111111111","22222222-2222-4222-8222-222222222222"]`; master != want {
+					t.Errorf("master security groups\n got %s\nwant %s (default and web)", master, want)
+				}
+				if want := `["11111111-1111-4111-8111-111111111111"]`; worker != want {
+					t.Errorf("worker security groups\n got %s\nwant %s (default only)", worker, want)
+				}
+				return nil
+			},
+		}},
+	})
+}
+
 // Every name is checked when you plan, and nothing is built.
 func TestCluster_CheckedAtPlan(t *testing.T) {
 	f, s := clusterFakes(t)
