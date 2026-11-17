@@ -337,6 +337,23 @@ data "mtncloud_catalog_items" "featured" {
 	}
 }
 
+// mtncloud_tenant gives the login's own tenant, so a tenant_id (identity sources, users) never has to
+// be copied from the console (tester's fix 19).
+func TestTenantDataSource(t *testing.T) {
+	f := newFakeAPI(t)
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{{
+			Config: f.providerConfig() + "data \"mtncloud_tenant\" \"me\" {}\n",
+			ConfigStateChecks: []statecheck.StateCheck{
+				statecheck.ExpectKnownValue("data.mtncloud_tenant.me", tfjsonpath.New("id"), knownvalue.Int64Exact(9001)),
+				statecheck.ExpectKnownValue("data.mtncloud_tenant.me", tfjsonpath.New("name"), knownvalue.StringExact("Acme")),
+				statecheck.ExpectKnownValue("data.mtncloud_tenant.me", tfjsonpath.New("master"), knownvalue.Bool(false)),
+			},
+		}},
+	})
+}
+
 func TestDataSources_ClearErrors(t *testing.T) {
 	f := newFakeAPI(t)
 	for name, tc := range map[string]struct{ config, want string }{

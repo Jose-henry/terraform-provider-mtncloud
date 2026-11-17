@@ -16,15 +16,16 @@ func dataSourceKeyPair() *schema.Resource {
 		Schema: map[string]*schema.Schema{
 			"id": {
 				Type:          schema.TypeInt,
-				Description:   "The ID of the key pair",
+				Description:   "The ID of the key pair. Give this or `name`.",
 				Optional:      true,
 				ConflictsWith: []string{"name"},
 				Computed:      true,
 			},
 			"name": {
 				Type:          schema.TypeString,
-				Description:   "The name of the integration",
+				Description:   "The name of the key pair. Give this or `id`.",
 				Optional:      true,
+				Computed:      true,
 				ConflictsWith: []string{"id"},
 			},
 			"publickey": {
@@ -43,7 +44,7 @@ func dataSourceMorphesKeyPairRead(ctx context.Context, d *schema.ResourceData, m
 	var diags diag.Diagnostics
 	//read name and ID from Terraform
 	name := d.Get("name").(string)
-	id := toInt64(d.Id())
+	id := int64(d.Get("id").(int)) // not d.Id(): that is empty until the read sets it (fix 14)
 
 	var resp *sdk.Response
 	var err error

@@ -39,7 +39,7 @@ output "catalog_orders" {
 
 Read-Only:
 
-- `catalog_item` (String) Catalog item that was ordered, for example `Create Project`.
+- `catalog_item` (String) Catalog item that was ordered, for example `Project`.
 - `execution_status` (String) Status of the order's workflow run, or empty.
 - `id` (Number) ID of the catalog order.
 - `name` (String) Name of the catalog order.

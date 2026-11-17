@@ -3,6 +3,8 @@ package legacy
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"log"
 
@@ -51,9 +53,11 @@ func resourceNestedWorkflowTask() *schema.Resource {
 			},
 			"operational_workflow_name": {
 				Type:        schema.TypeString,
-				Description: "The name of the operational workflow",
+				Description: "The name of the operational workflow. Give this or `operational_workflow_id`.",
 				Optional:    true,
 				Computed:    true,
+				// Found ignoring case; the console's spelling is stored.
+				DiffSuppressFunc: func(_, old, new string, _ *schema.ResourceData) bool { return strings.EqualFold(old, new) },
 			},
 			"retryable": {
 				Type:        schema.TypeBool,
@@ -98,9 +102,9 @@ func resourceNestedWorkflowTaskCreate(ctx context.Context, d *schema.ResourceDat
 		"code": "nestedWorkflow",
 	}
 
-	taskOptions := map[string]interface{}{
-		"operationalWorkflowId":   d.Get("operational_workflow_id").(int),
-		"operationalWorkflowName": d.Get("operational_workflow_name").(string),
+	taskOptions, nd := nestedWorkflowOptions(client, d)
+	if nd != nil {
+		return nd
 	}
 
 	labelsPayload := make([]string, 0)
@@ -202,9 +206,9 @@ func resourceNestedWorkflowTaskUpdate(ctx context.Context, d *schema.ResourceDat
 		"code": "nestedWorkflow",
 	}
 
-	taskOptions := map[string]interface{}{
-		"operationalWorkflowId":   d.Get("operational_workflow_id").(int),
-		"operationalWorkflowName": d.Get("operational_workflow_name").(string),
+	taskOptions, nd := nestedWorkflowOptions(client, d)
+	if nd != nil {
+		return nd
 	}
 
 	labelsPayload := make([]string, 0)
@@ -265,4 +269,45 @@ func resourceNestedWorkflowTaskDelete(ctx context.Context, d *schema.ResourceDat
 	log.Printf("API RESPONSE: %s", resp)
 	d.SetId("")
 	return diags
+}
+
+// nestedWorkflowOptions picks the workflow as the console's form does: from the workflows MTN offers
+// for nesting (/api/options/operationWorkflows), sending its name and its ID as text. Before, an ID
+// alone was sent with an empty name ("Operational Workflow is required") and a name alone with ID 0
+// ("must be a valid value"): tester's fix 18.1.
+func nestedWorkflowOptions(client *sdk.Client, d *schema.ResourceData) (map[string]interface{}, diag.Diagnostics) {
+	name, id := configuredWorkflow(d)
+	resp, err := client.GetOptionSource("operationWorkflows", &sdk.Request{QueryParams: map[string]string{"max": "1000"}})
+	if err != nil {
+		return nil, diag.Errorf("Couldn't list the workflows you can nest: %v", err)
+	}
+	option, wid, err := findOptionSourceOption(resp.Result.(*sdk.GetOptionSourceResult).Data, "operational workflow you can nest", name, id)
+	if err != nil {
+		return nil, diag.FromErr(err)
+	}
+	return map[string]interface{}{
+		"operationalWorkflowId":   strconv.FormatInt(wid, 10),
+		"operationalWorkflowName": option.Name,
+	}, nil
+}
+
+// configuredWorkflow is the workflow the configuration names: its name when given (it decides when
+// both are), else its ID. State is not used, because the name it holds doesn't follow a rename in
+// the console, so an update of another argument would look for the old name.
+func configuredWorkflow(d *schema.ResourceData) (string, int) {
+	cfg := d.GetRawConfig()
+	if cfg.IsNull() || !cfg.IsKnown() { // no raw configuration (unit tests): what is set
+		if name := d.Get("operational_workflow_name").(string); name != "" {
+			return name, 0
+		}
+		return "", d.Get("operational_workflow_id").(int)
+	}
+	if v := cfg.GetAttr("operational_workflow_name"); v.IsKnown() && !v.IsNull() && v.AsString() != "" {
+		return v.AsString(), 0
+	}
+	if v := cfg.GetAttr("operational_workflow_id"); v.IsKnown() && !v.IsNull() {
+		n, _ := v.AsBigFloat().Int64()
+		return "", int(n)
+	}
+	return d.Get("operational_workflow_name").(string), d.Get("operational_workflow_id").(int)
 }

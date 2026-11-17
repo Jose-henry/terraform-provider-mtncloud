@@ -4,6 +4,21 @@ Each entry records what was decided, why, and what it rules out. Change a decisi
 entry that supersedes it, never by editing history.
 
 
+## D-047 A login only manages its own tenant; `tenant_id` is deprecated (owner, 2026-11-17)
+Owner: "it should always get the user tenant id, besides this is not needed, provided they are using their
+own credentials or token", and asked whether `tenant_id` is a security issue.
+- CLI evidence (QA sub-tenant, 2026-11-17): `POST /api/users` with no `accountId` makes the user in the login's
+  own tenant, which the customer role's "Users: Full" allows. Any `accountId` (the SDKv2 default was 1, the
+  master) is checked against `admin-accounts`, so a sub-tenant got a 403 that didn't say why.
+- `mtncloud_user` sends no `accountId`. AD and SAML identity sources need a tenant in the URL: it is read
+  from `/api/whoami`. `tenant_id` on users, identity sources and network domains (where it was never sent)
+  is deprecated; when set it must equal the login's tenant, or the apply is refused before any call.
+- Not a hole on MTN's side: the API enforced it (403). But an argument that can only fail, or points at the
+  master, is a trap and a confusing message; the provider never offers cross-tenant management. A master
+  login managing sub-tenants is a separate, master-only feature if it is ever wanted (D-004).
+- New data source `mtncloud_tenant` (from whoami) replaces copying the ID from the console.
+- Removal of `tenant_id` waits for 1.0 (rule 10: deprecation period).
+
 ## D-046 Kubernetes autoscaling is fixed at build; manual scaling never calls the autoscaler (owner, 2026-11-11)
 Owner: "manual autoscaling shouldn't depend on the autoscaler package". Sources: MTN's
 `install-cluster-autoscaler.sh` and README (Manage Kubernetes), QA clusters 180 and 183.

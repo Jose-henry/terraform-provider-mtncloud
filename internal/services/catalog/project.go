@@ -54,7 +54,7 @@ func (r *projectResource) Metadata(_ context.Context, req resource.MetadataReque
 
 func (r *projectResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "An MTN Cloud project, ordered from the catalog (\"Create Project\"). Creating it waits for the order's " +
+		Description: "An MTN Cloud project, ordered from the catalog (\"Project\"). Creating it waits for the order's " +
 			"workflow to finish, not for the project to sync in: its default security group, networks and floating " +
 			"IP pools can take up to an hour to appear. A project can't be renamed or deleted from Terraform.",
 		Attributes: map[string]schema.Attribute{
@@ -175,7 +175,7 @@ func (r *projectResource) Create(ctx context.Context, req resource.CreateRequest
 	// The catalog form's fields; MTN's workflow names the pool "<projectName>-<tenant>" in the cloud.
 	itemName, err := r.itemName(ctx, projectItem)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to find the Create Project catalog item", err.Error())
+		resp.Diagnostics.AddError("Unable to find the Project catalog item", err.Error())
 		return
 	}
 	item, err := r.client.OrderWorkflow(ctx, itemName, map[string]any{

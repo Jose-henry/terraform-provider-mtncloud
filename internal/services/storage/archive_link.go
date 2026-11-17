@@ -54,7 +54,7 @@ func (r *archiveLinkResource) Schema(_ context.Context, _ resource.SchemaRequest
 		Description: "A download link to an archive file: anyone with its URL can download the file **without logging in**, " +
 			"until it expires. The link's secret is kept in the Terraform state (sensitive). Once the link has expired or " +
 			"was deleted in the console, the next plan makes a new one; an expired link stays listed in the console, where " +
-			"it no longer works. Changing an argument replaces the link.",
+			"it no longer works. Another `file_id` replaces the link; `expire_seconds` can't change once the link exists (the plan says so).",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Description: "`<file_id>/<link_id>`.", Computed: true, PlanModifiers: keep},
 			"file_id": schema.StringAttribute{

@@ -12,13 +12,7 @@ Provides an MTN Cloud SAML identity source resource: lets users of the tenant si
 ## Example Usage
 
 ```terraform
-# Your tenant's ID, shown in the console under Administration > Tenants (or in /api/whoami).
-variable "tenant_id" {
-  type = number
-}
-
 resource "mtncloud_saml_identity_source" "addemo" {
-  tenant_id                      = var.tenant_id
   name                           = "samldemo"
   description                    = "TF example SAML identity source"
   login_redirect_url             = "https://tfexamplesaml.test.local:8443/realms/master/protocol/saml"
@@ -54,7 +48,6 @@ resource "mtncloud_saml_identity_source" "addemo" {
 
 - `default_account_role_id` (Number) The id of the default role a user is assigned when they are in the required group or if no specific group mapping applies to the user
 - `name` (String) The name of the SAML identity source
-- `tenant_id` (Number) The ID of the MTN Cloud tenant to associate the identity source with
 
 ### Optional
 
@@ -70,6 +63,7 @@ resource "mtncloud_saml_identity_source" "addemo" {
 - `role_mapping` (Block Set) The SAML to MTN Cloud Role mapping (see [below for nested schema](#nestedblock--role_mapping))
 - `saml_request` (String) The SAML request configuration (NoSignature, SelfSigned, CustomSignature)
 - `surname_attribute` (String) SAML SP field value to map to MTN Cloud user Last Name
+- `tenant_id` (Number, Deprecated) The tenant: always the one the provider is logged in to (see `mtncloud_tenant`). Deprecated: leave it out.
 - `validate_assertion_signature` (Boolean) Whether to validate the assertion signature (SAML RESPONSE field in the UI)
 
 ### Read-Only

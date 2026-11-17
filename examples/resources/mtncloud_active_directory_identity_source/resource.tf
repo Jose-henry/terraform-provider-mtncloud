@@ -1,5 +1,4 @@
 resource "mtncloud_active_directory_identity_source" "addemo" {
-  tenant_id               = 1
   name                    = "addemo"
   description             = "TF example AD identity source"
   ad_server               = "dc01.contoso.com"

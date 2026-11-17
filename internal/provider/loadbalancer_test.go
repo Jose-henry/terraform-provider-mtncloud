@@ -211,6 +211,13 @@ data "mtncloud_load_balancer_members" "x" {
   load_balancer_name = "My Load Balancer"
   pool_name          = "nope"
 }`, `no pool named "nope"`},
+		// Load balancer IDs are UUIDs: a number is refused at plan (tester's fix 16).
+		"id not a uuid": {`
+data "mtncloud_load_balancer_listener" "x" {
+  network_id       = 114
+  load_balancer_id = "999999999"
+  name             = "HTTP-Listener"
+}`, `must be a load balancer ID: a UUID`},
 		"both selectors": {`
 data "mtncloud_load_balancer_listener" "x" {
   network_id         = 114

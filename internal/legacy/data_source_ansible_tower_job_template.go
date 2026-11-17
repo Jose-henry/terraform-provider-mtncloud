@@ -52,7 +52,7 @@ func dataSourceAnsibleTowerJobTemplateRead(ctx context.Context, d *schema.Resour
 			return nil
 		} else {
 			log.Printf("API FAILURE: %s - %v", resp, err)
-			return diag.FromErr(err)
+			return optionSourceError("ansibleTowerJobTemplate", resp, err)
 		}
 	}
 	log.Printf("API RESPONSE: %s", resp)

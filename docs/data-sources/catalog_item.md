@@ -15,7 +15,7 @@ Looks up one service you can order from the MTN Cloud catalog, by ID or by the n
 ```terraform
 # One service from the catalog, with the inputs its order form asks for.
 data "mtncloud_catalog_item" "project" {
-  name = "Create Project"
+  name = "Project"
 }
 
 output "required_inputs" {
@@ -29,7 +29,7 @@ output "required_inputs" {
 ### Optional
 
 - `id` (Number) Catalog item ID. Give this or `name`.
-- `name` (String) Name shown in the catalog, matched exactly, for example `Create Project`. Give this or `id`.
+- `name` (String) Name shown in the catalog, matched exactly, for example `Project`. A name MTN Cloud has since changed still works, with a deprecation warning. Give this or `id`.
 
 ### Read-Only
 

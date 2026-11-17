@@ -39,7 +39,7 @@ resource "mtncloud_nested_workflow_task" "tfexample_nested_workflow" {
 - `code` (String) The code of the nested workflow task
 - `labels` (Set of String) The organization labels associated with the task (Only supported on MTN Cloud 5.5.3 or higher)
 - `operational_workflow_id` (Number) The ID of the operational workflow
-- `operational_workflow_name` (String) The name of the operational workflow
+- `operational_workflow_name` (String) The name of the operational workflow. Give this or `operational_workflow_id`.
 - `retry_count` (Number) The number of times to retry the task if there is a failure
 - `retry_delay_seconds` (Number) The number of seconds to wait between retry attempts
 - `retryable` (Boolean) Whether to retry the task if there is a failure

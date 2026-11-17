@@ -53,7 +53,7 @@ func dataSourceVrealizeOrchestratorWorkflowRead(ctx context.Context, d *schema.R
 			return nil
 		} else {
 			log.Printf("API FAILURE: %s - %v", resp, err)
-			return diag.FromErr(err)
+			return optionSourceError("vroWorkflow", resp, err)
 		}
 	}
 	log.Printf("API RESPONSE: %s", resp)

@@ -18,7 +18,7 @@ const (
 type taskOption struct {
 	attr     string
 	key      string // option key in the body
-	config   bool   // field context "config" (plugin options), else "taskOptions"
+	plugin   bool   // a plugin task's option: key is the option type's code, and a flag is sent as a boolean
 	kind     optKind
 	required bool
 	platform bool   // the platform fills it in when left out: Optional+Computed, kept from state
@@ -83,7 +83,7 @@ func taskSpecs() []taskSpec {
 			targets: []string{"local"}, results: true,
 			about: "Collects PowerScale storage usage for billing.",
 			options: []taskOption{
-				{attr: "dry_run", key: "dryRun", config: true, kind: flag, desc: "Collect without sending usage to billing."},
+				{attr: "dry_run", key: "powerscale.task.dryRun", plugin: true, kind: flag, desc: "Collect without sending usage to billing."},
 			},
 		},
 		{
@@ -101,7 +101,7 @@ func taskSpecs() []taskSpec {
 			typeName: "reverse_text_task", code: "reverseTextTask", title: "Reverse Text", targets: []string{"resource", "local"}, results: true,
 			about: "Returns its text reversed. Useful to try out workflows.",
 			options: []taskOption{
-				{attr: "text", key: "reversibleText", config: true, required: true, desc: "The text to reverse."},
+				{attr: "text", key: "reverseTextTaskText", plugin: true, required: true, desc: "The text to reverse."},
 			},
 		},
 	}

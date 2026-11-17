@@ -291,7 +291,7 @@ removed {
 				// A failed workflow made nothing, so nothing is kept and the next apply orders again.
 				PreConfig:   set("error"),
 				Config:      projectConfig(f, `  name = "web"`),
-				ExpectError: regexp.MustCompile(`(?s)Project order failed.*"error": Resource pool\s+create returned 400`),
+				ExpectError: regexp.MustCompile(`(?s)Project order failed.*"error":\s+Resource\s+pool\s+create\s+returned\s+400`),
 			},
 			{
 				PreConfig:        set("success"),

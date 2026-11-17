@@ -80,6 +80,7 @@ func resourceAnsiblePlaybookTask() *schema.Resource {
 				Type:        schema.TypeString,
 				Description: "The target that the ansible playbook will be executed on",
 				Optional:    true,
+				Computed:    true, // MTN fills it in when left out (tester's fix 18.3)
 			},
 			"retryable": {
 				Type:        schema.TypeBool,

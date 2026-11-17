@@ -32,6 +32,10 @@ func (f NodeFailure) String() string {
 // NodeFailureOf reads a node's newest failed build step (QA cluster 177's worker: "kubeadm worker
 // join", "bash: line 1: null: command not found", 2026-11-11).
 func (c *Client) NodeFailureOf(ctx context.Context, serverID int64) (NodeFailure, error) {
+	return c.failureOf(ctx, "serverId", serverID)
+}
+
+func (c *Client) failureOf(ctx context.Context, key string, id int64) (NodeFailure, error) {
 	var out struct {
 		Processes []struct {
 			Status      string `json:"status"`
@@ -52,7 +56,7 @@ func (c *Client) NodeFailureOf(ctx context.Context, serverID int64) (NodeFailure
 			} `json:"events"`
 		} `json:"processes"`
 	}
-	q := url.Values{"serverId": {itoa(serverID)}, "max": {"10"}, "sort": {"dateCreated"}, "direction": {"desc"}}
+	q := url.Values{key: {itoa(id)}, "max": {"10"}, "sort": {"dateCreated"}, "direction": {"desc"}}
 	if err := c.get(ctx, "/api/processes", q, &out); err != nil {
 		return NodeFailure{}, err
 	}

@@ -22,8 +22,14 @@ func resourceKeyPair() *schema.Resource {
 		DeleteContext: resourceKeyPairDelete,
 
 		CustomizeDiff: schema.CustomizeDiffFunc(func(ctx context.Context, d *schema.ResourceDiff, m interface{}) error {
-			if err := setAtCreate("key pair", "name", "public_key")(ctx, d, m); err != nil {
+			if err := setAtCreate("key pair", "name")(ctx, d, m); err != nil {
 				return err
+			}
+			// HasChange here ignores DiffSuppressFunc: a key differing only in whitespace isn't a change.
+			if o, n := d.GetChange("public_key"); d.NewValueKnown("public_key") && !sameKey(o.(string), n.(string)) {
+				if err := setAtCreate("key pair", "public_key")(ctx, d, m); err != nil {
+					return err
+				}
 			}
 			return setAtCreateSecret("key pair", "private_key", "passphrase")(ctx, d, m)
 		}),
@@ -40,8 +46,10 @@ func resourceKeyPair() *schema.Resource {
 			},
 			"public_key": {
 				Type:        schema.TypeString,
-				Description: "The public key of the key pair",
+				Description: "The public key of the key pair, for example `file(\"~/.ssh/id_ed25519.pub\")`.",
 				Required:    true,
+				// MTN Cloud stores the key without the trailing newline file() reads (live, 2026-11-17).
+				DiffSuppressFunc: func(_, old, new string, _ *schema.ResourceData) bool { return sameKey(old, new) },
 			},
 			"private_key": {
 				Type:        schema.TypeString,
@@ -166,4 +174,10 @@ func resourceKeyPairDelete(ctx context.Context, d *schema.ResourceData, meta int
 	log.Printf("API RESPONSE: %s", resp)
 	d.SetId("")
 	return diags
+}
+
+// sameKey reports whether two public keys differ only in whitespace: a trailing newline, CRLF line
+// ends, or spaces between the type, key and comment.
+func sameKey(a, b string) bool {
+	return strings.Join(strings.Fields(a), " ") == strings.Join(strings.Fields(b), " ")
 }

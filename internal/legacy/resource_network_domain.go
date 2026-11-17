@@ -78,9 +78,12 @@ func resourceNetworkDomain() *schema.Resource {
 				Default:      "private",
 			},
 			"tenant_id": {
-				Description: "The tenant to assign the network domain",
-				Type:        schema.TypeInt,
-				Optional:    true,
+				Description:  "The tenant: always the one the provider is logged in to (see `mtncloud_tenant`). Deprecated: leave it out.",
+				Type:         schema.TypeInt,
+				Optional:     true,
+				Computed:     true,
+				Deprecated:   tenantIDDeprecation,
+				ValidateFunc: validation.IntAtLeast(1),
 			},
 		},
 		Importer: &schema.ResourceImporter{
@@ -94,6 +97,11 @@ func resourceNetworkDomainCreate(ctx context.Context, d *schema.ResourceData, me
 
 	// Warning or errors can be collected in a slice type
 	var diags diag.Diagnostics
+
+	// Made in the login's own tenant; a tenant_id naming another one is refused (D-047).
+	if _, err := ownTenant(d, client); err != nil {
+		return diag.FromErr(err)
+	}
 
 	name := d.Get("name").(string)
 	description := d.Get("description").(string)

@@ -44,7 +44,8 @@ func (r *versionResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 		Description: "A version of a deployment. Its content is files uploaded to MTN Cloud (`type = \"file\"`, with " +
 			"`mtncloud_deployment_file`), a git repository (`git`), or a URL MTN Cloud fetches when it deploys (`fetch`). " +
 			"Everything here changes in place. Destroying it deletes the version and its files; what was deployed stays " +
-			"on the instances.",
+			"on the instances. A version that was ever deployed, even by a failed deploy, can't be deleted (\"used in deploys\") " +
+			"until those instances are deleted.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "ID of the version."},
 			"deployment_id": schema.StringAttribute{Required: true, Validators: idValid, PlanModifiers: replace,

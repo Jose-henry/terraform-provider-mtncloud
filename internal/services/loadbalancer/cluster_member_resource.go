@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -77,8 +78,8 @@ func (r *clusterMemberResource) Schema(ctx context.Context, _ resource.SchemaReq
 				Description: "The cluster's ID, for example `data.mtncloud_managed_kubernetes_cluster.k8s.id`. Changing it replaces the members."},
 			"role": schema.StringAttribute{Required: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 				Validators: []validator.String{stringvalidator.RegexMatches(nodeRole, "must be a node type such as kube-worker")},
-				Description: "The nodes' type: `kube-worker` for a Kubernetes cluster's workers, `kube-master` for its masters. " +
-					"Changing it replaces the members."},
+				Description: "The nodes' type: `kube-worker` for a Kubernetes cluster's workers, `kube-master` for its masters, " +
+					"and for a Docker cluster's hosts the role the console's Add Member list shows (as `cluster:<id>:<role>`). Changing it replaces the members."},
 			"port": schema.Int64Attribute{Required: true, PlanModifiers: fixedInt("member"), Validators: portValid,
 				Description: "The port the nodes listen on, for example a Kubernetes NodePort. Set at create: the cloud can't change it, so a change is refused at plan time."},
 			// Optional+Computed with a default: most members share traffic equally.
@@ -156,7 +157,12 @@ func (r *clusterMemberResource) Create(ctx context.Context, req resource.CreateR
 	err := r.client.AddLBClusterMembers(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(),
 		client.LBClusterMemberSpec{ClusterID: cid, Role: role, Port: plan.Port.ValueInt64(), Weight: plan.Weight.ValueInt64(), Backup: plan.Backup.ValueBool()})
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to add the cluster's nodes to the pool", err.Error())
+		detail := err.Error()
+		if strings.Contains(detail, "is not one this load balancer can use") {
+			detail += fmt.Sprintf(" Also check role %q: Kubernetes clusters offer kube-worker and kube-master; the console's "+
+				"Add Member list shows every role this cluster offers, as cluster:%d:<role>.", role, cid)
+		}
+		resp.Diagnostics.AddError("Unable to add the cluster's nodes to the pool", detail)
 		// The group may have been added before the error: keep it in state when the pool shows it,
 		// so the next apply doesn't add it twice. On a context of its own: the create's may be what ran out.
 		rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
@@ -260,4 +266,24 @@ func (r *clusterMemberResource) ImportState(ctx context.Context, req resource.Im
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_id"), cid)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role"), role)...)
+}
+
+// knownNodeRoles are the cluster roles the load balancer's member picker offers on MTN Cloud.
+var knownNodeRoles = []string{"kube-worker", "kube-master", dockerHostRole}
+
+// dockerHostRole is a Docker cluster's hosts' role.
+const dockerHostRole = "morpheus-node" // mtncloud:allow-upstream-name (API wire value: the platform's role code)
+
+// ValidateConfig warns about a role the member picker doesn't offer: MTN only refuses it after the
+// load balancer task runs, minutes later (tester's fix 20).
+func (r *clusterMemberResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var role types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("role"), &role)...)
+	if role.IsNull() || role.IsUnknown() || slices.Contains(knownNodeRoles, role.ValueString()) {
+		return
+	}
+	resp.Diagnostics.AddAttributeWarning(path.Root("role"), "Unfamiliar cluster role",
+		fmt.Sprintf("%q isn't a role MTN Cloud's load balancers usually offer (kube-worker and kube-master for Kubernetes "+
+			"clusters). If the console's Add Member list doesn't show cluster:<id>:%s, the apply fails after a few minutes.",
+			role.ValueString(), role.ValueString()))
 }

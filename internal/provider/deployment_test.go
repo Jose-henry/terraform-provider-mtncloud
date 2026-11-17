@@ -25,15 +25,16 @@ import (
 // an upload of the same name overwrites, and a new deploy archives the one it replaces. A deploy is
 // marked committed even when its run (a "deploy" process in the instance's history) fails.
 type depFake struct {
-	mu       sync.Mutex
-	deps     map[int64]map[string]any
-	versions map[int64]map[string]any
-	files    map[int64]map[string]int // version -> name -> size
-	deploys  []map[string]any         // instance 4700's, oldest first
-	next     int64
-	uploads  int
-	failNext bool // the next deploy's run fails
-	hideRuns bool // the history list leaves out deploy runs, as when they have scrolled out of it
+	mu         sync.Mutex
+	deps       map[int64]map[string]any
+	versions   map[int64]map[string]any
+	files      map[int64]map[string]int // version -> name -> size
+	deploys    []map[string]any         // instance 4700's, oldest first
+	next       int64
+	uploads    int
+	failNext   bool // the next deploy's run fails
+	failDeploy bool // the next deploy itself ends "failed", and its run too
+	hideRuns   bool // the history list leaves out deploy runs, as when they have scrolled out of it
 }
 
 func newDepFake(f *fakeAPI) *depFake {
@@ -109,6 +110,9 @@ func (d *depFake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					x["run"] = "complete"
 					if d.failNext {
 						x["run"], d.failNext = "failed", false
+					}
+					if d.failDeploy {
+						x["status"], x["run"], d.failDeploy = "failed", "failed", false
 					}
 				}
 				list = append(list, x)
@@ -421,6 +425,12 @@ resource "mtncloud_deployment_file" "x" {
 				ExpectError: regexp.MustCompile(`failed\s+on\s+the\s+instance:\s+Failed\s+to\s+build\s+deploy\s+config`)},
 			{Config: cfg("", "https://example.org/b", "v1", "hello, world"), ConfigPlanChecks: update(inst)},
 			{Config: cfg("", "https://example.org/b", "v1", "hello, world"), ConfigPlanChecks: empty},
+			// A deploy that itself ends "failed" gives its run's reason from the history (tester's fix
+			// 17.2: the error only said "ended failed"), then deploys again.
+			{PreConfig: func() { d.mu.Lock(); d.failDeploy = true; d.mu.Unlock() }, Config: cfg("", "https://example.org/b", "v2", "hello, world"),
+				ExpectError: regexp.MustCompile(`ended\s+"failed":\s+Failed\s+to\s+build\s+deploy\s+config`)},
+			{Config: cfg("", "https://example.org/b", "v2", "hello, world"), ConfigPlanChecks: update(inst)},
+			{Config: cfg("", "https://example.org/b", "v1", "hello, world"), ConfigPlanChecks: update(inst)},
 			// A deploy of another version staged outside Terraform isn't live: nothing changes.
 			{PreConfig: func() { d.add("staged", "", true) }, Config: cfg("", "https://example.org/b", "v1", "hello, world"), ConfigPlanChecks: empty},
 			// Someone redeploys the same version and its run fails: the plan deploys again.

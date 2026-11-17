@@ -60,8 +60,9 @@ func resourceTaskJob() *schema.Resource {
 			},
 			"scheduled_date_and_time": {
 				Type:          schema.TypeString,
-				Description:   "The date and time the job will be executed if schedule mode date_and_time is used",
+				Description:   "The date and time the job will be executed if schedule mode date_and_time is used, in RFC 3339 form, for example `2026-12-01T09:00:00Z`",
 				Optional:      true,
+				ValidateFunc:  validation.IsRFC3339Time,
 				ConflictsWith: []string{"execution_schedule_id"},
 			},
 			"execution_schedule_id": {

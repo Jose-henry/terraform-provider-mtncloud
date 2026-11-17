@@ -9,7 +9,7 @@ import (
 
 // MOSItem is the MOS catalog item: ordering it makes the tenant's MOS keys, and ordering it again
 // replaces them for the whole tenant (`S3 Folder (Operational)/CreateMOS-S3.sh`).
-var MOSItem = CatalogItemRef{Code: "s32311", Names: []string{"MTN Object Storage (MOS)", "MTN Object Storage"}}
+var MOSItem = CatalogRef("s32311")
 
 // MOSKeySet is where the tenant's MOS keys are in Cypher, and its endpoints. It holds no secret.
 type MOSKeySet struct {

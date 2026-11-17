@@ -14,7 +14,7 @@ import (
 type OrderedItem struct {
 	ID            int64
 	TypeID        int64  // the catalog item's ID, which a rename keeps
-	TypeName      string // the catalog item type, for example "Create Project"
+	TypeName      string // the catalog item type, for example "Project"
 	Status        string // the item's own status, for example "ORDERED"; it doesn't follow the execution
 	StatusMessage string
 	RefType       string // "Workflow" for a workflow item

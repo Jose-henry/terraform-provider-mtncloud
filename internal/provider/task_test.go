@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -71,8 +72,9 @@ func newTaskAPI(t *testing.T) (*taskAPI, string) {
 				opts["webMethod"] = a.defaultMethod
 			}
 			task["id"] = a.nextID
-			a.tasks[a.nextID], a.last = task, task
-			reply(map[string]any{"success": true, "task": task})
+			a.last = task
+			a.tasks[a.nextID] = stored(task)
+			reply(map[string]any{"success": true, "task": a.tasks[a.nextID]})
 		case one && a.tasks[id] == nil:
 			w.WriteHeader(http.StatusNotFound)
 		case one && r.Method == http.MethodGet:
@@ -97,8 +99,9 @@ func newTaskAPI(t *testing.T) (*taskAPI, string) {
 					task[k] = merged
 				}
 			}
-			a.tasks[id], a.last = task, task
-			reply(map[string]any{"success": true, "task": task})
+			a.last = task
+			a.tasks[id] = stored(task)
+			reply(map[string]any{"success": true, "task": a.tasks[id]})
 		case one && r.Method == http.MethodDelete:
 			delete(a.tasks, id)
 			reply(map[string]any{"success": true})
@@ -235,6 +238,31 @@ resource "mtncloud_http_task" "notify" {
 	})
 }
 
+// A plugin checkbox goes in taskOptions under its option code, as a JSON boolean: sent in "config",
+// MTN dropped it, so a dry run ran for real (tester's fix 18.2, live 2026-11-17).
+func TestPowerScaleTask_DryRunIsBoolean(t *testing.T) {
+	a, provider := newTaskAPI(t)
+	cfg := func(dry string) string {
+		return provider + "resource \"mtncloud_powerscale_storage_collection_task\" \"p\" {\n  name    = \"ps\"\n  dry_run = " + dry + "\n}\n"
+	}
+	sent := func(want bool) func(*terraform.State) error {
+		return func(*terraform.State) error {
+			opts, _ := a.lastBody()["taskOptions"].(map[string]any)
+			if got, ok := opts["powerscale.task.dryRun"].(bool); !ok || got != want {
+				t.Errorf("taskOptions[powerscale.task.dryRun] = %#v, want %v (a boolean)", opts["powerscale.task.dryRun"], want)
+			}
+			return nil
+		}
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("true"), Check: sent(true)},
+			{Config: cfg("false"), Check: sent(false)},
+		},
+	})
+}
+
 func TestConditionalWorkflowTask(t *testing.T) {
 	a, provider := newTaskAPI(t)
 	cfg := func(ifWF, extra string) string {
@@ -274,7 +302,8 @@ resource "mtncloud_conditional_workflow_task" "c" {
 	})
 }
 
-// A plugin option (field context "config") goes in "config", not "taskOptions"; the target can be chosen.
+// A plugin option goes in taskOptions under its option code, not in "config", which MTN drops (live
+// 2026-11-17: the text was stored empty); the target can be chosen.
 func TestReverseTextTask_ConfigOptions(t *testing.T) {
 	a, provider := newTaskAPI(t)
 	cfg := provider + `
@@ -290,8 +319,8 @@ resource "mtncloud_reverse_text_task" "r" {
 			Config: cfg,
 			Check: func(*terraform.State) error {
 				task := a.lastBody()
-				conf, _ := task["config"].(map[string]any)
-				if conf["reversibleText"] != "hello" || task["taskOptions"] != nil || task["executeTarget"] != "local" {
+				opts, _ := task["taskOptions"].(map[string]any)
+				if opts["reverseTextTaskText"] != "hello" || task["config"] != nil || task["executeTarget"] != "local" {
 					t.Errorf("body: %v", task)
 				}
 				return nil
@@ -361,4 +390,20 @@ resource "mtncloud_http_task" "c" {
 			{Config: cfg},
 		},
 	})
+}
+
+// stored is a task as MTN Cloud keeps it: "config" is dropped, and option values are strings.
+func stored(task map[string]any) map[string]any {
+	out := maps.Clone(task)
+	delete(out, "config")
+	if opts, ok := task["taskOptions"].(map[string]any); ok {
+		o := maps.Clone(opts)
+		for k, v := range o {
+			if b, isBool := v.(bool); isBool {
+				o[k] = strconv.FormatBool(b)
+			}
+		}
+		out["taskOptions"] = o
+	}
+	return out
 }

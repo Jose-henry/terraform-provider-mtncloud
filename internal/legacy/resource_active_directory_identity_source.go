@@ -12,6 +12,7 @@ import (
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourceActiveDirectoryIdentitySource() *schema.Resource {
@@ -21,6 +22,7 @@ func resourceActiveDirectoryIdentitySource() *schema.Resource {
 		ReadContext:   resourceActiveDirectoryIdentitySourceRead,
 		UpdateContext: resourceActiveDirectoryIdentitySourceUpdate,
 		DeleteContext: resourceActiveDirectoryIdentitySourceDelete,
+		CustomizeDiff: setAtCreate("identity source", "tenant_id"),
 
 		Schema: map[string]*schema.Schema{
 			"id": {
@@ -29,9 +31,12 @@ func resourceActiveDirectoryIdentitySource() *schema.Resource {
 				Computed:    true,
 			},
 			"tenant_id": {
-				Type:        schema.TypeInt,
-				Description: "The ID of the MTN Cloud tenant to associate the identity source with",
-				Required:    true,
+				Type:         schema.TypeInt,
+				Description:  "The tenant: always the one the provider is logged in to (see `mtncloud_tenant`). Deprecated: leave it out.",
+				Optional:     true,
+				Computed:     true,
+				Deprecated:   tenantIDDeprecation,
+				ValidateFunc: validation.IntAtLeast(1),
 			},
 			"name": {
 				Type:        schema.TypeString,
@@ -181,7 +186,11 @@ func resourceActiveDirectoryIdentitySourceCreate(ctx context.Context, d *schema.
 		},
 	}
 
-	resp, err := client.CreateIdentitySource(int64(d.Get("tenant_id").(int)), req)
+	tenantID, err := ownTenant(d, client)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	resp, err := client.CreateIdentitySource(tenantID, req)
 	if err != nil {
 		log.Printf("API FAILURE: %s - %s", resp, err)
 		return diag.FromErr(err)

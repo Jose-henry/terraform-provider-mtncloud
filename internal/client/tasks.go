@@ -167,16 +167,24 @@ func (c *Client) FindTasksNamed(ctx context.Context, name, typeCode string) ([]*
 // OptionByName picks one entry of an /api/options/<source> list by name (case ignored), for
 // inputs that take an ID but that people name: an AI agent, a Puppet master, a workflow.
 func (c *Client) OptionByName(ctx context.Context, source, what, name string) (Option, error) {
-	opts, err := c.options(ctx, source, nil)
-	if err != nil {
-		return Option{}, err
-	}
-	names := make([]string, len(opts))
-	for i, o := range opts {
-		if strings.EqualFold(o.Name, name) {
-			return o, nil
+	var names []string
+	for try := 0; try < 2; try++ {
+		if try == 1 {
+			// Not in the cached list: it may have been made earlier in this apply (a workflow a task
+			// names, for example), so load the list again once.
+			c.cache.forget("options/" + source + "?")
 		}
-		names[i] = o.Name
+		opts, err := c.options(ctx, source, nil)
+		if err != nil {
+			return Option{}, err
+		}
+		names = make([]string, len(opts))
+		for i, o := range opts {
+			if strings.EqualFold(o.Name, name) {
+				return o, nil
+			}
+			names[i] = o.Name
+		}
 	}
 	return Option{}, &NoMatchError{fmt.Sprintf("no %s named %q. Yours: %s", what, name, list(names))}
 }

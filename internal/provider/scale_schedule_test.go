@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
@@ -186,22 +185,19 @@ resource "mtncloud_instance_scale_schedule" "work" {
 			},
 			{Config: cfg("71", weekdays), ConfigPlanChecks: empty},
 			{
-				// New times, same threshold: an update that keeps the copied values.
+				// New times, same threshold: the update copies the threshold again (known after apply).
 				Config: cfg("71", strings.Replace(weekdays, `"18:00"`, `"19:30"`, 1)), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
 					plancheck.ExpectResourceAction(res, plancheck.ResourceActionUpdate),
-					plancheck.ExpectKnownValue(res, tfjsonpath.New("threshold").AtMapKey("max_count"), knownvalue.Int64Exact(8)),
+					plancheck.ExpectUnknownValue(res, tfjsonpath.New("threshold")),
 				}},
+				Check: resource.TestCheckResourceAttr(res, "threshold.max_count", "8"),
 			},
 			{
-				// The threshold changes between plan and apply, with new times: the update keeps the
-				// copied values it planned, and the next plan copies the new ones.
+				// The threshold changes in the same apply, just before the schedule's update (it runs
+				// first, being referenced), with new times: one apply copies the new values (tester's
+				// fix 17.1; before, a second apply was needed).
 				PreConfig: func() { s.mu.Lock(); s.bumpOnPut = true; s.mu.Unlock() },
 				Config:    cfg("71", strings.Replace(weekdays, `"18:00"`, `"20:00"`, 1)), ConfigPlanChecks: update,
-				Check:              resource.TestCheckResourceAttr(res, "threshold.max_count", "8"),
-				ExpectNonEmptyPlan: true, // the refresh sees the newer threshold
-			},
-			{
-				Config: cfg("71", strings.Replace(weekdays, `"18:00"`, `"20:00"`, 1)), ConfigPlanChecks: update,
 				Check: resource.TestCheckResourceAttr(res, "threshold.max_count", "9"),
 			},
 			{Config: cfg("71", strings.Replace(weekdays, `"18:00"`, `"20:00"`, 1)), ConfigPlanChecks: empty},

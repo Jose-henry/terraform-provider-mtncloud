@@ -52,7 +52,7 @@ func dataSourceChefServerRead(ctx context.Context, d *schema.ResourceData, meta 
 			return nil
 		} else {
 			log.Printf("API FAILURE: %s - %v", resp, err)
-			return diag.FromErr(err)
+			return optionSourceError("chefServer", resp, err)
 		}
 	}
 	log.Printf("API RESPONSE: %s", resp)

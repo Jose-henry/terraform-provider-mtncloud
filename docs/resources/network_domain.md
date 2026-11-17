@@ -17,7 +17,6 @@ resource "mtncloud_network_domain" "tf_example_network_domain" {
   description = "Terraform example network domain"
   public_zone = true
   visibility  = "private"
-  tenant_id   = 1
   active      = true
 }
 ```
@@ -38,7 +37,7 @@ resource "mtncloud_network_domain" "tf_example_network_domain" {
 - `domain_password` (String, Sensitive) The password of the account used to facilitate an automated domain join operation
 - `domain_username` (String) The username of the account used to facilitate an automated domain join operation
 - `public_zone` (Boolean) Whether the domain will be public or private
-- `tenant_id` (Number) The tenant to assign the network domain
+- `tenant_id` (Number, Deprecated) The tenant: always the one the provider is logged in to (see `mtncloud_tenant`). Deprecated: leave it out.
 - `visibility` (String) Determines whether the resource is visible in sub-tenants or not
 
 ### Read-Only

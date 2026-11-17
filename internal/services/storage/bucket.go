@@ -53,7 +53,7 @@ func (r *bucketResource) Metadata(_ context.Context, req resource.MetadataReques
 func (r *bucketResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "A bucket in MTN Object Storage (MOS), registered in the console under Infrastructure > Storage > Buckets " +
-			"so it can be used there too. The provider uses the tenant's MOS keys from Cypher: order \"MTN Object Storage (MOS)\" " +
+			"so it can be used there too. The provider uses the tenant's MOS keys from Cypher: order \"MTN Object Storage\" " +
 			"from the catalog once before using it. Destroy deletes the bucket in MOS and its console record. It refuses while " +
 			"an archive uses the bucket (deleting the record would delete the archive), and while the bucket holds objects " +
 			"unless `force_destroy` is set.",

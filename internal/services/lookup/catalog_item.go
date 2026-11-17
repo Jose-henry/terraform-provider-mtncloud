@@ -63,7 +63,7 @@ func (d *catalogItemDataSource) Schema(_ context.Context, _ datasource.SchemaReq
 		Attributes: map[string]schema.Attribute{
 			// Optional+Computed: give id or name, and the other is filled in.
 			"id":          schema.Int64Attribute{Optional: true, Computed: true, Description: "Catalog item ID. Give this or `name`."},
-			"name":        schema.StringAttribute{Optional: true, Computed: true, Description: "Name shown in the catalog, matched exactly, for example `Create Project`. Give this or `id`."},
+			"name":        schema.StringAttribute{Optional: true, Computed: true, Description: "Name shown in the catalog, matched exactly, for example `Project`. A name MTN Cloud has since changed still works, with a deprecation warning. Give this or `id`."},
 			"description": schema.StringAttribute{Computed: true, Description: "Description shown in the catalog."},
 			"type":        schema.StringAttribute{Computed: true, Description: "`instance`, `blueprint` or `workflow`."},
 			"featured":    schema.BoolAttribute{Computed: true, Description: "Whether the catalog features this item."},
@@ -118,6 +118,22 @@ func (d *catalogItemDataSource) Read(ctx context.Context, req datasource.ReadReq
 			found = append(found, it)
 		}
 	}
+	// A name MTN Cloud has since changed still finds the item, with a warning: former names are
+	// deprecated and will be removed in a later release (client.CatalogNames).
+	if len(found) == 0 && m.ID.IsNull() {
+		if _, current, ok := client.RenamedCatalogItem(m.Name.ValueString()); ok {
+			for _, it := range items {
+				if it.Name == current {
+					found = append(found, it)
+				}
+			}
+			if len(found) > 0 {
+				resp.Diagnostics.AddAttributeWarning(path.Root("name"), "Catalog item renamed",
+					fmt.Sprintf("MTN Cloud renamed %q to %q. The old name still works but is deprecated and will be "+
+						"removed in a later release: use name = %q.", m.Name.ValueString(), current, current))
+			}
+		}
+	}
 	switch {
 	case len(found) == 0 && !m.ID.IsNull():
 		resp.Diagnostics.AddAttributeError(path.Root("id"), "No such catalog item",
@@ -146,8 +162,12 @@ func (d *catalogItemDataSource) Read(ctx context.Context, req datasource.ReadReq
 		apiError(&resp.Diagnostics, "the catalog item's inputs", err)
 		return
 	}
+	name := it.Name
+	if !m.Name.IsNull() {
+		name = m.Name.ValueString() // as configured, a former name included
+	}
 	m = oneCatalogItemModel{
-		ID: types.Int64Value(it.ID), Name: types.StringValue(it.Name), Description: types.StringValue(it.Description),
+		ID: types.Int64Value(it.ID), Name: types.StringValue(name), Description: types.StringValue(it.Description),
 		Type: types.StringValue(it.Type), Featured: types.BoolValue(it.Featured), Inputs: []catalogInputModel{},
 	}
 	for _, in := range inputs {
