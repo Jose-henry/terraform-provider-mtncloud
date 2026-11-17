@@ -47,6 +47,7 @@ func DataSources() []func() datasource.DataSource {
 		newImage,
 		newFloatingIPs,
 		newNetworks,
+		newTenant,
 	}, recordDataSources()...)
 }
 

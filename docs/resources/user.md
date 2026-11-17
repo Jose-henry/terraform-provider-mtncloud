@@ -47,7 +47,7 @@ resource "mtncloud_user" "tf_example_user" {
 - `linux_username` (String) The username assigned to linux instances for this user account
 - `password_expired` (Boolean) Set user password expiration. After the first login you will be prompted to create a new password. Set at create: MTN Cloud can't change it afterwards, so a change is refused at plan time.
 - `receive_notifications` (Boolean) Whether notification emails will be sent to the email address associated with the user account or not
-- `tenant_id` (Number) The ID of the tenant to create the user account in
+- `tenant_id` (Number, Deprecated) The tenant: always the one the provider is logged in to (see `mtncloud_tenant`). Deprecated: leave it out.
 - `windows_password` (String, Sensitive) The password assigned to windows instances for this user account (external password changes are not detected)
 - `windows_username` (String) The username assigned to windows instances for this user account
 

@@ -6,7 +6,7 @@ import "strings"
 
 // ProjectShortName returns the name a customer gave a project, from the platform's full name.
 //
-// MTN's "Create Project" automation renames every project to "<name>-<TENANT>", where TENANT is
+// MTN's "Project" catalog item (formerly "Create Project") automation renames every project to "<name>-<TENANT>", where TENANT is
 // the tenant (account) name from /api/whoami: "web-prod" in tenant "Acme" becomes
 // "web-prod-Acme". Customers only ever see and type the short name. Some pools are shared and have
 // no suffix at all (for example "admin"); those come back unchanged.

@@ -447,6 +447,12 @@ func TestCatalogItem_DataSource(t *testing.T) {
 			{Config: one(`  name = "MTN Object Storage"`), ConfigStateChecks: []statecheck.StateCheck{
 				check(tfjsonpath.New("inputs"), knownvalue.ListSizeExact(0)),
 			}},
+			// A name MTN Cloud has since changed still finds the item (deprecated, with a warning), and
+			// keeps the configured name, so the plan stays empty.
+			{Config: one(`  name = "MTN Object Storage (MOS)"`), ConfigStateChecks: []statecheck.StateCheck{
+				check(tfjsonpath.New("id"), knownvalue.Int64Exact(13)),
+				check(tfjsonpath.New("name"), knownvalue.StringExact("MTN Object Storage (MOS)")),
+			}},
 			{Config: one(`  name = "nope"`), ExpectError: regexp.MustCompile(`(?s)No such catalog item.*You can order:\s+Create\s+Instance`)},
 			{Config: one(`  id = 1`), ExpectError: regexp.MustCompile(`No such catalog item`)},
 			{Config: one(`  id = 22`)},

@@ -120,6 +120,9 @@ func validDay(name string, d dayModel) string {
 		return ""
 	}
 	on, off := d.On.ValueString(), d.Off.ValueString()
+	if !onTime.MatchString(on) || !offTime.MatchString(off) {
+		return "" // the format check already says what is wrong ("25:00"): one error, not two (tester's fix 17)
+	}
 	switch {
 	case on == "00:00" && off == "24:00":
 		return fmt.Sprintf("%s runs all day: leave %s out instead (that is the default).", name, name)

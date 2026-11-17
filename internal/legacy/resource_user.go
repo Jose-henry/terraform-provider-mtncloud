@@ -4,11 +4,11 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"strconv"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourceUser() *schema.Resource {
@@ -27,10 +27,12 @@ func resourceUser() *schema.Resource {
 				Computed:    true,
 			},
 			"tenant_id": {
-				Description: "The ID of the tenant to create the user account in",
-				Type:        schema.TypeInt,
-				Computed:    true,
-				Optional:    true,
+				Type:         schema.TypeInt,
+				Description:  "The tenant: always the one the provider is logged in to (see `mtncloud_tenant`). Deprecated: leave it out.",
+				Optional:     true,
+				Computed:     true,
+				Deprecated:   tenantIDDeprecation,
+				ValidateFunc: validation.IntAtLeast(1),
 			},
 			"first_name": {
 				Description: "The first name of the user account",
@@ -130,17 +132,16 @@ func resourceUserCreate(ctx context.Context, d *schema.ResourceData, meta interf
 		}
 	}
 
-	var tenantId string
-	if d.Get("tenant_id").(int) > 1 {
-		tenantId = strconv.Itoa(d.Get("tenant_id").(int))
-	} else {
-		tenantId = "1"
+	// The user is made in the login's own tenant: no accountId is sent, which "Users: Full" allows.
+	// The old default, accountId=1 (the master tenant), needed "admin-accounts (full)" (tester's fix
+	// 19.5). A tenant_id naming another tenant is refused before anything is sent (owner, 2026-11-17).
+	if _, err := ownTenant(d, client); err != nil {
+		return diag.FromErr(err)
 	}
+	query := map[string]string{}
 
 	req := &sdk.Request{
-		QueryParams: map[string]string{
-			"accountId": tenantId,
-		},
+		QueryParams: query,
 		Body: map[string]interface{}{
 			"user": map[string]interface{}{
 				"firstName":            d.Get("first_name").(string),
@@ -217,6 +218,11 @@ func resourceUserRead(ctx context.Context, d *schema.ResourceData, meta interfac
 		setAttr(ctx, d, "last_name", user.LastName)
 		setAttr(ctx, d, "email", user.Email)
 		setAttr(ctx, d, "receive_notifications", user.ReceiveNotifications)
+		if user.AccountID != 0 {
+			setAttr(ctx, d, "tenant_id", user.AccountID)
+		} else if user.Account.ID != 0 {
+			setAttr(ctx, d, "tenant_id", user.Account.ID)
+		}
 		var roleIds []int
 		for _, role := range user.Roles {
 			roleIds = append(roleIds, int(role.ID))

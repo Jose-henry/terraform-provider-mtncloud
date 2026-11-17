@@ -42,7 +42,7 @@ type MOSCredentials struct {
 // ErrMOSNotSetUp means the tenant has no MOS keys in Cypher.
 var ErrMOSNotSetUp = errors.New("MTN Object Storage isn't set up for this tenant: no MOS keys were found in Cypher. Add " +
 	"`resource \"mtncloud_mos_access\" \"keys\" {}` (it orders them once, as the tenant has none) and make MOS resources " +
-	"depend on it, or order \"MTN Object Storage (MOS)\" from the catalog once, or set MTNCLOUD_MOS_ACCESS_KEY, " +
+	"depend on it, or order \"MTN Object Storage\" from the catalog once, or set MTNCLOUD_MOS_ACCESS_KEY, " +
 	"MTNCLOUD_MOS_SECRET_KEY and MTNCLOUD_MOS_ENDPOINT")
 
 // MOSTenantName is the tenant name as MTN's MOS workflow writes it into Cypher key names:

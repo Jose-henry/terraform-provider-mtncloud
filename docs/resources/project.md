@@ -2,17 +2,17 @@
 page_title: "mtncloud_project Resource - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  An MTN Cloud project, ordered from the catalog ("Create Project"). Creating it waits for the order's workflow to finish, not for the project to sync in: its default security group, networks and floating IP pools can take up to an hour to appear. A project can't be renamed or deleted from Terraform.
+  An MTN Cloud project, ordered from the catalog ("Project"). Creating it waits for the order's workflow to finish, not for the project to sync in: its default security group, networks and floating IP pools can take up to an hour to appear. A project can't be renamed or deleted from Terraform.
 ---
 
 # mtncloud_project
 
-An MTN Cloud project, ordered from the catalog ("Create Project"). Creating it waits for the order's workflow to finish, not for the project to sync in: its default security group, networks and floating IP pools can take up to an hour to appear. A project can't be renamed or deleted from Terraform.
+An MTN Cloud project, ordered from the catalog ("Project"). Creating it waits for the order's workflow to finish, not for the project to sync in: its default security group, networks and floating IP pools can take up to an hour to appear. A project can't be renamed or deleted from Terraform.
 
 ## Example Usage
 
 ```terraform
-# Orders MTN's "Create Project" catalog item. MTN Cloud names it "web-prod-<tenant>".
+# Orders MTN's "Project" catalog item. MTN Cloud names it "web-prod-<tenant>".
 resource "mtncloud_project" "web" {
   name        = "web-prod"
   description = "Web tier, production"
@@ -62,7 +62,7 @@ nothing.
 - **Recommended: order projects from the MTN Cloud console.** A project can't be deleted from Terraform
   (or by a customer login at all), so a mistyped name stays until MTN Cloud support removes it. Ordering
   from the console, then using the project by name in other resources, avoids that.
-- **Waits for the order only.** Create places the order and waits for MTN's "Create Project"
+- **Waits for the order only.** Create places the order and waits for MTN's "Project"
   workflow to finish (default timeout 15 minutes, see `timeouts`). It does not wait for the project
   to sync in. Allow **up to an hour** before its default security group, networks and floating IP
   pools are all there.

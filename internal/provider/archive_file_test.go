@@ -352,6 +352,44 @@ data "mtncloud_archive_files" "docs" {
 	}
 }
 
+// Renaming an archive and changing a file in it (given by archive_id) in one apply: the file's archive
+// name comes from the apply, not the plan (tester's fix 19.3: "inconsistent final plan").
+func TestArchiveFile_RenameWithContent(t *testing.T) {
+	f := newFakeAPI(t)
+	m := newMOSFake(t, f)
+	cfg := func(name, content string) string {
+		return m.config(f) + `
+resource "mtncloud_mos_bucket" "b" {
+  name = "tf-acc-files-2"
+}
+resource "mtncloud_archive_bucket" "a" {
+  name          = "` + name + `"
+  mos_bucket_id = mtncloud_mos_bucket.b.id
+  force_destroy = true
+}
+resource "mtncloud_archive_file" "f" {
+  archive_id = mtncloud_archive_bucket.a.id
+  path       = "a.txt"
+  content    = "` + content + `"
+}
+`
+	}
+	file := "mtncloud_archive_file.f"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: factories(),
+		Steps: []resource.TestStep{
+			{Config: cfg("tf-acc-arc-a", "one")},
+			{
+				Config: cfg("tf-acc-arc-b", "two"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(file, tfjsonpath.New("archive"), knownvalue.StringExact("tf-acc-arc-b")),
+				},
+			},
+			{Config: cfg("tf-acc-arc-b", "two"), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+		},
+	})
+}
+
 func TestArchiveFile_Checks(t *testing.T) {
 	f := newFakeAPI(t)
 	m := newMOSFake(t, f)

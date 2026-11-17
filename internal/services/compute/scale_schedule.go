@@ -216,8 +216,15 @@ func (r *scaleScheduleResource) ModifyPlan(ctx context.Context, req resource.Mod
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if plan.ScaleThresholdID.Equal(state.ScaleThresholdID) {
-		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("threshold"), state.Threshold)...)
+	if !plan.ScaleThresholdID.Equal(state.ScaleThresholdID) {
+		return
+	}
+	resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("threshold"), state.Threshold)...)
+	// Updated anyway (new times or dates): copy the threshold again in that update, so a threshold
+	// changed in the same apply (which runs first, being referenced) needs no second apply (tester's
+	// fix 17.1). With nothing else to change, the plan stays empty and the copy as it is.
+	if !resp.Diagnostics.HasError() && !resp.Plan.Raw.Equal(req.State.Raw) {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("threshold"), types.ObjectUnknown(copiedThresholdTypes))...)
 	}
 }
 
@@ -409,10 +416,10 @@ func (r *scaleScheduleResource) Update(ctx context.Context, req resource.UpdateR
 		resp.Diagnostics.AddError("Invalid ID", err.Error())
 		return
 	}
-	// Copy the threshold only when it changed, or when Read found the copy out of date (it then
-	// dropped the ID). Otherwise the plan keeps the copied values, and copying again would break that
-	// promise when the library threshold changes in the same apply.
-	copyThreshold := !m.ScaleThresholdID.Equal(state.ScaleThresholdID)
+	// Copy the threshold when it changed, when Read found the copy out of date (it then dropped the
+	// ID), or when the plan left the copy to this update (ModifyPlan). Otherwise the plan keeps the
+	// copied values, and copying again would break that promise.
+	copyThreshold := !m.ScaleThresholdID.Equal(state.ScaleThresholdID) || m.Threshold.IsUnknown()
 	s, err := r.client.UpdateScaleSchedule(ctx, inst, sid, m.spec(copyThreshold))
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to update scale schedule "+m.ID.ValueString(), err.Error())

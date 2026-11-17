@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -69,10 +70,12 @@ func (r *taskResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 		"retry_count": schema.Int64Attribute{
 			Optional: true, Computed: true, Default: int64default.StaticInt64(5),
 			Description: "How many times to retry when `retryable` is true. Defaults to 5.",
+			Validators:  []validator.Int64{int64validator.AtLeast(0)},
 		},
 		"retry_delay_seconds": schema.Int64Attribute{
 			Optional: true, Computed: true, Default: int64default.StaticInt64(10),
 			Description: "Seconds between retries. Defaults to 10.",
+			Validators:  []validator.Int64{int64validator.AtLeast(0)},
 		},
 		"allow_custom_config": schema.BoolAttribute{
 			Optional: true, Computed: true, Default: booldefault.StaticBool(false),
@@ -159,6 +162,13 @@ func (r *taskResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRe
 			continue
 		}
 		if _, err := r.client.OptionByName(ctx, o.source, o.what, v.ValueString()); err != nil {
+			if o.kind == workflow && !client.LookupFailed(err) {
+				// A workflow made in the same apply doesn't exist yet at plan time (tester's fix 18):
+				// the apply looks it up again and fails there if it is still missing.
+				resp.Diagnostics.AddAttributeWarning(path.Root(o.attr), "Workflow not found yet",
+					err.Error()+" If this apply creates it, this is fine: the apply looks it up again.")
+				continue
+			}
 			resp.Diagnostics.AddAttributeError(path.Root(o.attr), client.LookupTitle(err, o.what, "Unknown "+o.what), client.LookupDetail(err, o.what))
 		}
 	}
@@ -219,10 +229,10 @@ func (r *taskResource) input(ctx context.Context, g getter, diags *diag.Diagnost
 		}
 	}
 	for _, o := range r.spec.options {
+		// A plugin task's options are kept in "taskOptions" under the option type's code, though
+		// the task type gives them field context "config": anything sent in "config" is dropped
+		// (live, 2026-11-17: reverse text stored empty, tester's fix 18.2).
 		dst := in.Options
-		if o.config {
-			dst = in.Config
-		}
 		// Every option is sent, nil when unset, so an update clears what was removed.
 		if o.kind == workflow {
 			dst[o.key+"Name"], dst[o.key+"Id"] = nil, nil
@@ -231,7 +241,11 @@ func (r *taskResource) input(ctx context.Context, g getter, diags *diag.Diagnost
 		}
 		switch o.kind {
 		case flag:
-			if boolean(o.attr) {
+			switch {
+			case o.plugin:
+				// A plugin checkbox is a JSON boolean, which MTN stores as "true" or "false".
+				dst[o.key] = boolean(o.attr)
+			case boolean(o.attr):
 				dst[o.key] = "on"
 			}
 		case headers:
@@ -416,9 +430,6 @@ func (r *taskResource) read(ctx context.Context, t *client.Task, st *tfsdk.State
 	}
 	for _, o := range r.spec.options {
 		src := t.Options
-		if o.config {
-			src = t.Config
-		}
 		raw := src[o.key]
 		switch o.kind {
 		case secret:

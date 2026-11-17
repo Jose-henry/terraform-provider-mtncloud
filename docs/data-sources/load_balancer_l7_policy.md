@@ -41,7 +41,7 @@ output "api_rules" {
 - `id` (String) The L7 policy's ID. Give this or `name`.
 - `listener_id` (String) The listener's ID. Give this or `listener_name`.
 - `listener_name` (String) The listener's name, matched exactly. Give this or `listener_id`.
-- `load_balancer_id` (String) Load balancer ID. Give this or `load_balancer_name`.
+- `load_balancer_id` (String) Load balancer ID, a UUID (for example `mtncloud_load_balancer.web.id`). Give this or `load_balancer_name`.
 - `load_balancer_name` (String) Load balancer name, matched exactly; it must match exactly one on the network. Give this or `load_balancer_id`.
 - `name` (String) The L7 policy's name, matched exactly. Give this or `id`.
 

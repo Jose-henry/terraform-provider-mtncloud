@@ -192,6 +192,7 @@ func (r *archiveFileResource) ModifyPlan(ctx context.Context, req resource.Modif
 	if plan.Content.IsUnknown() || plan.ContentBase64.IsUnknown() || plan.Source.IsUnknown() {
 		plan.ContentSHA256, plan.SizeBytes = types.StringUnknown(), types.Int64Unknown()
 		plan.ContentType, plan.LastUpdated = types.StringUnknown(), types.StringUnknown()
+		renamable(cfg, &plan, state)
 		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 		return
 	}
@@ -209,8 +210,18 @@ func (r *archiveFileResource) ModifyPlan(ctx context.Context, req resource.Modif
 		plan.ContentType, plan.LastUpdated = state.ContentType, state.LastUpdated // nothing to upload
 	} else {
 		plan.ContentType, plan.LastUpdated = types.StringUnknown(), types.StringUnknown()
+		renamable(cfg, &plan, state)
 	}
 	resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
+}
+
+// renamable leaves the archive's name to the apply when the file is uploaded again into an archive
+// given by ID: the same apply may rename the archive, and the upload reads the new name back
+// (tester's fix 19.3: "inconsistent final plan" when both changed together).
+func renamable(cfg archiveFileModel, plan *archiveFileModel, state *archiveFileModel) {
+	if state != nil && cfg.Archive.IsNull() {
+		plan.Archive = types.StringUnknown()
+	}
 }
 
 // archiveName is the archive's name at apply time, for an archive given by ID or made after the plan.

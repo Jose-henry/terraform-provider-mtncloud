@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"regexp"
 
 	"log"
 
 	sdk "github.com/gomorpheus/morpheus-go-sdk"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourceExecuteSchedule() *schema.Resource {
@@ -49,8 +51,10 @@ func resourceExecuteSchedule() *schema.Resource {
 			},
 			"schedule": {
 				Type:        schema.TypeString,
-				Description: "The cron style syntax for the scheduled execution",
+				Description: "When it runs, as a five-field cron expression: minute, hour, day of month, month, day of week, for example `0 2 * * *` (02:00 every day)",
 				Required:    true,
+				ValidateFunc: validation.StringMatch(cronFields,
+					"must be a five-field cron expression (minute hour day-of-month month day-of-week), for example \"0 2 * * *\""),
 			},
 		},
 		Importer: &schema.ResourceImporter{
@@ -213,3 +217,9 @@ type ExecuteSchedule struct {
 		Lastupdated      string `json:"lastUpdated"`
 	} `json:"schedule"`
 }
+
+// cronFields is a five-field cron expression: each field digits, *, ?, /, -, commas, L, W, # and
+// month or weekday names ("every day" and "every day at two am" used to pass the plan: tester's fix 17).
+var cronFields = regexp.MustCompile(`(?i)^\s*` + cronField + `(\s+` + cronField + `){4}\s*$`)
+
+const cronField = `(?:[0-9*?/,#LW-]|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|SUN|MON|TUE|WED|THU|FRI|SAT)+`

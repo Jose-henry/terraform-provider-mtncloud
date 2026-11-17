@@ -37,7 +37,7 @@ output "members" {
 
 ### Optional
 
-- `load_balancer_id` (String) Load balancer ID. Give this or `load_balancer_name`.
+- `load_balancer_id` (String) Load balancer ID, a UUID (for example `mtncloud_load_balancer.web.id`). Give this or `load_balancer_name`.
 - `load_balancer_name` (String) Load balancer name, matched exactly; it must match exactly one on the network. Give this or `load_balancer_id`.
 - `pool_id` (String) The pool's ID. Give this or `pool_name`.
 - `pool_name` (String) The pool's name, matched exactly. Give this or `pool_id`.

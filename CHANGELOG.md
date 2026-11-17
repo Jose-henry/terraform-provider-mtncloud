@@ -2,6 +2,32 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
+## 0.11.2 (2026-11-17)
+
+From a tester's report on 0.11.1, each claim checked with the CLI first.
+
+- **Changed: users and identity sources are always made in your own tenant.** `mtncloud_user` no longer sends `accountId`. Before, it sent `accountId=1` (the master tenant) by default, which needs the master's account permission, so a tenant's own login got a 403 even with "Users: Full". `tenant_id` on `mtncloud_user`, `mtncloud_active_directory_identity_source`, `mtncloud_saml_identity_source` and `mtncloud_network_domain` is deprecated: leave it out. When set, it must be the tenant you are logged in to, or the apply is refused before anything is sent. A login never manages another tenant through this provider.
+- **Changed: catalog names follow MTN's rename** (catalog read with the CLI, 2026-11-17). Resource types are unchanged, items are still found by code, and orders placed before the rename still match. Now: `Project` (was `Create Project`), `MTN Object Storage`, `MTN File Storage · NFS` and `· SMB`, `MTN MySQL Server`, `MTN PostgreSQL Server`, `MTN MariaDB Server`, `MTN MongoDB Server`, `MTN LAMP Stack`, `MTN LEMP Stack`, `MTN WordPress Hosting`, `MTN Database Service`, `MTN Relay for RabbitMQ`, `MTN Streamline for Apache Kafka`, `MTN Security Monitoring (SIEM)`, `MTN Site-to-Site VPN` (was `PfSense VPN`), `MTN Remote Access VPN` (was `MTN VPN Server (WireGuard)`), `MTN Container Cluster (Self-Managed)` (was `Kubernetes (MK8S) Engine`), `MTN SSL Certificates` (was `Let's Encrypt SSL`).
+- **Deprecated: old catalog item names.** `data "mtncloud_catalog_item"` given an old name still finds the item, with a warning naming the new one. Old names will be removed in a later release: use the new names.
+- **Added: `mtncloud_tenant`**, the tenant you are logged in to (`id`, `name`, `master`).
+- **Fixed: `mtncloud_key_pair` data source by `id`** (the ID was ignored).
+- **Fixed: `mtncloud_domain` data source finds shared domains** such as `localdomain`, by name or ID. MTN Cloud lists them for every tenant but answers 404 when one is read by ID.
+- **Fixed: `mtncloud_form`:** a checkbox's `default_value` may be `"true"` or `"false"`, and is kept; a text area gets 3 rows when `text_rows` is left out.
+- **Changed: destroying a form with field groups.** MTN Cloud's own delete fails while a form has field groups (a database error, also in the console). The provider now removes the groups and deletes again. A tenant login whose role may create forms but not change them gets a 403 there (seen live): the error then says to remove the field groups in the console first.
+- **Changed: a name not found in an option list is looked up once more**, so a workflow made earlier in the same apply is found by a task that names it.
+- **Fixed: `mtncloud_nested_workflow_task`** keeps working after its workflow is renamed in the console, and a name in other case doesn't show a change.
+- **Fixed: `mtncloud_nested_workflow_task`** finds the workflow by name or ID in the list the console offers, and sends both.
+- **Fixed: `mtncloud_reverse_text_task` and `mtncloud_powerscale_storage_collection_task` keep their settings.** MTN Cloud dropped `text` and `dry_run` as they were sent, so the text was empty and a dry run ran for real. They are now stored where MTN keeps them (checked live).
+- **Fixed: `mtncloud_key_pair` with `public_key = file(...)`** no longer shows a change after apply (MTN Cloud stores the key without the trailing newline), which also blocked `terraform destroy`.
+- **Fixed: `execute_target` and `visibility` on Ansible, Ansible Tower and vRO tasks** no longer show a diff when left out.
+- **Fixed: a failed update keeps the previous state** on the remaining SDK-based resources, so the next plan shows the change again.
+- **Fixed: `mtncloud_archive_file`** given by `archive_id` no longer fails with "inconsistent final plan" when its archive is renamed in the same apply.
+- **Fixed: `mtncloud_instance_scale_schedule`** copies a threshold changed in the same apply (before, it needed a second apply).
+- **Fixed: a failed `mtncloud_instance_deploy` gives MTN Cloud's reason** from the deploy's run.
+- **Changed: plan-time checks:** cron schedules on `mtncloud_execute_schedule` (5 fields), RFC 3339 dates on job `scheduled_date_and_time`, `retry_count` and `retry_delay_seconds` of 0 or more, `text_rows` of 1 or more, load balancer IDs (UUIDs). A power schedule time in the wrong format gives one error, not two. An unknown cluster `role` on `mtncloud_load_balancer_cluster_member`, or a conditional workflow that doesn't exist yet, is a plan warning.
+- **Changed: clearer errors** when an integration's option list has nothing for this login, or MTN Cloud answers 5xx.
+- Docs: a deployed version can't be deleted until its instances are; `expire_seconds` on an archive file link can't change.
+
 ## 0.11.1 (2026-11-11)
 
 - **Changed: `root_datastore` is renamed `disk_datastore`** on `master`, `worker` and `host`, and now also covers every data disk that doesn't name its own `datastore` (in 0.11.0 those went to the project's default). A configuration that set `root_datastore` in 0.11.0 renames the argument, and the stored state is carried over, so nothing is rebuilt. Existing nodes keep their disks where they are; workers or hosts added later put data disks without their own `datastore` on `disk_datastore`.

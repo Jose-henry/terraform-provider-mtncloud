@@ -84,7 +84,13 @@ func (p *lbPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *lbPlugin) id(prefix string) string { p.n++; return fmt.Sprintf("%s-%d", prefix, p.n) }
+func (p *lbPlugin) id(prefix string) string {
+	p.n++
+	if prefix == "lb" { // load balancer IDs are UUIDs, as on MTN Cloud
+		return fmt.Sprintf("0b8f1c2e-4d3a-4f6b-9c1d-%012d", p.n)
+	}
+	return fmt.Sprintf("%s-%d", prefix, p.n)
+}
 
 func list(m map[string]any, k string) []any { l, _ := m[k].([]any); return l }
 

@@ -59,7 +59,9 @@ func (r *instanceDeployResource) Schema(ctx context.Context, _ resource.SchemaRe
 			"its message if it fails. When someone deploys another version of the same deployment, or a deploy's run " +
 			"fails, the plan deploys this one again. Deploys to one instance run one at a time. The instance's image must " +
 			"have a deploy folder: MTN's standard images don't yet, and deploying to them fails with \"missing a deploy " +
-			"folder configuration\". MTN Cloud can't undeploy, so destroying this leaves the files on the instance.",
+			"folder configuration\". MTN Cloud can't undeploy, so destroying this leaves the files on the instance. Every deploy, " +
+			"a failed one too, stays on the instance's record: MTN Cloud then refuses to delete its version and its deployment " +
+			"(\"used in deploys\") until the instance is deleted, so try a deploy on an instance you can delete.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{Computed: true, PlanModifiers: keep, Description: "`<instance_id>/<deployment_id>`."},
 			"instance_id": schema.StringAttribute{Required: true, Validators: idValid, PlanModifiers: replace,
@@ -166,7 +168,7 @@ func (r *instanceDeployResource) deploy(ctx context.Context, m *instanceDeployMo
 	}
 	if _, failed := client.DeployDone(d.Status); failed {
 		m.Status = types.StringValue("failed")
-		return fmt.Errorf("deploy %d ended %q. See the instance's Deploy tab and its history; the next apply deploys again", d.ID, d.Status)
+		return fmt.Errorf("deploy %d ended %q%s. See the instance's Deploy tab and its history; the next apply deploys again", d.ID, d.Status, r.why(ctx, d))
 	}
 	// The deploy's status says committed even when its run failed: the run decides.
 	run, err := r.client.WaitForDeployRun(ctx, d, runAppears)
@@ -360,4 +362,17 @@ func (r *instanceDeployResource) ImportState(ctx context.Context, req resource.I
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("instance_id"), p[0])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("deployment_id"), p[1])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("version_id"), "0")...)
+}
+
+// why is MTN's reason for a failed deploy: its run's message on the instance's history (": <reason>",
+// for example "Failed to build deploy config. This Container Node Type may be missing a deploy folder
+// configuration."), or "" when none can be read (tester's fix 17.2).
+func (r *instanceDeployResource) why(ctx context.Context, d *client.InstanceDeploy) string {
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	run, err := r.client.DeployRunFor(rctx, d, time.Time{})
+	if err != nil || run == nil || strings.TrimSpace(run.Message) == "" {
+		return ""
+	}
+	return ": " + strings.TrimRight(run.Message, ". ")
 }

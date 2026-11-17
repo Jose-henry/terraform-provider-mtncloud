@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"log"
 
@@ -179,10 +180,11 @@ func resourceForm() *schema.Resource {
 							Computed:    true,
 						},
 						"text_rows": {
-							Type:        schema.TypeInt,
-							Description: "The number of lines to show for a code editor or text area option type",
-							Optional:    true,
-							Computed:    true,
+							Type:         schema.TypeInt,
+							Description:  "The number of lines to show for a code editor or text area option type",
+							Optional:     true,
+							Computed:     true,
+							ValidateFunc: validation.IntAtLeast(1), // MTN refuses 0 rows with a raw 400 (tester's fix 19)
 						},
 						"display": {
 							Type:         schema.TypeString,
@@ -438,10 +440,11 @@ func resourceForm() *schema.Resource {
 										Computed:    true,
 									},
 									"text_rows": {
-										Type:        schema.TypeInt,
-										Description: "The number of rows to display for a text area",
-										Optional:    true,
-										Computed:    true,
+										Type:         schema.TypeInt,
+										Description:  "The number of rows to display for a text area",
+										Optional:     true,
+										Computed:     true,
+										ValidateFunc: validation.IntAtLeast(1), // MTN refuses 0 rows with a raw 400 (tester's fix 19)
 									},
 									"display": {
 										Type:         schema.TypeString,
@@ -581,10 +584,10 @@ func resourceFormCreate(ctx context.Context, d *schema.ResourceData, meta interf
 				row["config"] = config
 			case "checkbox":
 				defaultValue := optionTypeConfig["default_value"].(string)
-				if defaultValue != "true" && defaultValue != "false" {
+				if defaultValue != "" && defaultValue != "true" && defaultValue != "false" { // unset is "": a checkbox uses default_checked (fix 19.1)
 					return diag.Errorf("The default_value attribute cannot be set when the type attribute is set to checkbox, use the default_checked attribute instead for the %s checkbox resource", optionTypeConfig["name"].(string))
 				}
-				row["defaultValue"] = optionTypeConfig["default_checked"]
+				row["defaultValue"] = checkboxDefault(defaultValue, optionTypeConfig["default_checked"])
 			case "number":
 				number, err := strconv.Atoi(optionTypeConfig["default_value"].(string))
 				if err != nil {
@@ -621,7 +624,7 @@ func resourceFormCreate(ctx context.Context, d *schema.ResourceData, meta interf
 			case "textarea":
 				row["defaultValue"] = optionTypeConfig["default_value"]
 				config := make(map[string]interface{})
-				config["rows"] = optionTypeConfig["text_rows"]
+				config["rows"] = textRows(optionTypeConfig["text_rows"])
 				row["config"] = config
 			case "typeahead":
 				row["defaultValue"] = optionTypeConfig["default_value"]
@@ -698,10 +701,10 @@ func resourceFormCreate(ctx context.Context, d *schema.ResourceData, meta interf
 						row["config"] = config
 					case "checkbox":
 						defaultValue := optionTypeConfig["default_value"].(string)
-						if defaultValue != "true" && defaultValue != "false" {
+						if defaultValue != "" && defaultValue != "true" && defaultValue != "false" { // unset is "": a checkbox uses default_checked (fix 19.1)
 							return diag.Errorf("The default_value attribute cannot be set when the type attribute is set to checkbox, use the default_checked attribute instead for the %s checkbox resource", optionTypeConfig["name"].(string))
 						}
-						row["defaultValue"] = optionTypeConfig["default_checked"]
+						row["defaultValue"] = checkboxDefault(defaultValue, optionTypeConfig["default_checked"])
 					case "number":
 						number, err := strconv.Atoi(optionTypeConfig["default_value"].(string))
 						if err != nil {
@@ -738,7 +741,7 @@ func resourceFormCreate(ctx context.Context, d *schema.ResourceData, meta interf
 					case "textarea":
 						row["defaultValue"] = optionTypeConfig["default_value"]
 						config := make(map[string]interface{})
-						config["rows"] = optionTypeConfig["text_rows"]
+						config["rows"] = textRows(optionTypeConfig["text_rows"])
 						row["config"] = config
 					case "typeahead":
 						row["defaultValue"] = optionTypeConfig["default_value"]
@@ -1037,10 +1040,10 @@ func resourceFormUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 				row["config"] = config
 			case "checkbox":
 				defaultValue := optionTypeConfig["default_value"].(string)
-				if defaultValue != "true" && defaultValue != "false" {
+				if defaultValue != "" && defaultValue != "true" && defaultValue != "false" { // unset is "": a checkbox uses default_checked (fix 19.1)
 					return diag.Errorf("The default_value attribute cannot be set when the type attribute is set to checkbox, use the default_checked attribute instead for the %s checkbox resource: %v", optionTypeConfig["name"].(string), defaultValue)
 				}
-				row["defaultValue"] = optionTypeConfig["default_checked"]
+				row["defaultValue"] = checkboxDefault(defaultValue, optionTypeConfig["default_checked"])
 			case "number":
 				number, err := strconv.Atoi(optionTypeConfig["default_value"].(string))
 				if err != nil {
@@ -1077,7 +1080,7 @@ func resourceFormUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 			case "textarea":
 				row["defaultValue"] = optionTypeConfig["default_value"]
 				config := make(map[string]interface{})
-				config["rows"] = optionTypeConfig["text_rows"]
+				config["rows"] = textRows(optionTypeConfig["text_rows"])
 				row["config"] = config
 			case "typeahead":
 				row["defaultValue"] = optionTypeConfig["default_value"]
@@ -1154,10 +1157,10 @@ func resourceFormUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 						row["config"] = config
 					case "checkbox":
 						defaultValue := optionTypeConfig["default_value"].(string)
-						if defaultValue != "true" && defaultValue != "false" {
+						if defaultValue != "" && defaultValue != "true" && defaultValue != "false" { // unset is "": a checkbox uses default_checked (fix 19.1)
 							return diag.Errorf("The default_value attribute cannot be set when the type attribute is set to checkbox, use the default_checked attribute instead for the %s checkbox resource", optionTypeConfig["name"].(string))
 						}
-						row["defaultValue"] = optionTypeConfig["default_checked"]
+						row["defaultValue"] = checkboxDefault(defaultValue, optionTypeConfig["default_checked"])
 					case "number":
 						number, err := strconv.Atoi(optionTypeConfig["default_value"].(string))
 						if err != nil {
@@ -1194,7 +1197,7 @@ func resourceFormUpdate(ctx context.Context, d *schema.ResourceData, meta interf
 					case "textarea":
 						row["defaultValue"] = optionTypeConfig["default_value"]
 						config := make(map[string]interface{})
-						config["rows"] = optionTypeConfig["text_rows"]
+						config["rows"] = textRows(optionTypeConfig["text_rows"])
 						row["config"] = config
 					case "typeahead":
 						row["defaultValue"] = optionTypeConfig["default_value"]
@@ -1300,17 +1303,59 @@ func resourceFormDelete(ctx context.Context, d *schema.ResourceData, meta interf
 		return diag.Errorf("The %s mtncloud_form resource is currently associated with the following catalog items and must be disassociated before being deleted: %s", d.Get("name"), inUseCatalogItems)
 	}
 
+	// MTN can't delete a form that still has field groups: its delete fails on a database constraint
+	// (live 2026-11-17: "could not execute batch; SQL [delete from option_type_field_group ...]").
+	// It deletes once they are gone, so they are removed and the delete tried again (tester's fix
+	// 19.2). A tenant's own login may get a 403 for that change: the error then says what to do.
 	resp, err := client.DeleteForm(toInt64(id), req)
-	if err != nil {
-		if resp != nil && resp.StatusCode == http.StatusNotFound {
-			log.Printf("API 404: %s - %s", resp, err)
-			return diag.FromErr(err)
-		} else {
-			log.Printf("API FAILURE: %s - %s", resp, err)
-			return diag.FromErr(err)
+	if err != nil && resp != nil && resp.StatusCode == http.StatusNotFound {
+		d.SetId("")
+		return diags
+	}
+	if err != nil && fieldGroupsBlockDelete(resp) {
+		clear := &sdk.Request{Body: map[string]interface{}{"optionTypeForm": map[string]interface{}{
+			"name": d.Get("name").(string), "code": d.Get("code").(string), "fieldGroups": []interface{}{},
+		}}}
+		if uresp, uerr := client.UpdateForm(toInt64(id), clear); uerr != nil {
+			why := uerr.Error()
+			if uresp != nil && uresp.StatusCode == http.StatusForbidden {
+				why = "your role may create forms but not change them"
+			}
+			return diag.Errorf("MTN Cloud can't delete form %s while it has field groups (its own delete fails), and removing "+
+				"them first failed: %s. Remove the field groups in the console (Library > Forms), or ask your tenant "+
+				"administrator, then run the destroy again", d.Get("name"), why)
 		}
+		resp, err = client.DeleteForm(toInt64(id), req)
+	}
+	if err != nil {
+		log.Printf("API FAILURE: %s - %s", resp, err)
+		return diag.FromErr(err)
 	}
 	log.Printf("API RESPONSE: %s", resp)
 	d.SetId("")
 	return diags
+}
+
+// textRows is a text area's or code editor's row count: MTN refuses 0 ("Rows must be greater than
+// 0"), so an unset count sends 3, the console's default.
+func textRows(v interface{}) int {
+	if n, _ := v.(int); n > 0 {
+		return n
+	}
+	return 3
+}
+
+// checkboxDefault is what a checkbox's default is sent as: default_value when it is "true" or "false"
+// (as the console shows it), else default_checked. Sending default_checked alone dropped a
+// default_value of "true", so the next plan showed a change (live QA, 2026-11-17).
+func checkboxDefault(defaultValue string, checked interface{}) interface{} {
+	if defaultValue == "true" || defaultValue == "false" {
+		return defaultValue == "true"
+	}
+	return checked
+}
+
+// fieldGroupsBlockDelete reports whether a form's delete failed on its field groups.
+func fieldGroupsBlockDelete(resp *sdk.Response) bool {
+	return resp != nil && resp.StatusCode == http.StatusBadRequest && strings.Contains(string(resp.Body), "option_type_field_group")
 }

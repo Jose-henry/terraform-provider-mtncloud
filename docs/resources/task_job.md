@@ -107,7 +107,7 @@ resource "mtncloud_task_job" "schedule" {
 - `instance_ids` (List of Number) A list of instance ids to associate with the job
 - `instance_label` (String) The instance label used for dynamic automation targeting
 - `labels` (Set of String) The organization labels associated with the task job (Only supported on MTN Cloud 5.5.3 or higher)
-- `scheduled_date_and_time` (String) The date and time the job will be executed if schedule mode date_and_time is used
+- `scheduled_date_and_time` (String) The date and time the job will be executed if schedule mode date_and_time is used, in RFC 3339 form, for example `2026-12-01T09:00:00Z`
 - `server_ids` (List of Number) A list of server ids to associate with the job
 - `server_label` (String) The server label used for dynamic automation targeting
 

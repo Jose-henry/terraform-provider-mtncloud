@@ -13,7 +13,6 @@ Provides an MTN Cloud Active Directory identity source resource: lets users of t
 
 ```terraform
 resource "mtncloud_active_directory_identity_source" "addemo" {
-  tenant_id               = 1
   name                    = "addemo"
   description             = "TF example AD identity source"
   ad_server               = "dc01.contoso.com"
@@ -45,7 +44,6 @@ resource "mtncloud_active_directory_identity_source" "addemo" {
 - `default_account_role_id` (Number) The id of the default role a user is assigned when they are in the required group or if no specific group mapping applies to the user
 - `domain` (String) The name of the active directory domain
 - `name` (String) The name of the active directory identity source
-- `tenant_id` (Number) The ID of the MTN Cloud tenant to associate the identity source with
 
 ### Optional
 
@@ -54,6 +52,7 @@ resource "mtncloud_active_directory_identity_source" "addemo" {
 - `required_group` (String) The active directory group users must be in to access MTN Cloud
 - `role_mapping` (Block Set) The Active Directory to MTN Cloud Role mapping (see [below for nested schema](#nestedblock--role_mapping))
 - `search_member_groups` (Boolean) Whether groups nested inside the required group will also be included
+- `tenant_id` (Number, Deprecated) The tenant: always the one the provider is logged in to (see `mtncloud_tenant`). Deprecated: leave it out.
 - `use_ssl` (Boolean) Whether to use SSL when connecting to the domain controller
 
 ### Read-Only

@@ -356,7 +356,7 @@ resource "mtncloud_load_balancer_floating_ip" "pub" {
 						lb["fip"] = map[string]any{"id": "fip-console", "floating_ip_address": "203.0.113.7", "floating_network_id": "ext-02"}
 					}
 				},
-				Config: fromPool, ExpectError: regexp.MustCompile(`(?s)already has floating IP 203\.0\.113\.7.*terraform import`),
+				Config: fromPool, ExpectError: regexp.MustCompile(`(?s)already\s+has\s+floating\s+IP\s+203\.0\.113\.7.*terraform\s+import`),
 			},
 			{
 				PreConfig: func() {

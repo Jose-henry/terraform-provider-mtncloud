@@ -103,7 +103,7 @@ DATA_SOURCES = [
       "security_group", "external_networks", "registries", "cluster_layouts",
       "catalog_items"]),
     ("Tenancy, users and access",
-     ["user", "users", "user_role", "user_roles", "user_group", "user_groups", "identity_source",
+     ["tenant", "user", "users", "user_role", "user_roles", "user_group", "user_groups", "identity_source",
       "identity_sources",
       "permission_set", "contact", "credential", "group", "groups", "environment", "environments"]),
     ("Networking",

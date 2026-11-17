@@ -33,7 +33,7 @@ output "catalog_order_status" {
 
 ### Read-Only
 
-- `catalog_item` (String) Catalog item that was ordered, for example `Create Project`.
+- `catalog_item` (String) Catalog item that was ordered, for example `Project`.
 - `execution_status` (String) Status of the order's workflow run, or empty.
 - `order_date` (String) When it was ordered (RFC 3339).
 - `quantity` (Number) Quantity ordered.

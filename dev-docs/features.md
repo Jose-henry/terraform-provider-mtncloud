@@ -6,8 +6,8 @@ The cloud (`MTNNG_CLOUD_AZ_1`) is found automatically: you never configure it.
 
 | | Resources | Data sources |
 |---|---|---|
-| Available today | 124 | 113 |
-| Usable with a customer (sub-tenant) login | 124 | 108 |
+| Available today | 124 | 114 |
+| Usable with a customer (sub-tenant) login | 124 | 109 |
 | Master tenant only | 0 | 0 |
 | Not checked yet with a customer login | 0 | 5 |
 | Coming next | 2 | 0 |
@@ -322,6 +322,7 @@ Autoscaling thresholds.
 | [`mtncloud_identity_source`](../docs/data-sources/identity_source.md) | Yes (read verified) |
 | [`mtncloud_identity_sources`](../docs/data-sources/identity_sources.md) | Yes (read verified) |
 | [`mtncloud_permission_set`](../docs/data-sources/permission_set.md) | Yes (no API call) |
+| [`mtncloud_tenant`](../docs/data-sources/tenant.md) | Yes (read verified) |
 | [`mtncloud_user`](../docs/data-sources/user.md) | Yes (read verified) |
 | [`mtncloud_user_group`](../docs/data-sources/user_group.md) | Yes (read verified) |
 | [`mtncloud_user_groups`](../docs/data-sources/user_groups.md) | Yes (read verified) |

@@ -28,9 +28,12 @@ func resourceSAMLIdentitySource() *schema.Resource {
 				Computed:    true,
 			},
 			"tenant_id": {
-				Type:        schema.TypeInt,
-				Description: "The ID of the MTN Cloud tenant to associate the identity source with",
-				Required:    true,
+				Type:         schema.TypeInt,
+				Description:  "The tenant: always the one the provider is logged in to (see `mtncloud_tenant`). Deprecated: leave it out.",
+				Optional:     true,
+				Computed:     true,
+				Deprecated:   tenantIDDeprecation,
+				ValidateFunc: validation.IntAtLeast(1),
 			},
 			"name": {
 				Type:        schema.TypeString,
@@ -199,7 +202,11 @@ func resourceSAMLIdentitySourceCreate(ctx context.Context, d *schema.ResourceDat
 		},
 	}
 
-	resp, err := client.CreateIdentitySource(int64(d.Get("tenant_id").(int)), req)
+	tenantID, err := ownTenant(d, client)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	resp, err := client.CreateIdentitySource(tenantID, req)
 	if err != nil {
 		log.Printf("API FAILURE: %s - %s", resp, err)
 		return diag.FromErr(err)

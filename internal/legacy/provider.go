@@ -180,6 +180,7 @@ func Provider() *schema.Provider {
 		ConfigureContextFunc: providerConfigure,
 	}
 	withPermissionHints(p)
+	withKeptStateOnFailedUpdate(p)
 	return p
 }
 

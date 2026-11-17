@@ -82,6 +82,7 @@ func resourceAnsibleTowerTask() *schema.Resource {
 				Type:         schema.TypeString,
 				Description:  "The target that the ansible tower job will be executed on (local, remote, resource)",
 				Optional:     true,
+				Computed:     true, // MTN fills it in when left out (tester's fix 18.3)
 				ValidateFunc: validation.StringInSlice([]string{"local", "remote", "resource"}, false),
 			},
 			"retryable": {
@@ -112,6 +113,7 @@ func resourceAnsibleTowerTask() *schema.Resource {
 				Type:         schema.TypeString,
 				Description:  "The visibility of the ansible tower task (public or private)",
 				Optional:     true,
+				Computed:     true, // MTN fills it in when left out (tester's fix 18.3)
 				ValidateFunc: validation.StringInSlice([]string{"public", "private"}, false),
 			},
 		},

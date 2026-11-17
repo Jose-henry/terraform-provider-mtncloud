@@ -2,12 +2,12 @@
 page_title: "mtncloud_catalog_items Data Source - terraform-provider-mtncloud"
 subcategory: ""
 description: |-
-  Lists the services you can order from the MTN Cloud catalog: projects, Kubernetes, managed databases, VPN, firewall, MTN Object Storage (MOS) and more. Pick an item by name.
+  Lists the services you can order from the MTN Cloud catalog: projects, Kubernetes, managed databases, VPN, firewall, MTN Object Storage and more. Pick an item by name.
 ---
 
 # mtncloud_catalog_items (Data Source)
 
-Lists the services you can order from the MTN Cloud catalog: projects, Kubernetes, managed databases, VPN, firewall, MTN Object Storage (MOS) and more. Pick an item by `name`.
+Lists the services you can order from the MTN Cloud catalog: projects, Kubernetes, managed databases, VPN, firewall, MTN Object Storage and more. Pick an item by `name`.
 
 ## Example Usage
 

@@ -8,7 +8,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
+
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -72,7 +76,10 @@ func lbSelectorAttributes() map[string]schema.Attribute {
 		"network_id": networkIDAttribute(),
 		// Optional+Computed: give one, and the other is filled in.
 		"load_balancer_id": schema.StringAttribute{
-			Optional: true, Computed: true, Description: "Load balancer ID. Give this or `load_balancer_name`.",
+			Optional: true, Computed: true,
+			Description: "Load balancer ID, a UUID (for example `mtncloud_load_balancer.web.id`). Give this or `load_balancer_name`.",
+			Validators: []validator.String{stringvalidator.RegexMatches(lbUUID,
+				"must be a load balancer ID: a UUID such as 0b8f1c2e-4d3a-4f6b-9c1d-2e3f4a5b6c7d")},
 		},
 		"load_balancer_name": schema.StringAttribute{
 			Optional: true, Computed: true,
@@ -156,3 +163,6 @@ func merge(maps ...map[string]schema.Attribute) map[string]schema.Attribute {
 	}
 	return out
 }
+
+// lbUUID is a load balancer's ID ("999999999" used to reach the API: tester's fix 16).
+var lbUUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)

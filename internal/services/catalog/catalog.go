@@ -44,12 +44,12 @@ func (b *base) ready(diags *diag.Diagnostics) bool {
 	return true
 }
 
-// Catalog items are found by code (MTN renames items: "MTN VPN Service" became "MTN PfSense VPN",
-// 2026-10-30, code MVPNSV02 kept), and ordered by the name they have now.
+// Catalog items are found by code (MTN renames items, and keeps the code), and ordered by the name
+// they have now. Names, now and former: client.CatalogNames.
 var (
-	projectItem = client.CatalogItemRef{Code: "001034sd", Names: []string{"Create Project"}}
-	nfsItem     = client.CatalogItemRef{Code: "nfs12", Names: []string{"MTN NFS Storage", "MTN NFS"}}
-	smbItem     = client.CatalogItemRef{Code: "smb12", Names: []string{"MTN SMB Storage", "MTN SMB"}}
+	projectItem = client.CatalogRef("001034sd")
+	nfsItem     = client.CatalogRef("nfs12")
+	smbItem     = client.CatalogRef("smb12")
 )
 
 // itemName is the item's name now, which an order is placed by.

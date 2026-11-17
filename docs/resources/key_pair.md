@@ -25,7 +25,7 @@ resource "mtncloud_key_pair" "deploy" {
 ### Required
 
 - `name` (String) Name of the key pair
-- `public_key` (String) The public key of the key pair
+- `public_key` (String) The public key of the key pair, for example `file("~/.ssh/id_ed25519.pub")`.
 
 ### Optional
 

@@ -3,12 +3,12 @@
 page_title: "mtncloud_archive_file_link Resource - mtncloud"
 subcategory: ""
 description: |-
-  A download link to an archive file: anyone with its URL can download the file without logging in, until it expires. The link's secret is kept in the Terraform state (sensitive). Once the link has expired or was deleted in the console, the next plan makes a new one; an expired link stays listed in the console, where it no longer works. Changing an argument replaces the link.
+  A download link to an archive file: anyone with its URL can download the file without logging in, until it expires. The link's secret is kept in the Terraform state (sensitive). Once the link has expired or was deleted in the console, the next plan makes a new one; an expired link stays listed in the console, where it no longer works. Another file_id replaces the link; expire_seconds can't change once the link exists (the plan says so).
 ---
 
 # mtncloud_archive_file_link (Resource)
 
-A download link to an archive file: anyone with its URL can download the file **without logging in**, until it expires. The link's secret is kept in the Terraform state (sensitive). Once the link has expired or was deleted in the console, the next plan makes a new one; an expired link stays listed in the console, where it no longer works. Changing an argument replaces the link.
+A download link to an archive file: anyone with its URL can download the file **without logging in**, until it expires. The link's secret is kept in the Terraform state (sensitive). Once the link has expired or was deleted in the console, the next plan makes a new one; an expired link stays listed in the console, where it no longer works. Another `file_id` replaces the link; `expire_seconds` can't change once the link exists (the plan says so).
 
 ## Example Usage
 

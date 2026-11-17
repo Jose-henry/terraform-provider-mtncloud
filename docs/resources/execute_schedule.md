@@ -27,7 +27,7 @@ resource "mtncloud_execute_schedule" "tf_example_execute_schedule" {
 ### Required
 
 - `name` (String) The name of the execute schedule
-- `schedule` (String) The cron style syntax for the scheduled execution
+- `schedule` (String) When it runs, as a five-field cron expression: minute, hour, day of month, month, day of week, for example `0 2 * * *` (02:00 every day)
 - `time_zone` (String) The time zone used for scheduling
 
 ### Optional

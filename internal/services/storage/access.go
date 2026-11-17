@@ -140,11 +140,11 @@ func (r *accessResource) planSource(ctx context.Context, plan accessModel, resp 
 	case err != nil:
 		resp.Diagnostics.AddWarning("MOS keys not checked",
 			"The tenant's MOS keys couldn't be read ("+err.Error()+"), so the plan can't say whether apply adopts them or orders "+
-				"new ones. Apply orders MTN Object Storage (MOS) only if the tenant has none, or with rotate = true.")
+				"new ones. Apply orders MTN Object Storage only if the tenant has none, or with rotate = true.")
 		return
 	case keys == nil:
 		resp.Diagnostics.AddWarning("MOS will be ordered",
-			"This tenant has no MOS keys: apply orders MTN Object Storage (MOS), which creates them for the whole tenant.")
+			"This tenant has no MOS keys: apply orders MTN Object Storage, which creates them for the whole tenant.")
 	case plan.Rotate.ValueBool():
 		resp.Diagnostics.AddWarning("MOS keys will be rotated",
 			"rotate = true: this apply orders new MOS keys, which replaces them for the whole tenant. Every tool and user of the "+

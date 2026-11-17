@@ -55,7 +55,7 @@ var recordSpecs = []recordSpec{
 		path: "/api/catalog/items", key: "items",
 		about: "What you have ordered from the catalog (the console's Inventory), with each order's status.",
 		fields: []field{
-			{"catalog_item", "type.name", text, "Catalog item that was ordered, for example `Create Project`."},
+			{"catalog_item", "type.name", text, "Catalog item that was ordered, for example `Project`."},
 			{"status", "status", text, "Order status, for example `ORDERED` or `FAILED`."},
 			{"status_message", "statusMessage", text, "Status message, or empty."},
 			{"execution_status", "execution.status", text, "Status of the order's workflow run, or empty."},

@@ -37,7 +37,7 @@ func (d *catalogItemsDataSource) Metadata(_ context.Context, req datasource.Meta
 func (d *catalogItemsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Lists the services you can order from the MTN Cloud catalog: projects, Kubernetes, managed databases, VPN, firewall, " +
-			"MTN Object Storage (MOS) and more. Pick an item by `name`.",
+			"MTN Object Storage and more. Pick an item by `name`.",
 		Attributes: map[string]schema.Attribute{
 			"name_regex": nameRegexAttribute("catalog items"),
 			"type": schema.StringAttribute{

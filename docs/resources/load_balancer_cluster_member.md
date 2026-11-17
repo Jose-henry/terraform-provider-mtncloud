@@ -43,7 +43,7 @@ output "worker_members" {
 - `network_id` (Number) ID of the MTN Network the load balancer is on, for example `mtncloud_network.app.id`. Your tenant must own it: a network shared with you is read-only. Changing it replaces the resource.
 - `pool_id` (String) The pool, for example `mtncloud_load_balancer_pool.web.id`. Changing it replaces the members.
 - `port` (Number) The port the nodes listen on, for example a Kubernetes NodePort. Set at create: the cloud can't change it, so a change is refused at plan time.
-- `role` (String) The nodes' type: `kube-worker` for a Kubernetes cluster's workers, `kube-master` for its masters. Changing it replaces the members.
+- `role` (String) The nodes' type: `kube-worker` for a Kubernetes cluster's workers, `kube-master` for its masters, and for a Docker cluster's hosts the role the console's Add Member list shows (as `cluster:<id>:<role>`). Changing it replaces the members.
 
 ### Optional
 
