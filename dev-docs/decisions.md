@@ -4,6 +4,22 @@ Each entry records what was decided, why, and what it rules out. Change a decisi
 entry that supersedes it, never by editing history.
 
 
+## D-048 A Docker cluster's hosts are `docker-worker`; the cloud's code is never shown (owner, 2026-11-19)
+Owner: the cloud's role code for Docker hosts (the upstream product name plus "-node") "should never be shown,
+even in the output or results of any operations, it should always be docker-worker".
+- Where the tester got it: MTN's console (Add Member list, `cluster:<id>:<code>`), which the provider's own
+  error pointed to. No released docs, examples or descriptions ever named it.
+- `mtncloud_load_balancer_cluster_member`: `role = "docker-worker"`, sent on the wire as the code (`wireRole`;
+  the constant lives in `internal/client`, marked allow-upstream-name). A configuration that writes the code is
+  a plan-time error that doesn't repeat it. Schema version 1: a 0.11.2 state is upgraded before refresh or
+  plan, so it never shows as drift or in a `-refresh=false` plan. Import takes the console's spelling and
+  stores `docker-worker`. `lbCustomerText` rewrites the code in every load balancer message from MTN.
+  Errors no longer send customers to the console's Add Member list.
+- The code still travels in request bodies and member tags; neither reaches state, plans or logs (the client
+  logs method, path, status only).
+- Open: a failed Docker host build's last log lines (cluster errors) may contain the agent's install path,
+  which carries the upstream name. Not rewritten: changing a path would make it wrong.
+
 ## D-047 A login only manages its own tenant; `tenant_id` is deprecated (owner, 2026-11-17)
 Owner: "it should always get the user tenant id, besides this is not needed, provided they are using their
 own credentials or token", and asked whether `tenant_id` is a security issue.

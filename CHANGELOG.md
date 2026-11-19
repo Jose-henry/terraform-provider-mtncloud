@@ -2,6 +2,11 @@
 
 All notable changes to this provider. Format: [Keep a Changelog](https://keepachangelog.com), versions: SemVer.
 
+## 0.11.3 (2026-11-19)
+
+- **Added: `role = "docker-worker"` on `mtncloud_load_balancer_cluster_member`** for a Docker cluster's hosts. It is the only name the provider shows for them: in state, IDs, plans and errors, MTN Cloud's own errors included. A configuration that used the cloud's internal code for Docker hosts (as MTN's console lists it) gets a plan-time error asking for `docker-worker`; the change replaces nothing. State saved by 0.11.2 is upgraded to `docker-worker` before Terraform refreshes or plans (schema version 1), so the old code doesn't show as a change; an output that refers to the resource's `id` shows the new ID once. An import ID with the console's spelling is stored as `docker-worker`.
+- **Changed: cluster member errors no longer send you to the console's Add Member list**; they name the roles to use.
+
 ## 0.11.2 (2026-11-17)
 
 From a tester's report on 0.11.1, each claim checked with the CLI first.

@@ -62,6 +62,7 @@ func (r *clusterMemberResource) Metadata(_ context.Context, req resource.Metadat
 
 func (r *clusterMemberResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Version: clusterMemberSchemaVersion,
 		Description: "One role of a cluster's nodes in a load balancer pool, for example a Kubernetes cluster's workers: every " +
 			"node of that role with an address on the load balancer's network becomes a member, as one group. The console " +
 			"keeps the group in step with the cluster: when it gains or loses nodes of that role, they are added to or " +
@@ -79,7 +80,7 @@ func (r *clusterMemberResource) Schema(ctx context.Context, _ resource.SchemaReq
 			"role": schema.StringAttribute{Required: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 				Validators: []validator.String{stringvalidator.RegexMatches(nodeRole, "must be a node type such as kube-worker")},
 				Description: "The nodes' type: `kube-worker` for a Kubernetes cluster's workers, `kube-master` for its masters, " +
-					"and for a Docker cluster's hosts the role the console's Add Member list shows (as `cluster:<id>:<role>`). Changing it replaces the members."},
+					"`docker-worker` for a Docker cluster's hosts. Changing it replaces the members."},
 			"port": schema.Int64Attribute{Required: true, PlanModifiers: fixedInt("member"), Validators: portValid,
 				Description: "The port the nodes listen on, for example a Kubernetes NodePort. Set at create: the cloud can't change it, so a change is refused at plan time."},
 			// Optional+Computed with a default: most members share traffic equally.
@@ -108,7 +109,7 @@ func (r *clusterMemberResource) fill(m *clusterMemberRes, lb *client.LoadBalance
 	if p == nil {
 		return true
 	}
-	ms := client.ClusterMembers(p, m.ClusterID.ValueInt64(), m.Role.ValueString())
+	ms := client.ClusterMembers(p, m.ClusterID.ValueInt64(), wireRole(m.Role.ValueString()))
 	if len(ms) == 0 {
 		return true
 	}
@@ -143,7 +144,7 @@ func (r *clusterMemberResource) Create(ctx context.Context, req resource.CreateR
 	cid, role := plan.ClusterID.ValueInt64(), plan.Role.ValueString()
 	// Members of this group already there: removing either resource would remove both. Adopt them by import.
 	if lb, _ := r.readLB(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), &resp.Diagnostics); lb != nil {
-		if p := findPool(lb, plan.PoolID.ValueString()); p != nil && len(client.ClusterMembers(p, cid, role)) > 0 {
+		if p := findPool(lb, plan.PoolID.ValueString()); p != nil && len(client.ClusterMembers(p, cid, wireRole(role))) > 0 {
 			resp.Diagnostics.AddAttributeError(path.Root("role"), "Cluster role already in the pool",
 				fmt.Sprintf("Cluster %d's %s nodes already have members in pool %s, and the cloud removes a group's members "+
 					"together, so only one resource can own them. To manage them here, import them: terraform import <address> "+
@@ -155,12 +156,12 @@ func (r *clusterMemberResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 	err := r.client.AddLBClusterMembers(ctx, plan.NetworkID.ValueInt64(), plan.LoadBalancerID.ValueString(), plan.PoolID.ValueString(),
-		client.LBClusterMemberSpec{ClusterID: cid, Role: role, Port: plan.Port.ValueInt64(), Weight: plan.Weight.ValueInt64(), Backup: plan.Backup.ValueBool()})
+		client.LBClusterMemberSpec{ClusterID: cid, Role: wireRole(role), Port: plan.Port.ValueInt64(), Weight: plan.Weight.ValueInt64(), Backup: plan.Backup.ValueBool()})
 	if err != nil {
 		detail := err.Error()
 		if strings.Contains(detail, "is not one this load balancer can use") {
-			detail += fmt.Sprintf(" Also check role %q: Kubernetes clusters offer kube-worker and kube-master; the console's "+
-				"Add Member list shows every role this cluster offers, as cluster:%d:<role>.", role, cid)
+			detail += fmt.Sprintf(" Also check role %q and cluster %d: use kube-worker or kube-master for a Kubernetes "+
+				"cluster, docker-worker for a Docker cluster, and a cluster with nodes on the load balancer's network.", role, cid)
 		}
 		resp.Diagnostics.AddError("Unable to add the cluster's nodes to the pool", detail)
 		// The group may have been added before the error: keep it in state when the pool shows it,
@@ -244,7 +245,7 @@ func (r *clusterMemberResource) Delete(ctx context.Context, req resource.DeleteR
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if err := r.client.RemoveLBClusterMembers(ctx, state.NetworkID.ValueInt64(), state.LoadBalancerID.ValueString(), state.PoolID.ValueString(),
-		state.ClusterID.ValueInt64(), state.Role.ValueString()); err != nil {
+		state.ClusterID.ValueInt64(), wireRole(state.Role.ValueString())); err != nil {
 		resp.Diagnostics.AddError("Unable to remove the cluster's nodes from the pool", err.Error())
 	}
 }
@@ -264,26 +265,48 @@ func (r *clusterMemberResource) ImportState(ctx context.Context, req resource.Im
 			strconv.Quote(id.ValueString())+".")
 		return
 	}
+	if role == dockerHostRole { // the cloud's own code, as MTN's console shows it: stored as docker-worker
+		role = dockerWorkerRole
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), c+":"+role)...)
+	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_id"), cid)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("role"), role)...)
 }
 
-// knownNodeRoles are the cluster roles the load balancer's member picker offers on MTN Cloud.
-var knownNodeRoles = []string{"kube-worker", "kube-master", dockerHostRole}
+// knownNodeRoles are the cluster roles the load balancer's member picker offers on MTN Cloud, as a
+// configuration writes them. The cloud's own code for docker-worker is never shown to a customer
+// (owner, 2026-11-19): a configuration that writes it is refused at plan time.
+var knownNodeRoles = []string{"kube-worker", "kube-master", dockerWorkerRole}
 
-// dockerHostRole is a Docker cluster's hosts' role.
-const dockerHostRole = "morpheus-node" // mtncloud:allow-upstream-name (API wire value: the platform's role code)
+const (
+	dockerWorkerRole = client.DockerWorkerRole
+	dockerHostRole   = client.DockerHostRole
+)
+
+// wireRole is the role as MTN Cloud names it: docker-worker is sent as the cloud's own code.
+func wireRole(role string) string {
+	if role == dockerWorkerRole {
+		return dockerHostRole
+	}
+	return role
+}
 
 // ValidateConfig warns about a role the member picker doesn't offer: MTN only refuses it after the
 // load balancer task runs, minutes later (tester's fix 20).
 func (r *clusterMemberResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var role types.String
 	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("role"), &role)...)
+	if role.ValueString() == dockerHostRole {
+		resp.Diagnostics.AddAttributeError(path.Root("role"), "Use docker-worker",
+			`A Docker cluster's hosts are role = "docker-worker". Change role to "docker-worker": it is the same group, `+
+				"so nothing is removed or added again.")
+		return
+	}
 	if role.IsNull() || role.IsUnknown() || slices.Contains(knownNodeRoles, role.ValueString()) {
 		return
 	}
 	resp.Diagnostics.AddAttributeWarning(path.Root("role"), "Unfamiliar cluster role",
 		fmt.Sprintf("%q isn't a role MTN Cloud's load balancers usually offer (kube-worker and kube-master for Kubernetes "+
-			"clusters). If the console's Add Member list doesn't show cluster:<id>:%s, the apply fails after a few minutes.",
-			role.ValueString(), role.ValueString()))
+			"clusters, docker-worker for Docker clusters). If the cluster doesn't offer it, the apply fails after a few minutes.",
+			role.ValueString()))
 }

@@ -279,6 +279,7 @@ func lbCustomerText(msg string) string {
 		"Neutron", "the network service", "neutron", "the network service", // mtncloud:allow-cloud-name (scrubbing it)
 		"Amphorae", "load balancer VMs", "amphorae", "load balancer VMs", // mtncloud:allow-cloud-name (scrubbing it)
 		"Amphora", "Load balancer VM", "amphora", "load balancer VM", // mtncloud:allow-cloud-name (scrubbing it)
+		DockerHostRole, DockerWorkerRole, // a Docker cluster's hosts are only ever shown as docker-worker (owner, 2026-11-19)
 	).Replace(msg)
 }
 
