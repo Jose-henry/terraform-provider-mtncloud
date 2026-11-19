@@ -230,6 +230,14 @@ func InstanceMembers(p *LBPool, instanceID int64) []LBMember {
 	return groupMembers(p, instanceGroupTag(instanceID))
 }
 
+// DockerWorkerRole is a Docker cluster's hosts as customers name them; DockerHostRole is the same role
+// as MTN Cloud's load balancer names it. Customers never see DockerHostRole (owner, 2026-11-19): it is
+// sent on the wire only, and lbCustomerText rewrites it in the cloud's messages.
+const (
+	DockerWorkerRole = "docker-worker"
+	DockerHostRole   = "morpheus-node" // mtncloud:allow-upstream-name (API wire value: the platform's role code)
+)
+
 // ClusterGroup is the plugin's key for one role of a cluster's nodes, "cluster:<id>:<role>", for
 // example "cluster:143:kube-worker". The role is the nodes' type as MTN Cloud names it.
 func ClusterGroup(clusterID int64, role string) string {

@@ -34,6 +34,7 @@ type lbPlugin struct {
 	released []string                  // fip-detach's release, per detach
 	held     map[string]map[string]any // addresses detached and kept in the project, by ID
 	failAt   int                       // the member-update run that fails (0: none)
+	groups   []string                  // the cluster groups member-add was sent, in order
 	// l7Error makes the next L7 policy create settle in ERROR (kept, success:false, piece attached);
 	// l7Warning is the warning an L7 policy update answers with (plugin, 2026-11-03).
 	l7Error   bool
@@ -336,7 +337,8 @@ func (p *lbPlugin) run(o map[string]any) map[string]any {
 			return e
 		}
 		if cg, has := spec["clusterGroup"]; has { // a cluster role: cluster 143's three workers, as one group
-			if cg != "cluster:143:kube-worker" {
+			p.groups = append(p.groups, fmt.Sprint(cg))
+			if cg != "cluster:143:kube-worker" && cg != dockerGroup {
 				return refuse("Cluster group %v is not one this load balancer can use.", cg)
 			}
 			if _, pinned := spec["pinAddress"]; pinned {
